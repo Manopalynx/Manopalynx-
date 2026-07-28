@@ -2368,8 +2368,13 @@
       }
       var t = ev.target;
       if(t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable)){
-        // Escape still works from inside a field — it's the way out of an edit
-        if(ev.key==='Escape'){ document.getElementById('cancelBtn').click(); t.blur(); }
+        // Escape from inside a field steps out of the field and leaves the form
+        // alone. It used to cancel outright, which meant one stray keypress while
+        // typing a customer's name wiped the amounts you'd already entered — the
+        // worst possible moment to lose them. Blurring lands focus on the body, so
+        // a second Escape falls through to the cancel below: still one gesture away
+        // from clearing the form, just not by accident.
+        if(ev.key==='Escape'){ ev.preventDefault(); t.blur(); }
         return;
       }
       if(ev.key==='?'){ ev.preventDefault(); openShortcuts(); return; }
