@@ -589,7 +589,10 @@
     var ai = document.getElementById('addItemBtn');
     if(ai) ai.style.display = noSale ? 'none' : '';
     var qr = document.getElementById('qtyRow');
-    if(qr) qr.style.display = noSale ? 'none' : '';
+    // Quantity has no meaning while editing: the save path rewrites the single row
+    // you clicked and never reads qty, so a stepper here would preview a figure the
+    // save cannot produce. Hidden rather than disabled — there's nothing to explain.
+    if(qr) qr.style.display = (noSale || editId) ? 'none' : '';
     if(noSale) setQty(1);
   }
   var now = new Date();
@@ -2056,8 +2059,10 @@
     setEL(false);
     var elBtn = document.getElementById('togEL'); if(elBtn) elBtn.style.display='';
     document.getElementById('fDate').value = keepDate && date ? date : todayISO();
-    setProduct('Device'); setSG(false); setIns(false); setIntl(false); setQty(1);
+    // cleared before setProduct, which now consults editId to decide whether the
+    // quantity row is shown — leaving it set would hide the row for the next call
     editId = null;
+    setProduct('Device'); setSG(false); setIns(false); setIntl(false); setQty(1);
     document.getElementById('formTitle').textContent = 'Log a call';
     updateSubmitLabel();
     document.getElementById('cancelBtn').style.display = 'none';
@@ -2426,6 +2431,10 @@
       var elB = document.getElementById('togEL'); if(elB) elB.style.display='none';
       setProduct(e.product||'Other');
       setSG(!!e.sg); setIns(!!e.ins); setIntl(!!e.internal);
+      // A quantity left on the stepper from an unlogged call would otherwise survive
+      // into the edit and multiply the delta preview, showing a total the save can't
+      // produce. The row is hidden here, but the value behind it still has to go.
+      setQty(1);
       document.getElementById('formTitle').textContent = 'Edit call';
       document.getElementById('submitBtn').textContent = 'Save changes';
       document.getElementById('cancelBtn').style.display = 'inline-block';
