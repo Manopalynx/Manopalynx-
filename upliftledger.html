@@ -349,9 +349,6 @@
     <span id="convText" style="color:var(--text)">—</span>
   </div>
 
-  <!-- product breakdown -->
-  <div class="pbreak" id="pBreak"></div>
-
   <!-- all-time sold counters -->
   <div class="pbreak" id="pCount"></div>
 
@@ -1007,8 +1004,6 @@
     document.getElementById('stAvg').textContent = gbp(saleCallN? total/saleCallN : 0, true);
     var pct = sumB>0 ? sumA/sumB*100 : null;
     document.getElementById('stRate').textContent = pct===null ? '—' : pct.toFixed(1)+'%';
-
-    document.getElementById('pBreak').innerHTML='';
 
     var cnt = {};
     me.forEach(function(e){ var p=e.product||'Other'; cnt[p]=(cnt[p]||0)+1; });
