@@ -221,6 +221,9 @@
 <main>
   <!-- backup nudge -->
   <div id="alertRow">
+  <!-- storage failure — the loudest thing on the page, because the screen otherwise
+       looks identical whether or not the last call was written to disk -->
+  <div id="storageAlert" style="display:none;margin-bottom:14px"></div>
   <div id="backupBanner" style="display:none"></div>
 
   <!-- today strip -->
@@ -595,6 +598,7 @@
   var now = new Date();
   var month = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
   var memoryOnly = false;
+  var storageFailCause = null;   // null | 'blocked' (refused at load) | 'full' (quota hit while saving)
 
   // ---------- storage (localStorage with in-memory fallback) ----------
   // Two keys: the live save, and the previous save kept one step behind it. If a write
@@ -634,6 +638,7 @@
       shadow = localStorage.getItem(SHADOW_KEY);
     }catch(e){
       memoryOnly = true;
+      storageFailCause = 'blocked';
       document.getElementById('storageNotice').textContent =
         'This browser is blocking saved data — entries will last for this session only. Back up before closing.';
       return;
@@ -657,20 +662,40 @@
         'Saved data could not be read. If you have a backup file, use Restore.';
     }
   }
+  function saveOK(){
+    var s = document.getElementById('saveState');
+    s.textContent = '✓ saved';
+    clearTimeout(saveData._t);
+    saveData._t = setTimeout(function(){ s.innerHTML='&nbsp;'; }, 1800);
+  }
   function saveData(){
     if(memoryOnly) return;
+    var body = JSON.stringify(currentPayload());
     try{
       // roll the current save down to the shadow before overwriting it
       var prev = localStorage.getItem(STORE_KEY);
       if(prev) localStorage.setItem(SHADOW_KEY, prev);
-      localStorage.setItem(STORE_KEY, JSON.stringify(currentPayload()));
-      var s = document.getElementById('saveState');
-      s.textContent = '✓ saved';
-      clearTimeout(saveData._t);
-      saveData._t = setTimeout(function(){ s.innerHTML='&nbsp;'; }, 1800);
-    }catch(e){
-      document.getElementById('saveState').textContent = 'save failed';
-    }
+      localStorage.setItem(STORE_KEY, body);
+      saveOK();
+      return;
+    }catch(e){ /* most likely out of room — try again without the safety net */ }
+    // The shadow write runs first and is competing for space with the write that
+    // actually matters. Drop it and retry: a save with no backup copy behind it beats
+    // no save at all, and the next successful save rebuilds the shadow from scratch.
+    try{
+      localStorage.removeItem(SHADOW_KEY);
+      localStorage.setItem(STORE_KEY, body);
+      saveOK();
+      return;
+    }catch(e2){ /* genuinely out of room */ }
+    // Hard failure. Stop pretending: further writes cannot succeed either, so flip
+    // memoryOnly so the guard above and the banner tell the same story, and say so
+    // somewhere that can't be missed. 'save failed' in 11px grey was the only signal
+    // before this, while the screen carried on looking exactly like a working ledger.
+    memoryOnly = true;
+    storageFailCause = 'full';
+    document.getElementById('saveState').textContent = 'NOT SAVED';
+    renderStorageAlert();
   }
 
   // ---------- helpers ----------
@@ -743,6 +768,28 @@
       count: Object.keys(calls).length,
       staleDays: oldest ? Math.floor((Date.now()-oldest)/86400000) : 0
     };
+  }
+
+  // Shown whenever nothing is reaching localStorage — quota exhausted mid-shift, or the
+  // browser refusing storage outright. Carries its own Back up now button because
+  // renderBackupBanner() hides itself in memoryOnly mode, which would otherwise remove
+  // the one prompt to save your work at the exact moment it stops being saved.
+  function renderStorageAlert(){
+    var el = document.getElementById('storageAlert');
+    if(!el) return;
+    if(!memoryOnly){ el.style.display='none'; el.innerHTML=''; return; }
+    var msg = storageFailCause === 'full'
+      ? 'Storage is full — nothing has been saved since this appeared.'
+      : 'This browser is blocking saved data — nothing is being saved.';
+    el.innerHTML =
+      '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#3A1F1C;border:1px solid #DE6E5C;border-radius:12px;padding:12px 14px">'+
+        '<span style="font-size:18px;line-height:1">⚠️</span>'+
+        '<span style="flex:1 1 200px;font-family:\'IBM Plex Mono\',monospace;font-size:12px;color:#E9EEF6">'+
+          msg+' Download a backup now — this shift’s work is lost when the tab closes.</span>'+
+        '<button id="storageBackupBtn" style="background:#E4B45A;color:#0D1420;border:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:13px;font-family:\'Archivo\',sans-serif;cursor:pointer">Back up now</button>'+
+      '</div>';
+    el.style.display='block';
+    document.getElementById('storageBackupBtn').addEventListener('click', backupJSON);
   }
 
   function renderBackupBanner(){
@@ -1401,6 +1448,7 @@
     });
 
     renderChart();
+    renderStorageAlert();
     renderBackupBanner();
     renderTodayStrip();
     renderNotes();
