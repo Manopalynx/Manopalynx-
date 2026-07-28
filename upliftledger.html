@@ -618,18 +618,77 @@
       noTarget: noTarget, backupDismiss: backupDismiss
     };
   }
+  // ---------- payload validation ----------
+  // Everything reaching adoptPayload is untrusted: a truncated localStorage write, a
+  // hand-edited backup, a JSON file from something else entirely. Nothing downstream
+  // re-checks, and only one of the three call sites did any checking of its own, so a
+  // row missing before/after reached the CSV writer as undefined.toFixed() — killing
+  // the export you'd reach for to rescue the data — and reached the headline as NaN,
+  // which gbp() rendered as a perfectly ordinary-looking £0.00.
+  function isObj(v){ return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function num(v){
+    var n = typeof v === 'number' ? v : parseFloat(v);
+    return isFinite(n) ? n : null;
+  }
+  // objects keyed by month/date whose values must be numbers, or must be arrays
+  function objOfNums(v){
+    if(!isObj(v)) return {};
+    var o = {};
+    Object.keys(v).forEach(function(k){ var n = num(v[k]); if(n !== null) o[k] = n; });
+    return o;
+  }
+  function objOfArrays(v){
+    if(!isObj(v)) return {};
+    var o = {};
+    Object.keys(v).forEach(function(k){ if(Array.isArray(v[k])) o[k] = v[k]; });
+    return o;
+  }
+  // Rows are repaired rather than discarded wherever possible — a call with an
+  // unreadable amount is still evidence the call happened. Only a row with no usable
+  // date is dropped: it can't be placed in any month, so it would be invisible on
+  // screen while still skewing every all-time figure.
+  function cleanEntries(raw){
+    var rows = [], dropped = 0, repaired = 0;
+    (Array.isArray(raw) ? raw : []).forEach(function(e){
+      if(!isObj(e)){ dropped++; return; }
+      if(typeof e.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(e.date)){ dropped++; return; }
+      var b = num(e.before), a = num(e.after);
+      var row = Object.assign({}, e);
+      if(b === null || a === null){
+        repaired++;
+        row.before = (b === null) ? 0 : b;
+        row.after  = (a === null) ? 0 : a;
+      }
+      if(!row.id) row.id = uid();
+      rows.push(row);
+    });
+    return {rows: rows, dropped: dropped, repaired: repaired};
+  }
+  var lastAdoptReport = null;   // {dropped, repaired} from the most recent adopt, or null
+
   // pull a parsed payload into the live variables
   function adoptPayload(d){
-    entries = d.entries||[];
-    targets = d.targets||{};
-    spots = d.spotlights||{};
-    easy = d.easyLeads||{};
-    pctT = d.pctTargets||{};
+    if(!isObj(d)) d = {};
+    var c = cleanEntries(d.entries);
+    entries = c.rows;
+    lastAdoptReport = (c.dropped || c.repaired) ? c : null;
+    targets = objOfNums(d.targets);
+    spots = objOfArrays(d.spotlights);
+    easy = objOfNums(d.easyLeads);
+    pctT = isObj(d.pctTargets) ? d.pctTargets : {};
     // lastExport was the pre-V6.6 name; read it so existing state carries over
-    lastBackup = d.lastBackup || d.lastExport || null;
-    planned = d.planned||{};
-    noTarget = d.noTarget||{};
-    backupDismiss = d.backupDismiss||null;
+    lastBackup = num(d.lastBackup) || num(d.lastExport) || null;
+    planned = objOfArrays(d.planned);
+    noTarget = isObj(d.noTarget) ? d.noTarget : {};
+    backupDismiss = isObj(d.backupDismiss) ? d.backupDismiss : null;
+  }
+  // one line describing anything that had to be fixed on the way in
+  function adoptReportText(){
+    if(!lastAdoptReport) return '';
+    var bits = [];
+    if(lastAdoptReport.repaired) bits.push(lastAdoptReport.repaired+' row'+(lastAdoptReport.repaired===1?'':'s')+' had unreadable amounts (set to £0.00)');
+    if(lastAdoptReport.dropped) bits.push(lastAdoptReport.dropped+' row'+(lastAdoptReport.dropped===1?'':'s')+' had no usable date and could not be loaded');
+    return 'Some saved data was damaged: ' + bits.join('; ') + '. Check this month against a backup.';
   }
   function loadData(){
     var raw = null, shadow = null;
@@ -700,8 +759,13 @@
 
   // ---------- helpers ----------
   function gbp(n, signed){
-    var sign = signed && n>0 ? '+' : '';
-    return sign + '£' + Number(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+    if(n === null || n === undefined || n === '') n = 0;   // long-standing leniency for optional values
+    var v = Number(n);
+    // A NaN total must not render as a plausible £0.00: one damaged row would make a
+    // whole month read exactly like an ordinary quiet one.
+    if(!isFinite(v)) return '—';
+    var sign = signed && v>0 ? '+' : '';
+    return sign + '£' + v.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
   }
   function monthKey(d){ return d.slice(0,7); }
   function monthLabelStr(key){
@@ -2681,7 +2745,13 @@
         month = monthKey(newest);
       }
       saveData(); clearForm(false); renderPending(); render();
-      toast('Restored ' + callCount + ' call' + (callCount===1?'':'s'));
+      // count what actually landed, not what the file claimed: cleanEntries may have
+      // dropped undateable rows on the way in
+      var restored = Object.keys(entries.reduce(function(m,e){ m[callIdOf(e)]=1; return m; },{})).length;
+      toast('Restored ' + restored + ' call' + (restored===1?'':'s'));
+      if(lastAdoptReport){
+        document.getElementById('storageNotice').textContent = adoptReportText();
+      }
     };
     reader.onerror = function(){ toast('Could not read that file'); };
     reader.readAsText(file);
@@ -2899,6 +2969,12 @@
     document.getElementById('storageNotice').textContent =
       'Recovered from the previous save — the last entry or two may be missing. Check today\u2019s calls.';
     setTimeout(function(){ toast('Recovered from previous save'); }, 400);
+  }
+  // Damage found on the way in takes the notice line: it's the more specific problem,
+  // and repairing rows without saying so is how a wrong figure comes to be trusted.
+  if(lastAdoptReport){
+    document.getElementById('storageNotice').textContent = adoptReportText();
+    setTimeout(function(){ toast('Some saved data was damaged'); }, 400);
   }
 })();
 </script>
