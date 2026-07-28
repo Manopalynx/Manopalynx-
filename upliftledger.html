@@ -2092,16 +2092,36 @@
     return [date, it.product, it.before, it.after, !!it.sg, !!it.ins].join('|');
   }
   // returns the matching entry, or null
+  //
+  // Compares by COUNT, not just presence. Stored entries are already expanded to one
+  // row per unit and carry no qty of their own, so a 3x line has to find three
+  // matching rows before it reads as a repeat. Matching on presence alone flagged
+  // every multi-quantity line against a single earlier sale — log 1x SIM, then 2x of
+  // the same SIM, and the second was called a duplicate. Putting qty into the
+  // signature instead would have been worse: no stored row carries qty, so every
+  // qty>1 line would match nothing and a genuine double-tap of a 3x line would sail
+  // through unwarned.
   function findRecentDuplicate(lines, date){
     var cutoff = Date.now() - DUP_WINDOW_MS;
-    var sigs = {};
-    lines.forEach(function(it){ sigs[sigOf(it, date)] = true; });
+    // how many rows this submission would add, per signature
+    var want = {};
+    lines.forEach(function(it){
+      var s = sigOf(it, date);
+      want[s] = (want[s]||0) + Math.max(1, it.qty||1);
+    });
+    var seen = {}, newest = {};
     for(var i=0;i<entries.length;i++){
       var e = entries[i];
       // loggedAt is only on entries created by this version; older rows can't be
       // time-checked, so they're skipped rather than guessed at
       if(!e.loggedAt || e.loggedAt < cutoff) continue;
-      if(sigs[sigOf(e, e.date)]) return e;
+      var s = sigOf(e, e.date);
+      if(!Object.prototype.hasOwnProperty.call(want, s)) continue;
+      seen[s] = (seen[s]||0) + 1;
+      // entries is newest-first, so the first hit is the most recent — that's the one
+      // whose timestamp the warning quotes back
+      if(!newest[s]) newest[s] = e;
+      if(seen[s] >= want[s]) return newest[s];
     }
     return null;
   }
