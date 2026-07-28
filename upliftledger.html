@@ -1,0 +1,2829 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Household Ledger</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Archivo:wght@400;500;600;700&display=swap');
+  :root{
+    --ink:#0D1420; --panel:#16202F; --panel-up:#1C2839; --line:#2A3A52;
+    --text:#E9EEF6; --muted:#8CA0BA; --brass:#E4B45A; --brass-dim:#9C7C3E;
+    --down:#DE6E5C;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--ink);color:var(--text);font-family:'Archivo',system-ui,sans-serif;min-height:100vh;padding-bottom:64px}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+  header{border-bottom:1px solid var(--line);padding:20px 20px 16px;display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px}
+  header .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--brass);letter-spacing:.2em}
+  header h1{font-size:24px;font-weight:700;letter-spacing:-.01em}
+  #saveState{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);min-height:14px}
+  main{max-width:760px;margin:0 auto;padding:20px 16px;display:flex;flex-direction:column;gap:20px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .month-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .month-nav button{background:var(--panel-up);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 12px;font-family:'IBM Plex Mono',monospace;cursor:pointer}
+  #monthLabel{font-weight:600;font-size:16px}
+  .headline{text-align:center;padding:6px 0 14px}
+  #headlineTotal{font-family:'IBM Plex Mono',monospace;font-size:40px;font-weight:600;color:var(--brass);letter-spacing:-.02em}
+  #headlineTotal.neg{color:var(--down)}
+  .headline .sub{font-size:12px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
+  .target-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .target-row .lbl{font-size:11px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+  .target-row button{background:none;border:none;color:var(--brass);font-family:'IBM Plex Mono',monospace;font-size:12px;text-decoration:underline;cursor:pointer}
+  .rail{height:10px;background:var(--ink);border:1px solid var(--line);border-radius:5px;overflow:hidden}
+  #railFill{height:100%;width:0;background:linear-gradient(90deg,var(--brass-dim),var(--brass));border-radius:5px;transition:width .6s ease}
+  #railNote{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);margin-top:5px;text-align:right;min-height:13px}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 10px;text-align:center}
+  .stat .v{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600}
+  .stat .l{font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-top:3px}
+  .card h2{font-weight:600;font-size:16px;margin-bottom:14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .full{grid-column:1 / -1}
+  label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;display:block}
+  input{background:var(--ink);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:10px 12px;font-family:'IBM Plex Mono',monospace;font-size:14px;width:100%;outline:none}
+  input::placeholder{color:#5A6B84}
+  input:focus,button:focus-visible{border-color:var(--brass)!important;box-shadow:0 0 0 2px rgba(228,180,90,.2)}
+  input[type=date]{color-scheme:dark}
+  .delta-preview{margin-top:14px;padding:10px 14px;border-radius:10px;background:var(--ink);border:1px dashed var(--line);display:flex;justify-content:space-between;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:14px}
+  .delta-preview .lbl{color:var(--muted);font-size:12px}
+  #deltaVal{color:var(--muted);font-weight:600}
+  .btn-row{display:flex;gap:10px;margin-top:14px}
+  .btn-primary{flex:1;background:var(--brass);color:var(--ink);border:none;border-radius:10px;padding:12px;font-weight:700;font-size:15px;font-family:'Archivo',sans-serif;cursor:pointer}
+  .btn-ghost{background:var(--panel-up);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px 16px;cursor:pointer;display:none}
+  .list-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+  .list-head h2{margin:0}
+  .chip{background:var(--panel-up);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'IBM Plex Mono',monospace;cursor:pointer;color:var(--muted)}
+  .chip.brass{color:var(--brass)}
+  .pchip{background:var(--ink);border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:8px 14px;font-family:'IBM Plex Mono',monospace;font-size:13px;cursor:pointer}
+  .pchip.active{background:var(--brass);border-color:var(--brass);color:var(--ink);font-weight:600}
+  .ptag{color:var(--brass-dim)}
+  /* Pill rows (product breakdown, sold counters). row-gap matters because these
+     wrap onto several lines once a few products are in play; without vertical
+     margin they sat flush against the cards above and below and the rounded
+     pills read as overlapping them. */
+  .pbreak{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+  .pbreak:empty{display:none;margin:0}
+  .pbreak .pb{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-family:'IBM Plex Mono',monospace;font-size:12px}
+  .pbreak .pb .n{color:var(--muted)}
+  .pbreak .pb .v{font-weight:600;margin-left:6px}
+  .pb.count{background:var(--ink)}
+  .pblbl{font-size:10px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;align-self:center;font-family:'Archivo',sans-serif}
+  .sbtn{width:36px;height:36px;background:var(--panel-up);color:var(--text);border:1px solid var(--line);border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:16px;cursor:pointer}
+  .sbtn.plus{background:var(--brass);color:var(--ink);border:none;font-weight:700}
+  .entry{background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+  .entry.best{border-color:var(--brass)}
+  .entry .who{flex:1 1 140px;min-width:0}
+  .entry .name{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .entry .meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)}
+  .entry .nums{font-family:'IBM Plex Mono',monospace;font-size:13px;text-align:right}
+  .entry .nums .dim{color:var(--muted)}
+  .entry .nums .d{font-weight:600;margin-left:10px}
+  .entry .acts{display:flex;gap:6px}
+  .entry .acts button{background:none;border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:11px;font-family:'IBM Plex Mono',monospace;cursor:pointer}
+  .entry .acts .edit{color:var(--muted)}
+  .entry .acts .del{color:var(--down)}
+  #empty{color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:13px;text-align:center;padding:24px 0}
+  .star{color:var(--brass);font-size:11px;font-family:'IBM Plex Mono',monospace}
+  .up{color:var(--brass)} .dn{color:var(--down)}
+  #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel-up);border:1px solid var(--brass);color:var(--text);border-radius:10px;padding:10px 18px;font-family:'IBM Plex Mono',monospace;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:50;display:none}
+  .chart-wrap{height:180px;position:relative}
+  .notice{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);text-align:center}
+  /* export scope chooser — shares the shortcut overlay's visual language */
+  #exportScrim{position:fixed;inset:0;background:rgba(5,9,16,.72);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+  #exportPanel{background:var(--panel);border:1px solid var(--brass-dim);border-radius:14px;padding:20px;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  #exportPanel h2{font-size:16px;font-weight:700;margin-bottom:2px}
+  #exportPanel .sc-sub{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px}
+  .expOpt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;background:var(--panel-up);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;text-align:left}
+  .expOpt:hover{border-color:var(--brass)}
+  .expOptName{font-family:'Archivo',sans-serif;font-size:14px;font-weight:700;color:var(--text)}
+  .expOptSub{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)}
+  #exportCancel{margin-top:8px;width:100%;background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:9px;font-family:'IBM Plex Mono',monospace;font-size:12px;cursor:pointer}
+
+  /* ---------- shortcuts overlay ----------
+     Sits above the confetti layer (z-index 100/101) so a celebration can't
+     draw over the reference sheet. */
+  #shortcutScrim{position:fixed;inset:0;background:rgba(5,9,16,.72);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+  #shortcutPanel{background:var(--panel);border:1px solid var(--brass-dim);border-radius:14px;padding:20px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  #shortcutPanel h2{font-size:16px;font-weight:700;margin-bottom:2px}
+  #shortcutPanel .sc-sub{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px}
+  #shortcutPanel .sc-group{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--brass);letter-spacing:.14em;text-transform:uppercase;margin:14px 0 7px}
+  #shortcutPanel .sc-group:first-of-type{margin-top:0}
+  #shortcutPanel .sc-row{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:6px 0;border-bottom:1px solid rgba(42,58,82,.5)}
+  #shortcutPanel .sc-row:last-child{border-bottom:none}
+  #shortcutPanel .sc-desc{font-size:13px;color:var(--text)}
+  #shortcutPanel .sc-keys{display:flex;gap:4px;flex-shrink:0}
+  kbd{background:var(--ink);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:2px 7px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--brass);min-width:22px;text-align:center;display:inline-block;line-height:1.5}
+  #shortcutClose{margin-top:16px;width:100%;background:var(--panel-up);border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:9px;font-family:'IBM Plex Mono',monospace;font-size:12px;cursor:pointer}
+  /* Discovery line — the overlay is useless if nothing points at it. Desktop
+     only: there's no keyboard to document on a phone. */
+  #shortcutHint{display:none}
+  @media (min-width:1100px){
+    #shortcutHint{display:block;margin-top:10px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#55657E}
+    #shortcutHint button{background:none;border:none;color:#55657E;font-family:inherit;font-size:inherit;cursor:pointer;text-decoration:underline dotted;padding:0}
+    #shortcutHint button:hover{color:var(--brass)}
+  }
+
+  /* ---------- native date/time picker icon ----------
+     Chrome and Edge render the calendar/clock button as a dark glyph, which is
+     effectively invisible on this theme's near-black field backgrounds — the
+     picker was always there, it just looked like a plain text box. Inverting it
+     to brass makes it findable, and the larger hit area makes it easier to hit
+     with a mouse mid-call. Safari ignores these properties, which is fine: it
+     doesn't render an indicator at all. */
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator,
+  input[type="month"]::-webkit-calendar-picker-indicator{
+    filter:invert(72%) sepia(38%) saturate(560%) hue-rotate(357deg) brightness(95%) contrast(92%);
+    cursor:pointer;
+    opacity:.85;
+    padding:3px;
+    margin-left:2px;
+    border-radius:4px;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator:hover,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+  input[type="time"]::-webkit-calendar-picker-indicator:hover,
+  input[type="month"]::-webkit-calendar-picker-indicator:hover{
+    opacity:1;
+    background:rgba(228,180,90,.15);
+  }
+  /* the field itself should read as clickable, since the whole box opens the picker */
+  input[type="date"],input[type="datetime-local"],input[type="month"]{cursor:pointer}
+
+  /* Notes in the callbacks card are click-to-edit. The hover tint is the only
+     affordance — a permanent border on every row would make the card noisy. */
+  [data-noteedit]:hover{background:rgba(228,180,90,.08);box-shadow:inset 0 0 0 1px rgba(228,180,90,.25)}
+  [data-noteedit]:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
+  .noteEditBox{width:100%;background:#0D1420;border:1px solid var(--brass);border-radius:6px;
+    color:var(--text);font-family:inherit;font-size:13px;line-height:1.4;padding:6px 8px;
+    resize:vertical;min-height:56px;margin-top:4px}
+  .noteEditHint{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#55657E;margin-top:4px}
+
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+  /* ---------- desktop ----------
+     Phone stays a single centred column. Above 1100px the page becomes two
+     independent columns: everything flows down #leftCol, with the log form on
+     the right and sticky (it's the thing you touch mid-call).
+
+     Note for future edits: the two columns must be separate containers, not
+     sibling grid items. Two earlier attempts got this wrong —
+     `grid-row: 1 / span 100` forced 100 phantom rows and left screens of black
+     space, and placing the cards as direct grid siblings made each grid row
+     stretch to match the tall log card, leaving a 400px hole mid-page. With
+     #leftCol as its own element, each column sizes to its own content and
+     neither can affect the other. */
+  @media (min-width:1100px){
+    main{
+      max-width:1240px;
+      display:grid;
+      grid-template-columns:minmax(0,1fr) 400px;
+      /* exactly two rows: the alert strips, then the two content columns.
+         Naming them means the log card can span both without inventing rows. */
+      grid-template-rows:auto 1fr;
+      align-items:start;
+      column-gap:22px;
+    }
+    /* The alert strips sit in row 1 of the LEFT column only. They used to span
+       both columns (grid-column 1/-1), which put them underneath the sticky log
+       card — the today strip and the form overlapped at the top of the page. */
+    #alertRow{grid-column:1;grid-row:1;min-width:0}
+    #leftCol{grid-column:1;grid-row:2;min-width:0}
+    #logCard{
+      grid-column:2;
+      /* span both rows so row 1 can't be stretched by this card's height */
+      grid-row:1 / 3;
+      position:sticky;
+      top:16px;
+      max-height:calc(100vh - 32px);
+      overflow-y:auto;
+      margin-bottom:0;
+    }
+    .stats{grid-template-columns:repeat(3,1fr)}
+  }
+  @media (min-width:1500px){
+    main{max-width:1400px;grid-template-columns:minmax(0,1fr) 440px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="eyebrow">S. T. CHALK &middot; SALES DESK</div>
+    <h1>Household Ledger</h1>
+  </div>
+  <div id="saveState">&nbsp;</div>
+</header>
+
+<main>
+  <!-- backup nudge -->
+  <div id="alertRow">
+  <div id="backupBanner" style="display:none"></div>
+
+  <!-- today strip -->
+  <div id="todayStrip" style="display:none;margin-bottom:14px;padding:12px 14px;background:var(--panel);border:1px solid var(--brass-dim);border-radius:12px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+      <span class="mono" style="font-size:11px;color:var(--brass);letter-spacing:.1em">TODAY</span>
+      <span class="mono" id="todayDate" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+    <div id="todayBody" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px"></div>
+  </div>
+
+  <!-- callback alert -->
+  <div id="callbackAlert" style="display:none;margin-bottom:14px"></div>
+  </div>
+
+
+  <div class="card" id="logCard">
+    <h2 id="formTitle">Log a call</h2>
+    <div class="grid2">
+      <div class="full">
+        <label>Product</label>
+        <div id="productChips" title="Use &larr; &rarr; to move along the row" style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="pchip active" data-p="Device">Device</button>
+          <button type="button" class="pchip" data-p="SIM">SIM</button>
+          <button type="button" class="pchip" data-p="Broadband">Broadband</button>
+          <button type="button" class="pchip" data-p="Other">Other</button>
+          <button type="button" class="pchip" data-p="No sale">No sale</button>
+        </div>
+      </div>
+      <div class="full" id="addonRow">
+        <label>Included in sale</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="pchip" id="togSG">Scam Guard (SG)</button>
+          <button type="button" class="pchip" id="togIns">Insurance</button>
+        </div>
+      </div>
+      <div class="full" id="internalRow" style="display:none">
+        <label>Call type</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="pchip" id="togInt">Internal call</button>
+        </div>
+      </div>
+      <div id="beforeWrap">
+        <label for="fBefore" id="beforeLabel">Paying before (£/mo)</label>
+        <input id="fBefore" inputmode="decimal" placeholder="32.00">
+      </div>
+      <div id="afterWrap">
+        <label for="fAfter">Paying after (£/mo)</label>
+        <input id="fAfter" inputmode="decimal" placeholder="45.00">
+      </div>
+      <div class="full" id="qtyRow">
+        <label>Quantity (identical)</label>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button type="button" class="sbtn" id="qtyDec" aria-label="Fewer">−</button>
+          <span id="qtyVal" class="mono" style="font-size:16px;font-weight:600;min-width:22px;text-align:center;display:inline-block">1</span>
+          <button type="button" class="sbtn plus" id="qtyInc" aria-label="More">+</button>
+          <span id="qtyHint" class="mono" style="font-size:12px;color:#8CA0BA"></span>
+        </div>
+      </div>
+      <div class="full">
+        <label for="fDate">Date</label>
+        <input id="fDate" type="date">
+      </div>
+      <div class="full">
+        <label for="fNote">Note (optional)</label>
+        <input id="fNote" placeholder="Name, number, what they're after">
+      </div>
+      <div class="full">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button type="button" class="pchip" id="togCb">Schedule a callback</button>
+          <button type="button" class="pchip" id="togEL">Easy lead</button>
+        </div>
+        <div id="cbAtRow" style="display:none;align-items:center;gap:8px;margin-top:8px">
+          <span class="mono" style="font-size:10px;color:var(--brass);letter-spacing:.08em;white-space:nowrap">CALL BACK AT</span>
+          <input type="datetime-local" id="fCbAt" style="flex:1;min-width:0;background:#0D1420;border:1px solid var(--brass-dim);border-radius:8px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:7px 9px">
+        </div>
+      </div>
+    </div>
+    <div id="pendingBox" style="display:none;margin-top:14px;padding:10px 12px;border-radius:10px;background:#0D1420;border:1px solid #9C7C3E"></div>
+    <div class="delta-preview"><span class="lbl">Household</span><span id="deltaVal">—</span></div>
+    <div class="btn-row">
+      <button class="btn-primary" id="submitBtn" title="Log call (Enter)">Log call</button>
+      <button id="addItemBtn" style="background:var(--panel-up);color:var(--brass);border:1px solid var(--brass-dim);border-radius:10px;padding:12px 14px;font-weight:600;font-size:13px;font-family:'Archivo',sans-serif;cursor:pointer">+ Add item</button>
+      <button class="btn-ghost" id="cancelBtn" title="Cancel (Esc)">Cancel</button>
+    </div>
+    <div id="shortcutHint">press <button id="shortcutHintBtn" type="button">?</button> for keyboard shortcuts</div>
+  </div>
+
+  <div id="leftCol">
+
+  <!-- month + headline -->
+  <div class="card">
+    <div class="month-nav">
+      <button id="prevMonth" aria-label="Previous month" title="Previous month ([)">&larr;</button>
+      <div id="monthLabel"></div>
+      <button id="nextMonth" aria-label="Next month" title="Next month (])">&rarr;</button>
+    </div>
+    <div class="headline">
+      <div id="headlineTotal">+£0.00</div>
+      <div class="sub">total monthly household</div>
+    </div>
+    <div>
+      <div class="target-row">
+        <span class="lbl">Target</span>
+        <span id="targetEdit"><button id="targetBtn">set a target</button></span>
+      </div>
+      <div id="copyTargetRow" style="display:none;margin-top:6px;justify-content:flex-end;gap:6px;align-items:center">
+        <button id="copyTargetBtn" class="chip brass" style="font-size:11px;padding:4px 10px"></button>
+        <button id="dismissTargetBtn" aria-label="No target this month" title="No target this month" style="background:transparent;color:#8CA0BA;border:1px solid var(--line);border-radius:8px;padding:4px 9px;font-size:12px;font-family:'IBM Plex Mono',monospace;cursor:pointer;line-height:1">&times;</button>
+      </div>
+      <div class="rail"><div id="railFill"></div></div>
+      <div id="railNote"></div>
+      <div id="lastMonthNote" style="display:none;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#55657E;margin-top:3px;text-align:right"></div>
+      <div id="paceNote" style="margin-top:8px;display:none"></div>
+    </div>
+  </div>
+
+  <!-- stats -->
+  <div class="stats">
+    <div class="stat"><div class="v" id="stCalls">0</div><div class="l">Calls</div></div>
+    <div class="stat"><div class="v" id="stAvg">+£0.00</div><div class="l">Avg / call</div></div>
+    <div class="stat"><div class="v" id="stRate">—</div><div class="l">Household %</div></div>
+  </div>
+  <div id="convRow" style="display:none;margin-top:10px;padding:10px 14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;font-family:'IBM Plex Mono',monospace;font-size:13px;justify-content:space-between;align-items:center">
+    <span style="color:var(--muted);letter-spacing:.05em">CONVERSION</span>
+    <span id="convText" style="color:var(--text)">—</span>
+  </div>
+
+  <!-- product breakdown -->
+  <div class="pbreak" id="pBreak"></div>
+
+  <!-- all-time sold counters -->
+  <div class="pbreak" id="pCount"></div>
+
+  <!-- call mix -->
+  <div class="card" id="mixCard" style="display:none">
+    <h2>Call mix</h2>
+    <div id="mixBar" style="display:flex;height:14px;border-radius:7px;overflow:hidden;border:1px solid var(--line)"></div>
+    <div id="mixLegend" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px"></div>
+  </div>
+
+  <!-- targets -->
+  <div class="card">
+    <div class="list-head">
+      <h2>Targets</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="copyPctBtn" class="chip brass" style="display:none">Copy last month's</button>
+        <button id="tReset" class="chip" style="display:none">Reset to defaults</button>
+      </div>
+    </div>
+    <div id="targetRows"></div>
+  </div>
+
+  <!-- log a call -->
+  <!-- easy leads -->
+  <div class="card">
+    <div class="list-head">
+      <h2>Easy Leads</h2>
+      <span class="mono" style="font-size:11px;color:var(--muted)">target 5 a day</span>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:18px;padding:4px 0 10px">
+      <button class="sbtn" id="easyDec" aria-label="Remove one easy lead">−</button>
+      <div style="text-align:center">
+        <div id="easyCount" style="font-family:'IBM Plex Mono',monospace;font-size:36px;font-weight:600;color:var(--text)">0</div>
+        <div id="easyPips" style="display:flex;gap:6px;justify-content:center;margin-top:6px"></div>
+      </div>
+      <button class="sbtn plus" id="easyInc" aria-label="Add one easy lead" title="Add one easy lead (E)" style="width:44px;height:44px;font-size:20px">+</button>
+    </div>
+    <div id="easyMonth" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);text-align:center"></div>
+    <div id="easyOther" style="display:none;margin-top:12px"></div>
+  </div>
+
+  <!-- notes / callbacks -->
+  <div class="card" id="notesCard" style="display:none">
+    <div class="list-head">
+      <h2 style="margin:0">Notes &amp; callbacks</h2>
+      <span class="mono" id="notesCount" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+    <div id="notesList"></div>
+  </div>
+
+  <!-- spotlight -->
+  <div class="card">
+    <div class="list-head">
+      <h2>Spotlight</h2>
+      <a class="chip brass" href="https://www.ee-spotlight.co.uk/group/guest/incentives" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Open EE Spotlight →</a>
+    </div>
+    <div style="text-align:center;padding:2px 0 14px">
+      <div id="spotTotal" style="font-family:'IBM Plex Mono',monospace;font-size:30px;font-weight:600;color:var(--brass)">0</div>
+      <div style="font-size:11px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-top:2px">switch points this month</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 84px auto;gap:8px;margin-bottom:12px">
+      <input id="spotName" placeholder="e.g. iPhone 16 128GB">
+      <input id="spotPts" inputmode="decimal" placeholder="pts">
+      <button id="spotAdd" style="background:var(--brass);color:var(--ink);border:none;border-radius:8px;padding:0 16px;font-weight:700;font-family:'Archivo',sans-serif;cursor:pointer">Add</button>
+    </div>
+    <div id="spotList"></div>
+    <div id="spotEmpty" style="display:none;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:13px;text-align:center;padding:8px 0">No spotlight items for this month.</div>
+    <button id="spotCopy" class="chip brass" style="display:none;margin:8px auto 0">Copy last month's items</button>
+  </div>
+
+  <!-- trend -->
+  <div class="card">
+    <h2>Six-month trend</h2>
+    <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+  </div>
+
+  <!-- working-day calendar -->
+  <div class="card" id="calCard" style="display:none">
+    <div class="list-head">
+      <h2 style="margin:0">Working days</h2>
+      <span class="mono" id="calSummary" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+    <div id="calHint" class="mono" style="font-size:11px;color:#8CA0BA;margin-bottom:10px;display:none">Tap a future day to mark a shift you'll be in · tap again to clear</div>
+    <div id="calGrid"></div>
+  </div>
+
+  <!-- list -->
+  <div class="card">
+    <div class="list-head">
+      <h2 id="listTitle">Calls</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="chip" id="undoDelBtn" style="display:none;border-color:#9C7C3E;color:#E4B45A">↩ Undo delete</button>
+        <button class="chip brass" id="backupBtn" title="Download a full backup file">Backup</button>
+        <button class="chip" id="restoreBtn" title="Restore from a backup file">Restore</button>
+        <input type="file" id="restoreFile" accept=".json,application/json" style="display:none">
+        <button class="chip brass" id="copySummary">Copy summary</button>
+        <button class="chip" id="exportBtn">Export</button>
+      </div>
+    </div>
+    <div id="entryList"></div>
+    <div id="empty" style="display:none">No calls logged this month. Log the first one above.</div>
+  </div>
+
+  <div class="notice" id="storageNotice"></div>
+  </div><!-- /leftCol -->
+</main>
+
+<div id="toast"></div>
+
+<div id="exportScrim" role="dialog" aria-modal="true" aria-labelledby="exportTitle">
+  <div id="exportPanel">
+    <h2 id="exportTitle">Export CSV</h2>
+    <div class="sc-sub">for reading &middot; not a backup</div>
+    <button class="expOpt" id="expOptMonth"><span class="expOptName">This month</span><span class="expOptSub" id="expOptMonthSub"></span></button>
+    <button class="expOpt" id="expOptAll"><span class="expOptName">All time</span><span class="expOptSub" id="expOptAllSub"></span></button>
+    <button id="exportCancel" type="button">Cancel &middot; Esc</button>
+  </div>
+</div>
+
+<div id="shortcutScrim" role="dialog" aria-modal="true" aria-labelledby="shortcutTitle">
+  <div id="shortcutPanel">
+    <h2 id="shortcutTitle">Keyboard shortcuts</h2>
+    <div class="sc-sub">desk mode</div>
+
+    <div class="sc-group">Logging a call</div>
+    <div class="sc-row"><span class="sc-desc">Move along the product row</span><span class="sc-keys"><kbd>&larr;</kbd><kbd>&rarr;</kbd></span></div>
+    <div class="sc-row"><span class="sc-desc">Next field</span><span class="sc-keys"><kbd>Tab</kbd></span></div>
+    <div class="sc-row"><span class="sc-desc">Log the call</span><span class="sc-keys"><kbd>Enter</kbd></span></div>
+    <div class="sc-row"><span class="sc-desc">Cancel / leave an edit</span><span class="sc-keys"><kbd>Esc</kbd></span></div>
+
+    <div class="sc-group">Anywhere</div>
+    <div class="sc-row"><span class="sc-desc">Jump into the form</span><span class="sc-keys"><kbd>N</kbd></span></div>
+    <div class="sc-row"><span class="sc-desc">+1 easy lead</span><span class="sc-keys"><kbd>E</kbd></span></div>
+    <div class="sc-row"><span class="sc-desc">Previous / next month</span><span class="sc-keys"><kbd>[</kbd><kbd>]</kbd></span></div>
+    <div class="sc-row"><span class="sc-desc">This panel</span><span class="sc-keys"><kbd>?</kbd></span></div>
+
+    <div class="sc-group">Note</div>
+    <div class="sc-row"><span class="sc-desc">Single-letter keys are ignored while you're typing in a field</span></div>
+    <div class="sc-row"><span class="sc-desc">Backup saves a file that fully restores; CSV is for reading only</span></div>
+
+    <button id="shortcutClose" type="button">Close &middot; Esc</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var STORE_KEY = 'uplift-ledger-v3';
+  var entries = [], targets = {}, editId = null;
+  var spots = {};
+  var easy = {};
+  var openStacks = {};
+  function callIdOf(e){ return e.callId || e.id; }
+  var pctT = {};
+  var planned = {};
+  var noTarget = {};  // months where the user dismissed the copy-target prompt
+  var backupDismiss = null;  // {count, date} — where the backup nudge was last deferred
+  var lastBackup = null;      // ms timestamp of the last JSON backup (was lastExport pre-V6.6)
+  var editingT = null;
+  var DEF_T = {uplift:130, broadband:5.5, easy:15, sg:40};
+  var PRODUCTS = ['Device','SIM','Broadband','Other','No sale'];
+  var pending = [];
+
+  // ---------- deletion recovery ----------
+  // The toast's Undo is the primary route, but it only lives 6 seconds and any other
+  // toast replaces it. Holding the last deletion here means the undo survives both,
+  // and an "undo delete" chip appears on the Calls header while it's still live.
+  var lastDeleted = null;              // {entry, idx, at}
+  var UNDO_WINDOW_MS = 120000;         // 2 minutes to notice a mis-tap
+  function undoAvailable(){
+    return !!(lastDeleted && (Date.now() - lastDeleted.at) < UNDO_WINDOW_MS);
+  }
+  function undoDelete(){
+    if(!lastDeleted) return;
+    var d = lastDeleted;
+    lastDeleted = null;
+    // clamp the index: other entries may have been added or removed since
+    entries.splice(Math.min(d.idx, entries.length), 0, d.entry);
+    releaseNoteOrder();
+    saveData(); render();
+    toast('Call restored');
+  }
+  var qty = 1;
+  var product = 'Device';
+  var sg = false, ins = false, intl = false;
+  function setSG(v){ sg=v; var b=document.getElementById('togSG'); b.classList.toggle('active',v); b.textContent=(v?'✓ ':'')+'Scam Guard (SG)'; }
+  function setIns(v){ ins=v; var b=document.getElementById('togIns'); b.classList.toggle('active',v); b.textContent=(v?'✓ ':'')+'Insurance'; }
+  function setIntl(v){ intl=v; var b=document.getElementById('togInt'); if(b){ b.classList.toggle('active',v); b.textContent=(v?'✓ ':'')+'Internal call'; } }
+  var cbOn = false;
+  var bbAutoZero = false;   // true while the 0 in 'paying before' was auto-filled for Broadband
+  var elOn = false;         // easy lead to be credited when this call is logged
+  function setEL(v){
+    elOn = v;
+    var b = document.getElementById('togEL');
+    if(b){ b.classList.toggle('active',v); b.textContent = (v?'\u2713 ':'')+'Easy lead'; }
+  }
+  function setCb(v){
+    cbOn = v;
+    var b=document.getElementById('togCb'), f=document.getElementById('fCbAt'),
+        r=document.getElementById('cbAtRow');
+    if(b){ b.classList.toggle('active',v); b.textContent=(v?'✓ ':'')+'Schedule a callback'; }
+    if(r){ r.style.display = v ? 'flex' : 'none'; }
+    if(f && !v){ f.value=''; }
+  }
+  function setQty(n){ qty=Math.max(1,n); document.getElementById('qtyVal').textContent=qty;
+    var h=document.getElementById('qtyHint'); h.textContent = qty>1 ? (qty+'× '+product+(sg?' · SG':'')+(ins?' · Ins':'')) : ''; updateDelta(); }
+  function setProduct(p){
+    if(PRODUCTS.indexOf(p)===-1) p='Other';
+    product = p;
+    document.querySelectorAll('#productChips .pchip').forEach(function(x){ x.classList.toggle('active', x.getAttribute('data-p')===p); });
+    var sgOk = (p==='Device'||p==='SIM');
+    var insOk = (p==='Device');
+    document.getElementById('addonRow').style.display = sgOk ? '' : 'none';
+    document.getElementById('togIns').style.display = insOk ? '' : 'none';
+    if(!sgOk) setSG(false);
+    if(!insOk) setIns(false);
+    var noSale = (p==='No sale');
+    document.getElementById('afterWrap').style.display = noSale ? 'none' : '';
+    // a no-sale doesn't move anyone's bill, so there's nothing to record
+    document.getElementById('beforeWrap').style.display = noSale ? 'none' : '';
+    document.getElementById('beforeLabel').textContent = 'Paying before (£/mo)';
+    // Broadband is always a new line, so nothing is being paid before it — prefill 0
+    // to save a step. Only fills an EMPTY field, so it never clobbers a typed value,
+    // and the 0 is withdrawn again if you switch to another product without touching it.
+    var bf = document.getElementById('fBefore');
+    if(bf && !editId){
+      if(p==='Broadband'){
+        if(!bf.value.trim()){ bf.value = '0'; bbAutoZero = true; updateDelta(); }
+      } else if(bbAutoZero && bf.value.trim()==='0'){
+        bf.value = ''; bbAutoZero = false; updateDelta();
+      }
+    }
+    document.querySelector('.delta-preview').style.display = noSale ? 'none' : 'flex';
+    document.getElementById('internalRow').style.display = noSale ? '' : 'none';
+    if(!noSale) setIntl(false);
+    var ai = document.getElementById('addItemBtn');
+    if(ai) ai.style.display = noSale ? 'none' : '';
+    var qr = document.getElementById('qtyRow');
+    if(qr) qr.style.display = noSale ? 'none' : '';
+    if(noSale) setQty(1);
+  }
+  var now = new Date();
+  var month = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  var memoryOnly = false;
+
+  // ---------- storage (localStorage with in-memory fallback) ----------
+  // Two keys: the live save, and the previous save kept one step behind it. If a write
+  // is ever truncated or corrupted, load falls back to the shadow rather than opening
+  // an empty ledger. SCHEMA is stamped so a future format change can migrate instead
+  // of guessing.
+  var SCHEMA = 1;
+  var SHADOW_KEY = STORE_KEY + '-prev';
+  var recoveredFromShadow = false;
+
+  function currentPayload(){
+    return {
+      schemaVersion: SCHEMA,
+      savedAt: Date.now(),
+      entries: entries, targets: targets, spotlights: spots, easyLeads: easy,
+      pctTargets: pctT, lastBackup: lastBackup, planned: planned,
+      noTarget: noTarget, backupDismiss: backupDismiss
+    };
+  }
+  // pull a parsed payload into the live variables
+  function adoptPayload(d){
+    entries = d.entries||[];
+    targets = d.targets||{};
+    spots = d.spotlights||{};
+    easy = d.easyLeads||{};
+    pctT = d.pctTargets||{};
+    // lastExport was the pre-V6.6 name; read it so existing state carries over
+    lastBackup = d.lastBackup || d.lastExport || null;
+    planned = d.planned||{};
+    noTarget = d.noTarget||{};
+    backupDismiss = d.backupDismiss||null;
+  }
+  function loadData(){
+    var raw = null, shadow = null;
+    try{
+      raw = localStorage.getItem(STORE_KEY);
+      shadow = localStorage.getItem(SHADOW_KEY);
+    }catch(e){
+      memoryOnly = true;
+      document.getElementById('storageNotice').textContent =
+        'This browser is blocking saved data — entries will last for this session only. Back up before closing.';
+      return;
+    }
+    // try the live save; if it won't parse, fall back to the shadow rather than
+    // silently starting empty on top of real data
+    if(raw){
+      try{ adoptPayload(JSON.parse(raw)); return; }
+      catch(e){ /* fall through to the shadow */ }
+    }
+    if(shadow){
+      try{
+        adoptPayload(JSON.parse(shadow));
+        recoveredFromShadow = true;
+        return;
+      }catch(e){ /* both unreadable — start clean below */ }
+    }
+    if(raw || shadow){
+      // there was data and neither copy parsed: say so rather than pretending
+      document.getElementById('storageNotice').textContent =
+        'Saved data could not be read. If you have a backup file, use Restore.';
+    }
+  }
+  function saveData(){
+    if(memoryOnly) return;
+    try{
+      // roll the current save down to the shadow before overwriting it
+      var prev = localStorage.getItem(STORE_KEY);
+      if(prev) localStorage.setItem(SHADOW_KEY, prev);
+      localStorage.setItem(STORE_KEY, JSON.stringify(currentPayload()));
+      var s = document.getElementById('saveState');
+      s.textContent = '✓ saved';
+      clearTimeout(saveData._t);
+      saveData._t = setTimeout(function(){ s.innerHTML='&nbsp;'; }, 1800);
+    }catch(e){
+      document.getElementById('saveState').textContent = 'save failed';
+    }
+  }
+
+  // ---------- helpers ----------
+  function gbp(n, signed){
+    var sign = signed && n>0 ? '+' : '';
+    return sign + '£' + Number(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+  }
+  function monthKey(d){ return d.slice(0,7); }
+  function monthLabelStr(key){
+    var p = key.split('-');
+    return new Date(+p[0], +p[1]-1, 1).toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  }
+  function shortMonth(key){
+    var p = key.split('-');
+    return new Date(+p[0], +p[1]-1, 1).toLocaleDateString('en-GB',{month:'short'});
+  }
+  function shiftMonth(key,n){
+    var p = key.split('-');
+    var d = new Date(+p[0], +p[1]-1+n, 1);
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  }
+  function todayISO(){
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  function toast(msg, actionLabel, actionFn){
+    var t = document.getElementById('toast');
+    clearTimeout(toast._t);
+    if(actionLabel && actionFn){
+      t.innerHTML = '';
+      var span = document.createElement('span'); span.textContent = msg;
+      var btn = document.createElement('button');
+      btn.textContent = actionLabel;
+      btn.style.cssText = 'margin-left:12px;background:#E4B45A;color:#0D1420;border:none;border-radius:6px;padding:3px 12px;font-weight:700;font-size:12px;font-family:\'Archivo\',sans-serif;cursor:pointer';
+      btn.addEventListener('click', function(){
+        clearTimeout(toast._t);
+        t.style.display='none';
+        actionFn();
+      });
+      t.appendChild(span); t.appendChild(btn);
+      t.style.display='flex';
+      t.style.alignItems='center';
+      toast._t = setTimeout(function(){ t.style.display='none'; }, 6000);
+    } else {
+      t.textContent = msg; t.style.display='block';
+      toast._t = setTimeout(function(){ t.style.display='none'; }, 2200);
+    }
+  }
+  function esc(s){
+    return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  var BACKUP_CALLS = 7;        // calls logged before the nudge appears / returns
+  var BACKUP_STALE_DAYS = 3;   // backstop: nudge anyway if anything sits unbacked this long
+
+  // Work not covered by the last export. Entries logged before this feature shipped have
+  // no loggedAt; if an export has happened since, they're treated as covered.
+  function backupState(){
+    var unbacked = entries.filter(function(e){
+      return !lastBackup || (e.loggedAt||0) > lastBackup;
+    });
+    var calls = {};
+    unbacked.forEach(function(e){ calls[callIdOf(e)] = 1; });
+    var oldest = 0;
+    unbacked.forEach(function(e){
+      var t = e.loggedAt||0;
+      if(t && (!oldest || t < oldest)) oldest = t;
+    });
+    return {
+      count: Object.keys(calls).length,
+      staleDays: oldest ? Math.floor((Date.now()-oldest)/86400000) : 0
+    };
+  }
+
+  function renderBackupBanner(){
+    var el = document.getElementById('backupBanner');
+    if(!el) return;
+    if(memoryOnly){ el.style.display='none'; return; }
+
+    var st = backupState();
+    if(!st.count){ el.style.display='none'; return; }
+
+    // trigger on volume of unbacked work, or on age as a slow-burn backstop
+    if(st.count < BACKUP_CALLS && st.staleDays < BACKUP_STALE_DAYS){
+      el.style.display='none'; return;
+    }
+
+    // "Later" holds until another BACKUP_CALLS calls land, or the day turns over
+    if(backupDismiss && backupDismiss.date === todayISO() &&
+       st.count < backupDismiss.count + BACKUP_CALLS){
+      el.style.display='none'; return;
+    }
+
+    var never = !lastBackup;
+    var urgent = never || st.count >= 20;
+    var plural = st.count===1 ? '' : 's';
+    var msg = never
+      ? st.count+' call'+plural+' logged, nothing backed up yet'
+      : st.count+' call'+plural+' since your last backup';
+
+    var bd = urgent ? '#DE6E5C' : '#9C7C3E';
+    el.style.display='block';
+    el.innerHTML =
+      '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#16202F;border:1px solid '+bd+';border-radius:12px;padding:12px 14px">'+
+        '<span style="font-size:18px;line-height:1">'+(urgent?'\u26A0\uFE0F':'\uD83D\uDCBE')+'</span>'+
+        '<span style="flex:1 1 180px;font-family:\'IBM Plex Mono\',monospace;font-size:12px;color:#E9EEF6">'+msg+'</span>'+
+        '<button id="backupExport" style="background:#E4B45A;color:#0D1420;border:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:13px;font-family:\'Archivo\',sans-serif;cursor:pointer">Back up now</button>'+
+        '<button id="backupLater" style="background:transparent;color:#8CA0BA;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:12px;font-family:\'IBM Plex Mono\',monospace;cursor:pointer">Later</button>'+
+      '</div>';
+    document.getElementById('backupExport').addEventListener('click', backupJSON);
+    document.getElementById('backupLater').addEventListener('click', function(){
+      backupDismiss = {count: st.count, date: todayISO()};
+      saveData(); renderBackupBanner();
+    });
+  }
+
+  function fireEasyFive(count){
+    if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var colors=['#6FC28B','#E4B45A','#E9EEF6'];
+    var cx=window.innerWidth/2, cy=window.innerHeight*0.4;
+    for(var i=0;i<36;i++){
+      (function(idx){
+        var p=document.createElement('div');
+        var size=5+Math.random()*5;
+        p.style.cssText='position:fixed;z-index:100;pointer-events:none;left:'+cx+'px;top:'+cy+'px;width:'+size+'px;height:'+size+'px;background:'+colors[idx%colors.length]+';border-radius:50%;';
+        document.body.appendChild(p);
+        var ang=(idx/36)*Math.PI*2+Math.random()*0.3;
+        var dist=90+Math.random()*160;
+        var anim=p.animate([
+          {transform:'translate(0,0) scale(1)',opacity:1},
+          {transform:'translate('+(Math.cos(ang)*dist)+'px,'+(Math.sin(ang)*dist+40)+'px) scale(.4)',opacity:0}
+        ],{duration:700+Math.random()*500,easing:'ease-out'});
+        anim.onfinish=function(){ p.remove(); };
+      })(i);
+    }
+    var b=document.createElement('div');
+    b.textContent='🖐️ EASY '+count+'!';
+    b.style.cssText='position:fixed;top:40%;left:50%;transform:translate(-50%,-50%);z-index:101;font-family:Archivo,sans-serif;font-weight:700;font-size:32px;color:#6FC28B;text-shadow:0 4px 24px rgba(0,0,0,.6);pointer-events:none;white-space:nowrap;';
+    document.body.appendChild(b);
+    var ba=b.animate([
+      {transform:'translate(-50%,-50%) scale(.5) rotate(-6deg)',opacity:0},
+      {transform:'translate(-50%,-50%) scale(1.1) rotate(3deg)',opacity:1,offset:0.25},
+      {transform:'translate(-50%,-50%) scale(1) rotate(0deg)',opacity:1,offset:0.7},
+      {transform:'translate(-50%,-50%) scale(1)',opacity:0}
+    ],{duration:1400,easing:'ease-out'});
+    ba.onfinish=function(){ b.remove(); };
+  }
+
+  function reducedMotion(){
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+  // falling confetti, shared by the broadband and double celebrations
+  function dropConfetti(n){
+    var colors=['#E4B45A','#6D8FB5','#E9EEF6','#9C7C3E','#6FC28B'];
+    for(var i=0;i<n;i++){
+      (function(idx){
+        var p=document.createElement('div');
+        var size=6+Math.random()*6;
+        p.style.cssText='position:fixed;z-index:100;pointer-events:none;top:-12px;left:'+(Math.random()*100)+'vw;width:'+size+'px;height:'+(size*0.5)+'px;background:'+colors[idx%colors.length]+';border-radius:2px;';
+        document.body.appendChild(p);
+        var anim=p.animate([
+          {transform:'translate(0,0) rotate(0deg)',opacity:1},
+          {transform:'translate('+((Math.random()-0.5)*200)+'px,'+(window.innerHeight+40)+'px) rotate('+(360+Math.random()*720)+'deg)',opacity:0.9}
+        ],{duration:1800+Math.random()*1400,easing:'cubic-bezier(.2,.6,.4,1)',delay:Math.random()*300});
+        anim.onfinish=function(){ p.remove(); };
+      })(i);
+    }
+  }
+  function showBanner(html, dur){
+    var b=document.createElement('div');
+    b.innerHTML=html;
+    b.style.cssText='position:fixed;top:40%;left:50%;transform:translate(-50%,-50%);z-index:101;font-family:Archivo,sans-serif;font-weight:700;text-align:center;text-shadow:0 4px 24px rgba(0,0,0,.6);pointer-events:none;';
+    document.body.appendChild(b);
+    var ba=b.animate([
+      {transform:'translate(-50%,-50%) scale(.5)',opacity:0},
+      {transform:'translate(-50%,-50%) scale(1.1)',opacity:1,offset:0.25},
+      {transform:'translate(-50%,-50%) scale(1)',opacity:1,offset:0.7},
+      {transform:'translate(-50%,-50%) scale(1)',opacity:0}
+    ],{duration:dur,easing:'ease-out'});
+    ba.onfinish=function(){ b.remove(); };
+  }
+  function fireCelebration(){
+    if(reducedMotion()) return;
+    dropConfetti(80);
+    showBanner('<div style="font-size:34px;color:#E4B45A;white-space:nowrap">\uD83C\uDF89 BROADBAND! \uD83C\uDF89</div>', 1600);
+  }
+  // Broadband sale AND the day's 5th lead on the same call — one moment, not two
+  // animations fighting over the same patch of screen.
+  function fireDouble(count){
+    if(reducedMotion()) return;
+    dropConfetti(110);
+    showBanner(
+      '<div style="font-size:34px;color:#E4B45A;white-space:nowrap">\uD83C\uDF89 BROADBAND! \uD83C\uDF89</div>'+
+      '<div style="font-size:24px;color:#6FC28B;margin-top:6px;white-space:nowrap">\uFF0B EASY '+count+'!</div>',
+      1900);
+  }
+
+  // ---------- chart ----------
+  var chart = null;
+  function renderChart(){
+    var labels=[], data=[], colors=[], keys=[];
+    for(var i=5;i>=0;i--){
+      var k = shiftMonth(month,-i);
+      var total = entries.filter(function(e){return monthKey(e.date)===k;})
+                         .reduce(function(s,e){return s+(e.after-e.before);},0);
+      keys.push(k); labels.push(shortMonth(k)); data.push(Math.round(total*100)/100);
+    }
+    data.forEach(function(v,idx){
+      colors.push(keys[idx]===month ? '#E4B45A' : (v<0 ? '#DE6E5C' : '#9C7C3E'));
+    });
+    var t = targets[month];
+    var sig = month + '|' + labels.join(',') + '|' + data.join(',') + '|' + colors.join(',') + '|' + (t||'');
+    if(chart && sig === chart._sig) return;
+    if(chart) chart.destroy();
+    if(typeof Chart === 'undefined'){
+      document.querySelector('.chart-wrap').innerHTML =
+        '<div class="notice" style="padding-top:60px">Chart needs an internet connection the first time it loads.</div>';
+      return;
+    }
+    chart = new Chart(document.getElementById('trendChart'),{
+      type:'bar',
+      data:{labels:labels,datasets:[{data:data,backgroundColor:colors,borderRadius:4}]},
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{
+          legend:{display:false},
+          tooltip:{
+            backgroundColor:'#1C2839',borderColor:'#2A3A52',borderWidth:1,
+            titleFont:{family:'IBM Plex Mono'},bodyFont:{family:'IBM Plex Mono'},
+            callbacks:{label:function(c){return gbp(c.parsed.y,true)+'/mo household';}}
+          }
+        },
+        scales:{
+          x:{ticks:{color:'#8CA0BA',font:{family:'IBM Plex Mono',size:11}},grid:{display:false},border:{color:'#2A3A52'}},
+          y:{ticks:{color:'#8CA0BA',font:{family:'IBM Plex Mono',size:10},
+              callback:function(v){return '£'+Number(v).toLocaleString('en-GB');}},
+             grid:{color:'rgba(42,58,82,.5)'},border:{display:false}}
+        }
+      }
+    });
+    chart._sig = sig;
+  }
+
+  // Household £ total for a month, optionally only up to a given day-of-month.
+  // Lets us compare a part-finished month against the same point last month.
+  function monthTotalToDay(mk, dayLimit){
+    var t = 0;
+    entries.forEach(function(e){
+      if(monthKey(e.date)!==mk) return;
+      if(dayLimit){
+        var dd = parseInt(e.date.slice(8,10),10);
+        if(dd > dayLimit) return;
+      }
+      t += e.after - e.before;
+    });
+    return t;
+  }
+
+  // Compute the headline metrics for any month — used for the "last month" comparison.
+  function monthMetrics(mk){
+    var me = entries.filter(function(e){ return monthKey(e.date)===mk; });
+    var total=0, sumB=0, sumA=0, sgN=0, cnt={};
+    var callSet={};
+    // Scam Guard only attaches to Device and SIM, so the rate is measured against
+    // those lines rather than against all calls — that's how work scores it. A
+    // Broadband-only or no-sale call can't carry SG, so counting it in the base
+    // would drag the figure down for something that was never on offer.
+    var sgEligible = 0;
+    me.forEach(function(e){
+      total += e.after-e.before;
+      // no-sale calls move nobody's bill — keep them out of the spend base
+      if((e.product||'Other')!=='No sale'){ sumB += e.before; sumA += e.after; }
+      callSet[callIdOf(e)] = 1;
+      var p = e.product||'Other'; cnt[p] = (cnt[p]||0)+1;
+      if(p==='Device' || p==='SIM') sgEligible++;
+      if(e.sg) sgN++;
+    });
+    var calls = Object.keys(callSet).length;
+    var em = 0;
+    Object.keys(easy).forEach(function(k){ if(monthKey(k)===mk) em += easy[k]; });
+    return {
+      calls: calls,
+      total: total,
+      uplift: sumB>0 ? sumA/sumB*100 : null,
+      broadband: calls ? (cnt['Broadband']||0)/calls*100 : null,
+      easy: calls ? em/calls*100 : null,
+      sgEligible: sgEligible,
+      sg: sgEligible ? sgN/sgEligible*100 : null
+    };
+  }
+
+  // ---------- render ----------
+  function render(){
+    document.getElementById('monthLabel').textContent = monthLabelStr(month);
+    document.getElementById('listTitle').textContent = 'Calls — ' + monthLabelStr(month);
+    // recovery chip: only while a recent deletion is still undoable
+    var uBtn = document.getElementById('undoDelBtn');
+    if(uBtn) uBtn.style.display = undoAvailable() ? '' : 'none';
+
+    var me = entries.filter(function(e){return monthKey(e.date)===month;})
+                    .sort(function(a,b){ if(a.date!==b.date) return a.date<b.date?1:-1; return a.id<b.id?1:-1; });
+    var total=0, sumB=0, sumA=0, best=null;
+    var callSet={}, saleCallSet={};
+    me.forEach(function(e){
+      var d=e.after-e.before; total+=d;
+      if((e.product||'Other')!=='No sale'){ sumB+=e.before; sumA+=e.after; }
+      var cid=callIdOf(e); callSet[cid]=1;
+      if((e.product||'Other')!=='No sale') saleCallSet[cid]=1;
+      if(!best || d>best.d) best={e:e,d:d};
+    });
+    var callCount=Object.keys(callSet).length;
+    var saleCallN=Object.keys(saleCallSet).length;
+
+    // conversion rate: calls with at least one real sale / all calls (internal calls
+    // are No-sale calls, so they count in the denominator but never as conversions —
+    // matching how the workplace measures it)
+    var convRow = document.getElementById('convRow');
+    var convText = document.getElementById('convText');
+    if(callCount>0){
+      var convPct = Math.round(saleCallN/callCount*1000)/10;
+      convText.textContent = 'converted ' + saleCallN + ' of ' + callCount + ' \u00b7 ' + convPct + '%';
+      convText.style.color = convPct>=50 ? '#6FC28B' : (convPct>0 ? '#E9EEF6' : '#DE6E5C');
+      convRow.style.display = 'flex';
+    } else {
+      convRow.style.display = 'none';
+    }
+
+    var h = document.getElementById('headlineTotal');
+    h.textContent = gbp(total,true); h.className = total<0?'neg':''; h.classList.toggle('mono',true);
+    document.getElementById('stCalls').textContent = callCount;
+    document.getElementById('stAvg').textContent = gbp(saleCallN? total/saleCallN : 0, true);
+    var pct = sumB>0 ? sumA/sumB*100 : null;
+    document.getElementById('stRate').textContent = pct===null ? '—' : pct.toFixed(1)+'%';
+
+    document.getElementById('pBreak').innerHTML='';
+
+    var cnt = {};
+    me.forEach(function(e){ var p=e.product||'Other'; cnt[p]=(cnt[p]||0)+1; });
+    var pcEl = document.getElementById('pCount');
+    var chips = '';
+    var dsoN = (cnt['Device']||0)+(cnt['SIM']||0)+(cnt['Other']||0);
+    var bbTot = cnt['Broadband']||0;
+    if(dsoN) chips += '<div class="pb count" style="border-color:#9C7C3E"><span class="n">Transactions</span><span class="v" style="color:#E4B45A">×'+dsoN+'</span></div>';
+    if(bbTot) chips += '<div class="pb count" style="border-color:#9C7C3E"><span class="n">Broadband</span><span class="v" style="color:#E4B45A">×'+bbTot+'</span></div>';
+    ['Device','SIM','Other'].forEach(function(pp){ if(cnt[pp]) chips += '<div class="pb count"><span class="n">'+pp+'</span><span class="v" style="color:#E9EEF6">×'+cnt[pp]+'</span></div>'; });
+    var sgN=0, insN=0;
+    me.forEach(function(e){ if(e.sg) sgN++; if(e.ins) insN++; });
+    if(sgN) chips += '<div class="pb count"><span class="n">SG</span><span class="v" style="color:#E9EEF6">×'+sgN+'</span></div>';
+    if(insN) chips += '<div class="pb count"><span class="n">Insurance</span><span class="v" style="color:#E9EEF6">×'+insN+'</span></div>';
+    var em=0; Object.keys(easy).forEach(function(k){ if(monthKey(k)===month) em+=easy[k]; });
+    if(em) chips += '<div class="pb count"><span class="n">Easy leads</span><span class="v" style="color:#E9EEF6">×'+em+'</span></div>';
+    pcEl.innerHTML = chips ? '<span class="pblbl">Sold</span>'+chips : '';
+
+    // call mix
+    var MIXC = {'Device':'#E4B45A','SIM':'#9C7C3E','Broadband':'#6D8FB5','Other':'#55657E',
+                'No sale':'#DE6E5C','Internal':'#8E7CA8'};
+    // The mix splits no-sales into customer no-sales and internal calls — an internal
+    // call isn't a lost sale, so lumping them together hides what the day looked like.
+    // Kept separate from `cnt`, which the Sold section and the Broadband target use.
+    var MIX_CATS = ['Device','SIM','Broadband','Other','No sale','Internal'];
+    var mixCnt = {};
+    me.forEach(function(e){
+      var pp = e.product||'Other';
+      var cat = (pp==='No sale' && e.internal) ? 'Internal' : pp;
+      mixCnt[cat] = (mixCnt[cat]||0) + 1;
+    });
+    var mixCard = document.getElementById('mixCard');
+    if(me.length){
+      mixCard.style.display='';
+      var bar='', leg='';
+      MIX_CATS.forEach(function(pp){
+        var n = mixCnt[pp]||0; if(!n) return;
+        var pv = n/me.length*100;
+        bar += '<div style="width:'+pv+'%;background:'+MIXC[pp]+'" title="'+pp+'"></div>';
+        leg += '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;color:#8CA0BA"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+MIXC[pp]+';margin-right:5px"></span>'+pp+' <span style="color:#E9EEF6;font-weight:600">'+pv.toFixed(0)+'%</span> ('+n+')</span>';
+      });
+      document.getElementById('mixBar').innerHTML = bar;
+      document.getElementById('mixLegend').innerHTML = leg;
+    } else { mixCard.style.display='none'; }
+
+    // targets
+    var mT = {uplift:DEF_T.uplift, broadband:DEF_T.broadband, easy:DEF_T.easy, sg:DEF_T.sg};
+    var ovT = pctT[month]||{};
+    Object.keys(ovT).forEach(function(k){ mT[k]=ovT[k]; });
+    var bbN = cnt['Broadband']||0;
+    var totalCalls = callCount;
+    // Scam Guard attaches to Device and SIM only, so its rate is measured against
+    // those lines, not against every call — matching how work scores it. Note this
+    // counts lines rather than calls: a family upgrade of three SIMs is three
+    // chances to attach SG, and should count as three.
+    var sgBase = (cnt['Device']||0) + (cnt['SIM']||0);
+    // last-month comparison: only fair once this month has enough calls, since these
+    // are ratios and swing wildly on low volume
+    var MIN_CALLS_FOR_COMPARE = 10;
+    var prevM = monthMetrics(shiftMonth(month,-1));
+    var canCompare = totalCalls >= MIN_CALLS_FOR_COMPARE && prevM.calls > 0;
+    var tRows = [
+      {k:'uplift', label:'Household', actual: pct},
+      {k:'broadband', label:'Broadband', actual: totalCalls? bbN/totalCalls*100 : null, count: bbN},
+      {k:'easy', label:'Easy leads', actual: totalCalls? em/totalCalls*100 : null, count: em},
+      {k:'sg', label:'Scam Guard', actual: sgBase? sgN/sgBase*100 : null, count: sgN, base: sgBase}
+    ];
+    var tHtml='';
+    tRows.forEach(function(r){
+      var t = mT[r.k];
+      var met = r.actual!==null && r.actual>=t;
+      var prog = r.actual===null?0:Math.max(0,Math.min(1,r.actual/t));
+      var aTxt = r.actual===null?'\u2014':r.actual.toFixed(1)+'%';
+      var needTxt = null;
+      if(r.k==='uplift'){
+        if(pct!==null){
+          var short = (t/100)*sumB - sumA;
+          needTxt = met ? 'target met' : gbp(short)+'/mo more';
+        }
+      } else if(r.k==='sg'){
+        // SG measures against Device + SIM lines, so the shortfall maths and the
+        // wording both use that base rather than total calls.
+        if(r.base > 0){
+          var sgNeeded = Math.ceil((t/100)*r.base);
+          var sgGap = sgNeeded - r.count;
+          if(sgGap>0){
+            needTxt = sgGap+' more needed ('+sgNeeded+' of '+r.base+' Device/SIM)';
+          } else {
+            var sgHead = Math.floor(r.count/(t/100)) - r.base;
+            needTxt = sgHead>0
+              ? sgHead+' more Device/SIM before below target'
+              : 'next Device/SIM drops below target';
+          }
+        } else {
+          needTxt = 'no Device or SIM sales yet';
+        }
+      } else if(totalCalls>0){
+        var needed = Math.ceil((t/100)*totalCalls);
+        var gap = needed - r.count;
+        if(gap>0){
+          needTxt = gap+' more needed ('+needed+' of '+totalCalls+' calls)';
+        } else {
+          var headroom = Math.floor(r.count/(t/100)) - totalCalls;
+          needTxt = headroom>0
+            ? headroom+' more call'+(headroom===1?'':'s')+' before below target'
+            : 'next call drops below target';
+        }
+      }
+      var valPart;
+      if(editingT===r.k){
+        valPart = '<input id="tInput" inputmode="decimal" value="'+t+'" style="width:70px;padding:3px 8px;font-size:12px"> '+
+          '<button data-tset="'+r.k+'" style="background:#E4B45A;color:#0D1420;border:none;border-radius:6px;padding:3px 10px;font-weight:600;font-size:12px;cursor:pointer">Set</button>';
+      } else {
+        valPart = '<button data-tk="'+r.k+'" style="background:none;border:none;color:#E4B45A;font-family:\'IBM Plex Mono\',monospace;font-size:12px;text-decoration:underline;cursor:pointer">'+t+'%</button>';
+      }
+      // last month's figure for this metric, with direction arrow
+      var cmpTxt = null;
+      if(canCompare && prevM[r.k]!==null && r.actual!==null){
+        var pv = prevM[r.k];
+        var diff = r.actual - pv;
+        var arrow = Math.abs(diff) < 0.05 ? '\u2013' : (diff > 0 ? '\u25b4' : '\u25be');
+        var arrowCol = Math.abs(diff) < 0.05 ? '#8CA0BA' : (diff > 0 ? '#6FC28B' : '#DE6E5C');
+        cmpTxt = '<span style="color:#55657E">last month '+pv.toFixed(1)+'%</span> '+
+                 '<span style="color:'+arrowCol+'">'+arrow+'</span>';
+      }
+      tHtml += '<div style="margin-bottom:12px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'+
+          '<span style="font-size:11px;color:#8CA0BA;letter-spacing:.1em;text-transform:uppercase">'+r.label+'</span>'+
+          '<span class="mono" style="font-size:12px;display:flex;align-items:center;gap:4px">'+
+            '<span style="color:'+(met?'#6FC28B':'#E9EEF6')+'">'+aTxt+'</span>'+
+            '<span style="color:#8CA0BA">/</span>'+ valPart +
+            (met?'<span style="color:#6FC28B"> \u2713</span>':'')+
+          '</span>'+
+        '</div>'+
+        '<div class="rail"><div style="height:100%;width:'+(prog*100)+'%;background:linear-gradient(90deg,'+(met?'#3E7A56,#6FC28B':'#9C7C3E,#E4B45A')+');border-radius:5px"></div></div>'+
+        (needTxt? '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:'+(met?'#6FC28B':'#8CA0BA')+';margin-top:4px;text-align:right">'+needTxt+'</div>' : '')+
+        (cmpTxt? '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;margin-top:2px;text-align:right">'+cmpTxt+'</div>' : '')+
+      '</div>';
+    });
+    document.getElementById('targetRows').innerHTML = tHtml;
+    document.getElementById('tReset').style.display = pctT[month] ? 'inline-block' : 'none';
+    // copy last month's % targets — only when this month is untouched and last month
+    // had at least one value changed from the defaults
+    var prevPKey = shiftMonth(month,-1);
+    var prevPct = pctT[prevPKey];
+    var cpBtn = document.getElementById('copyPctBtn');
+    cpBtn.style.display = (!pctT[month] && prevPct && Object.keys(prevPct).length) ? 'inline-block' : 'none';
+    if(editingT){
+      var ti = document.getElementById('tInput');
+      if(ti){ ti.focus(); ti.addEventListener('keydown', function(e){ if(e.key==='Enter') commitT(editingT); }); }
+    }
+
+    // spotlight
+    var ms = spots[month]||[];
+    var prevMs = spots[shiftMonth(month,-1)]||[];
+    var ptsTotal = 0;
+    ms.forEach(function(s){ ptsTotal += s.count*s.points; });
+    document.getElementById('spotTotal').textContent = (Math.round(ptsTotal*100)/100).toLocaleString('en-GB');
+    var sl = document.getElementById('spotList');
+    sl.innerHTML = '';
+    document.getElementById('spotEmpty').style.display = ms.length? 'none':'block';
+    document.getElementById('spotCopy').style.display = (!ms.length && prevMs.length)? 'block':'none';
+    ms.forEach(function(s){
+      var earned = Math.round(s.count*s.points*100)/100;
+      var div = document.createElement('div');
+      div.className = 'entry';
+      div.innerHTML =
+        '<div class="who"><div class="name">'+esc(s.name)+'</div><div class="meta">'+s.points+' pts each</div></div>'+
+        '<div style="display:flex;align-items:center;gap:8px">'+
+          '<button class="sbtn" data-act="dec" data-id="'+s.id+'" aria-label="Remove one">−</button>'+
+          '<span class="mono" style="font-size:16px;font-weight:600;min-width:24px;text-align:center;display:inline-block">'+s.count+'</span>'+
+          '<button class="sbtn plus" data-act="inc" data-id="'+s.id+'" aria-label="Add one">+</button>'+
+        '</div>'+
+        '<div class="mono" style="font-size:13px;color:var(--brass);font-weight:600;min-width:56px;text-align:right">'+earned.toLocaleString('en-GB')+' pts</div>'+
+        '<div class="acts"><button class="del" data-act="sdel" data-id="'+s.id+'">del</button></div>';
+      sl.appendChild(div);
+    });
+
+    // easy leads
+    var tk = todayISO();
+    var isCur = monthKey(tk) === month;
+    var tc = isCur ? (easy[tk]||0) : 0;
+    var ec = document.getElementById('easyCount');
+    ec.textContent = tc;
+    ec.style.color = tc>=5 ? '#6FC28B' : '#E9EEF6';
+    var incB=document.getElementById('easyInc'), decB=document.getElementById('easyDec');
+    incB.disabled = !isCur; decB.disabled = !isCur;
+    incB.style.opacity = isCur ? '1' : '0.4'; decB.style.opacity = isCur ? '1' : '0.4';
+    var filled = tc===0 ? 0 : ((tc-1)%5)+1;
+    var pips='';
+    for(var pi=0;pi<5;pi++){
+      pips += '<span style="width:10px;height:10px;border-radius:50%;display:inline-block;background:'+(pi<filled?'#6FC28B':'transparent')+';border:1px solid '+(pi<filled?'#6FC28B':'#2A3A52')+'"></span>';
+    }
+    document.getElementById('easyPips').innerHTML = pips;
+    document.getElementById('easyMonth').textContent = em + ' this month';
+
+    // Leads sitting on any day other than today — from logging a call with a different
+    // date, or from viewing a past month. The +/- above only ever touch today, so
+    // without this there'd be no way to correct them.
+    var otherDays = Object.keys(easy).filter(function(k){
+      return monthKey(k)===month && k!==tk && easy[k]>0;
+    }).sort().reverse();
+    var oe = document.getElementById('easyOther');
+    if(!otherDays.length){ oe.style.display='none'; oe.innerHTML=''; }
+    else {
+      oe.style.display='block';
+      oe.innerHTML =
+        '<div class="mono" style="font-size:10px;color:#55657E;letter-spacing:.08em;text-align:center;margin-bottom:6px">OTHER DAYS</div>'+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center">'+
+        otherDays.map(function(k){
+          var dd = new Date(k+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+          // a lead dated ahead of today is almost always a slip, so flag it
+          var col = (k > tk) ? '#E4B45A' : '#8CA0BA';
+          return '<span style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:3px 5px 3px 9px">'+
+            '<span class="mono" style="font-size:11px;color:'+col+'">'+dd+' \u00d7'+easy[k]+'</span>'+
+            '<button data-eday="'+k+'" aria-label="Remove one lead from '+dd+'" style="background:transparent;border:1px solid var(--line);border-radius:5px;color:#8CA0BA;font-size:12px;line-height:1;padding:2px 7px;cursor:pointer;font-family:\'IBM Plex Mono\',monospace">\u2212</button>'+
+          '</span>';
+        }).join('')+'</div>';
+      oe.querySelectorAll('[data-eday]').forEach(function(b){
+        b.addEventListener('click', function(){
+          var k = b.getAttribute('data-eday');
+          easy[k] = Math.max(0,(easy[k]||0)-1);
+          if(!easy[k]) delete easy[k];
+          renderKeepScroll();
+        });
+      });
+    }
+
+    // target rail
+    var t = targets[month];
+    var btn = document.getElementById('targetBtn');
+    if(btn) btn.textContent = t ? gbp(t) : 'set a target';
+
+    // "same as last month" — only when this month has none and last month had one set
+    var prevKey = shiftMonth(month,-1);
+
+    // last month household £ comparison — like for like: if this is the current month,
+    // compare against last month up to the same day, not its finished total
+    var lmNote = document.getElementById('lastMonthNote');
+    var realNow = new Date();
+    var realMK = realNow.getFullYear()+'-'+String(realNow.getMonth()+1).padStart(2,'0');
+    var isCurMonth = (month === realMK);
+    var prevHasData = entries.some(function(e){ return monthKey(e.date)===prevKey; });
+    if(prevHasData && (total!==0 || isCurMonth)){
+      var prevTotal, label;
+      if(isCurMonth){
+        var dayNow = realNow.getDate();
+        prevTotal = monthTotalToDay(prevKey, dayNow);
+        label = 'last month by day '+dayNow;
+      } else {
+        prevTotal = monthTotalToDay(prevKey);
+        label = 'last month';
+      }
+      var dTot = total - prevTotal;
+      var arw = Math.abs(dTot) < 0.005 ? '\u2013' : (dTot > 0 ? '\u25b4' : '\u25be');
+      var arwCol = Math.abs(dTot) < 0.005 ? '#8CA0BA' : (dTot > 0 ? '#6FC28B' : '#DE6E5C');
+      lmNote.innerHTML = label+' '+gbp(prevTotal,true)+
+        ' <span style="color:'+arwCol+'">'+arw+'</span>';
+      lmNote.style.display = 'block';
+    } else {
+      lmNote.style.display = 'none';
+    }
+
+    var prevT = targets[prevKey];
+    var ctRow = document.getElementById('copyTargetRow');
+    var ctBtn = document.getElementById('copyTargetBtn');
+    if(!t && prevT && !noTarget[month]){
+      ctBtn.textContent = 'Same as last month (' + gbp(prevT) + ')';
+      ctRow.style.display = 'flex';
+    } else {
+      ctRow.style.display = 'none';
+    }
+    var fill = document.getElementById('railFill');
+    var note = document.getElementById('railNote');
+    if(t){
+      var p = Math.max(0, Math.min(1, total/t));
+      fill.style.width = (p*100)+'%';
+      note.textContent = Math.round(p*100)+'% · ' + (total>=t ? 'target hit' : gbp(t-total)+' to go');
+    }else{
+      fill.style.width='0%'; note.textContent='';
+    }
+
+    renderPaceAndCalendar(total, t);
+
+    // list
+    var list = document.getElementById('entryList');
+    var empty = document.getElementById('empty');
+    list.innerHTML = '';
+    empty.style.display = me.length ? 'none' : 'block';
+    function entryRow(e){
+      var d = e.after-e.before;
+      var isBest = best && best.e.id===e.id && d>0 && me.length>1;
+      var div = document.createElement('div');
+      div.className = 'entry' + (isBest?' best':'');
+      var noSale = (e.product||'Other')==='No sale';
+      var nums = noSale ? '' : '<div class="nums"><span class="dim">'+gbp(e.before)+'</span><span class="dim"> → </span><span>'+gbp(e.after)+'</span><span class="d '+(d>=0?'up':'dn')+'">'+gbp(d,true)+'</span></div>';
+      var noteBtn = '';
+      if(e.note && String(e.note).trim()){
+        noteBtn = e.noteDone
+          ? '<button data-noteadd="'+e.id+'" style="margin-left:6px;background:transparent;color:var(--brass);border:1px solid var(--brass-dim);border-radius:5px;padding:1px 8px;font-size:10px;font-family:\'IBM Plex Mono\',monospace;cursor:pointer;vertical-align:middle">add</button>'
+          : '<button data-noteremove="'+e.id+'" style="margin-left:6px;background:transparent;color:#8CA0BA;border:1px solid var(--line);border-radius:5px;padding:1px 8px;font-size:10px;font-family:\'IBM Plex Mono\',monospace;cursor:pointer;vertical-align:middle">remove</button>';
+      }
+      div.innerHTML =
+        '<div class="who">'+
+          '<div class="name">'+esc(e.product||'Other')+(isBest?' <span class="star">★ best</span>':'')+'</div>'+
+          '<div class="meta">'+ new Date(e.date+'T00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}) +
+            (e.internal? ' <span style="color:#6D8FB5">· Internal</span>':'') +
+            (e.sg? ' <span class="ptag">· SG</span>':'') + (e.ins? ' <span class="ptag">· Insurance</span>':'') +
+            (e.note? ' · <span style="'+(e.noteDone?'opacity:.5;text-decoration:line-through':'')+'">'+esc(e.note)+'</span>'+noteBtn:'') +'</div>'+
+        '</div>'+
+        nums +
+        '<div class="acts"><button class="edit" data-act="edit" data-id="'+e.id+'">edit</button><button class="del" data-act="del" data-id="'+e.id+'">del</button></div>';
+      return div;
+    }
+    // group items into calls by callId
+    var callMap = {}, callOrder = [];
+    me.forEach(function(e){
+      var cid = callIdOf(e);
+      if(!callMap[cid]){ callMap[cid]=[]; callOrder.push(cid); }
+      callMap[cid].push(e);
+    });
+    var groups = [];
+    // Any run of consecutive single-item calls of the same kind collapses into a stack —
+    // three SIM sales in a row, four no-sales, and so on. A different kind breaks the run,
+    // so a later run of the same kind starts a fresh stack.
+    // Each stack is numbered within its date so its open/closed key stays unique per run
+    // and survives an item being deleted from inside it.
+    function stackKind(e){
+      var p = e.product||'Other';
+      return (p==='No sale' && e.internal) ? 'Internal' : p;
+    }
+    var stackSeq = {};
+    callOrder.forEach(function(cid){
+      var items = callMap[cid];
+      var one = items.length===1 ? items[0] : null;
+      if(!one){ groups.push({type:'call', cid:cid, items:items}); return; }
+      var kind = stackKind(one);
+      var lastG = groups[groups.length-1];
+      if(lastG && lastG.type==='stack' && lastG.kind===kind){ lastG.items.push(one); return; }
+      var sd = one.date;
+      var n = stackSeq[sd] || 0;
+      stackSeq[sd] = n + 1;
+      groups.push({type:'stack', kind:kind, items:[one], seq:n});
+    });
+    function sdate(x){ return new Date(x+'T00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }
+    groups.forEach(function(g){
+      if(g.type==='call'){
+        var items = g.items;
+        var callTotal = items.reduce(function(a,e){return a+(e.after-e.before);},0);
+        var wrap = document.createElement('div');
+        wrap.style.cssText = 'background:#0D1420;border:1px solid #9C7C3E;border-radius:10px;padding:10px 12px';
+        var head = document.createElement('div');
+        head.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px';
+        head.innerHTML = '<span class="mono" style="font-size:11px;color:#E4B45A">1 call · '+items.length+' sales</span>'+
+          '<span class="mono" style="font-size:11px;color:#8CA0BA">'+sdate(items[0].date)+'<span style="color:'+(callTotal>=0?'#E4B45A':'#DE6E5C')+';font-weight:600;margin-left:8px">'+gbp(callTotal,true)+'</span></span>';
+        wrap.appendChild(head);
+        var inner = document.createElement('div');
+        inner.style.cssText = 'display:flex;flex-direction:column;gap:8px';
+        items.forEach(function(e){ inner.appendChild(entryRow(e)); });
+        wrap.appendChild(inner);
+        list.appendChild(wrap);
+        return;
+      }
+      if(g.items.length===1){ list.appendChild(entryRow(g.items[0])); return; }
+      var key='stack-'+g.items[0].date+'-'+g.seq; var open=!!openStacks[key];
+      var oldest=g.items[g.items.length-1].date, newest=g.items[0].date;
+      var range = oldest===newest ? sdate(newest) : sdate(oldest)+' – '+sdate(newest);
+      var head2=document.createElement('div'); head2.className='entry'; head2.setAttribute('data-stack',key);
+      head2.style.borderStyle='dashed'; head2.style.cursor='pointer';
+      var kind = g.kind || 'No sale';
+      var nonSale = (kind==='No sale' || kind==='Internal');
+      var stackTotal = g.items.reduce(function(a,e){ return a+(e.after-e.before); },0);
+      var cntCol = kind==='Internal' ? '#8E7CA8' : (kind==='No sale' ? '#DE6E5C' : '#E4B45A');
+      // keep the best-call marker visible even when its row is collapsed inside a stack
+      var hasBest = best && me.length>1 && best.d>0 &&
+                    g.items.some(function(e){ return e.id===best.e.id; });
+      // roll up the add-ons so a collapsed stack still shows what's inside it
+      var sgN = g.items.filter(function(e){ return e.sg; }).length;
+      var insN = g.items.filter(function(e){ return e.ins; }).length;
+      var addons = (sgN ? ' <span class="ptag">· SG ×'+sgN+'</span>' : '')+
+                   (insN ? ' <span class="ptag">· Insurance ×'+insN+'</span>' : '');
+      head2.innerHTML =
+        '<div class="who">'+
+          '<div class="name" style="color:#8CA0BA">'+esc(kind)+
+            ' <span style="color:'+cntCol+'">×'+g.items.length+'</span>'+
+            (hasBest?' <span class="star">★ best</span>':'')+'</div>'+
+          '<div class="meta">'+range+addons+'</div>'+
+        '</div>'+
+        '<span class="mono" style="font-size:11px;color:#8CA0BA">'+
+          (nonSale ? '' : '<span style="color:'+(stackTotal>=0?'#E4B45A':'#DE6E5C')+';font-weight:600;margin-right:8px">'+gbp(stackTotal,true)+'</span>')+
+          (open?'▾ collapse':'tap to expand ▸')+
+        '</span>';
+      list.appendChild(head2);
+      if(open){ g.items.forEach(function(e){ var r=entryRow(e); r.style.marginLeft='10px'; list.appendChild(r); }); }
+    });
+
+    renderChart();
+    renderBackupBanner();
+    renderTodayStrip();
+    renderNotes();
+    renderCallbackAlert();
+  }
+
+  // ---------- today strip + notes/callbacks ----------
+  function renderTodayStrip(){
+    var strip = document.getElementById('todayStrip');
+    var tk = todayISO();
+    var td = entries.filter(function(e){ return e.date===tk; });
+    var leadsToday = easy[tk]||0;
+    var isEmpty = (!td.length && !leadsToday);
+
+    var total=0, callSet={}, saleCallSet={};
+    td.forEach(function(e){
+      total += (e.after-e.before);
+      var cid=callIdOf(e); callSet[cid]=1;
+      if((e.product||'Other')!=='No sale') saleCallSet[cid]=1;
+    });
+    var calls=Object.keys(callSet).length;
+    var sales=Object.keys(saleCallSet).length;
+    var convTxt = calls ? (Math.round(sales/calls*1000)/10)+'%' : '—';
+
+    var d = new Date(tk+'T00:00:00');
+    document.getElementById('todayDate').textContent =
+      d.toLocaleDateString('en-GB',{weekday:'short', day:'numeric', month:'short'});
+
+    function cell(v, l, col){
+      return '<div style="text-align:center">'+
+        '<div class="mono" style="font-size:15px;font-weight:600;color:'+(col||'var(--text)')+'">'+v+'</div>'+
+        '<div style="font-size:9px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-top:2px">'+l+'</div>'+
+      '</div>';
+    }
+    var upliftCol = isEmpty ? 'var(--muted)' : (total>0 ? 'var(--brass)' : (total<0 ? '#DE6E5C' : 'var(--text)'));
+    var convCol = calls ? (sales/calls>=0.5 ? '#6FC28B' : 'var(--text)') : 'var(--muted)';
+    var leadCol = isEmpty ? 'var(--muted)' : (leadsToday>=5 ? '#6FC28B' : 'var(--text)');
+    document.getElementById('todayBody').innerHTML =
+      cell(gbp(total,true), 'Household', upliftCol) +
+      cell(calls, 'Calls', isEmpty ? 'var(--muted)' : undefined) +
+      cell(convTxt, 'Conv', convCol) +
+      cell(leadsToday+'/5', 'Leads', leadCol);
+    strip.style.display='block';
+  }
+
+  // ---------- callback scheduling helpers ----------
+  var CALLBACK_WARN_MIN = 30;           // how far ahead the warning starts
+  var dismissedCallbacks = {};          // session-only: banner dismissals
+  var notifiedCallbacks = {};           // session-only: desktop notifications already fired
+
+  // Status of a note's scheduled callback: null | 'later' | 'soon' | 'overdue'
+  var NO_ANSWER_AFTER = 3;   // attempts before an overdue callback reads as "no answer"
+  var SHIFT_MS = 3600000;    // each logged attempt pushes the callback on by an hour
+
+  // ---------- note order settling ----------
+  // The notes list sorts soonest-callback-first, which is the order you want. The
+  // problem was timing, not the sort: logging an attempt pushes that callback an hour
+  // forward, and the list re-sorted on the same frame — so the card you were tapping
+  // teleported and the next tap landed on someone else.
+  // Fix: hold the displayed order, and let it re-sort 2s after you stop interacting.
+  // The reorder then happens once, visibly, while you're not mid-tap.
+  var heldNoteOrder = null;     // array of entry ids being held, or null when settled
+  var settleTimer = null;
+  var SETTLE_MS = 2000;
+  function holdNoteOrder(ids){
+    heldNoteOrder = ids.slice();
+    scheduleSettle();
+  }
+  function scheduleSettle(){
+    if(settleTimer) clearTimeout(settleTimer);
+    settleTimer = setTimeout(function(){
+      settleTimer = null;
+      // Don't reorder out from under an open editor: if a callback field inside the
+      // notes card has focus, wait and try again rather than moving its row.
+      var act = document.activeElement;
+      var card = document.getElementById('notesCard');
+      if(act && card && card.contains(act) && act.tagName === 'INPUT'){
+        scheduleSettle(); return;
+      }
+      settleNoteOrder();
+    }, SETTLE_MS);
+  }
+  // drop the held order and redraw, so the list animates into true priority order
+  function settleNoteOrder(){
+    if(!heldNoteOrder) return;
+    heldNoteOrder = null;
+    var y = window.scrollY;
+    render();
+    window.scrollTo(0, y);
+  }
+  // immediate release, for changes where the new order IS the useful information
+  function releaseNoteOrder(){
+    if(settleTimer){ clearTimeout(settleTimer); settleTimer = null; }
+    heldNoteOrder = null;
+  }
+  function applyHeldOrder(rows){
+    if(!heldNoteOrder) return rows;
+    var pos = {};
+    heldNoteOrder.forEach(function(id,i){ pos[id] = i; });
+    // anything not in the held set (a note added since) sorts to the end in its
+    // natural order, so new arrivals appear without disturbing the rows you're on
+    return rows.slice().sort(function(a,b){
+      var pa = (a.id in pos) ? pos[a.id] : Infinity;
+      var pb = (b.id in pos) ? pos[b.id] : Infinity;
+      return pa - pb;
+    });
+  }
+
+  function callbackStatus(e){
+    if(!e.callbackAt) return null;
+    var due = new Date(e.callbackAt).getTime();
+    if(isNaN(due)) return null;
+    var mins = (due - Date.now())/60000;
+    if(mins < 0) return (e.attempts||0) >= NO_ANSWER_AFTER ? 'noanswer' : 'overdue';
+    if(mins <= CALLBACK_WARN_MIN) return 'soon';
+    return 'later';
+  }
+  // datetime-local wants "YYYY-MM-DDTHH:MM" in local time
+  function toLocalInput(ms){
+    var d = new Date(ms), p = function(n){ return String(n).padStart(2,'0'); };
+    return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+
+           'T'+p(d.getHours())+':'+p(d.getMinutes());
+  }
+  function callbackColour(status){
+    if(status==='overdue') return '#DE6E5C';
+    if(status==='noanswer') return '#6D8FB5';
+    if(status==='soon') return '#E4B45A';
+    return null;
+  }
+  function fmtCallback(iso){
+    var d = new Date(iso);
+    if(isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}) + ' ' +
+           d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  }
+  // notes that are still outstanding, wherever they were logged
+  function outstandingNotes(){
+    return entries.filter(function(e){
+      // a scheduled callback counts even with no note written — otherwise it'd vanish
+      var hasNote = e.note && String(e.note).trim();
+      return (hasNote || e.callbackAt) && !e.noteDone;
+    });
+  }
+
+  function renderNotes(){
+    var card = document.getElementById('notesCard');
+    var list = document.getElementById('notesList');
+    // Notes for the viewed month, PLUS any outstanding scheduled callback from another
+    // month — a callback set in July for August shouldn't vanish when the month flips.
+    var withNotes = outstandingNotes().filter(function(e){
+      return monthKey(e.date)===month || !!e.callbackAt;
+    }).sort(function(a,b){
+      // scheduled callbacks first, soonest due at the top; then plain notes by date
+      if(a.callbackAt && b.callbackAt) return a.callbackAt < b.callbackAt ? -1 : 1;
+      if(a.callbackAt) return -1;
+      if(b.callbackAt) return 1;
+      return a.date < b.date ? 1 : -1;
+    });
+
+    // a held order wins until it settles — see holdNoteOrder above
+    withNotes = applyHeldOrder(withNotes);
+
+    if(!withNotes.length){ card.style.display='none'; list.innerHTML=''; return; }
+    card.style.display='';
+    document.getElementById('notesCount').textContent =
+      withNotes.length + ' note' + (withNotes.length===1?'':'s');
+
+    list.innerHTML = withNotes.map(function(e){
+      var dt = new Date(e.date+'T00:00:00')
+                 .toLocaleDateString('en-GB',{day:'numeric', month:'short'});
+      var prod = e.product||'Other';
+      var prodCol = prod==='No sale' ? '#DE6E5C' : 'var(--brass)';
+      var att = e.attempts || 0;
+      var attCol = att===0 ? '#55657E' : (att>=3 ? '#E4B45A' : 'var(--text)');
+      var status = callbackStatus(e);
+      var edge = callbackColour(status) || prodCol;
+      var sbtn = 'flex:none;width:26px;height:26px;background:transparent;border:1px solid var(--line);'+
+                 'border-radius:6px;color:#8CA0BA;font-size:14px;line-height:1;cursor:pointer;'+
+                 'font-family:\'IBM Plex Mono\',monospace;padding:0';
+
+      // status pill, only once a callback is scheduled
+      var pill = '';
+      if(status==='overdue'){
+        pill = '<span class="mono" style="font-size:10px;color:#DE6E5C;border:1px solid #DE6E5C;border-radius:5px;padding:1px 7px">overdue</span>';
+      } else if(status==='noanswer'){
+        pill = '<span class="mono" style="font-size:10px;color:#6D8FB5;border:1px solid #6D8FB5;border-radius:5px;padding:1px 7px">no answer &times;'+(e.attempts||0)+'</span>';
+      } else if(status==='soon'){
+        pill = '<span class="mono" style="font-size:10px;color:#E4B45A;border:1px solid #E4B45A;border-radius:5px;padding:1px 7px">due soon</span>';
+      } else if(status==='later'){
+        pill = '<span class="mono" style="font-size:10px;color:#8CA0BA">'+fmtCallback(e.callbackAt)+'</span>';
+      }
+
+      return '<div style="padding:10px 12px;margin-top:8px;background:#0D1420;border:1px solid var(--line);border-left:3px solid '+edge+';border-radius:8px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">'+
+          '<span class="mono" style="font-size:11px;color:'+prodCol+'">'+esc(prod)+'</span>'+
+          '<span style="display:flex;align-items:center;gap:8px">'+ pill +
+            '<span class="mono" style="font-size:11px;color:var(--muted)">'+dt+'</span>'+
+          '</span>'+
+        '</div>'+
+        '<div data-noteedit="'+e.id+'" tabindex="0" role="button" '+
+          'title="Click to edit this note" '+
+          'style="font-size:13px;line-height:1.4;margin-top:4px;cursor:text;border-radius:6px;'+
+          'padding:2px 4px;margin-left:-4px;margin-right:-4px;'+
+          (e.note && String(e.note).trim() ? 'color:var(--text)">'+esc(e.note)
+                                           : 'color:#55657E;font-style:italic">no note &middot; click to add')+'</div>'+
+        '<div style="display:flex;align-items:center;gap:6px;margin-top:8px">'+
+          '<span class="mono" style="font-size:10px;color:#55657E;letter-spacing:.05em">CALL BACK</span>'+
+          '<input type="datetime-local" data-cbat="'+e.id+'" value="'+(e.callbackAt||'')+'" '+
+            'style="flex:1;min-width:0;background:transparent;border:1px solid var(--line);border-radius:6px;'+
+            'color:var(--text);font-family:\'IBM Plex Mono\',monospace;font-size:11px;padding:3px 6px">'+
+          (e.callbackAt ? '<button data-cbclear="'+e.id+'" aria-label="Clear callback time" style="'+sbtn+'">&times;</button>' : '')+
+        '</div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px">'+
+          '<div style="display:flex;align-items:center;gap:6px">'+
+            '<button data-attdec="'+e.id+'" aria-label="One fewer attempt" style="'+sbtn+'">&minus;</button>'+
+            '<span class="mono" style="font-size:11px;color:'+attCol+';min-width:74px;text-align:center">'+
+              att+' attempt'+(att===1?'':'s')+'</span>'+
+            '<button data-attinc="'+e.id+'" aria-label="One more attempt" style="'+sbtn+'">+</button>'+
+          '</div>'+
+          '<button data-notedone="'+e.id+'" style="flex:none;background:transparent;color:#6FC28B;border:1px solid #6FC28B;border-radius:6px;padding:4px 12px;font-size:11px;font-family:\'IBM Plex Mono\',monospace;cursor:pointer">done</button>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+
+    // set / change a callback time
+    // ---------- inline note editing ----------
+    // Click the note text to edit it in place. Deliberately not a jump to the log
+    // form: mid-shift you want to amend what a customer said without losing your
+    // place in the callback list.
+    list.querySelectorAll('[data-noteedit]').forEach(function(el){
+      function beginEdit(){
+        if(el.dataset.editing === '1') return;
+        el.dataset.editing = '1';
+        var id = el.getAttribute('data-noteedit');
+        var entry = entries.filter(function(x){ return x.id===id; })[0];
+        if(!entry){ el.dataset.editing=''; return; }
+        // hold the list order so the row can't move while the box is open
+        holdNoteOrder(withNotes.map(function(x){ return x.id; }));
+
+        var original = entry.note || '';
+        var box = document.createElement('textarea');
+        box.className = 'noteEditBox';
+        box.value = original;
+        box.setAttribute('aria-label','Edit note');
+        var hint = document.createElement('div');
+        hint.className = 'noteEditHint';
+        hint.textContent = 'Enter to save \u00B7 Esc to cancel';
+
+        el.replaceWith(box);
+        box.after(hint);
+        box.focus();
+        box.setSelectionRange(box.value.length, box.value.length);
+
+        var done = false;
+        function finish(save){
+          if(done) return;
+          done = true;
+          var val = box.value.trim();
+          hint.remove();
+          if(save && val !== original.trim()){
+            entries = entries.map(function(x){
+              return x.id===id ? Object.assign({}, x, {note: val}) : x;
+            });
+            saveData();
+            toast(val ? 'Note updated' : 'Note cleared');
+          }
+          // re-render either way so the row returns to its normal display
+          var y = window.scrollY;
+          render();
+          window.scrollTo(0, y);
+        }
+        box.addEventListener('keydown', function(ev){
+          // Enter saves; Shift+Enter allows a line break for longer notes
+          if(ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); ev.stopPropagation(); finish(true); }
+          else if(ev.key==='Escape'){ ev.preventDefault(); ev.stopPropagation(); finish(false); }
+        });
+        // clicking away saves, matching how the callback time field behaves
+        box.addEventListener('blur', function(){ finish(true); });
+      }
+      el.addEventListener('click', beginEdit);
+      el.addEventListener('keydown', function(ev){
+        if(ev.key==='Enter' || ev.key===' '){ ev.preventDefault(); beginEdit(); }
+      });
+    });
+
+    list.querySelectorAll('[data-cbat]').forEach(function(inp){
+      // Store the value as it changes, but do NOT re-render here. Re-rendering rebuilds
+      // this input, which detaches the native date picker and closes it mid-edit — so
+      // every segment you touched was committing as if it were the final answer.
+      inp.addEventListener('change', function(){
+        var id = inp.getAttribute('data-cbat');
+        var val = inp.value || null;
+        entries = entries.map(function(x){ return x.id===id ? Object.assign({},x,{callbackAt:val}) : x; });
+        delete dismissedCallbacks[id]; delete notifiedCallbacks[id];
+        saveData();
+        renderCallbackAlert();   // safe: doesn't touch the notes list
+      });
+      // Once the picker is dismissed it's safe to redraw the row
+      inp.addEventListener('blur', function(){
+        var val = inp.value || null;
+        var y = window.scrollY;
+        // you've deliberately rescheduled — the new priority order is the useful one
+        releaseNoteOrder();
+        render(); window.scrollTo(0,y);
+        if(val){ requestNotifyPermission(); toast('Callback set for '+fmtCallback(val)); }
+      });
+    });
+    list.querySelectorAll('[data-cbclear]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var id = btn.getAttribute('data-cbclear');
+        var y = window.scrollY;
+        releaseNoteOrder();
+        entries = entries.map(function(x){ return x.id===id ? Object.assign({},x,{callbackAt:null}) : x; });
+        saveData(); render(); window.scrollTo(0,y);
+        toast('Callback time cleared');
+      });
+    });
+
+    // Callback attempt counter. Logging an attempt also pushes the callback on by an
+    // hour — you tried, no answer, try again later — and re-arms the 30-minute warning.
+    list.querySelectorAll('[data-attinc],[data-attdec]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var inc = btn.hasAttribute('data-attinc');
+        var id = btn.getAttribute(inc ? 'data-attinc' : 'data-attdec');
+        var y = window.scrollY;
+        // hold the current order before the callback time moves, so this row stays
+        // under your finger; it re-sorts 2s after you stop tapping
+        holdNoteOrder(withNotes.map(function(x){ return x.id; }));
+        var newTime = null, newCount = 0;
+        entries = entries.map(function(x){
+          if(x.id!==id) return x;
+          var n = Math.max(0, (x.attempts||0) + (inc ? 1 : -1));
+          newCount = n;
+          var patch = {attempts: n};
+          if(x.callbackAt){
+            var sched = new Date(x.callbackAt).getTime();
+            if(!isNaN(sched)){
+              // shifting forward: measure from whichever is later, so a callback that
+              // is already well overdue lands an hour from now rather than in the past
+              var base = inc ? Math.max(sched, Date.now()) : sched;
+              patch.callbackAt = toLocalInput(base + (inc ? SHIFT_MS : -SHIFT_MS));
+              newTime = patch.callbackAt;
+            }
+          }
+          return Object.assign({}, x, patch);
+        });
+        // let the warning and notification fire again against the new time
+        delete dismissedCallbacks[id];
+        delete notifiedCallbacks[id];
+        saveData(); render(); window.scrollTo(0,y);
+        if(inc && newTime){
+          toast('Attempt '+newCount+' \u00b7 next try '+fmtCallback(newTime));
+        }
+      });
+    });
+
+    // mark a note done — it leaves this list but stays on the call, where it can be re-added
+    list.querySelectorAll('[data-notedone]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var id = btn.getAttribute('data-notedone');
+        var y = window.scrollY;
+        // finishing a call removes the row entirely — re-prioritise straight away
+        releaseNoteOrder();
+        entries = entries.map(function(x){ return x.id===id ? Object.assign({},x,{noteDone:true}) : x; });
+        saveData(); render(); window.scrollTo(0,y);
+        toast('Note marked done');
+      });
+    });
+  }
+
+
+  // ---------- callback alerts (banner, tab title, desktop notification) ----------
+  var BASE_TITLE = document.title;
+
+  // Scrolling the notes card fully out of view means you've moved on, so the pinned
+  // working order is released and the list re-sorts by priority next time you look.
+  // Guarded: an older browser without IntersectionObserver just keeps the pin until
+  // one of the explicit releases fires, which is still correct, only stickier.
+  (function(){
+    try{
+      if(typeof IntersectionObserver === 'undefined') return;
+      var card = document.getElementById('notesCard');
+      if(!card) return;
+      new IntersectionObserver(function(ents){
+        ents.forEach(function(en){
+          if(!en.isIntersecting && heldNoteOrder){
+            // out of sight — settle now rather than waiting out the timer, so the
+            // list is already in priority order when you scroll back to it
+            settleNoteOrder();
+          }
+        });
+      }, {threshold:0}).observe(card);
+    }catch(err){ /* pin simply stays until an explicit release */ }
+  })();
+
+  function requestNotifyPermission(){
+    try{
+      if(typeof Notification === 'undefined') return;
+      if(Notification.permission === 'default') Notification.requestPermission();
+    }catch(err){ /* blocked by policy — banner still works */ }
+  }
+  function fireNotification(e){
+    try{
+      if(typeof Notification === 'undefined') return;
+      if(Notification.permission !== 'granted') return;
+      new Notification('Callback due', {
+        body: String(e.note||'').slice(0,120),
+        tag: 'cb-'+e.id
+      });
+    }catch(err){ /* silently fall back to the banner */ }
+  }
+
+  // Callbacks needing attention right now: due within the window, or already overdue.
+  function dueCallbacks(){
+    return outstandingNotes().filter(function(e){
+      var s = callbackStatus(e);
+      return s==='soon' || s==='overdue' || s==='noanswer';
+    }).sort(function(a,b){ return a.callbackAt < b.callbackAt ? -1 : 1; });
+  }
+
+  function renderCallbackAlert(){
+    var el = document.getElementById('callbackAlert');
+    if(!el) return;
+    var due = dueCallbacks();
+
+    // desktop notification once per callback as it enters the window
+    due.forEach(function(e){
+      if(!notifiedCallbacks[e.id]){ notifiedCallbacks[e.id] = true; fireNotification(e); }
+    });
+
+    // tab title — the bit most likely to catch you while you're in another window
+    var undismissed = due.filter(function(e){ return !dismissedCallbacks[e.id]; });
+    document.title = undismissed.length
+      ? '\u23F0 Callback due \u2014 ' + BASE_TITLE
+      : BASE_TITLE;
+
+    if(!undismissed.length){ el.style.display='none'; el.innerHTML=''; return; }
+
+    el.innerHTML = undismissed.map(function(e){
+      var st = callbackStatus(e);
+      var when = fmtCallback(e.callbackAt);
+      var col, head, icon;
+      if(st==='noanswer'){
+        col = '#6D8FB5'; icon = '\u260E\uFE0F';
+        head = 'No answer after '+(e.attempts||0)+' attempts \u00b7 '+when;
+      } else if(st==='overdue'){
+        col = '#DE6E5C'; icon = '\u26A0\uFE0F';
+        head = 'Callback overdue \u00b7 '+when;
+      } else {
+        col = '#E4B45A'; icon = '\u23F0';
+        head = 'Callback at '+when;
+      }
+      return '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#16202F;'+
+               'border:1px solid '+col+';border-radius:12px;padding:12px 14px;margin-bottom:8px">'+
+        '<span style="font-size:18px;line-height:1">'+icon+'</span>'+
+        '<div style="flex:1 1 200px;min-width:0">'+
+          '<div class="mono" style="font-size:11px;color:'+col+';letter-spacing:.05em">'+head+'</div>'+
+          '<div style="font-size:13px;color:#E9EEF6;margin-top:2px">'+esc(e.note)+'</div>'+
+        '</div>'+
+        '<button data-cbdismiss="'+e.id+'" style="flex:none;background:transparent;color:#8CA0BA;'+
+          'border:1px solid var(--line);border-radius:8px;padding:5px 12px;font-size:11px;'+
+          'font-family:\'IBM Plex Mono\',monospace;cursor:pointer">dismiss</button>'+
+      '</div>';
+    }).join('');
+    el.style.display='block';
+
+    el.querySelectorAll('[data-cbdismiss]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        dismissedCallbacks[btn.getAttribute('data-cbdismiss')] = true;
+        renderCallbackAlert();
+      });
+    });
+  }
+
+  // Light tick: only refreshes the alert and the notes card, never the whole page,
+  // so it can't cause the layout to shift while you're working.
+  setInterval(function(){
+    renderCallbackAlert();
+    // don't rebuild the notes list while a callback picker or note editor is open
+    var ae = document.activeElement;
+    if(ae && ae.getAttribute && ae.getAttribute('data-cbat')) return;
+    if(ae && ae.classList && ae.classList.contains('noteEditBox')) return;
+    renderNotes();
+  }, 30000);
+
+  var MIN_WORKING_DAYS = 5; // hide projection until this many logged days (when no shifts marked)
+  function renderPaceAndCalendar(monthTotal, target){
+    var parts = month.split('-');
+    var yr = +parts[0], mo = +parts[1]; // mo is 1-based
+    var daysInMonth = new Date(yr, mo, 0).getDate();
+
+    // which days this month had at least one logged call
+    var loggedDays = {}; // day-of-month -> true
+    entries.forEach(function(e){
+      if(monthKey(e.date)===month){
+        var dd = parseInt(e.date.slice(8,10),10);
+        if(dd>=1 && dd<=daysInMonth) loggedDays[dd] = true;
+      }
+    });
+
+    // planned/marked future shifts for this month
+    var plannedList = planned[month] || [];
+    var plannedSet = {};
+    plannedList.forEach(function(d){ plannedSet[d]=true; });
+
+    // figure out "today" relative to the viewed month
+    var realToday = new Date();
+    var realKey = realToday.getFullYear()+'-'+String(realToday.getMonth()+1).padStart(2,'0');
+    var isCurrentMonth = (realKey === month);
+    var isPastMonth = (month < realKey);
+    var todayDom = realToday.getDate();
+    // last day to colour with logged/grey: today if current month, whole month if past, nothing if future
+    var lastColouredDay;
+    if(isCurrentMonth) lastColouredDay = todayDom;
+    else if(isPastMonth) lastColouredDay = daysInMonth;
+    else lastColouredDay = 0; // future month
+
+    // ---- calendar grid ----
+    var calCard = document.getElementById('calCard');
+    var grid = document.getElementById('calGrid');
+    var loggedCount = Object.keys(loggedDays).length;
+    // count planned days that are still in the future (past planned days are ignored — logged is truth)
+    var futurePlannedCount = 0;
+    plannedList.forEach(function(d){
+      if(isCurrentMonth && d > todayDom) futurePlannedCount++;
+      else if(month > realKey) futurePlannedCount++; // whole month is future
+    });
+
+    // future days are tappable only for current or future months
+    var allowMarking = isCurrentMonth || (month > realKey);
+
+    // hide the card only when there's genuinely nothing to show
+    if(lastColouredDay === 0 && loggedCount === 0 && !allowMarking){
+      calCard.style.display = 'none';
+    } else {
+      calCard.style.display = '';
+      document.getElementById('calHint').style.display = allowMarking ? 'block' : 'none';
+      var dowNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      var html = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px">';
+      dowNames.forEach(function(n){
+        html += '<div style="text-align:center;font-family:\'IBM Plex Mono\',monospace;font-size:10px;color:#8CA0BA;letter-spacing:.05em">'+n+'</div>';
+      });
+      var firstDow = new Date(yr, mo-1, 1).getDay();
+      var lead = (firstDow===0) ? 6 : firstDow-1;
+      for(var b=0;b<lead;b++){ html += '<div></div>'; }
+      for(var d=1; d<=daysInMonth; d++){
+        var bg='transparent', bd='#2A3A52', col='#55657E', tappable=false;
+        var isFuture = (month > realKey) || (isCurrentMonth && d > todayDom);
+        if(d <= lastColouredDay){
+          if(loggedDays[d]){ bg='#2E5A3E'; bd='#6FC28B'; col='#E9EEF6'; }   // green — calls logged
+          else { bg='#0D1420'; bd='#2A3A52'; col='#55657E'; }              // grey — past, nothing logged
+        } else if(isFuture){
+          tappable = true;
+          if(plannedSet[d]){ bg='transparent'; bd='#E4B45A'; col='#E4B45A'; } // planned shift — hollow brass
+          else { bg='transparent'; bd='#2A3A52'; col='#8CA0BA'; }             // blank future
+        }
+        var isToday = isCurrentMonth && d===todayDom;
+        var cursor = tappable ? 'cursor:pointer;' : '';
+        var dataAttr = tappable ? ' data-planday="'+d+'"' : '';
+        html += '<div'+dataAttr+' style="text-align:center;font-family:\'IBM Plex Mono\',monospace;font-size:12px;padding:6px 0;border-radius:6px;'+cursor+
+                'background:'+bg+';border:1px solid '+(isToday?'#E4B45A':bd)+';color:'+col+'">'+d+'</div>';
+      }
+      html += '</div>';
+      grid.innerHTML = html;
+      var sumTxt = loggedCount + ' logged';
+      if(futurePlannedCount) sumTxt += ' · ' + futurePlannedCount + ' shift'+(futurePlannedCount===1?'':'s')+' marked';
+      document.getElementById('calSummary').textContent = sumTxt;
+
+      // wire taps (only future/current months have tappable cells)
+      if(allowMarking){
+        grid.querySelectorAll('[data-planday]').forEach(function(cell){
+          cell.addEventListener('click', function(){
+            var day = parseInt(cell.getAttribute('data-planday'),10);
+            var arr = planned[month] ? planned[month].slice() : [];
+            var idx = arr.indexOf(day);
+            if(idx>=0) arr.splice(idx,1); else arr.push(day);
+            if(arr.length) planned[month] = arr.sort(function(a,b){return a-b;});
+            else delete planned[month];
+            saveData();
+            render();
+          });
+        });
+      }
+    }
+
+    // ---- pace projection (current month only) ----
+    var paceEl = document.getElementById('paceNote');
+    if(!isCurrentMonth){
+      paceEl.style.display = 'none'; paceEl.innerHTML = ''; return;
+    }
+
+    var ratePerDay = loggedCount>0 ? monthTotal / loggedCount : 0;
+
+    if(futurePlannedCount > 0){
+      // MARKED MODE: trust what's marked as the full remaining roster → single confident figure
+      if(loggedCount === 0){ paceEl.style.display='none'; paceEl.innerHTML=''; return; }
+      var totalWorkingDays = loggedCount + futurePlannedCount;
+      var proj = ratePerDay * totalWorkingDays;
+      var verdict = '', col = '#E4B45A';
+      if(target){
+        if(proj >= target){ verdict = ' · clears target ✓'; col = '#6FC28B'; }
+        else { verdict = ' · ~' + gbp(target-proj) + ' under target'; }
+      }
+      paceEl.style.display = 'block';
+      paceEl.innerHTML =
+        '<div class="mono" style="font-size:13px;font-weight:600;color:'+col+'">On pace for ~'+gbp(proj,true)+verdict+'</div>'+
+        '<div class="mono" style="font-size:11px;color:#8CA0BA;margin-top:2px">projecting to '+totalWorkingDays+' working days ('+loggedCount+' logged + '+futurePlannedCount+' marked)</div>';
+      return;
+    }
+
+    // ESTIMATE MODE: no shifts marked → guess remaining working days, show a range
+    if(loggedCount < MIN_WORKING_DAYS){
+      paceEl.style.display = 'none'; paceEl.innerHTML = ''; return;
+    }
+    var daysElapsed = todayDom;
+    var daysRemaining = daysInMonth - todayDom;
+    var workRate = loggedCount / daysElapsed;
+    var loRemaining = Math.max(0, workRate*0.75 * daysRemaining);
+    var hiRemaining = workRate*1.25 * daysRemaining;
+    var projLo = monthTotal + ratePerDay * loRemaining;
+    var projHi = monthTotal + ratePerDay * hiRemaining;
+    if(projLo > projHi){ var tmp=projLo; projLo=projHi; projHi=tmp; }
+    var rangeTxt = 'On pace for ~' + gbp(projLo,true) + ' – ' + gbp(projHi,true).replace(/^\+?£/,'£');
+    var verdict2 = '', col2 = '#E4B45A';
+    if(target){
+      var mid = (projLo+projHi)/2;
+      if(mid >= target){ verdict2 = ' · clears target ✓'; col2 = '#6FC28B'; }
+      else { verdict2 = ' · ~' + gbp(target-mid) + ' under target'; }
+    }
+    paceEl.style.display = 'block';
+    paceEl.innerHTML =
+      '<div class="mono" style="font-size:13px;font-weight:600;color:'+col2+'">'+rangeTxt+verdict2+'</div>'+
+      '<div class="mono" style="font-size:11px;color:#8CA0BA;margin-top:2px">based on '+loggedCount+' working day'+(loggedCount===1?'':'s')+' · mark your shifts for a sharper figure</div>';
+  }
+
+  // ---------- form ----------
+  function readForm(){
+    return {
+      product: product, sg: sg, ins: ins, internal: intl,
+      before: parseFloat(document.getElementById('fBefore').value),
+      after: parseFloat(document.getElementById('fAfter').value),
+      date: document.getElementById('fDate').value,
+      note: document.getElementById('fNote').value.trim(),
+      cbAt: (cbOn && document.getElementById('fCbAt').value) ? document.getElementById('fCbAt').value : null
+    };
+  }
+  function clearForm(keepDate){
+    var date = document.getElementById('fDate').value;
+    ['fBefore','fAfter','fNote'].forEach(function(id){document.getElementById(id).value='';});
+    setCb(false); bbAutoZero = false;
+    setEL(false);
+    var elBtn = document.getElementById('togEL'); if(elBtn) elBtn.style.display='';
+    document.getElementById('fDate').value = keepDate && date ? date : todayISO();
+    setProduct('Device'); setSG(false); setIns(false); setIntl(false); setQty(1);
+    editId = null;
+    document.getElementById('formTitle').textContent = 'Log a call';
+    updateSubmitLabel();
+    document.getElementById('cancelBtn').style.display = 'none';
+    updateDelta();
+  }
+  function updateDelta(){
+    var b = parseFloat(document.getElementById('fBefore').value);
+    var a = parseFloat(document.getElementById('fAfter').value);
+    var el = document.getElementById('deltaVal');
+    var box = document.querySelector('.delta-preview');
+    if(isNaN(b)||isNaN(a)){ el.textContent='\u2014'; el.style.color='#8CA0BA'; box.style.borderColor='#2A3A52'; return; }
+    var d = (a-b) * (product==='No sale'?1:qty);
+    el.textContent = gbp(d,true)+'/mo';
+    el.style.color = d>=0 ? '#E4B45A' : '#DE6E5C';
+    box.style.borderColor = d>=0 ? '#E4B45A' : '#DE6E5C';
+  }
+  function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+
+  // ---------- duplicate guard ----------
+  // Logging the same call twice is easy when you're distracted and unsure whether the
+  // last one saved. The signature deliberately EXCLUDES the note: two identical SIM
+  // upgrades to different customers is a real thing, and the note is what tells them
+  // apart. The guard warns once and never blocks — "Log anyway" goes straight through.
+  var DUP_WINDOW_MS = 90000;
+  var dupBypass = false;     // set by the toast action so the retry skips the check
+  function sigOf(it, date){
+    return [date, it.product, it.before, it.after, !!it.sg, !!it.ins].join('|');
+  }
+  // returns the matching entry, or null
+  function findRecentDuplicate(lines, date){
+    var cutoff = Date.now() - DUP_WINDOW_MS;
+    var sigs = {};
+    lines.forEach(function(it){ sigs[sigOf(it, date)] = true; });
+    for(var i=0;i<entries.length;i++){
+      var e = entries[i];
+      // loggedAt is only on entries created by this version; older rows can't be
+      // time-checked, so they're skipped rather than guessed at
+      if(!e.loggedAt || e.loggedAt < cutoff) continue;
+      if(sigs[sigOf(e, e.date)]) return e;
+    }
+    return null;
+  }
+  function formItem(){
+    var f = readForm();
+    if(f.product==='No sale'){
+      // no transaction happened, so there are no amounts to record
+      f.before = 0; f.after = 0;
+    }
+    if(isNaN(f.before) || isNaN(f.after)) return null;
+    return {product:f.product, before:f.before, after:f.after, sg:f.sg, ins:f.ins};
+  }
+  function renderPending(){
+    var box = document.getElementById('pendingBox');
+    if(!pending.length){ box.style.display='none'; box.innerHTML=''; return; }
+    box.style.display='block';
+    var html = '<div style="font-size:10px;color:#8CA0BA;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px">This call so far</div>';
+    pending.forEach(function(it,i){
+      var q = Math.max(1, it.qty||1);
+      var d = (it.after-it.before)*q;
+      html += '<div style="display:flex;align-items:center;gap:8px;font-family:\'IBM Plex Mono\',monospace;font-size:12px;margin-bottom:6px">'+
+        '<span style="flex:1"><span style="color:#E9EEF6">'+(q>1?q+'\u00d7 ':'')+esc(it.product)+'</span>'+
+        (it.sg?' <span style="color:#9C7C3E">\u00b7 SG</span>':'')+(it.ins?' <span style="color:#9C7C3E">\u00b7 Insurance</span>':'')+
+        '<span style="color:#8CA0BA"> \u00b7 '+gbp(it.before)+'\u2192'+gbp(it.after)+'</span></span>'+
+        '<span style="color:'+(d>=0?'#E4B45A':'#DE6E5C')+';font-weight:600">'+gbp(d,true)+'</span>'+
+        '<button data-pdel="'+i+'" style="background:none;border:1px solid #2A3A52;color:#DE6E5C;border-radius:6px;padding:2px 7px;font-size:11px;font-family:\'IBM Plex Mono\',monospace;cursor:pointer">\u2715</button></div>';
+    });
+    box.innerHTML = html;
+    updateSubmitLabel();
+  }
+  function pendingUnits(){ return pending.reduce(function(s,it){return s+Math.max(1,it.qty||1);},0); }
+  function updateSubmitLabel(){
+    if(editId){ document.getElementById('submitBtn').textContent='Save changes'; return; }
+    var u = pendingUnits();
+    document.getElementById('submitBtn').textContent = u ? ('Log call ('+(u+Math.max(1,qty))+')') : 'Log call';
+  }
+
+  document.getElementById('fBefore').addEventListener('input', updateDelta);
+  document.getElementById('fAfter').addEventListener('input', updateDelta);
+  document.getElementById('productChips').addEventListener('click', function(ev){
+    var b = ev.target.closest('.pchip'); if(!b) return;
+    setProduct(b.getAttribute('data-p'));
+  });
+  document.getElementById('togSG').addEventListener('click', function(){ setSG(!sg); setQty(qty); });
+  document.getElementById('togIns').addEventListener('click', function(){ setIns(!ins); setQty(qty); });
+  document.getElementById('togInt').addEventListener('click', function(){ setIntl(!intl); });
+  document.getElementById('togCb').addEventListener('click', function(){ setCb(!cbOn); });
+  document.getElementById('togEL').addEventListener('click', function(){ setEL(!elOn); });
+  document.getElementById('fBefore').addEventListener('input', function(){ bbAutoZero = false; });
+  // The native picker's "Reset" clears the field outright, but a call always needs a
+  // date — an empty one just fails validation. Fall straight back to today instead.
+  (function(){
+    var fd = document.getElementById('fDate');
+    // A call always needs a date, so an empty field falls back to today. Only on blur:
+    // restoring it mid-edit would fight someone clearing the field to type a new date,
+    // and stealing focus to force a redraw would be worse.
+    fd.addEventListener('blur', function(){ if(!fd.value) fd.value = todayISO(); });
+  })();
+  document.getElementById('qtyDec').addEventListener('click', function(){ setQty(qty-1); });
+  document.getElementById('qtyInc').addEventListener('click', function(){ setQty(qty+1); });
+  document.getElementById('pendingBox').addEventListener('click', function(ev){
+    var b = ev.target.closest('button'); if(!b) return;
+    var i = b.getAttribute('data-pdel');
+    if(i!==null){ pending.splice(+i,1); renderPending(); }
+  });
+  document.getElementById('addItemBtn').addEventListener('click', function(){
+    var it = formItem();
+    if(!it || product==='No sale'){ toast('Enter both amounts first'); return; }
+    it.qty = Math.max(1, qty);
+    pending.push(it);
+    setProduct('Device'); setSG(false); setIns(false); setQty(1);
+    document.getElementById('fBefore').value=''; document.getElementById('fAfter').value='';
+    updateDelta(); renderPending();
+  });
+  // Keep the viewport visually stable across a re-render that may insert/remove
+  // cards above the current scroll position. Anchors to the Log-a-call card,
+  // which is always present, and restores its on-screen position after render.
+  function renderKeepingAnchor(anchorEl){
+    var before = anchorEl ? anchorEl.getBoundingClientRect().top : null;
+    render();
+    if(before !== null && anchorEl){
+      var after = anchorEl.getBoundingClientRect().top;
+      var delta = after - before;
+      if(delta) window.scrollBy(0, delta);
+    }
+  }
+
+  document.getElementById('submitBtn').addEventListener('click', function(){
+    var f = readForm();
+    if(!f.date){ toast('Need a date'); return; }
+    // a new call is a fresh context — drop any held notes order
+    releaseNoteOrder();
+    if(editId){
+      var eit = formItem();
+      if(!eit){ toast('Enter both amounts'); return; }
+      // find the call this edited item belongs to, so any added items join the same call
+      var origEntry = entries.find(function(e){return e.id===editId;});
+      var cId = origEntry ? callIdOf(origEntry) : uid();
+      entries = entries.map(function(e){ return e.id===editId ? Object.assign({},e,eit,{callId:cId,date:f.date,note:f.note,callbackAt:f.cbAt,internal:(f.product==='No sale'&&f.internal)}) : e; });
+      // attach any items sitting in the pending tray as new entries in the same call
+      var addedUnits = 0;
+      if(pending.length){
+        var extras = [];
+        pending.forEach(function(it){ var q=Math.max(1,it.qty||1); for(var k=0;k<q;k++){ extras.push({product:it.product,before:it.before,after:it.after,sg:it.sg,ins:it.ins}); } });
+        addedUnits = extras.length;
+        // insert the new rows right after the edited entry so they stay grouped
+        var idx = entries.findIndex(function(e){return e.id===editId;});
+        var newRows = extras.map(function(it,i){ return Object.assign({id:uid()+'-x'+i, callId:cId, date:f.date, note:'', internal:false, loggedAt:Date.now()}, it); });
+        entries.splice(idx+1, 0, ...newRows);
+      }
+      toast(addedUnits ? ('Call updated \u00b7 '+addedUnits+' item'+(addedUnits===1?'':'s')+' added') : 'Call updated');
+      month = monthKey(f.date); pending=[]; clearForm(true); renderPending(); saveData(); renderKeepingAnchor(document.getElementById('logCard')); return;
+    }
+    var cur = formItem();
+    var lines = pending.slice();
+    if(cur){ cur.qty = Math.max(1,qty); lines.push(cur); }
+    if(!lines.length){ toast('Enter both amounts or add an item'); return; }
+    // Warn once on an apparent duplicate, then get out of the way. Edits skip this
+    // entirely — re-saving an edited call is not a duplicate.
+    if(!dupBypass){
+      var dup = findRecentDuplicate(lines, f.date);
+      if(dup){
+        var secs = Math.round((Date.now() - dup.loggedAt)/1000);
+        var when = secs < 60 ? 'moments ago'
+                 : (secs < 120 ? 'a minute ago' : Math.round(secs/60)+' minutes ago');
+        toast('Same call logged ' + when, 'Log anyway', function(){
+          dupBypass = true;
+          document.getElementById('submitBtn').click();
+          dupBypass = false;
+        });
+        return;
+      }
+    }
+    dupBypass = false;
+    var items = [];
+    lines.forEach(function(it){ var q=Math.max(1,it.qty||1); for(var k=0;k<q;k++) items.push({product:it.product,before:it.before,after:it.after,sg:it.sg,ins:it.ins}); });
+    var callId = uid();
+    var internal = (f.product==='No sale' && f.internal);
+    var nowStamp = Date.now();
+    var rows = items.map(function(it,i){ return Object.assign({id:uid()+'-'+i, callId:callId, date:f.date, note:i===0?f.note:'', callbackAt:i===0?f.cbAt:null, internal:internal, loggedAt:nowStamp}, it); });
+    for(var i=rows.length-1;i>=0;i--) entries.unshift(rows[i]);
+    var callTotal = items.reduce(function(a,it){return a+(it.after-it.before);},0);
+    // credit the easy lead against the CALL's date, so catching up on yesterday's
+    // calls puts the lead on yesterday where it belongs
+    var gotLead = elOn;
+    var hitFive = false;
+    if(gotLead){
+      easy[f.date] = (easy[f.date]||0)+1;
+      hitFive = (f.date===todayISO() && easy[f.date]%5===0);
+    }
+    var baseMsg = items.length>1 ? ('Logged '+items.length+' sales \u00b7 '+gbp(callTotal,true)+'/mo')
+                                 : (callTotal>0?'Logged '+gbp(callTotal,true)+'/mo':'Call logged');
+    toast(baseMsg + (gotLead ? ' \u00b7 +1 easy lead' : ''));
+    // one celebration per call: the double takes precedence over either on its own
+    var isBB = items.some(function(it){return it.product==='Broadband';});
+    if(isBB && hitFive) fireDouble(easy[f.date]);
+    else if(hitFive) fireEasyFive(easy[f.date]);
+    else if(isBB) fireCelebration();
+    month = monthKey(f.date); pending=[]; clearForm(true); renderPending();
+    saveData(); renderKeepingAnchor(document.getElementById('logCard'));
+  });
+
+  document.getElementById('cancelBtn').addEventListener('click', function(){ clearForm(false); });
+
+  // ---------- date fields open their picker on click ----------
+  // The native indicator is a small target at the right-hand edge. Clicking
+  // anywhere in the box opens the picker instead, which matters most for the
+  // callback rows in the notes list where the fields are narrow.
+  // showPicker() is Chrome/Edge 99+; older browsers keep the normal behaviour
+  // of typing into the field, and the indicator still works everywhere.
+  document.addEventListener('click', function(ev){
+    var t = ev.target;
+    if(!t || t.tagName !== 'INPUT') return;
+    var ty = t.type;
+    if(ty !== 'date' && ty !== 'datetime-local' && ty !== 'month' && ty !== 'time') return;
+    if(t.readOnly || t.disabled) return;
+    // don't re-fire when the click was on the indicator itself — the browser
+    // is already opening the picker and calling it again throws
+    if(typeof t.showPicker !== 'function') return;
+    try{ t.showPicker(); }catch(err){ /* not allowed in this context; ignore */ }
+  });
+
+  // ---------- keyboard flow ----------
+  // Desk use, mid-call: the whole log should be reachable without the mouse.
+  // Everything here routes through the existing click handlers rather than
+  // duplicating any logic, so behaviour can't drift between mouse and keyboard.
+  (function(){
+    var logCard = document.getElementById('logCard');
+
+    // The product/toggle chips are <button>s, so they're already tabbable — but
+    // tabbing through five products to reach an amount field is slow. Left/right
+    // moves along the product row instead, and tab jumps past it.
+    document.getElementById('productChips').addEventListener('keydown', function(ev){
+      if(ev.key!=='ArrowLeft' && ev.key!=='ArrowRight') return;
+      var chips = Array.prototype.slice.call(this.querySelectorAll('.pchip'));
+      var i = chips.indexOf(document.activeElement);
+      if(i===-1) return;
+      ev.preventDefault();
+      var next = chips[(i + (ev.key==='ArrowRight'?1:chips.length-1)) % chips.length];
+      next.focus(); next.click();
+    });
+
+    // Enter anywhere in the form submits, so the run is:
+    // pick product -> tab -> before -> tab -> after -> Enter.
+    // Exempt: the note field's own Enter is harmless, but datetime-local and
+    // date pickers use Enter internally, so leave those alone.
+    logCard.addEventListener('keydown', function(ev){
+      if(ev.key!=='Enter') return;
+      var t = ev.target;
+      if(t.tagName==='BUTTON') return;                 // let the button do its own thing
+      if(t.type==='date' || t.type==='datetime-local') return;
+      ev.preventDefault();
+      document.getElementById('submitBtn').click();
+    });
+
+    // After a successful log the form resets — put the cursor back at the top of
+    // the run so the next call starts typing immediately. Broadband prefills
+    // 'before', so land on 'after' in that case.
+    function focusFormStart(){
+      var bf = document.getElementById('fBefore');
+      var af = document.getElementById('fAfter');
+      var target = (bf && bf.offsetParent!==null && !bf.value.trim()) ? bf : af;
+      if(target && target.offsetParent!==null) target.focus();
+    }
+    document.getElementById('submitBtn').addEventListener('click', function(){
+      // runs after the handler above; if the form cleared, editId is null again
+      setTimeout(focusFormStart, 0);
+    });
+
+    // ---------- shortcuts overlay ----------
+    var scrim = document.getElementById('shortcutScrim');
+    var lastFocus = null;
+    function shortcutsOpen(){ return scrim.style.display === 'flex'; }
+    function openShortcuts(){
+      lastFocus = document.activeElement;
+      scrim.style.display = 'flex';
+      document.getElementById('shortcutClose').focus();
+    }
+    function closeShortcuts(){
+      scrim.style.display = 'none';
+      // hand focus back where it came from, so closing doesn't lose your place
+      if(lastFocus && document.contains(lastFocus)) lastFocus.focus();
+      lastFocus = null;
+    }
+    document.getElementById('shortcutClose').addEventListener('click', closeShortcuts);
+    document.getElementById('shortcutHintBtn').addEventListener('click', openShortcuts);
+    // clicking the dimmed area closes; clicking the panel itself doesn't
+    scrim.addEventListener('click', function(ev){ if(ev.target===scrim) closeShortcuts(); });
+
+    // Global shortcuts. Skipped whenever focus is in a field, so typing a note
+    // can never trigger one.
+    document.addEventListener('keydown', function(ev){
+      if(ev.ctrlKey||ev.metaKey||ev.altKey) return;
+      // the export chooser is modal too — Esc closes it and nothing else fires
+      if(exportScrim && exportScrim.style.display === 'flex'){
+        if(ev.key==='Escape'){ ev.preventDefault(); closeExport(); }
+        return;
+      }
+      // the overlay swallows everything while it's up — Esc closes it and
+      // nothing else fires, so ? can't cancel an edit on the way out
+      if(shortcutsOpen()){
+        if(ev.key==='Escape'||ev.key==='?'){ ev.preventDefault(); closeShortcuts(); }
+        return;
+      }
+      var t = ev.target;
+      if(t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable)){
+        // Escape still works from inside a field — it's the way out of an edit
+        if(ev.key==='Escape'){ document.getElementById('cancelBtn').click(); t.blur(); }
+        return;
+      }
+      if(ev.key==='?'){ ev.preventDefault(); openShortcuts(); return; }
+      if(ev.key==='Escape'){ document.getElementById('cancelBtn').click(); return; }
+      // n = new call: jump straight into the form
+      if(ev.key==='n'||ev.key==='N'){ ev.preventDefault(); focusFormStart(); return; }
+      // e = +1 easy lead, the other thing logged repeatedly through a shift
+      if(ev.key==='e'||ev.key==='E'){ ev.preventDefault(); document.getElementById('easyInc').click(); return; }
+      // [ and ] step through months
+      if(ev.key==='['){ ev.preventDefault(); document.getElementById('prevMonth').click(); return; }
+      if(ev.key===']'){ ev.preventDefault(); document.getElementById('nextMonth').click(); return; }
+    });
+  })();
+
+  document.getElementById('entryList').addEventListener('click', function(ev){
+    var b = ev.target.closest('button');
+    if(!b){
+      var sr = ev.target.closest('[data-stack]');
+      if(sr){ var k = sr.getAttribute('data-stack'); openStacks[k] = !openStacks[k]; render(); }
+      return;
+    }
+    // note remove/add toggle — controls whether the note shows in Notes & callbacks
+    var nRem = b.getAttribute('data-noteremove');
+    var nAdd = b.getAttribute('data-noteadd');
+    if(nRem || nAdd){
+      var nid = nRem || nAdd;
+      var mkDone = !!nRem;
+      var y = window.scrollY;
+      entries = entries.map(function(x){ return x.id===nid ? Object.assign({},x,{noteDone:mkDone}) : x; });
+      saveData(); render(); window.scrollTo(0,y);
+      toast(mkDone ? 'Note removed from callbacks' : 'Note added back to callbacks');
+      return;
+    }
+    var id = b.getAttribute('data-id');
+    var e = entries.find(function(x){return x.id===id;}); if(!e) return;
+    if(b.getAttribute('data-act')==='del'){
+      var delIdx = entries.findIndex(function(x){return x.id===id;});
+      var delEntry = entries[delIdx];
+      // Keep the deletion in a variable as well as the toast closure: if another
+      // toast replaces this one, the undo is still recoverable from the Calls
+      // header rather than being silently lost.
+      lastDeleted = {entry: delEntry, idx: delIdx, at: Date.now()};
+      entries = entries.filter(function(x){return x.id!==id;});
+      if(editId===id) clearForm(false);
+      releaseNoteOrder();
+      saveData(); render();
+      toast('Call deleted', 'Undo', undoDelete);
+    }else{
+      editId = id;
+      document.getElementById('fBefore').value = e.before;
+      document.getElementById('fAfter').value = e.after;
+      document.getElementById('fDate').value = e.date;
+      document.getElementById('fNote').value = e.note||'';
+      if(e.callbackAt){ setCb(true); document.getElementById('fCbAt').value = e.callbackAt; }
+      else setCb(false);
+      // easy leads are a per-day tally, not a property of the call, so editing can't
+      // know whether one was credited — hide the chip rather than risk double-counting
+      setEL(false);
+      var elB = document.getElementById('togEL'); if(elB) elB.style.display='none';
+      setProduct(e.product||'Other');
+      setSG(!!e.sg); setIns(!!e.ins); setIntl(!!e.internal);
+      document.getElementById('formTitle').textContent = 'Edit call';
+      document.getElementById('submitBtn').textContent = 'Save changes';
+      document.getElementById('cancelBtn').style.display = 'inline-block';
+      updateDelta();
+      var formCard = document.getElementById('logCard');
+      if(formCard) formCard.scrollIntoView({behavior:'smooth', block:'start'});
+      else window.scrollTo({top:0, behavior:'smooth'});
+    }
+  });
+
+  // ---------- month nav ----------
+  document.getElementById('prevMonth').addEventListener('click', function(){ month = shiftMonth(month,-1); render(); });
+  document.getElementById('nextMonth').addEventListener('click', function(){ month = shiftMonth(month,1); render(); });
+
+  // ---------- target ----------
+  document.getElementById('targetEdit').addEventListener('click', function(ev){
+    if(ev.target.id !== 'targetBtn') return;
+    var wrap = document.getElementById('targetEdit');
+    var current = targets[month] || '';
+    wrap.innerHTML = '<input id="targetInput" inputmode="decimal" placeholder="£/mo" value="'+current+'" '+
+      'style="width:90px;padding:4px 8px;font-size:12px"> '+
+      '<button id="targetSave" style="background:#E4B45A;color:#0D1420;border:none;border-radius:6px;padding:4px 10px;font-weight:600;font-size:12px;cursor:pointer">Set</button>';
+    var inp = document.getElementById('targetInput');
+    inp.focus();
+    function commit(){
+      var v = parseFloat(inp.value);
+      if(isNaN(v)||v<=0) delete targets[month]; else { targets[month]=v; delete noTarget[month]; }
+      wrap.innerHTML = '<button id="targetBtn">set a target</button>';
+      saveData(); render();
+    }
+    document.getElementById('targetSave').addEventListener('click', commit);
+    inp.addEventListener('keydown', function(e){ if(e.key==='Enter') commit(); });
+  });
+
+  // ---------- export / import ----------
+  function exportCSV(scope){
+    var rows = scope==='month'
+      ? entries.filter(function(e){return monthKey(e.date)===month;}).sort(function(a,b){return a.date>b.date?1:-1;})
+      : entries.slice().sort(function(a,b){return a.date>b.date?1:-1;});
+    var hasSpots = scope==='month'
+      ? (spots[month]||[]).length>0
+      : Object.keys(spots).some(function(k){return (spots[k]||[]).length>0;});
+    if(!rows.length && !hasSpots){ toast('Nothing to export yet'); return; }
+    var q = function(s){ return '"'+String(s==null?'':s).replace(/"/g,'""')+'"'; };
+    var lines = ['Date,Call,Product,Before (£/mo),After (£/mo),Household (£/mo),SG,Insurance,Internal,Note'];
+    var total = 0;
+    rows.forEach(function(e){
+      var d = e.after-e.before; total+=d;
+      lines.push([e.date,q(callIdOf(e)),q(e.product||'Other'),e.before.toFixed(2),e.after.toFixed(2),d.toFixed(2),(e.sg?'Yes':''),(e.ins?'Yes':''),(e.internal?'Yes':''),q(e.note)].join(','));
+    });
+    lines.push(',,,,TOTAL,'+total.toFixed(2)+',,,,');
+    if(scope==='month'){
+      var msx = spots[month]||[];
+      if(msx.length){
+        var sp=0;
+        lines.push('');
+        lines.push('Spotlight,Points each,Count,Points earned');
+        msx.forEach(function(s){ var p=s.count*s.points; sp+=p; lines.push([q(s.name),s.points,s.count,p].join(',')); });
+        lines.push('TOTAL,,,'+sp);
+      }
+    } else {
+      var mkeys = Object.keys(spots).filter(function(k){return (spots[k]||[]).length>0;}).sort();
+      if(mkeys.length){
+        var sp2=0;
+        lines.push('');
+        lines.push('Month,Spotlight,Points each,Count,Points earned');
+        mkeys.forEach(function(k){ (spots[k]||[]).forEach(function(s){ var p=s.count*s.points; sp2+=p; lines.push([k,q(s.name),s.points,s.count,p].join(',')); }); });
+        lines.push(',TOTAL,,,'+sp2);
+      }
+    }
+    var blob = new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = scope==='month' ? 'household-'+month+'.csv' : 'household-all-time.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    // A CSV is a report, not a restorable backup — it drops callback times, attempt
+    // counts, note-done flags, targets, easy leads and planned shifts. So it no longer
+    // stamps lastBackup: only a JSON backup clears the nudge.
+    saveData();
+    toast('CSV downloaded');
+  }
+  // ---------- export chooser ----------
+  // One Export chip instead of two: the month/all choice moves into a small panel,
+  // which also gives room to say what a CSV is and isn't.
+  var exportScrim = document.getElementById('exportScrim');
+  function callCountIn(list){
+    var m = {};
+    list.forEach(function(e){ m[callIdOf(e)] = 1; });
+    return Object.keys(m).length;
+  }
+  function openExport(){
+    var monthRows = entries.filter(function(e){ return monthKey(e.date)===month; });
+    var mc = callCountIn(monthRows), ac = callCountIn(entries);
+    document.getElementById('expOptMonthSub').textContent =
+      monthLabelStr(month) + ' \u00B7 ' + mc + ' call' + (mc===1?'':'s');
+    document.getElementById('expOptAllSub').textContent =
+      'every month \u00B7 ' + ac + ' call' + (ac===1?'':'s');
+    exportScrim.style.display = 'flex';
+    document.getElementById('expOptMonth').focus();
+  }
+  function closeExport(){ exportScrim.style.display = 'none'; }
+  document.getElementById('exportBtn').addEventListener('click', openExport);
+  document.getElementById('exportCancel').addEventListener('click', closeExport);
+  exportScrim.addEventListener('click', function(ev){ if(ev.target===exportScrim) closeExport(); });
+  document.getElementById('expOptMonth').addEventListener('click', function(){ closeExport(); exportCSV('month'); });
+  document.getElementById('expOptAll').addEventListener('click', function(){ closeExport(); exportCSV('all'); });
+
+  // ---------- JSON backup / restore ----------
+  // The CSV is for reading and for the work tracker. This is the one that actually
+  // restores: it's the exact save payload, so nothing is lost in a round trip.
+  function backupJSON(){
+    var payload = currentPayload();
+    payload.savedAt = Date.now();
+    var blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'ledger-backup-' + todayISO() + '.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    // only a full backup clears the nudge
+    lastBackup = Date.now();
+    backupDismiss = null;
+    saveData();
+    renderBackupBanner();
+    var n = Object.keys(entries.reduce(function(m,e){ m[callIdOf(e)]=1; return m; },{})).length;
+    toast('Backed up ' + n + ' call' + (n===1?'':'s'));
+  }
+
+  function restoreJSON(file){
+    var reader = new FileReader();
+    reader.onload = function(){
+      var d;
+      try{
+        d = JSON.parse(String(reader.result));
+      }catch(err){
+        toast('That file is not a readable backup');
+        return;
+      }
+      // Validate before touching anything. A CSV or an unrelated JSON should bounce
+      // off rather than half-load and leave the ledger in a mixed state.
+      if(!d || typeof d !== 'object' || !Array.isArray(d.entries)){
+        toast('That does not look like a ledger backup');
+        return;
+      }
+      if(d.schemaVersion && d.schemaVersion > SCHEMA){
+        toast('That backup is from a newer version of the ledger');
+        return;
+      }
+      var callCount = Object.keys(d.entries.reduce(function(m,e){
+        m[e.callId || e.id] = 1; return m;
+      },{})).length;
+      var when = d.savedAt ? new Date(d.savedAt).toLocaleDateString('en-GB',
+                   {day:'numeric', month:'short', year:'numeric'}) : 'an unknown date';
+      var liveCalls = Object.keys(entries.reduce(function(m,e){
+        m[callIdOf(e)] = 1; return m;
+      },{})).length;
+
+      var msg = 'Restore ' + callCount + ' call' + (callCount===1?'':'s') +
+                ' from ' + when + '?\n\n' +
+                'This REPLACES everything currently in the ledger' +
+                (liveCalls ? ' (' + liveCalls + ' call' + (liveCalls===1?'':'s') + ').' : '.') +
+                '\n\nAnything logged since that backup will be lost.';
+      if(!window.confirm(msg)) { toast('Restore cancelled'); return; }
+
+      adoptPayload(d);
+      // the restored state is by definition backed up — that file exists
+      lastBackup = d.savedAt || Date.now();
+      backupDismiss = null;
+      editId = null; pending = []; releaseNoteOrder(); lastDeleted = null;
+      // jump to the newest month present, so you land on data rather than an empty view
+      if(entries.length){
+        var newest = entries.reduce(function(a,e){ return e.date > a ? e.date : a; }, entries[0].date);
+        month = monthKey(newest);
+      }
+      saveData(); clearForm(false); renderPending(); render();
+      toast('Restored ' + callCount + ' call' + (callCount===1?'':'s'));
+    };
+    reader.onerror = function(){ toast('Could not read that file'); };
+    reader.readAsText(file);
+  }
+
+  document.getElementById('backupBtn').addEventListener('click', backupJSON);
+  document.getElementById('restoreBtn').addEventListener('click', function(){
+    document.getElementById('restoreFile').click();
+  });
+  document.getElementById('restoreFile').addEventListener('change', function(ev){
+    var f = ev.target.files[0];
+    if(f) restoreJSON(f);
+    ev.target.value = '';
+  });
+
+
+  // ---------- copy summary ----------
+  function buildMonthSummary(){
+    var me = entries.filter(function(e){return monthKey(e.date)===month;});
+    var total=0, sumB=0, sumA=0, sgN=0, insN=0;
+    var callSet={}, saleCallSet={}, cnt={};
+    me.forEach(function(e){
+      var d=e.after-e.before; total+=d;
+      if((e.product||'Other')!=='No sale'){ sumB+=e.before; sumA+=e.after; }
+      var cid=callIdOf(e); callSet[cid]=1;
+      var p=e.product||'Other'; cnt[p]=(cnt[p]||0)+1;
+      if(p!=='No sale') saleCallSet[cid]=1;
+      if(e.sg) sgN++; if(e.ins) insN++;
+    });
+    var callCount=Object.keys(callSet).length;
+    var saleCallN=Object.keys(saleCallSet).length;
+    var em=0; Object.keys(easy).forEach(function(k){ if(monthKey(k)===month) em+=easy[k]; });
+    var pts=0; (spots[month]||[]).forEach(function(s){ pts+=s.count*s.points; });
+
+    var L=[];
+    L.push(monthLabelStr(month) + ' — S. T. Chalk');
+    var t = targets[month];
+    if(t){
+      var pctToTarget = Math.round(Math.max(0,Math.min(1,total/t))*100);
+      L.push('Household: '+gbp(total,true)+' (target '+gbp(t)+' · '+pctToTarget+'%)');
+    } else {
+      L.push('Household: '+gbp(total,true));
+    }
+    if(sumB>0){
+      L.push('Spend: '+gbp(sumB)+' \u2192 '+gbp(sumA)+' ('+(sumA/sumB*100).toFixed(1)+'%)');
+    }
+    L.push('Calls: '+callCount+' · Avg/call '+gbp(saleCallN? total/saleCallN : 0, true));
+    if(callCount>0) L.push('Conversion: '+saleCallN+' of '+callCount+' ('+(Math.round(saleCallN/callCount*1000)/10)+'%)');
+    // product line, only the ones with a count
+    var prodBits=[];
+    // split internal calls out of the no-sale count, matching the Call mix on screen
+    var intN = me.filter(function(e){ return (e.product||'Other')==='No sale' && e.internal; }).length;
+    ['Device','SIM','Broadband','Other'].forEach(function(p){ if(cnt[p]) prodBits.push(p+' '+cnt[p]); });
+    var nsN = (cnt['No sale']||0) - intN;
+    if(nsN>0) prodBits.push('No sale '+nsN);
+    if(intN>0) prodBits.push('Internal '+intN);
+    if(prodBits.length) L.push('Mix: '+prodBits.join(' · '));
+    if(sgN||insN) L.push('Add-ons: Scam Guard '+sgN+' · Insurance '+insN);
+    if(em) L.push('Easy leads: '+em);
+    if(pts) L.push('Switch points: '+(Math.round(pts*100)/100).toLocaleString('en-GB'));
+    return L.join('\n');
+  }
+  document.getElementById('undoDelBtn').addEventListener('click', function(){
+    if(!undoAvailable()){ lastDeleted = null; render(); toast('Nothing to undo'); return; }
+    undoDelete();
+  });
+
+  document.getElementById('copySummary').addEventListener('click', function(){
+    var me = entries.filter(function(e){return monthKey(e.date)===month;});
+    var em=0; Object.keys(easy).forEach(function(k){ if(monthKey(k)===month) em+=easy[k]; });
+    if(!me.length && !em && !(spots[month]||[]).length){ toast('Nothing to summarise this month yet'); return; }
+    var text = buildMonthSummary();
+    function fallback(){
+      try{
+        var ta=document.createElement('textarea');
+        ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        toast('Summary copied');
+      }catch(e){ toast('Could not copy automatically'); }
+    }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){ toast('Summary copied'); }, fallback);
+    } else { fallback(); }
+  });
+
+  // ---------- spotlight ----------
+  document.getElementById('spotAdd').addEventListener('click', function(){
+    var name = document.getElementById('spotName').value.trim();
+    var pts = parseFloat(document.getElementById('spotPts').value);
+    if(!name || isNaN(pts) || pts<0){ toast('Need a name and points value'); return; }
+    if(!spots[month]) spots[month]=[];
+    spots[month].push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5), name:name, points:pts, count:0});
+    document.getElementById('spotName').value=''; document.getElementById('spotPts').value='';
+    saveData(); render();
+  });
+  document.getElementById('spotCopy').addEventListener('click', function(){
+    var prev = spots[shiftMonth(month,-1)]||[];
+    if(!prev.length) return;
+    spots[month] = prev.map(function(s){ return {id:s.id+'-'+month, name:s.name, points:s.points, count:0}; });
+    saveData(); render(); toast("Copied last month's spotlight items");
+  });
+  document.getElementById('spotList').addEventListener('click', function(ev){
+    var b = ev.target.closest('button'); if(!b) return;
+    var id = b.getAttribute('data-id');
+    var ms = spots[month]||[];
+    var s = ms.find(function(x){return x.id===id;}); if(!s) return;
+    var act = b.getAttribute('data-act');
+    if(act==='inc') s.count++;
+    else if(act==='dec') s.count = Math.max(0, s.count-1);
+    else if(act==='sdel'){
+      var sIdx = ms.findIndex(function(x){return x.id===id;});
+      var sItem = ms[sIdx];
+      var sMonth = month;
+      spots[month] = ms.filter(function(x){return x.id!==id;});
+      var y0 = window.scrollY;
+      saveData(); render(); window.scrollTo(0, y0);
+      toast('Spotlight item deleted', 'Undo', function(){
+        var arr = spots[sMonth] ? spots[sMonth].slice() : [];
+        arr.splice(Math.min(sIdx, arr.length), 0, sItem);
+        spots[sMonth] = arr;
+        saveData(); render();
+        toast('Restored');
+      });
+      return;
+    }
+    var y = window.scrollY;
+    saveData(); render();
+    window.scrollTo(0, y);
+  });
+
+  // ---------- targets ----------
+  function commitT(k){
+    var ti = document.getElementById('tInput');
+    var v = ti ? parseFloat(ti.value) : NaN;
+    if(!pctT[month]) pctT[month] = {};
+    if(isNaN(v) || v<=0) delete pctT[month][k]; else pctT[month][k]=v;
+    if(!Object.keys(pctT[month]).length) delete pctT[month];
+    editingT = null;
+    saveData(); render();
+  }
+  document.getElementById('targetRows').addEventListener('click', function(ev){
+    var b = ev.target.closest('button'); if(!b) return;
+    var tk = b.getAttribute('data-tk');
+    var ts = b.getAttribute('data-tset');
+    if(tk){ editingT = tk; render(); }
+    else if(ts){ commitT(ts); }
+  });
+  document.getElementById('tReset').addEventListener('click', function(){
+    delete pctT[month];
+    editingT = null;
+    saveData(); render(); toast('Targets reset to defaults');
+  });
+
+  // dismiss the "same as last month" prompt for this month
+  document.getElementById('dismissTargetBtn').addEventListener('click', function(){
+    var m = month;
+    var y = window.scrollY;
+    noTarget[m] = true;
+    saveData(); render(); window.scrollTo(0,y);
+    toast('No target this month', 'Undo', function(){
+      delete noTarget[m];
+      saveData(); render();
+    });
+  });
+
+  // copy last month's £ household target into this month
+  document.getElementById('copyTargetBtn').addEventListener('click', function(){
+    var prevT = targets[shiftMonth(month,-1)];
+    if(!prevT) return;
+    var y = window.scrollY;
+    targets[month] = prevT;
+    delete noTarget[month];
+    saveData(); render(); window.scrollTo(0,y);
+    toast('Target set to ' + gbp(prevT));
+  });
+
+  // copy last month's % targets into this month
+  document.getElementById('copyPctBtn').addEventListener('click', function(){
+    var prevPct = pctT[shiftMonth(month,-1)];
+    if(!prevPct || !Object.keys(prevPct).length) return;
+    var y = window.scrollY;
+    pctT[month] = Object.assign({}, prevPct);
+    editingT = null;
+    saveData(); render(); window.scrollTo(0,y);
+    toast("Copied last month's targets");
+  });
+
+  // ---------- easy leads ----------
+  function renderKeepScroll(){
+    var y = window.scrollY;
+    saveData(); render();
+    window.scrollTo(0, y);
+  }
+  document.getElementById('easyInc').addEventListener('click', function(){
+    var tk = todayISO();
+    easy[tk] = (easy[tk]||0)+1;
+    if(easy[tk]%5===0) fireEasyFive(easy[tk]);
+    renderKeepScroll();
+  });
+  document.getElementById('easyDec').addEventListener('click', function(){
+    var tk = todayISO();
+    easy[tk] = Math.max(0,(easy[tk]||0)-1);
+    if(easy[tk]===0) delete easy[tk];
+    renderKeepScroll();
+  });
+
+  // ---------- init ----------
+  loadData();
+  document.getElementById('fDate').value = todayISO();
+  render();
+  // If the live save was unreadable and the shadow copy was used instead, say so —
+  // the most recent entry or two may be missing and that's worth knowing immediately.
+  if(recoveredFromShadow){
+    document.getElementById('storageNotice').textContent =
+      'Recovered from the previous save — the last entry or two may be missing. Check today\u2019s calls.';
+    setTimeout(function(){ toast('Recovered from previous save'); }, 400);
+  }
+})();
+</script>
+</body>
+</html>
