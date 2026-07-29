@@ -35,6 +35,42 @@ Two exports, and they are not interchangeable:
 Only a Backup clears the backup nudge. The nudge appears after 7 calls since the last
 one, or after anything has sat unbacked for 3 days.
 
+## Developer notes
+
+Target browser is **Microsoft Edge** on desktop. That is not incidental — several
+behaviours below depend on it being Chromium-based, and on the window being wide enough
+for the two-column layout (≥1100px).
+
+Before changing anything, run the tests. This file has a history of defects that read
+perfectly well in the source: a quantity silently ignored on save, a duplicate warning
+firing on legitimate entries, an export that threw and produced no file, a quota failure
+that looked exactly like a successful save. None of those were visible by inspection.
+Measure first.
+
+### Known issues
+
+**Toggling a note from the calls list moves the list by ~200px.** The note lives in the
+notes card far above, so adding or removing a card there shifts everything below it.
+This is *not* a scroll-preservation problem — anchoring to `#listTitle`, anchoring to
+`#notesCard`, and removing the scroll handling entirely all measure the same −200px, so
+something after that line has the last word. The fix is to stop re-rendering the whole
+page from a button in the calls list and update only the note card and the row that
+changed. Marked in place in the source.
+
+### What is and is not verified
+
+Covered by the test suite: the data-safety path (backup restores losslessly, damaged
+rows cannot crash the export or read as £0.00, failed writes are loud), and the
+interaction paths that were moving content mid-tap.
+
+**Not covered: any of the arithmetic.** Nothing verifies that "3 more needed (7 of 41
+calls)" is the right number, nor the Scam Guard shortfall against Device/SIM lines, the
+household percentage, the conversion rate, the pace projection, or the CSV totals row.
+Those read as sound, but so did everything in the list above. A wrong figure there does
+not crash, jump, or warn — it just quietly reports the wrong thing all month. This is
+the most valuable place to spend the next effort: hand-calculate a month of expected
+figures and assert the app produces them.
+
 ## Tests
 
 ```
