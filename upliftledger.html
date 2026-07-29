@@ -1561,7 +1561,14 @@
   // ---------- callback scheduling helpers ----------
   var CALLBACK_WARN_MIN = 30;           // how far ahead the warning starts
   var dismissedCallbacks = {};          // session-only: banner dismissals
-  var notifiedCallbacks = {};           // session-only: desktop notifications already fired
+  // Which callback time each entry has already been notified about. Stored on the entry
+  // rather than in a session map: a session map meant every reload re-announced every
+  // callback that was already overdue, so opening the ledger in the morning fired a
+  // desktop notification for each one you were on your way to dealing with.
+  // Keying it to the callbackAt value makes it self-invalidating — reschedule the call
+  // and the stored value no longer matches, so the new time is announced once.
+  function notifyKeyOf(e){ return e.callbackAt || ''; }
+  function alreadyNotified(e){ return (e.notifiedFor || '') === notifyKeyOf(e); }
 
   // Status of a note's scheduled callback: null | 'later' | 'soon' | 'overdue'
   var NO_ANSWER_AFTER = 3;   // attempts before an overdue callback reads as "no answer"
@@ -1806,7 +1813,8 @@
         var id = inp.getAttribute('data-cbat');
         var val = inp.value || null;
         entries = entries.map(function(x){ return x.id===id ? Object.assign({},x,{callbackAt:val}) : x; });
-        delete dismissedCallbacks[id]; delete notifiedCallbacks[id];
+        // notifiedFor still holds the OLD time, so the new one announces itself once
+        delete dismissedCallbacks[id];
         saveData();
         renderCallbackAlert();   // safe: doesn't touch the notes list
       });
@@ -1858,9 +1866,9 @@
           }
           return Object.assign({}, x, patch);
         });
-        // let the warning and notification fire again against the new time
+        // let the warning fire again against the new time; the notification re-arms
+        // on its own, because notifiedFor no longer matches the shifted callbackAt
         delete dismissedCallbacks[id];
-        delete notifiedCallbacks[id];
         // Anchor to the notes card rather than restoring the old scroll offset.
         // Logging an attempt moves the callback out of (or into) the due window, so
         // the alert banner at the top of the page appears or disappears — and
@@ -1943,10 +1951,17 @@
     if(!el) return;
     var due = dueCallbacks();
 
-    // desktop notification once per callback as it enters the window
+    // desktop notification once per callback time, and only once — see alreadyNotified
+    var marked = false;
     due.forEach(function(e){
-      if(!notifiedCallbacks[e.id]){ notifiedCallbacks[e.id] = true; fireNotification(e); }
+      if(alreadyNotified(e)) return;
+      e.notifiedFor = notifyKeyOf(e);
+      marked = true;
+      fireNotification(e);
     });
+    // persist the marks so a reload doesn't re-announce them; saveData() does not
+    // re-render, so this cannot loop back into here
+    if(marked) saveData();
 
     // tab title — the bit most likely to catch you while you're in another window
     var undismissed = due.filter(function(e){ return !dismissedCallbacks[e.id]; });
