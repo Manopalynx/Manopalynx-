@@ -1831,10 +1831,11 @@
     list.querySelectorAll('[data-cbclear]').forEach(function(btn){
       btn.addEventListener('click', function(){
         var id = btn.getAttribute('data-cbclear');
-        var y = window.scrollY;
         releaseNoteOrder();
         entries = entries.map(function(x){ return x.id===id ? Object.assign({},x,{callbackAt:null}) : x; });
-        saveData(); render(); window.scrollTo(0,y);
+        // clearing the time drops this callback out of the due set, so the alert above
+        // may vanish — anchor rather than restore an offset measured before it did
+        saveData(); renderKeepingAnchor(document.getElementById('notesCard'));
         toast('Callback time cleared');
       });
     });
@@ -1886,11 +1887,12 @@
     list.querySelectorAll('[data-notedone]').forEach(function(btn){
       btn.addEventListener('click', function(){
         var id = btn.getAttribute('data-notedone');
-        var y = window.scrollY;
         // finishing a call removes the row entirely — re-prioritise straight away
         releaseNoteOrder();
         entries = entries.map(function(x){ return x.id===id ? Object.assign({},x,{noteDone:true}) : x; });
-        saveData(); render(); window.scrollTo(0,y);
+        // the row leaves the list and the alert above may go with it; if this was the
+        // last note the card hides altogether, which renderKeepingAnchor now tolerates
+        saveData(); renderKeepingAnchor(document.getElementById('notesCard'));
         toast('Note marked done');
       });
     });
@@ -2326,14 +2328,17 @@
   // Keep the viewport visually stable across a re-render that may insert/remove
   // cards above the current scroll position. Anchors to the Log-a-call card,
   // which is always present, and restores its on-screen position after render.
+  // An anchor that is hidden reports a zero rect, not its old position, so measuring one
+  // would produce a correction the size of the whole page. That is reachable: marking the
+  // last outstanding note done hides #notesCard outright. If the anchor is missing on
+  // either side of the render, leave the scroll position alone rather than guess.
+  function anchorVisible(el){ return !!(el && el.getClientRects().length); }
   function renderKeepingAnchor(anchorEl){
-    var before = anchorEl ? anchorEl.getBoundingClientRect().top : null;
+    var before = anchorVisible(anchorEl) ? anchorEl.getBoundingClientRect().top : null;
     render();
-    if(before !== null && anchorEl){
-      var after = anchorEl.getBoundingClientRect().top;
-      var delta = after - before;
-      if(delta) window.scrollBy(0, delta);
-    }
+    if(before === null || !anchorVisible(anchorEl)) return;
+    var delta = anchorEl.getBoundingClientRect().top - before;
+    if(delta) window.scrollBy(0, delta);
   }
 
   document.getElementById('submitBtn').addEventListener('click', function(){
@@ -2551,6 +2556,13 @@
       var mkDone = !!nRem;
       var y = window.scrollY;
       entries = entries.map(function(x){ return x.id===nid ? Object.assign({},x,{noteDone:mkDone}) : x; });
+      // KNOWN ISSUE: this moves the calls list by ~200px, because the note it toggles
+      // lives in the notes card far above and a whole card appears or disappears there.
+      // Not a scroll-preservation problem — anchoring to #listTitle, anchoring to
+      // #notesCard, and removing the scroll handling altogether all measure the same
+      // -200px, so something after this line has the last word. The real fix is to stop
+      // re-rendering the world from a button in the calls list and update only the note
+      // card and the one row that changed. Left as-is rather than dressed up.
       saveData(); render(); window.scrollTo(0,y);
       toast(mkDone ? 'Note removed from callbacks' : 'Note added back to callbacks');
       return;

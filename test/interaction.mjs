@@ -178,6 +178,22 @@ await scenario(browser, {
   act: p => p.locator('[data-attinc]').first().click()
 });
 
+// Same failure mode as the attempt buttons: these also drop a callback out of the due
+// set, so the alert above the fold disappears underneath you.
+await scenario(browser, {
+  name: 'clearing a callback time (due banner disappears)',
+  seedFn: callbackSeed(-15),
+  anchor: '#notesCard h2',
+  act: p => p.locator('[data-cbclear]').first().click()
+});
+
+await scenario(browser, {
+  name: 'marking a callback done (due banner disappears)',
+  seedFn: callbackSeed(-15),
+  anchor: '#notesCard h2',
+  act: p => p.locator('[data-notedone]').first().click()
+});
+
 console.log('\n— banners that appear because you logged a call —');
 
 await scenario(browser, {
