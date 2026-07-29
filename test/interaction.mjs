@@ -25,6 +25,14 @@ import { dirname, resolve } from 'path';
 const LEDGER = 'file://' + resolve(dirname(fileURLToPath(import.meta.url)), '..', 'upliftledger.html');
 const KEY = 'uplift-ledger-v3';
 
+// Pinned deliberately, not inherited from the headless default. The ledger switches to
+// its two-column desktop layout at 1100px, and that layout is not a cosmetic variant:
+// above the breakpoint #logCard moves to column 2 and becomes sticky, which changes
+// which elements move when a banner is inserted at the top of the page. A suite that
+// picked up its width by accident could silently start exercising the single-column
+// layout instead and still look green.
+const VIEWPORT = { width: 1280, height: 800 };   // desktop; above the 1100px breakpoint
+
 // ---------- seed helpers ----------
 // Seeds run inside the page. Dates are computed there so the suite is not pinned to
 // the machine's clock or timezone.
@@ -73,7 +81,7 @@ async function scenario(browser, {
   // against a feature, and a suite that cries wolf stops being read.
   checkDisplacement = true
 }) {
-  const page = await browser.newPage();
+  const page = await browser.newPage({ viewport: VIEWPORT });
   page.setDefaultTimeout(10000);
   const problems = [];
   page.on('pageerror', e => problems.push('uncaught: ' + e.message));
@@ -271,6 +279,131 @@ await scenario(browser, {
     return (b === '32' && n === 'mrs smith') ? null : `form lost content: before=${b} note=${n}`;
   }
 });
+
+// ---------- backup round trip ----------
+// Deliberately not shaped like the scenarios above: this is not one interaction with
+// three assertions, it is the whole data-safety promise end to end. Backup claims to be
+// the copy that fully restores, as distinct from the CSV, so the thing worth proving is
+// that every container survives a wipe byte for byte — not just the calls, but callback
+// times, attempt counts, note-done flags, targets, percentage targets, spotlight items,
+// easy leads and planned shifts.
+async function roundTrip(browser) {
+  const name = 'backup -> wipe -> restore preserves every container';
+  const page = await browser.newPage({ viewport: VIEWPORT });
+  page.setDefaultTimeout(10000);
+  const problems = [];
+  page.on('pageerror', e => problems.push('uncaught: ' + e.message));
+  page.on('dialog', d => d.accept());          // the restore confirm
+  await page.route(u => /^https?:/.test(u.href), r => r.abort());
+
+  const fails = [];
+  try {
+    await page.goto(LEDGER, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(seed(`
+      put({ entries: [
+        { id:'a', callId:'a', date:DS, product:'Device', before:30, after:45, sg:true, ins:true,
+          note:'Mrs Smith', attempts:2, callbackAt: DS+'T14:30', loggedAt:111 },
+        { id:'b', callId:'a', date:DS, product:'SIM', before:10, after:15, loggedAt:111 },
+        { id:'c', callId:'c', date:DS, product:'No sale', before:0, after:0, internal:true,
+          note:'already handled', noteDone:true, loggedAt:111 } ],
+        targets:      { [DS.slice(0,7)]: 900 },
+        spotlights:   { [DS.slice(0,7)]: [{ id:'s', name:'iPhone 16', points:12, count:3 }] },
+        easyLeads:    { [DS]: 4 },
+        pctTargets:   { [DS.slice(0,7)]: { uplift:140, sg:55 } },
+        planned:      { [DS.slice(0,7)]: [28,29] },
+        lastBackup: 222 });
+    `));
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(500);
+
+    const before = await page.evaluate(k => localStorage.getItem(k), KEY);
+    const dl = page.waitForEvent('download', { timeout: 8000 });
+    await page.click('#backupBtn');
+    const file = '/tmp/ledger-roundtrip.json';
+    await (await dl).saveAs(file);
+
+    await page.evaluate(() => localStorage.clear());
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(400);
+    if ((await page.textContent('#stCalls')).trim() !== '0') fails.push('wipe did not clear the ledger');
+
+    await page.setInputFiles('#restoreFile', file);
+    await page.waitForTimeout(900);
+
+    const after = await page.evaluate(k => localStorage.getItem(k), KEY);
+    const A = JSON.parse(before), B = JSON.parse(after);
+    for (const k of ['entries','targets','spotlights','easyLeads','pctTargets','planned','noTarget']) {
+      if (JSON.stringify(A[k]) !== JSON.stringify(B[k])) {
+        fails.push(`${k} did not survive: ${JSON.stringify(A[k])} -> ${JSON.stringify(B[k])}`);
+      }
+    }
+    if (problems.length) fails.push(problems[0]);
+  } catch (err) {
+    fails.push('harness error: ' + String(err.message).split('\n')[0]);
+  }
+
+  if (fails.length) { failed++; console.log(`FAIL  ${name}`); fails.forEach(f => console.log(`        · ${f}`)); }
+  else { passed++; console.log(` ok   ${name}`); }
+  await page.close();
+}
+
+// ---------- desktop notifications fire once, not once per reload ----------
+// Needs an init script to stand in for the Notification API before the page runs, so it
+// does not fit the scenario() shape either.
+async function notifyOnce(browser) {
+  const name = 'an overdue callback is announced once, not again on every reload';
+  const page = await browser.newPage({ viewport: VIEWPORT });
+  page.setDefaultTimeout(10000);
+  const fails = [];
+  await page.route(u => /^https?:/.test(u.href), r => r.abort());
+  await page.addInitScript(() => {
+    window.__notif = 0;
+    function FakeNotification() { window.__notif++; }
+    FakeNotification.permission = 'granted';
+    FakeNotification.requestPermission = () => Promise.resolve('granted');
+    window.Notification = FakeNotification;
+  });
+  try {
+    await page.goto(LEDGER, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(seed(`
+      put({ entries: [{ id:'cb0', callId:'cb0', date:DS, product:'Device', before:30, after:45,
+                        note:'Mrs Smith re contract', attempts:0,
+                        callbackAt: localDT(Date.now() - 20*60000), loggedAt:Date.now() }] });
+    `));
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(700);
+    const first = await page.evaluate(() => window.__notif);
+    if (first !== 1) fails.push(`first load fired ${first} notifications, expected 1`);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(700);
+    const second = await page.evaluate(() => window.__notif);
+    if (second !== 0) fails.push(`reload re-announced it (${second} notifications), expected 0`);
+
+    // rescheduling must re-arm: a new time is genuinely new news
+    await page.evaluate(() => {
+      const raw = JSON.parse(localStorage.getItem('uplift-ledger-v3'));
+      const pad = n => String(n).padStart(2,'0');
+      const d = new Date(Date.now() - 5*60000);
+      raw.entries[0].callbackAt = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+
+                                  'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+      localStorage.setItem('uplift-ledger-v3', JSON.stringify(raw));
+    });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(700);
+    const third = await page.evaluate(() => window.__notif);
+    if (third !== 1) fails.push(`a rescheduled callback fired ${third} notifications, expected 1`);
+  } catch (err) {
+    fails.push('harness error: ' + String(err.message).split('\n')[0]);
+  }
+  if (fails.length) { failed++; console.log(`FAIL  ${name}`); fails.forEach(f => console.log(`        · ${f}`)); }
+  else { passed++; console.log(` ok   ${name}`); }
+  await page.close();
+}
+
+console.log('\n— the data-safety promise, end to end —');
+await roundTrip(browser);
+await notifyOnce(browser);
 
 await browser.close();
 console.log(`\n${passed} passed, ${failed} failed\n`);
