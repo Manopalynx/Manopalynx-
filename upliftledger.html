@@ -1837,7 +1837,6 @@
       btn.addEventListener('click', function(){
         var inc = btn.hasAttribute('data-attinc');
         var id = btn.getAttribute(inc ? 'data-attinc' : 'data-attdec');
-        var y = window.scrollY;
         // hold the current order before the callback time moves, so this row stays
         // under your finger; it re-sorts 2s after you stop tapping
         holdNoteOrder(withNotes.map(function(x){ return x.id; }));
@@ -1862,7 +1861,13 @@
         // let the warning and notification fire again against the new time
         delete dismissedCallbacks[id];
         delete notifiedCallbacks[id];
-        saveData(); render(); window.scrollTo(0,y);
+        // Anchor to the notes card rather than restoring the old scroll offset.
+        // Logging an attempt moves the callback out of (or into) the due window, so
+        // the alert banner at the top of the page appears or disappears — and
+        // scrollTo() with the offset captured before that happened lands you 71px
+        // out, which is half a callback card. The next tap then hits the customer
+        // below. Anchoring measures a real element instead of trusting a number.
+        saveData(); renderKeepingAnchor(document.getElementById('notesCard'));
         if(inc && newTime){
           toast('Attempt '+newCount+' \u00b7 next try '+fmtCallback(newTime));
         }
