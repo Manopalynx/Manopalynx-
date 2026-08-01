@@ -20,7 +20,8 @@ import {
   raiseCitadel, sellDevelopment, mortgage, redeem, repayDebt, tradable,
   settleContract, declareIndependence, submitClaim, closeContest, standings,
   setCompletingTargets, seekContract, contractIsLegal, proposeContract, respondToContract,
-  serialize, deserialize, payFacilityFee, releaseVassal, aiValue, aiBid, aiWantsToBuy
+  serialize, deserialize, payFacilityFee, releaseVassal, aiValue, aiBid, aiWantsToBuy,
+  pledge, pledgeValue, redeemCost, raisableValue, parkForSettlement, autoSettle, settleNow
 } from '../engine.js';
 
 /* -------------------------------------------------------------- fixtures */
@@ -999,6 +1000,7 @@ test('the same seed produces the same game', () => {
       else if (G.phase === 'card') applyCard(G);
       else if (G.phase === 'offer') buy(G, current(G)) || (G.phase = 'end');
       else if (G.phase === 'auction') { const q = G.auction.queue[G.auction.at]; submitBid(G, q, 100); }
+      else if (G.phase === 'settle') { autoSettle(G); settleNow(G); }
       else if (G.phase === 'contest') { const q = G.contest.queue[G.contest.at]; submitClaim(G, q, 100); }
       else endTurn(G);
     }
@@ -1239,4 +1241,99 @@ test('a player can be kept out of an auction they already declined', () => {
   assert.equal(G.auction.bids[a.i], 0);
   submitBid(G, b.i, 300);
   assert.equal(G.auction.winner, b.i);
+});
+
+/* ============================================================ settlement */
+
+test('a human short of a rent is asked, not stripped', () => {
+  const G = game();
+  const [a, b] = G.players;
+  a.cash = 5;
+  own(G, a, SETS.eden.sq[0]);
+  own(G, b, SETS.agora.sq[0], { garrisons: 1 });
+  a.pos = SETS.agora.sq[0];
+  G.phase = 'landed';
+  resolveLanding(G);
+  assert.equal(G.phase, 'settle', 'the bill should park for a decision');
+  assert.equal(G.settlement.owed, BOARD[SETS.agora.sq[0]].r[1]);
+  assert.equal(G.settlement.to, b.i);
+  assert.equal(holding(a, SETS.eden.sq[0]).mortgaged, 0, 'nothing sold without being asked');
+});
+
+test('an opponent is never asked — it settles automatically', () => {
+  const G = game([{ name: 'S', kind: 'ai', persona: 'spector' }, { name: 'M', kind: 'human' }]);
+  const [ai, human] = G.players;
+  ai.cash = 5;
+  own(G, ai, SETS.eden.sq[0]);
+  own(G, human, SETS.agora.sq[0], { garrisons: 1 });
+  ai.pos = SETS.agora.sq[0];
+  G.phase = 'landed';
+  resolveLanding(G);
+  assert.notEqual(G.phase, 'settle', 'opponents do not park');
+  assert.equal(holding(ai, SETS.eden.sq[0]).mortgaged, 1, 'it raised the money itself');
+});
+
+test('nothing parks when there is nothing left to raise against', () => {
+  const G = game();
+  const [a, b] = G.players;
+  a.cash = 5;                                   // holds nothing at all
+  own(G, b, SETS.agora.sq[0], { garrisons: 1 });
+  a.pos = SETS.agora.sq[0];
+  G.phase = 'landed';
+  resolveLanding(G);
+  assert.notEqual(G.phase, 'settle', 'a sheet with no options is just a tax on the player');
+  assert.equal(a.lord, b.i, 'it goes straight to the consequence');
+});
+
+test('pledging raises half and stops the rent; redeeming costs 55%', () => {
+  const G = game();
+  const [a] = G.players;
+  const sq = SETS.eden.sq[0];
+  own(G, a, sq);
+  const before = a.cash;
+  assert.equal(pledge(G, a, sq), true);
+  assert.equal(a.cash, before + pledgeValue(sq));
+  assert.equal(rentOf(G, sq), 0, 'a pledged holding charges nothing');
+  assert.equal(redeemCost(sq), Math.ceil(BOARD[sq].pr * 11 / 20));
+});
+
+test('what a player can raise counts buildings and unpledged holdings only', () => {
+  const G = game();
+  const [a] = G.players;
+  a.cash = 0;
+  own(G, a, SETS.eden.sq[0], { garrisons: 2 });
+  own(G, a, SETS.eden.sq[1], { mortgaged: 1 });
+  const gc = SETS.eden.gc;
+  // two garrisons at half each, plus the first holding pledged; the second is
+  // already pledged and can raise nothing more.
+  assert.equal(raisableValue(G, a), 2 * Math.floor(gc / 2) + pledgeValue(SETS.eden.sq[0]));
+});
+
+test('settling with too little still ends in the right consequence', () => {
+  const G = game();
+  const [a, b] = G.players;
+  a.cash = 5;
+  own(G, a, SETS.syn.sq[0]);
+  own(G, b, SETS.agora.sq[1], { citadel: 1 });      // a rent nothing can cover
+  a.pos = SETS.agora.sq[1];
+  G.phase = 'landed';
+  resolveLanding(G);
+  assert.equal(G.phase, 'settle');
+  autoSettle(G);
+  settleNow(G);
+  assert.equal(a.lord, b.i, 'the oath follows when the money does not');
+  assert.equal(G.settlement, null);
+});
+
+test('liquidation raises the whole bill, not just the gap', () => {
+  // It used to be given the shortfall rather than the total, so it stopped one
+  // gap short and bankrupted players who still had assets to sell.
+  const G = game();
+  const [a, b] = G.players;
+  a.cash = 100;
+  own(G, a, SETS.eden.sq[0]);          // 180 -> pledges for 90
+  own(G, a, SETS.eden.sq[1]);          // 180 -> pledges for 90
+  own(G, a, SETS.eden.sq[2]);          // 200 -> pledges for 100
+  assert.equal(pay(G, a, b, 250), true, 'it can cover 250 from 100 cash plus 280 of pledges');
+  assert.equal(a.lord, null, 'and must not fall while it still holds sellable assets');
 });

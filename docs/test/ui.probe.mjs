@@ -238,6 +238,54 @@ for (const device of DEVICES) {
   }
   await page.evaluate(() => window.closeSheet());
 
+  // ---- being short must ask, not decide for you ----
+  const settle = await page.evaluate(async () => {
+    const G = window.__G();
+    const SETS = window.__SETS();
+    while (G.players[G.cur].kind !== 'human') G.cur = (G.cur + 1) % G.players.length;
+    const p = G.players[G.cur];
+    const other = G.players.find(q => q !== p);
+    // Give them a board worth pledging and almost no cash, then land them on a
+    // rent they cannot cover.
+    p.cash = 5;
+    p.holdings = SETS.eden.sq.map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+    const rented = SETS.agora.sq[0];
+    // One garrison, not three: at three the rent is 1100 and the player's whole
+    // board raises 285, so nothing could cover it and Auto would be blamed for
+    // arithmetic rather than behaviour.
+    other.holdings = [{ sq: rented, garrisons: 1, citadel: 0, mortgaged: 0 }];
+    for (const q of G.players) if (q !== other) q.holdings = q.holdings.filter(h => h.sq !== rented);
+    p.pos = rented;
+    G.phase = 'landed';
+    window.act_resolve();
+    if (G.phase !== 'settle') return `expected the settle phase, got ${G.phase}`;
+    const sheet = document.querySelector('.sheet');
+    if (!sheet) return 'no settlement sheet appeared';
+    const pledgeBtn = document.querySelector('.sheet [data-fn^="settlePledge|"]');
+    if (!pledgeBtn) return 'the sheet offers nothing to pledge';
+    const before = p.cash;
+    pledgeBtn.click();
+    const raised = G.players[G.cur].cash - before;
+    // Auto should cover the rest without being asked twice.
+    const auto = document.querySelector('.sheet [data-fn="settleAuto"]');
+    if (auto) auto.click();
+    const covered = G.players[G.cur].cash >= G.settlement.owed;
+    document.querySelector('.sheet [data-fn="settleDone"]').click();
+    await new Promise(r => setTimeout(r, 60));
+    return { raised, covered, settled: G.settlement === null, phaseAfter: G.phase };
+  });
+  if (typeof settle === 'string') fail(settle);
+  else {
+    if (settle.raised > 0) pass(`pledging in the settlement sheet raises money (${settle.raised})`);
+    else fail('pledging raised nothing');
+    if (settle.covered) pass('Auto covers the remainder');
+    else fail('Auto did not cover the shortfall');
+    if (settle.settled && settle.phaseAfter !== 'settle') pass('settling completes the payment and moves on');
+    else fail(`still parked in ${settle.phaseAfter}`);
+  }
+  await page.evaluate(() => window.closeSheet());
+  await page.waitForTimeout(200);
+
   // ---- the galaxy, and the re-render trap it sits in ----
   // The board is rebuilt with innerHTML on every render. If the centre panel is
   // rebuilt with it, the canvas is destroyed and the animation restarts many

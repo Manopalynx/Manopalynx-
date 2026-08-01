@@ -8,8 +8,8 @@ const TABLES = {
   '4': [HUMAN('Sam'), HUMAN('Meelah'), AI('Spector', 'spector'), AI('Varan', 'varan')]
 };
 const N = +(process.argv[2] || 40);
-const cashes = [1500, 2000, 2500];
-const circuits = [24, 36, 48, 60];
+const cashes = [2000];
+const circuits = [48, 72, 96, 120];
 const orig = RULES.startingCash;
 console.log('\nabsorption rate / sets completed of 8 / avg turns\n');
 for (const [label, seats] of Object.entries(TABLES)) {

@@ -7,7 +7,7 @@ import {
   createGame, current, ownerOf, roll, resolveLanding, applyCard, endTurn,
   buy, openAuction, submitBid, closeAuction, submitClaim, closeContest,
   aiWantsToBuy, aiDevelop, garrisonsOf, citadelsOf,
-  seekContract, proposeContract, respondToContract
+  seekContract, proposeContract, respondToContract, autoSettle, settleNow
 } from '../engine.js';
 
 // Plays one game to its end. Returns the finished state.
@@ -59,6 +59,12 @@ export function playGame({ seats, seed = 1, circuits = 24, onTurn = null, maxSte
       }
       case 'contract':
         respondToContract(G, harnessAccepts(G, G.contract));
+        break;
+      case 'settle':
+        // The harness always takes the automatic route; the manual sheet is
+        // exercised by the browser probe instead.
+        autoSettle(G);
+        settleNow(G);
         break;
       default:
         return G;

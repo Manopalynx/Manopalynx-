@@ -37,7 +37,7 @@ function shuffled(G, n) {
 }
 
 /* ============================================================ setup */
-export function createGame({ seats, seed = 1, circuits = 48 } = {}) {
+export function createGame({ seats, seed = 1, circuits = 72 } = {}) {
   const G = {
     seed,
     rngState: seed >>> 0,
@@ -57,6 +57,7 @@ export function createGame({ seats, seed = 1, circuits = 48 } = {}) {
     auction: null,
     contest: null,
     pendingCard: null,
+    settlement: null,   // a bill parked while a human decides how to raise it
     doublesRun: 0,      // consecutive doubles this turn
     rollAgain: false    // a doubles roll buys another before the turn settles
   };
@@ -190,7 +191,11 @@ const trim = G => { if (G.log.length > 120) G.log.pop(); };
 // ever removed from the table — that is the whole design.
 export function pay(G, from, to, amount) {
   if (amount <= 0) return true;
-  if (from.cash < amount) liquidate(G, from, amount - from.cash);
+  // The FULL amount, not the shortfall. liquidate() raises until cash reaches
+  // the figure it is given, so passing the gap made it stop one gap short: a
+  // player owing 500 while holding 100 raised to 400, was still short, and was
+  // bankrupted with sellable assets still on the board.
+  if (from.cash < amount) liquidate(G, from, amount);
   if (from.cash >= amount) {
     from.cash -= amount;
     if (to) to.cash += amount;
@@ -293,6 +298,70 @@ export function payRent(G, from, to, amount) {
 
 export const money = v =>
   (v < 0 ? '-₡' : '₡') + Math.abs(Math.round(v)).toLocaleString('en-GB');
+
+// Everything a player could raise by pledging and selling down, without any of
+// it being decided for them.
+export function raisableValue(G, p) {
+  let v = 0;
+  for (const h of p.holdings) {
+    const b = BOARD[h.sq];
+    const gc = b.s ? SETS[b.s].gc : 0;
+    if (h.citadel) v += Math.floor(gc * 5 / 2);
+    else v += h.garrisons * Math.floor(gc / 2);
+    if (!h.mortgaged) v += pledgeValue(h.sq);
+  }
+  return v;
+}
+
+/* ============================================================ settlement */
+// A bill a human cannot cover from cash parks here instead of the engine
+// quietly stripping their board for them. They choose what goes — or press
+// Auto and get the same order the opponents use.
+//
+// Only rent, tax and upkeep park. Card penalties are small and not worth
+// interrupting a turn for.
+export function parkForSettlement(G, from, to, amount, then) {
+  if (from.kind !== 'human') return false;
+  if (from.cash >= amount) return false;
+  if (raisableValue(G, from) <= 0) return false;      // nothing left to decide
+  G.settlement = { player: from.i, to: to === null ? null : to.i, owed: amount, then };
+  G.phase = 'settle';
+  return true;
+}
+
+// The Auto button, and what every opponent does: pledge dead holdings, then
+// garrisons from the slowest-paying set, and a citadel only as a last resort.
+export function autoSettle(G) {
+  const st = G.settlement;
+  if (!st) return false;
+  liquidate(G, G.players[st.player], st.owed);
+  return true;
+}
+
+// Perform the parked payment with whatever the player managed to raise. If it
+// still is not enough, the usual consequence follows — a debt marker to the
+// bank, or an oath to a player.
+export function settleNow(G) {
+  const st = G.settlement;
+  if (!st) return false;
+  const from = G.players[st.player];
+  const to = st.to === null ? null : G.players[st.to];
+  G.settlement = null;
+
+  if (st.then === 'rent') {
+    payRent(G, from, to, st.owed);
+    if (G.phase !== 'contest' && !G.over) G.phase = 'end';
+  } else if (st.then === 'tax') {
+    pay(G, from, null, st.owed);
+    note(G, `${from.name} settles ${money(st.owed)}.`);
+    if (G.phase !== 'contest' && !G.over) G.phase = 'end';
+  } else if (st.then === 'upkeep') {
+    pay(G, from, null, st.owed);
+    note(G, `${from.name} pays ${money(st.owed)} in upkeep.`);
+    finishTurn(G);
+  }
+  return true;
+}
 
 /* ============================================================ vassalage */
 function vassalise(G, p, to) {
@@ -551,6 +620,7 @@ export function resolveLanding(G) {
     const b = BOARD[p.pos];
     if (b.t === 'goto') { toFacility(G, p); G.phase = 'end'; return; }
     if (b.t === 'tax') {
+      if (parkForSettlement(G, p, null, b.amt, 'tax')) return;
       pay(G, p, null, b.amt);
       note(G, `${p.name} pays the ${b.n} — ${money(b.amt)}.`);
       G.phase = G.phase === 'contest' ? 'contest' : 'end';
@@ -568,7 +638,8 @@ export function resolveLanding(G) {
     if (!owner) { G.phase = 'offer'; return; }
     if (owner.i === p.i) { G.phase = 'end'; return; }
     const rent = rentOf(G, p.pos, G.dice[0] + G.dice[1]);
-    if (rent === 0) { note(G, `${BOARD[p.pos].n} is mortgaged. Nothing due.`); G.phase = 'end'; return; }
+    if (rent === 0) { note(G, `${BOARD[p.pos].n} is pledged. Nothing due.`); G.phase = 'end'; return; }
+    if (parkForSettlement(G, p, owner, rent, 'rent')) return;
     payRent(G, p, owner, rent);
     if (G.phase !== 'contest' && !G.over) G.phase = 'end';
     return;
@@ -622,7 +693,17 @@ export function endTurn(G) {
   G.rollAgain = false;
   G.doublesRun = 0;
   const u = upkeep(p);
-  if (u > 0) { pay(G, p, null, u); note(G, `${p.name} pays ${money(u)} in upkeep.`); }
+  if (u > 0) {
+    if (parkForSettlement(G, p, null, u, 'upkeep')) return;
+    pay(G, p, null, u);
+    note(G, `${p.name} pays ${money(u)} in upkeep.`);
+  }
+  finishTurn(G);
+}
+
+// Everything after upkeep is settled: interest, then the next player.
+function finishTurn(G) {
+  const p = current(G);
   if (p.debt) p.debt += Math.ceil(p.debt * RULES.debtInterest);
   if (G.phase === 'contest' || G.over) return;
 
@@ -775,23 +856,35 @@ export function sellDevelopment(G, p, sq) {
   return false;
 }
 
-export function mortgage(G, p, sq) {
+// PLEDGE, not mortgage. "Rent" already means what an opponent pays you, so
+// using it for raising money against your own holdings would point the same
+// word in two directions. The stored field is still `mortgaged` so that games
+// saved before the rename still load.
+export const pledgeValue = sq => Math.floor(BOARD[sq].pr / 2);
+export const redeemCost = sq =>
+  Math.ceil(BOARD[sq].pr * RULES.mortgageRedeemNumerator / RULES.mortgageRedeemDenominator);
+
+export function pledge(G, p, sq) {
   const h = holding(p, sq);
   if (!h || h.mortgaged || h.garrisons || h.citadel) return false;
   h.mortgaged = 1;
-  p.cash += Math.floor(BOARD[sq].pr / 2);
+  p.cash += pledgeValue(sq);
+  note(G, `${p.name} pledges ${BOARD[sq].n} for ${money(pledgeValue(sq))}.`);
   return true;
 }
+export const mortgage = pledge;   // old name, kept so nothing silently breaks
+
 export function redeem(G, p, sq) {
   const h = holding(p, sq);
   if (!h || !h.mortgaged) return false;
   // Half the price back, plus a tenth in interest. Written as a whole-number
   // ratio on purpose: pr * 0.55 is 220.00000000000003 for Cradle, and ceil()
   // then quietly overcharges a credit. Money never touches a float here.
-  const cost = Math.ceil(BOARD[sq].pr * RULES.mortgageRedeemNumerator / RULES.mortgageRedeemDenominator);
+  const cost = redeemCost(sq);
   if (p.cash < cost) return false;
   p.cash -= cost;
   h.mortgaged = 0;
+  note(G, `${p.name} redeems ${BOARD[sq].n} for ${money(cost)}.`);
   return true;
 }
 export function repayDebt(G, p) {

@@ -37,7 +37,7 @@ function clearSave() {
 }
 
 /* ============================================================ setup */
-const setup = { humans: 2, names: ['Sam', 'Meelah'], ais: [], circuits: 48 };
+const setup = { humans: 2, names: ['Sam', 'Meelah'], ais: [], circuits: 72 };
 
 function drawSetup() {
   const saved = loadSaved();
@@ -61,7 +61,7 @@ function drawSetup() {
       }).join('')}
     </div>
     <div class="fld"><label>Circuit limit</label>
-      <div class="opts">${[24, 48, 72].map(k =>
+      <div class="opts">${[48, 72, 120].map(k =>
         `<button class="opt${setup.circuits === k ? ' on' : ''}" data-t="${k}">${k}</button>`).join('')}</div>
     </div>
     <button class="big" id="begin">Open the ledger${seatsUsed < 2 ? ' — add an opponent' : ''}</button>
@@ -328,7 +328,7 @@ function renderActions() {
 
   $('acts').innerHTML = primary
     + second
-    + actBtn('Manage', 'showManage()', '', 'build · mortgage')
+    + actBtn('Manage', 'showManage()', '', 'build · pledge')
     + actBtn('Propose', 'showTrade()', '', 'draw a contract')
     + relational
     + actBtn('End turn', 'act_end()', G.phase === 'end' ? 'pri' : '', '&nbsp;', G.phase !== 'end');
@@ -450,6 +450,11 @@ function tick() {
       showContract();
       break;
 
+    case 'settle':
+      busy = false;
+      showSettle();
+      break;
+
     case 'end':
       if (p.kind === 'ai') {
         busy = true;
@@ -494,6 +499,7 @@ const ACTIONS = {
   act_roll, act_resolve, act_amend, act_end,
   showSquare, showManage, showTrade, showTithe, showRevolt, showFinal, showLedger,
   closeSheet, newGame, copyResult, toggleLog, act_payFee,
+  showSettle, settlePledge, settleSellG, settleBreak, settleAuto, settleDone,
   buyNow, declineToAuction, takeCard, sealBid, sealClaim, endAuction, endContest,
   answerContract, build, raiseCitadel, sellDev, toggleMortgage, repay,
   setTithe, release, declare, tradeSet, sendTrade, playOn
@@ -737,7 +743,7 @@ function showCard() {
 }
 
 /* ---------------------------------------------------------- manage */
-const manageState = h => h.mortgaged ? 'MORTGAGED' : h.citadel ? 'CITADEL'
+const manageState = h => h.mortgaged ? 'PLEDGED' : h.citadel ? 'CITADEL'
   : `${h.garrisons} garrison${h.garrisons === 1 ? '' : 's'}`;
 
 function manageControls(p, h) {
@@ -746,7 +752,7 @@ function manageControls(p, h) {
   if (E.canRaiseCitadel(G, p, h.sq)) c += `<button data-fn="raiseCitadel|${h.sq}">◆</button>`;
   if (h.garrisons > 0 || h.citadel) c += `<button data-fn="sellDev|${h.sq}">−</button>`;
   if (!h.garrisons && !h.citadel) {
-    c += `<button data-fn="toggleMortgage|${h.sq}">${h.mortgaged ? 'Redeem' : 'Mortgage'}</button>`;
+    c += `<button data-fn="toggleMortgage|${h.sq}">${h.mortgaged ? 'Redeem' : 'Pledge'}</button>`;
   }
   return c;
 }
@@ -809,7 +815,7 @@ function raiseCitadel(sq) { E.raiseCitadel(G, E.current(G), +sq); afterManage();
 function sellDev(sq) { E.sellDevelopment(G, E.current(G), +sq); afterManage(); }
 function toggleMortgage(sq) {
   const p = E.current(G), h = E.holding(p, +sq);
-  if (h.mortgaged) E.redeem(G, p, +sq); else E.mortgage(G, p, +sq);
+  if (h.mortgaged) E.redeem(G, p, +sq); else E.pledge(G, p, +sq);
   afterManage();
 }
 function repay() { E.repayDebt(G, E.current(G)); afterManage(); }
@@ -901,7 +907,7 @@ function drawTrade() {
 
   const why = (owner, sq) => {
     const h = E.holding(owner, sq), b = BOARD[sq];
-    if (h.mortgaged) return 'mortgaged — redeem first';
+    if (h.mortgaged) return 'pledged — redeem it first';
     if (h.garrisons > 0 || h.citadel) return 'garrisoned — sell buildings first';
     if (b.s && SETS[b.s].sq.some(j => {
       const o = E.ownerOf(G, j); if (!o) return false;
@@ -1006,6 +1012,63 @@ function answerContract(accept) {
   E.respondToContract(G, accept === '1');
   tick();
 }
+
+/* ---------------------------------------------------------- settlement */
+// You owe more than you hold. The engine used to strip your board for you, in
+// an order that broke your best citadel before your worst holding. Now you
+// choose — or press Auto and get the sane order.
+function showSettle() {
+  const st = G.settlement;
+  if (!st) return;
+  const p = G.players[st.player];
+  const short = Math.max(0, st.owed - p.cash);
+  const owedTo = st.to === null ? 'the bank' : G.players[st.to].name;
+  const canRaise = E.raisableValue(G, p);
+
+  const rows = [...p.holdings].sort((a, b) => a.sq - b.sq).map(h => {
+    const b = BOARD[h.sq];
+    const swatch = `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;
+      margin-right:8px;background:${b.s ? SETS[b.s].c : 'var(--fleet)'}"></span>`;
+    if (h.citadel) {
+      return `<button class="pick" data-fn="settleBreak|${h.sq}">${swatch}Break the citadel on ${esc(b.n)}
+        <span class="sub2">raises ${money(Math.floor(SETS[b.s].gc * 5 / 2))} · rent falls to ${money(b.r[3])}</span></button>`;
+    }
+    if (h.garrisons > 0) {
+      return `<button class="pick" data-fn="settleSellG|${h.sq}">${swatch}Sell a garrison on ${esc(b.n)}
+        <span class="sub2">raises ${money(Math.floor(SETS[b.s].gc / 2))} · ${h.garrisons} there now</span></button>`;
+    }
+    if (h.mortgaged) {
+      return `<button class="pick" disabled>${swatch}${esc(b.n)}
+        <span class="why">already pledged</span></button>`;
+    }
+    return `<button class="pick" data-fn="settlePledge|${h.sq}">${swatch}Pledge ${esc(b.n)}
+      <span class="sub2">raises ${money(E.pledgeValue(h.sq))} · pays no rent until redeemed for ${money(E.redeemCost(h.sq))}</span></button>`;
+  }).join('');
+
+  const enough = p.cash >= st.owed;
+  sheet(`<h3>${enough ? 'Settled' : 'You are short'}</h3>
+    <div class="sub">${esc(p.name)} · owed to ${esc(owedTo)}</div>
+    <div class="stat"><span>Due</span><span>${money(st.owed)}</span></div>
+    <div class="stat"><span>In hand</span><span>${money(p.cash)}</span></div>
+    <div class="stat"><span>Still to find</span>
+      <span style="color:${short ? 'var(--warn)' : 'var(--tx)'}">${money(short)}</span></div>
+    ${short > canRaise ? `<div class="warnbox">Everything you hold would raise ${money(canRaise)}.
+      That is not enough, and ${st.to === null
+        ? 'the shortfall becomes a debt marker at 10% a turn.'
+        : `you will enter vassalage under ${esc(owedTo)}.`}</div>` : ''}
+    ${rows || '<p style="color:var(--dim);font-size:14px">Nothing left to raise against.</p>'}
+    ${btns([
+      [enough ? `Pay ${money(st.owed)}` : 'Settle for what I have', 'settleDone', 'pri'],
+      ['Auto', 'settleAuto', '']
+    ])}`);
+}
+
+function afterSettleAction() { save(); render(); showSettle(); }
+function settlePledge(sq) { E.pledge(G, G.players[G.settlement.player], +sq); afterSettleAction(); }
+function settleSellG(sq) { E.sellDevelopment(G, G.players[G.settlement.player], +sq); afterSettleAction(); }
+function settleBreak(sq) { E.sellDevelopment(G, G.players[G.settlement.player], +sq); afterSettleAction(); }
+function settleAuto() { E.autoSettle(G); afterSettleAction(); }
+function settleDone() { closeSheet(); E.settleNow(G); tick(); }
 
 /* ---------------------------------------------------------- endings */
 function showFinal() {

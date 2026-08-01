@@ -21,7 +21,7 @@ Playable. Engine, interface, offline support and save/resume are all in.
 ```
 data.js      board, decks, opponents, economy constants — data only
 engine.js    the rules. No DOM, no timers, no Math.random
-test/        110 passing
+test/        124 passing
 ```
 
 ## Running the tests
@@ -74,6 +74,16 @@ That last step is rare. Liquidation covers it most of the time, which is why it
 must say so: it used to strip a board in complete silence, and a player could
 watch their position collapse and reasonably conclude the game had done nothing.
 
+**A human is asked rather than stripped.** A rent, tax or upkeep bill you cannot
+cover parks the game in a `settle` phase and offers a sheet: pledge a holding,
+sell a garrison, break a citadel, or press **Auto** for the same order the
+opponents use. Only when you say so does the payment go through — and if what
+you raised still is not enough, the usual consequence follows.
+
+*Pledge*, not mortgage: "rent" already means what an opponent pays you, so using
+it for raising money against your own holdings would point one word in two
+directions. The stored field is still `mortgaged` so older saves still load.
+
 ## Balance: what has been found to matter
 
 Absorption is the designed ending. Getting games to actually reach it took two
@@ -89,11 +99,20 @@ between them. Adding it moved everything with no economy constant touched.
 ~4, so the old 24-circuit limit was not enough turns to acquire, trade and build.
 Swept at two seats:
 
-| circuits | 24 | 36 | 48 | 60 |
+| circuits | 48 | 72 | 96 | 120 |
 |---|---|---|---|---|
-| games decided by absorption | 7% | 23% | 53% | 67% |
+| 2 seats | 8% | 20% | 44% | 56% |
+| 3 seats | 16% | 56% | 68% | 76% |
+| 4 seats | 12% | 28% | 36% | 48% |
 
-The default is 48, which is roughly 80 turns at two seats.
+The default is 72. Past that a two-seat game runs beyond 170 turns, which is
+authentic Monopoly and too long for a phone. A game that runs out of circuits
+ends on totals and offers to play on.
+
+An earlier version of this table read 53% at 48 circuits. That was wrong, and
+worth recording why: `pay()` handed `liquidate()` the **shortfall** rather than
+the total, so it stopped one gap short and bankrupted players who still had
+assets to sell. Every absorption figure measured before that fix was inflated.
 
 **Ruled out: the money supply.** Sweeping the lap payment from ₡200 down to ₡100
 and tripling upkeep moved the four-seat rate not at all.
