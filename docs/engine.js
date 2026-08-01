@@ -159,6 +159,15 @@ export function paybackTurns(key, traffic) {
 
 export const revoltThreshold = p => RULES.revoltBase + RULES.revoltStep * p.declarations;
 
+// Solved once from the board. Opponents reason about a set's payback RELATIVE
+// to the rest of the board rather than against a fixed constant, because a
+// constant tuned for one board silently stops meaning anything on the next one
+// — which is exactly what happened when this went from 28 squares to 40.
+const PAYBACK = Object.fromEntries(
+  Object.keys(SETS).map(k => [k, paybackTurns(k, TRAFFIC)]));
+const PAYBACK_BEST = Math.min(...Object.values(PAYBACK));
+const PAYBACK_WORST = Math.max(...Object.values(PAYBACK));
+
 /* ============================================================ log */
 function note(G, text) { G.log.unshift({ kind: 'note', text, circuit: G.circuit }); trim(G); }
 function leader(G, force = false) {
@@ -199,29 +208,46 @@ export function pay(G, from, to, amount) {
   return false;
 }
 
-// Raise cash the way a desperate holder actually would: break citadels first,
-// then garrisons (largest stack first), then mortgage the cheapest holdings.
+// Raise cash, worst asset first.
+//
+// This used to break CITADELS first — your single biggest rent earner — before
+// touching a worthless brown property you would never miss. No player would
+// ever do that. The order now matches what a rational holder does: mortgage
+// dead holdings (reversible, and they earn least), then sell garrisons from the
+// set that pays back slowest, and treat a citadel as the last thing to go.
 export function liquidate(G, p, need) {
   const before = p.cash;
   let citadels = 0, garrisons = 0;
   const mortgaged = [];
   let guard = 0;
-  while (p.cash < need && guard++ < 100) {
-    const cit = p.holdings.find(h => h.citadel);
+
+  const worstFirst = (a, b) => {
+    const pa = PAYBACK[BOARD[a.sq].s] ?? 0, pb = PAYBACK[BOARD[b.sq].s] ?? 0;
+    return pb - pa;                       // higher payback = slower = sell first
+  };
+
+  while (p.cash < need && guard++ < 200) {
+    // 1. Mortgage what is not built on, cheapest first. Reversible, and an
+    //    unbuilt holding is earning bare rent at best.
+    const m = p.holdings
+      .filter(h => !h.mortgaged && !h.garrisons && !h.citadel)
+      .sort((a, b) => BOARD[a.sq].pr - BOARD[b.sq].pr)[0];
+    if (m) { m.mortgaged = 1; mortgaged.push(BOARD[m.sq].n); p.cash += Math.floor(BOARD[m.sq].pr / 2); continue; }
+
+    // 2. Sell garrisons, from the slowest-paying set first.
+    const g = p.holdings.filter(h => h.garrisons > 0).sort(worstFirst)[0];
+    if (g) { g.garrisons--; G.garrisonPool++; garrisons++; p.cash += Math.floor(SETS[BOARD[g.sq].s].gc / 2); continue; }
+
+    // 3. A citadel, and only because there is nothing else left.
+    const cit = p.holdings.filter(h => h.citadel).sort(worstFirst)[0];
     if (cit) {
       const gc = SETS[BOARD[cit.sq].s].gc;
-      // A citadel is worth three garrisons; returning it needs three from the
-      // pool. If the pool cannot cover it the citadel simply cannot be broken.
       citadels++;
       if (G.garrisonPool < 3) { cit.citadel = 0; cit.garrisons = 0; G.citadelPool++; p.cash += Math.floor(gc * 5 / 2); continue; }
       cit.citadel = 0; cit.garrisons = 3; G.citadelPool++; G.garrisonPool -= 3;
       p.cash += Math.floor(gc * 5 / 2);
       continue;
     }
-    const g = p.holdings.filter(h => h.garrisons > 0).sort((a, b) => b.garrisons - a.garrisons)[0];
-    if (g) { g.garrisons--; G.garrisonPool++; garrisons++; p.cash += Math.floor(SETS[BOARD[g.sq].s].gc / 2); continue; }
-    const m = p.holdings.filter(h => !h.mortgaged).sort((a, b) => BOARD[a.sq].pr - BOARD[b.sq].pr)[0];
-    if (m) { m.mortgaged = 1; mortgaged.push(BOARD[m.sq].n); p.cash += Math.floor(BOARD[m.sq].pr / 2); continue; }
     break;
   }
 
@@ -362,6 +388,21 @@ function resolveContest(G) {
 export function closeContest(G) {
   G.contest = null;
   if (!G.over) G.phase = 'end';
+}
+
+// Holding people costs upkeep every turn, and until now there was no way to
+// stop paying it. An overlord may let a vassal go whenever they like: the
+// vassal walks free with whatever they had buried, and the overhead ends.
+export function releaseVassal(G, lord, vassalIndex) {
+  if (!lord.vassals.includes(vassalIndex)) return false;
+  const v = G.players[vassalIndex];
+  lord.vassals = lord.vassals.filter(x => x !== vassalIndex);
+  v.lord = null;
+  v.strength = 0;                 // there is nothing left to bury it against
+  note(G, `${lord.name} releases ${v.name}. The arrangement ends, and the upkeep with it.`);
+  leaderSays(G, 'An instrument torn up is still an instrument. Somebody kept the copy.');
+  checkVictory(G);
+  return true;
 }
 
 export function setTithe(G, p, rate) {
@@ -627,14 +668,15 @@ export function buy(G, p, index = p.pos) {
 
 const clampBid = (p, v) => Math.max(0, Math.min(p.cash, Math.floor(Number(v) || 0)));
 
-export function openAuction(G, index) {
-  const eligible = G.players.filter(p => !p.debt && p.cash > 0);
+export function openAuction(G, index, sitOut = []) {
+  const eligible = G.players.filter(p => !p.debt && p.cash > 0 && !sitOut.includes(p.i));
   if (!eligible.length) {
     note(G, 'No bidder is solvent. The holding stays unclaimed.');
     G.phase = 'end';
     return false;
   }
   G.auction = { sq: index, bids: {}, queue: [], at: 0, resolved: false };
+  for (const i of sitOut) G.auction.bids[i] = 0;      // recorded, not asked
   for (const p of eligible) {
     if (p.kind === 'ai') G.auction.bids[p.i] = aiBid(G, p, index);
     else G.auction.queue.push(p.i);
@@ -931,23 +973,34 @@ export function aiValue(G, p, sq) {
   if (!b.s) return Math.round(b.pr * (p.persona === 'spector' ? 1.15 : p.persona === 'varan' ? 1.25 : 0.95));
 
   const s = SETS[b.s];
-  const payback = paybackTurns(b.s, TRAFFIC);
   const mine = s.sq.filter(i => { const o = ownerOf(G, i); return o && o.i === p.i; }).length;
   const free = s.sq.filter(i => !ownerOf(G, i)).length;
   let v;
   if (p.persona === 'spector') {
-    v = b.pr * (1.6 - payback / 40);
+    // Best payback on the board is worth 1.25x list, worst 0.75x. Scaled to the
+    // board rather than to a magic number, so Spector still buys the good half
+    // outright instead of declining everything and forcing an auction.
+    const spread = Math.max(1, PAYBACK_WORST - PAYBACK_BEST);
+    v = b.pr * (1.25 - 0.5 * (PAYBACK[b.s] - PAYBACK_BEST) / spread);
     if (mine > 0) v *= 1 + 0.45 * mine;
     if (mine === 0 && mine + free < s.sq.length) v *= 0.55;
   } else if (p.persona === 'vale') {
-    const prestige = { agora: 1.85, ven: 1.15, eden: 0.72, dom: 0.95, eni: 0.7, syn: 0.8 }[b.s];
+    // Every set needs an entry. A missing one produced NaN, which then flowed
+    // into a bid, a displayed price and very nearly a player's cash balance.
+    const prestige = {
+      bas: 1.85,      // his own empire; he is the Basileian reformer
+      agora: 1.60, ven: 1.15, com: 1.00, dom: 0.95, syn: 0.80, eden: 0.75, eni: 0.70
+    }[b.s] ?? 1;
     v = b.pr * prestige * (mine > 0 ? 1.4 : 1);
   } else {
     const rivals = s.sq.map(i => ownerOf(G, i)).filter(o => o && o.i !== p.i);
     const oneRivalHolds = rivals.length && new Set(rivals.map(o => o.i)).size === 1;
     v = b.pr * (oneRivalHolds ? 1.95 : 1.15) * (mine > 0 ? 1.3 : 1);
   }
-  return Math.round(v);
+  // Nothing downstream of here tolerates a non-number: a NaN valuation becomes
+  // a NaN bid, a NaN price on screen, and a NaN cash balance that every
+  // "cash < 0" check in the codebase reads as fine.
+  return Number.isFinite(v) ? Math.round(v) : b.pr;
 }
 
 export function aiBid(G, p, sq) {
@@ -956,7 +1009,8 @@ export function aiBid(G, p, sq) {
   let bid = Math.min(v, Math.floor(p.cash * cap));
   bid = Math.round(bid * (0.9 + random(G) * 0.2));
   if (bid < Math.floor(BOARD[sq].pr * 0.35)) bid = 0;
-  return Math.max(0, bid);
+  if (!Number.isFinite(bid)) bid = 0;
+  return Math.max(0, Math.min(p.cash, bid));
 }
 
 export function aiWantsToBuy(G, p, sq) {

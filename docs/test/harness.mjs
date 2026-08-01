@@ -114,6 +114,10 @@ export function checkInvariants(G, where = '') {
   const fail = m => { throw new Error(`${m}${where ? ` (${where})` : ''}`); };
 
   for (const p of G.players) {
+    // Finite BEFORE sign. NaN < 0 is false, so a NaN balance sailed straight
+    // through the old check and every other money guard in the codebase.
+    if (!Number.isFinite(p.cash)) fail(`${p.name} holds a cash balance of ${p.cash}`);
+    if (!Number.isFinite(p.debt)) fail(`${p.name} holds a debt of ${p.debt}`);
     if (p.cash < 0) fail(`${p.name} holds negative cash (${p.cash})`);
     if (p.debt < 0) fail(`${p.name} holds negative debt (${p.debt})`);
     if (p.lord === p.i) fail(`${p.name} is their own overlord`);

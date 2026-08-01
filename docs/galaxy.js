@@ -109,7 +109,11 @@ export function startGalaxy(canvas, getMood) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     cx = w / 2; cy = h / 2;
     radius = Math.min(w, h) * 0.46;
-    if (!running) draw(0);
+    // Always redraw, not just when stopped. Setting canvas.width blanks the
+    // buffer, so waiting for the next frame leaves the middle of the board
+    // empty for however long that takes — visible as a flicker on rotate, and
+    // on every render that resizes.
+    draw(0);
   }
 
   // ---- drawing ------------------------------------------------------------

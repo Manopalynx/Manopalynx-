@@ -496,7 +496,7 @@ const ACTIONS = {
   closeSheet, newGame, copyResult, toggleLog, act_payFee,
   buyNow, declineToAuction, takeCard, sealBid, sealClaim, endAuction, endContest,
   answerContract, build, raiseCitadel, sellDev, toggleMortgage, repay,
-  setTithe, declare, tradeSet, sendTrade, playOn
+  setTithe, release, declare, tradeSet, sendTrade, playOn
 };
 for (const k of Object.keys(ACTIONS)) window[k] = ACTIONS[k];
 
@@ -622,15 +622,24 @@ function showOffer() {
     <p style="font-size:14px;color:var(--dim);margin:14px 0 0;line-height:1.5">
     Decline and it goes to sealed bid. Everyone bids blind, once. Highest takes it.</p>`}
     ${btns(p.debt
-      ? [['To auction', 'declineToAuction', 'pri wide']]
-      : [[`Buy ${money(b.pr)}`, 'buyNow', 'pri'], ['Decline → auction', 'declineToAuction', '']])}`);
+      ? [['To auction', 'declineToAuction|0', 'pri wide']]
+      : [[`Buy ${money(b.pr)}`, 'buyNow', 'pri'],
+         ['Decline, but bid', 'declineToAuction|0', ''],
+         ['Decline and pass', 'declineToAuction|1', 'wide']])}`);
   if (!p.debt && p.cash < b.pr) {
     const el = $('sheetRoot').querySelector('.mbtn.pri');
     if (el) { el.disabled = true; el.textContent = 'Not enough cash'; }
   }
 }
 function buyNow() { closeSheet(); E.buy(G, E.current(G)); tick(); }
-function declineToAuction() { closeSheet(); E.openAuction(G, E.current(G).pos); tick(); }
+// "Decline and pass" is the common case — you did not want it at any price —
+// and it used to cost you a sheet, a typed zero and a pass of the phone anyway.
+function declineToAuction(sitOut) {
+  const p = E.current(G);
+  closeSheet();
+  E.openAuction(G, p.pos, sitOut === '1' ? [p.i] : []);
+  tick();
+}
 
 function showBid() {
   const a = G.auction;
@@ -644,18 +653,29 @@ function showBid() {
     <div class="stat"><span>Landing frequency</span><span>${TRAFFIC[a.sq].toFixed(2)}%</span></div>
     ${b.s ? `<div class="stat"><span>Set payback</span><span>${E.paybackTurns(b.s, TRAFFIC)} turns</span></div>` : ''}
     <input type="number" id="bidIn" inputmode="numeric" placeholder="0" min="0" max="${p.cash}" style="margin-top:14px">
-    ${btns([['Seal it', `sealBid|${p.i}`, 'pri wide']])}`);
+    ${btns([
+      ['Seal it', `sealBid|${p.i}`, 'pri'],
+      ['No bid', `sealBid|${p.i}|0`, ''],
+      [`Everything · ${money(p.cash)}`, `sealBid|${p.i}|max`, 'wide']
+    ])}`);
   setTimeout(() => { const el = $('bidIn'); if (el) el.focus(); }, 80);
 }
-function sealBid(i) {
+function sealBid(i, preset) {
+  const p = G.players[+i];
   const el = $('bidIn');
-  E.submitBid(G, +i, el ? el.value : 0);
+  const amount = preset === '0' ? 0
+    : preset === 'max' ? p.cash
+    : (el ? el.value : 0);
+  E.submitBid(G, +i, amount);
   closeSheet();
   setTimeout(tick, 120);
 }
 function showAuctionResult() {
   const a = G.auction;
   const b = BOARD[a.sq];
+  // One bid or none is not a result worth a sheet and a tap — it is already in
+  // the ledger. Only show the reveal when there was actually a contest.
+  if (a.ranked.filter(e => e.v > 0).length <= 1) { endAuction(); return; }
   let s = `<h3>Bids revealed</h3><div class="sub">${esc(b.n)}</div>`;
   for (const e of a.ranked) {
     s += `<div class="stat"><span style="color:${pipOf(e.p)}">${esc(e.p.name)}</span>
@@ -804,8 +824,24 @@ function showTithe() {
     You cannot see how close they are.</p>
     <div class="opts" style="margin-top:14px">${[10, 25, 40, 55].map(r =>
       `<button class="opt${p.tithe === r ? ' on' : ''}" data-fn="setTithe|${r}">${r}%</button>`).join('')}</div>
+    <div class="sub" style="margin:20px 0 6px">Let them go</div>
+    <p style="font-size:13.5px;color:var(--dim);line-height:1.5;margin:0 0 8px">
+    Holding them costs ${money(E.upkeep(p))} every turn. Release one and that
+    stops — along with the tithe, and whatever they have buried against you.</p>
+    ${p.vassals.map(vi => `<button class="pick" data-fn="release|${vi}">
+      Release ${esc(G.players[vi].name)}
+      <span class="sub2">sworn since falling · holds ${money(E.holdingsValue(G.players[vi]))}</span>
+    </button>`).join('')}
     ${btns([['Done', 'closeSheet', 'pri wide']])}`);
 }
+function release(vi) {
+  const p = E.current(G);
+  if (!E.releaseVassal(G, p, +vi)) return;
+  save();
+  closeSheet();
+  tick();
+}
+
 function setTithe(r) {
   E.setTithe(G, E.current(G), +r);
   save(); render();

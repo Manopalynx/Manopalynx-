@@ -251,6 +251,7 @@ for (const device of DEVICES) {
       const c = document.querySelector('.galaxyCanvas');
       return c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
     };
+    await new Promise(r => requestAnimationFrame(() => r()));
     const first = sample();
     let lit = 0;
     for (let i = 3; i < first.length; i += 4) if (first[i] > 8) lit++;

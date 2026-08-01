@@ -20,7 +20,7 @@ import {
   raiseCitadel, sellDevelopment, mortgage, redeem, repayDebt, tradable,
   settleContract, declareIndependence, submitClaim, closeContest, standings,
   setCompletingTargets, seekContract, contractIsLegal, proposeContract, respondToContract,
-  serialize, deserialize, payFacilityFee
+  serialize, deserialize, payFacilityFee, releaseVassal, aiValue, aiBid, aiWantsToBuy
 } from '../engine.js';
 
 /* -------------------------------------------------------------- fixtures */
@@ -283,17 +283,16 @@ test('debt accrues 10% a turn, rounded up', () => {
   assert.equal(a.debt, 305 + 31);      // ceil(30.5)
 });
 
-test('liquidation sells citadels, then garrisons, then mortgages', () => {
+test('liquidation raises what was asked for and stops', () => {
   const G = game();
   const [a] = G.players;
   a.cash = 0;
-  own(G, a, 16, { citadel: 1 });       // eden, gc 100 -> breaking pays floor(100*5/2)=250
-  own(G, a, 1);                        // syn, list 60 -> mortgage pays 30
-  liquidate(G, a, 250);
-  assert.equal(a.cash, 250);
-  assert.equal(holding(a, 16).citadel, 0);
-  assert.equal(holding(a, 16).garrisons, 3, 'a broken citadel leaves three garrisons');
-  assert.equal(holding(a, 1).mortgaged, 0, 'mortgaging should not have been needed');
+  own(G, a, SETS.eden.sq[0], { citadel: 1 });   // breaking it pays floor(100*5/2)=250
+  own(G, a, SETS.syn.sq[0]);                    // mortgages for 30
+  liquidate(G, a, 25);
+  assert.ok(a.cash >= 25, 'it must cover the shortfall');
+  assert.ok(a.cash < 250, 'and must not strip the board to do it');
+  assert.equal(holding(a, SETS.eden.sq[0]).citadel, 1, 'the citadel is untouched for 25');
 });
 
 test('liquidation mortgages the cheapest holding first', () => {
@@ -1131,4 +1130,113 @@ test('a rent that forces a sale reports both the rent and the sale', () => {
   assert.match(text, /pays/, 'the rent went unreported');
   assert.match(text, /sells 3 garrisons|mortgages/, 'the forced sale went unreported');
   assert.equal(a.lord, null, 'the sale covered it, so no oath was taken');
+});
+
+/* ============================================================ raising money */
+
+test('liquidation mortgages dead holdings before it touches anything built', () => {
+  const G = game();
+  const [a] = G.players;
+  a.cash = 0;
+  own(G, a, SETS.agora.sq[0], { citadel: 1 });         // the biggest earner
+  own(G, a, SETS.eden.sq[0], { garrisons: 3 });
+  own(G, a, SETS.syn.sq[0]);                            // worthless and unbuilt
+  own(G, a, SETS.syn.sq[1]);
+  liquidate(G, a, 60);
+  assert.equal(holding(a, SETS.agora.sq[0]).citadel, 1, 'the citadel must be the last thing to go');
+  assert.equal(holding(a, SETS.eden.sq[0]).garrisons, 3, 'garrisons must outlast an unbuilt mortgage');
+  assert.equal(holding(a, SETS.syn.sq[0]).mortgaged, 1, 'the cheapest dead holding should go first');
+});
+
+test('a citadel is only broken when nothing else can be sold', () => {
+  const G = game();
+  const [a] = G.players;
+  a.cash = 0;
+  own(G, a, SETS.agora.sq[0], { citadel: 1 });
+  liquidate(G, a, 400);
+  assert.equal(holding(a, SETS.agora.sq[0]).citadel, 0, 'with nothing else, the citadel does go');
+  assert.ok(a.cash > 0);
+});
+
+test('garrisons are sold from the slowest-paying set first', () => {
+  const G = game();
+  const [a] = G.players;
+  a.cash = 0;
+  const slow = Object.keys(SETS).sort((x, y) =>
+    paybackTurns(y, TRAFFIC) - paybackTurns(x, TRAFFIC))[0];
+  const fast = Object.keys(SETS).sort((x, y) =>
+    paybackTurns(x, TRAFFIC) - paybackTurns(y, TRAFFIC))[0];
+  own(G, a, SETS[slow].sq[0], { garrisons: 3 });
+  own(G, a, SETS[fast].sq[0], { garrisons: 3 });
+  liquidate(G, a, 10);
+  assert.equal(holding(a, SETS[fast].sq[0]).garrisons, 3, 'the best set should be defended');
+  assert.equal(holding(a, SETS[slow].sq[0]).garrisons, 2);
+});
+
+/* ============================================================ opponents, sanely */
+
+test('no opponent ever values a square at anything but a number', () => {
+  const G = game([
+    { name: 'S', kind: 'ai', persona: 'spector' },
+    { name: 'V', kind: 'ai', persona: 'varan' },
+    { name: 'A', kind: 'ai', persona: 'vale' }
+  ]);
+  // A set missing from a persona's table produced NaN, which flowed into a bid,
+  // onto the screen, and very nearly into a cash balance — where every
+  // "cash < 0" check in the codebase reads NaN as perfectly fine.
+  for (const p of G.players) {
+    for (let i = 0; i < BOARD.length; i++) {
+      if (!BOARD[i].pr) continue;
+      const v = aiValue(G, p, i);
+      assert.ok(Number.isFinite(v), `${p.persona} values ${BOARD[i].n} at ${v}`);
+      const bid = aiBid(G, p, i);
+      assert.ok(Number.isFinite(bid), `${p.persona} bids ${bid} on ${BOARD[i].n}`);
+      assert.ok(bid >= 0 && bid <= p.cash);
+    }
+  }
+});
+
+test('opponents buy most of the board outright rather than forcing an auction', () => {
+  // Spector's valuation was scaled to a constant tuned for the 28-square board.
+  // On 40 squares it priced every set below list — including one at a NEGATIVE
+  // value — so it declined everything and every purchase became an auction the
+  // human had to sit through.
+  const G = game([
+    { name: 'S', kind: 'ai', persona: 'spector' },
+    { name: 'V', kind: 'ai', persona: 'varan' },
+    { name: 'A', kind: 'ai', persona: 'vale' }
+  ]);
+  let wants = 0, total = 0;
+  for (const p of G.players) {
+    for (let i = 0; i < BOARD.length; i++) {
+      if (!BOARD[i].pr) continue;
+      total++;
+      if (aiWantsToBuy(G, p, i)) wants++;
+    }
+  }
+  assert.ok(wants > total * 0.6,
+    `opponents would buy only ${wants} of ${total} squares — the rest become auctions`);
+});
+
+test('an overlord can let a vassal go, and stops paying for them', () => {
+  const G = game(seats4);
+  const [lord, vassal] = G.players;
+  lord.vassals = [vassal.i]; vassal.lord = lord.i; vassal.strength = 900;
+  const withVassal = upkeep(lord);
+  assert.equal(releaseVassal(G, lord, vassal.i), true);
+  assert.equal(vassal.lord, null);
+  assert.deepEqual(lord.vassals, []);
+  assert.equal(vassal.strength, 0);
+  assert.ok(upkeep(lord) < withVassal, 'the upkeep should fall when the vassal goes');
+  assert.equal(releaseVassal(G, lord, vassal.i), false, 'and cannot be done twice');
+});
+
+test('a player can be kept out of an auction they already declined', () => {
+  const G = game(seats4);
+  const [a, b] = G.players;
+  openAuction(G, SETS.eden.sq[0], [a.i]);
+  assert.ok(!G.auction.queue.includes(a.i), 'the decliner is not asked to bid');
+  assert.equal(G.auction.bids[a.i], 0);
+  submitBid(G, b.i, 300);
+  assert.equal(G.auction.winner, b.i);
 });
