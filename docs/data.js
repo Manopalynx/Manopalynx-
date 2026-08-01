@@ -37,7 +37,14 @@ export const BOARD = [
   { t: 'tax',               n: 'Dominion Tithe',         amt: 200, a: 'TITH' },
   { t: 'f',                 n: 'Pillar of Commerce',     pr: 200, a: 'PILR' },
   { t: 'p',  s: 'eni',      n: 'Enigma Uplands',         pr: 100, r: [12, 40, 120, 340, 450], a: 'UPLD' },
-  { t: 'jail',              n: 'Neurex Holding Facility', a: 'NRX' },
+  // Was the "Neurex Holding Facility", and could not be paid out of, because
+  // the Neurex is the one power in the book with no price — "no official to
+  // blind, no tithe to pay, no arrangement". That was faithful and it played
+  // badly: three dead turns with nothing to decide.
+  // An Overseer is the Dominion's eye, installed in every facility and aboard
+  // every ship, and the Leader's whole origin is buying officials. Detention by
+  // one can absolutely be bought out of, so the square is now theirs.
+  { t: 'jail',              n: 'Overseer Detention',      a: 'OVSR' },
   { t: 'p',  s: 'eni',      n: 'Enigma Agricultural Belt', pr: 100, r: [12, 40, 120, 340, 450], a: 'BELT' },
   { t: 'con',               n: 'Contingency', a: 'CON' },
   { t: 'p',  s: 'eni',      n: 'Re-dok Station',         pr: 120, r: [16, 50, 150, 400, 520], a: 'RDOK' },
@@ -95,7 +102,7 @@ export const CONTINGENCY = [
   { x: 'Requisition order. Report to the nearest fleet.', fleet: 1 },
   { x: 'The *Orion* signals for you. Advance to it.', go: 18 },
   { x: 'A manifest you were not meant to read. Take ₡150 from the bank.', cash: 150 },
-  { x: 'The Overseer has taken an interest in your accounts. Go to the Neurex Holding Facility.', jail: 1 },
+  { x: 'The Overseer has taken an interest in your accounts. Report to detention.', jail: 1 },
   { x: 'You are three squares further back than your paperwork claims.', back: 3 },
   { x: 'Anthelion synthesis dividend. Collect ₡100.', cash: 100 },
   { x: 'Dominion audit. Varan finds ₡120 that should not have been there.', cash: -120 },
@@ -110,7 +117,7 @@ export const CONTINGENCY = [
 export const COLUMN = [
   { x: 'The column is settled in your favour. Collect ₡200.', cash: 200 },
   { x: 'Back to the beginning of the ledger. Advance to Go.', go: 0 },
-  { x: 'The Neurex has assessed you as a candidate. Go to the Holding Facility.', jail: 1 },
+  { x: 'Your name appears on a list you were not shown. Report to Overseer detention.', jail: 1 },
   { x: 'Tithe rebate from a world that overpaid. Collect ₡120.', cash: 120 },
   { x: 'Hull inspection. Pay ₡80.', cash: -80 },
   { x: 'A debt you had written off is repaid with interest. Collect ₡160.', cash: 160 },
@@ -205,5 +212,6 @@ export const RULES = {
   revoltBase: 1400,              // strength needed for a first declaration
   revoltStep: 300,               // added per previous declaration
   revoltCost: 500,
-  facilityAttempts: 3            // doubles, or three attempts, and no payment
+  facilityAttempts: 3,           // doubles, or pay the fee, or three attempts
+  facilityFee: 150               // an Overseer is an official, and officials have a price
 };

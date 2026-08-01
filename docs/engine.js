@@ -399,17 +399,15 @@ export function roll(G, d1, d2) {
   const total = a + b, doubles = a === b;
 
   if (p.inFacility) {
-    // The Neurex cannot be bought. There is no official to blind, no tithe to
-    // pay, no arrangement — Interlude I. You leave on doubles, or you leave
-    // when it has finished assessing you.
     if (doubles) {
       p.inFacility = false; p.attempts = 0;
-      note(G, `${p.name} is released from the facility on doubles.`);
+      note(G, `${p.name} walks out on doubles.`);
     } else {
       p.attempts++;
       if (p.attempts >= RULES.facilityAttempts) {
         p.inFacility = false; p.attempts = 0;
-        note(G, `${p.name} is released — the assessment concludes.`);
+        pay(G, p, null, RULES.facilityFee);
+        note(G, `${p.name} pays ${money(RULES.facilityFee)} and is released.`);
       } else {
         note(G, `${p.name} remains in the Holding Facility. Attempt ${p.attempts} of ${RULES.facilityAttempts}.`);
         G.phase = 'end';
@@ -420,6 +418,19 @@ export function roll(G, d1, d2) {
   const path = advance(G, p, total);
   G.phase = 'landed';
   return { path, doubles, total, held: false };
+}
+
+// Settle with the Overseer and walk out before rolling. The alternative was
+// three turns with no decision in them, which is dead air in a game this short.
+export function payFacilityFee(G) {
+  const p = current(G);
+  if (G.phase !== 'roll' || !p.inFacility || p.cash < RULES.facilityFee) return false;
+  pay(G, p, null, RULES.facilityFee);
+  p.inFacility = false;
+  p.attempts = 0;
+  note(G, `${p.name} settles with the Overseer for ${money(RULES.facilityFee)} and walks out.`);
+  leader(G);
+  return true;
 }
 
 export const amendCost = p => RULES.amendCosts[RULES.amendsPerGame - p.amends] ?? RULES.amendCosts.at(-1);

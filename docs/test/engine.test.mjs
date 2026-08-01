@@ -20,7 +20,7 @@ import {
   raiseCitadel, sellDevelopment, mortgage, redeem, repayDebt, tradable,
   settleContract, declareIndependence, submitClaim, closeContest, standings,
   setCompletingTargets, seekContract, contractIsLegal, proposeContract, respondToContract,
-  serialize, deserialize
+  serialize, deserialize, payFacilityFee
 } from '../engine.js';
 
 /* -------------------------------------------------------------- fixtures */
@@ -551,7 +551,7 @@ test('the nearest-utility card wraps past Go and pays for the lap', () => {
 
 /* ============================================================ the Facility */
 
-test('the Neurex cannot be paid off — doubles release you, nothing else does', () => {
+test('a held player pays nothing until they choose to, or run out of attempts', () => {
   const G = game();
   const [a] = G.players;
   a.inFacility = true;
@@ -560,8 +560,31 @@ test('the Neurex cannot be paid off — doubles release you, nothing else does',
   roll(G, 2, 5);
   assert.equal(a.inFacility, true);
   assert.equal(a.attempts, 1);
-  assert.equal(a.cash, before, 'no payment leaves the Facility');
+  assert.equal(a.cash, before, 'a failed attempt costs nothing on its own');
   assert.equal(a.pos, JAIL);
+});
+
+test('an Overseer can be settled with before rolling', () => {
+  const G = game();
+  const [a] = G.players;
+  a.inFacility = true; a.pos = JAIL; a.attempts = 1;
+  assert.equal(payFacilityFee(G), true);
+  assert.equal(a.cash, 1800 - RULES.facilityFee);
+  assert.equal(a.inFacility, false);
+  assert.equal(a.attempts, 0);
+  assert.equal(G.phase, 'roll', 'you still have your roll after paying');
+});
+
+test('the fee cannot be paid when free, when broke, or out of turn', () => {
+  const G = game();
+  const [a] = G.players;
+  assert.equal(payFacilityFee(G), false, 'not detained');
+  a.inFacility = true;
+  a.cash = RULES.facilityFee - 1;
+  assert.equal(payFacilityFee(G), false, 'not enough cash');
+  a.cash = 5000;
+  G.phase = 'end';
+  assert.equal(payFacilityFee(G), false, 'not the roll phase');
 });
 
 test('doubles release you and move you the rolled total', () => {
@@ -574,7 +597,7 @@ test('doubles release you and move you the rolled total', () => {
   assert.equal(a.pos, JAIL + 8);
 });
 
-test('the assessment concludes after three attempts, at no cost', () => {
+test('the third failed attempt releases you and charges the fee', () => {
   const G = game();
   const [a] = G.players;
   a.inFacility = true; a.pos = JAIL;
@@ -583,7 +606,7 @@ test('the assessment concludes after three attempts, at no cost', () => {
   const before = a.cash;
   roll(G, 2, 6);
   assert.equal(a.inFacility, false);
-  assert.equal(a.cash, before, 'release costs nothing — the Neurex has no price');
+  assert.equal(a.cash, before - RULES.facilityFee);
   assert.equal(a.pos, JAIL + 8);
 });
 

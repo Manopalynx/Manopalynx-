@@ -148,13 +148,18 @@ function render() {
   renderLog();
 }
 
+// Four chips have to fit 393pt without the last one sliding off the edge, and
+// "High Commander Varan" will never fit whole. Opponents go by the name you
+// would use at the table; humans keep their first name.
+const chipName = p => p.kind === 'ai' ? p.name.split(' ').pop() : p.name.split(' ')[0];
+
 function renderBar() {
   $('bar').innerHTML = G.players.map((p, i) => {
     const rel = p.lord !== null
-      ? `<div class="vs">vassal · ${esc(G.players[p.lord].name.split(' ')[0])}</div>`
+      ? `<div class="vs">vassal · ${esc(chipName(G.players[p.lord]))}</div>`
       : p.vassals.length ? `<div class="vs">overlord ×${p.vassals.length}</div>` : '';
     return `<div class="pchip${i === G.cur ? ' act' : ''}">
-      <div class="nm"><span class="pip" style="background:${pipOf(p)}"></span>${esc(p.name)}</div>
+      <div class="nm"><span class="pip" style="background:${pipOf(p)}"></span><span class="who">${esc(chipName(p))}</span></div>
       <div class="cash">${money(p.cash)}</div>
       ${p.debt ? `<div class="vs" style="color:var(--warn)">debt ${money(p.debt)}</div>` : ''}${rel}</div>`;
   }).join('');
@@ -290,12 +295,17 @@ function renderActions() {
   }
 
   const primary = G.phase === 'roll'
-    ? actBtn('Roll', 'act_roll()', 'pri', p.inFacility ? 'in the Facility' : '&nbsp;')
+    ? actBtn('Roll', 'act_roll()', 'pri',
+        p.inFacility ? `held · attempt ${p.attempts + 1} of ${RULES.facilityAttempts}` : '&nbsp;')
     : G.phase === 'landed'
       ? actBtn('Resolve', 'act_resolve()', 'pri', esc(BOARD[p.pos].n))
       : actBtn('Roll', '', '', '&nbsp;', true);
 
   const canAmend = G.phase === 'landed' && p.amends > 0 && p.cash >= E.amendCost(p);
+  // While detained the second slot settles with the Overseer instead of amending.
+  const second = (G.phase === 'roll' && p.inFacility)
+    ? actBtn('Settle', 'act_payFee()', '', money(RULES.facilityFee), p.cash < RULES.facilityFee)
+    : actBtn('Amend', 'act_amend()', '', `${money(E.amendCost(p))} · ${p.amends} left`, !canAmend);
   const relational = p.lord !== null
     ? actBtn('Second ledger', 'showRevolt()', '', 'hidden')
     : p.vassals.length
@@ -303,7 +313,7 @@ function renderActions() {
       : actBtn('—', '', '', '&nbsp;', true);
 
   $('acts').innerHTML = primary
-    + actBtn('Amend', 'act_amend()', '', `${money(E.amendCost(p))} · ${p.amends} left`, !canAmend)
+    + second
     + actBtn('Manage', 'showManage()', '', 'build · mortgage')
     + actBtn('Propose', 'showTrade()', '', 'draw a contract')
     + relational
@@ -321,7 +331,19 @@ function bindActs() {
   });
 }
 
+// Open by default. The board is square and the screen is not, so shutting the
+// ledger leaves a gap nothing else can fill — that should be a choice the
+// player makes for a clearer board, not the state they are handed.
+let logOpen = true;
+function toggleLog() { logOpen = !logOpen; renderLog(); }
+
 function renderLog() {
+  const wrap = $('logWrap');
+  wrap.classList.toggle('open', logOpen);
+  const count = G.log.length;
+  $('logToggle').innerHTML =
+    `<span>${logOpen ? 'The ledger' : esc(topLine())}</span><b>${logOpen ? '▾' : `▴ ${count}`}</b>`;
+  $('logToggle').onclick = toggleLog;
   $('log').innerHTML = G.log.map(l => {
     if (l.kind === 'leader') return `<div class="le leader">${esc(l.text)}</div>`;
     if (l.kind === 'voice') {
@@ -330,6 +352,14 @@ function renderLog() {
     }
     return `<div class="le"><span class="t">C${l.circuit}</span> ${esc(l.text)}</div>`;
   }).join('');
+}
+
+// The one line worth seeing when the ledger is shut.
+function topLine() {
+  const l = G.log[0];
+  if (!l) return '';
+  if (l.kind === 'voice') return `${chipName(G.players[l.who])}: ${l.text}`;
+  return l.text;
 }
 
 /* ============================================================ sheets */
@@ -446,7 +476,7 @@ function walk(path, done) {
 const ACTIONS = {
   act_roll, act_resolve, act_amend, act_end,
   showSquare, showManage, showTrade, showTithe, showRevolt, showFinal, showLedger,
-  closeSheet, newGame, copyResult,
+  closeSheet, newGame, copyResult, toggleLog, act_payFee,
   buyNow, declineToAuction, takeCard, sealBid, sealClaim, endAuction, endContest,
   answerContract, build, raiseCitadel, sellDev, toggleMortgage, repay,
   setTithe, declare, tradeSet, sendTrade, playOn
@@ -485,6 +515,11 @@ function act_amend() {
   hold(p, from);
   busy = true; render();
   walk(r.path, () => { busy = false; E.resolveLanding(G); tick(); });
+}
+
+function act_payFee() {
+  if (!E.payFacilityFee(G)) return;
+  tick();
 }
 
 function act_end() {
@@ -531,8 +566,9 @@ function showSquare(i) {
   if (b.t === 'f') s += `<div class="stat"><span>Rent</span><span>₡50 · ₡150 for both</span></div>`;
   if (b.t === 'u') s += `<div class="stat"><span>Rent</span><span>4× roll · 10× for both</span></div>`;
   if (b.t === 'jail') s += `<p style="font-size:14px;line-height:1.5;color:var(--dim);margin-top:12px">
-    Doubles release you, or the assessment concludes after ${RULES.facilityAttempts} attempts.
-    There is nothing to pay. The Neurex does not take payment.</p>`;
+    Roll doubles and walk out, settle for ${money(RULES.facilityFee)} at any point, or be released
+    on the ${RULES.facilityAttempts}rd attempt and pay it anyway. An Overseer is an official, and
+    officials have a price.</p>`;
   if (owner) s += `<div class="stat"><span>Held by</span><span style="color:${pipOf(owner)}">${esc(owner.name)}${held.mortgaged ? ' (mortgaged)' : ''}</span></div>`;
   s += btns([['The ledger', 'showLedger', ''], ['Close', 'closeSheet', 'pri']]);
   sheet(s);
