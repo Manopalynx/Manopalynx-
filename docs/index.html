@@ -243,6 +243,11 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
 /* The deck reference. Effect first and in the reading colour, flavour under it
    in the dim one — the opposite weighting to a drawn card, because here the
    player is looking up what a deck holds rather than savouring one of them. */
+/* A square's line. The author's own words are set in italic against the gold
+   rule; anything written for the game sits plain, so the difference is legible
+   without opening data.js. */
+.flav{font-size:14px;line-height:1.5;color:var(--dim);margin:10px 0 14px}
+.flav.quoted{font-style:italic;color:var(--tx);border-left:2px solid var(--gold);padding-left:11px}
 .deckrow{padding:9px 0;border-bottom:1px solid var(--rule)}
 .deckrow:last-child{border-bottom:0}
 .deckwhat{font-family:var(--m);font-size:13px;color:var(--tx)}

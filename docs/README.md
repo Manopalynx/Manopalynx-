@@ -21,7 +21,7 @@ Playable. Engine, interface, offline support and save/resume are all in.
 ```
 data.js      board, decks, opponents, economy constants — data only
 engine.js    the rules. No DOM, no timers, no Math.random
-test/        153 passing (plus a browser probe across five viewports)
+test/        157 passing (plus a browser probe across five viewports)
 ```
 
 ## Running the tests
@@ -77,6 +77,35 @@ would ever have flagged that.
   derived from movement. `test/traffic.test.mjs` catches it; `test/derive-traffic.mjs`
   regenerates it. Fixing those three moved Horizon from 2.60% to **3.27%**, the second
   busiest square on the board.
+
+## The board is somebody's novel
+
+Every square carries a line, shown under its name. **Thirty of the forty are the
+author's**, lifted from the book and trimmed only at the ends; the other ten were written
+for the game. `qv: 1` in `data.js` marks the author's, and the interface renders those in
+italic against a gold rule and the written ones plain — so which is which is visible at
+the table, not only in the source. A test fails if fewer than 28 squares quote the book.
+
+Surveying the novel for this turned up four things the data had wrong and nothing could
+have caught:
+
+- **Re-dok sat in the Enigma set.** It is Basileian — *"ten centuries of Basileian history
+  flowing along beside the escalators"* — and it is the station Samuel walks a disassembled
+  rifle through on his way to shoot Adran Vale. It is now in the Basileia set, beside the
+  plaza where he uses it.
+- **Five squares were invented qualifiers on real worlds** — Farmlands, Drydocks, Tribute
+  Yards, an Imperial Court, Far Marches. The book supplies better: *The Eden Archive*,
+  *Venenum War-Stock* (from "the yards, the foundries, the war-stock of a sector"), *The
+  Tribute Ships*, *Re-dok Station*, *The Rezar Marches*. **Arvanis** — "refused integration
+  three times, its mineral output is required" — took the freed Enigma slot.
+- **A comment in `SETS` was confidently wrong**, claiming the novel names no Basileian
+  world and that Vale's Plaza was an invention. It names several, and the plaza is where
+  Vale is assassinated. Corrected in place, because a wrong comment is worse than none.
+- **Codes that differ by one character.** `VESA`/`VASA` were both real places one letter
+  apart. Writing the test to catch that pair immediately caught `COL`/`CON` — **the two
+  decks**, the worst possible pair to confuse — plus `ORAN`/`ORIN`, `ANCH`/`ANTH`/`ARCH`.
+  All resolved. The rule is now enforced: two codes of the same length may not differ by
+  a single character.
 
 ## The two decks
 

@@ -7,6 +7,13 @@
 // CANON. Names are drawn from Grandiose: The Rise to Power (S. T. Chalk, 2026).
 // Where a square departs from the book a comment says so and why, because the
 // setting belongs to the author and the deviations should be easy to overrule.
+//
+// Every square carries `q`, the line shown under its name in the info panel.
+// `qv: 1` means the line is the author's, lifted from the novel and trimmed only
+// at its ends. No `qv` means it was written for the game and is the first thing
+// to strike if it does not sound like the book. Thirty of forty are the author's.
+// The interface shows quoted lines in italic and written ones plainly, so the
+// distinction is visible at the table and not only in this file.
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -22,9 +29,12 @@ export const SETS = {
   // experience it as coercion, they will experience it as rescue". Three worlds
   // bought with medicine, and now a colour group you complete and charge rent on.
   com:  { n: 'The Compact', c: 'var(--com)',  gc: 150, sq: [26, 27, 29] },
-  // The largest empire in the galaxy had no squares at all. The book names no
-  // Basileian world, so the Marches and the Court are inventions; Vale's Plaza
-  // is not — it is where he was shot.
+  // All three are the book's. The earlier note here was wrong twice over: it
+  // claimed the novel names no Basileian world, and it called the Marches and
+  // the Court inventions. The novel names several — "the Rezar marches to the
+  // core routes", and Re-dok, whose station carries "ten centuries of Basileian
+  // history" and through whose customs Samuel walks a disassembled rifle on his
+  // way to the plaza. Vale's Plaza is where he uses it.
   bas:  { n: 'Basileia',   c: 'var(--bas)',   gc: 200, sq: [31, 32, 34] },
   agora:{ n: 'Agora',      c: 'var(--agora)', gc: 200, sq: [37, 39] }
 };
@@ -39,47 +49,92 @@ export const SETS = {
 // r: rent ladder — [bare, 1 garrison, 2, 3, citadel]
 // a: four-character code. 40 squares round a 393pt perimeter leaves ~33px a
 //    side, so no full name fits at any cell shape; the centre panel names it.
+//    Two codes of the same length may not differ by a single character — at
+//    10px they are the same glyph-shape to a player mid-turn. That rule caught
+//    COL against CON, which are the two DECKS and so the worst possible pair to
+//    confuse, and VESA against VASA, ORAN against ORIN, ANCH against ANTH and
+//    ARCH. Held by "the short codes are distinct enough to tell apart".
 export const BOARD = [
-  { t: 'go', n: 'The Ledger Opens', a: 'GO' },
-  { t: 'p', s: 'syn', n: 'Vessa Station', pr: 60, r: [2, 10, 30, 90, 250], a: 'VESA' },
-  { t: 'col', n: 'The Column', a: 'COL' },
-  { t: 'p', s: 'syn', n: 'The Corridor', pr: 60, r: [4, 20, 60, 180, 450], a: 'CORR' },
-  { t: 'tax', n: 'Dominion Tithe', amt: 200, a: 'TITH' },
-  { t: 'f', n: 'Pillar of Commerce', pr: 200, a: 'PILR' },
-  { t: 'p', s: 'eni', n: 'Enigma Uplands', pr: 100, r: [6, 30, 90, 270, 550], a: 'UPLD' },
-  { t: 'con', n: 'Contingency', a: 'CON' },
-  { t: 'p', s: 'eni', n: 'Enigma Agricultural Belt', pr: 100, r: [6, 30, 90, 270, 550], a: 'BELT' },
-  { t: 'p', s: 'eni', n: 'Re-dok Station', pr: 120, r: [8, 40, 100, 300, 600], a: 'RDOK' },
-  { t: 'jail', n: 'Overseer Detention', a: 'OVSR' },
-  { t: 'p', s: 'dom', n: 'Ortox Transit', pr: 140, r: [10, 50, 150, 450, 750], a: 'ORTX' },
-  { t: 'u', n: 'The Deep Array', pr: 150, a: 'ARRY' },
-  { t: 'p', s: 'dom', n: "Varan's Audit House", pr: 140, r: [10, 50, 150, 450, 750], a: 'AUDT' },
-  { t: 'p', s: 'dom', n: 'The Tribute Yards', pr: 160, r: [12, 60, 180, 500, 900], a: 'TRIB' },
-  { t: 'f', n: 'Orion', pr: 200, a: 'ORIN' },
-  { t: 'p', s: 'eden', n: 'Horizon', pr: 180, r: [14, 70, 200, 550, 950], a: 'HRZN' },
-  { t: 'col', n: 'The Column', a: 'COL' },
-  { t: 'p', s: 'eden', n: 'Oasis Fortress', pr: 180, r: [14, 70, 200, 550, 950], a: 'OASI' },
-  { t: 'p', s: 'eden', n: 'Eden Farmlands', pr: 200, r: [16, 80, 220, 600, 1000], a: 'FARM' },
-  { t: 'free', n: 'Neutral Anchorage', a: 'ANCH' },
-  { t: 'p', s: 'ven', n: 'Venenum Drydocks', pr: 220, r: [18, 90, 250, 700, 1050], a: 'DRYD' },
-  { t: 'con', n: 'Contingency', a: 'CON' },
-  { t: 'p', s: 'ven', n: 'Venenum Yards', pr: 220, r: [18, 90, 250, 700, 1050], a: 'YRDS' },
-  { t: 'p', s: 'ven', n: 'Venenum Foundries', pr: 240, r: [20, 100, 300, 750, 1100], a: 'FNDR' },
-  { t: 'f', n: 'Harpa', pr: 200, a: 'HARP' },
-  { t: 'p', s: 'com', n: 'Keth', pr: 260, r: [22, 110, 330, 800, 1150], a: 'KETH' },
-  { t: 'p', s: 'com', n: 'Oranthe', pr: 260, r: [22, 110, 330, 800, 1150], a: 'ORAN' },
-  { t: 'u', n: 'Anthelion Synthesis', pr: 150, a: 'ANTH' },
-  { t: 'p', s: 'com', n: 'Vasa', pr: 280, r: [24, 120, 360, 850, 1200], a: 'VASA' },
-  { t: 'goto', n: 'Absorbed', a: 'ABSD' },
-  { t: 'p', s: 'bas', n: 'The Far Marches', pr: 300, r: [26, 130, 390, 900, 1275], a: 'MRCH' },
-  { t: 'p', s: 'bas', n: 'The Imperial Court', pr: 300, r: [26, 130, 390, 900, 1275], a: 'CRT' },
-  { t: 'col', n: 'The Column', a: 'COL' },
-  { t: 'p', s: 'bas', n: "Vale's Plaza", pr: 320, r: [28, 150, 450, 1000, 1400], a: 'PLAZ' },
-  { t: 'f', n: "Raven's Claw", pr: 200, a: 'RAVN' },
-  { t: 'con', n: 'Contingency', a: 'CON' },
-  { t: 'p', s: 'agora', n: 'The Palace', pr: 350, r: [35, 175, 500, 1100, 1500], a: 'PLCE' },
-  { t: 'tax', n: 'Compact Levy', amt: 100, a: 'LEVY' },
-  { t: 'p', s: 'agora', n: 'Cradle', pr: 400, r: [50, 200, 600, 1400, 2000], a: 'CRDL' }
+  { t: 'go', n: 'The Ledger Opens', a: 'GO',
+    q: 'Every conquest would be entered twice: once in their ledger, as territory pacified in the Dominion\'s name, and once in ours.', qv: 1 },
+  { t: 'p', s: 'syn', n: 'Vessa Station', pr: 60, r: [2, 10, 30, 90, 250], a: 'VSTA',
+    q: 'I was on Vessa Station when their fleet took the Corridor.', qv: 1 },
+  { t: 'col', n: 'The Column', a: 'CLMN',
+    q: 'A column of figures is an argument that never has to raise its voice.' },
+  { t: 'p', s: 'syn', n: 'The Corridor', pr: 60, r: [4, 20, 60, 180, 450], a: 'CORR',
+    q: 'Twelve billion people lived in the Corridor. The Purifiers did not take a single prisoner, because a prisoner is a thing you intend to trade.', qv: 1 },
+  { t: 'tax', n: 'Dominion Tithe', amt: 200, a: 'TITH',
+    q: 'We would conquer with enthusiasm and hand over the tribute with a bow.', qv: 1 },
+  { t: 'f', n: 'Pillar of Commerce', pr: 200, a: 'PILR',
+    q: 'They let us keep the name; they thought it was quaint.', qv: 1 },
+  { t: 'p', s: 'eni', n: 'Enigma Uplands', pr: 100, r: [6, 30, 90, 270, 550], a: 'UPLD',
+    q: 'Above the belt the soil thins and the farms give out, and what is left is wind, terraces, and people who climbed up here to be left alone.' },
+  { t: 'con', n: 'Contingency', a: 'CON',
+    q: 'Nothing here arrives unbudgeted. Some of it simply arrives early.' },
+  { t: 'p', s: 'eni', n: 'Enigma Agricultural Belt', pr: 100, r: [6, 30, 90, 270, 550], a: 'BELT',
+    q: 'The wind came off the agricultural belt smelling of turned earth and the flowering season, the way it had smelled every spring of his life.', qv: 1 },
+  { t: 'p', s: 'eni', n: 'Arvanis', pr: 120, r: [8, 40, 100, 300, 600], a: 'ARVN',
+    q: 'The nation of Arvanis has refused integration three times. Its mineral output is required.', qv: 1 },
+  { t: 'jail', n: 'Overseer Detention', a: 'OVSR',
+    q: 'An Overseer is an official, and officials have a price.' },
+  { t: 'p', s: 'dom', n: 'Ortox Transit', pr: 140, r: [10, 50, 150, 450, 750], a: 'ORTX',
+    q: 'The Orion under Hale from the west through Ortox; the Harpa from the east; the system boxed.', qv: 1 },
+  { t: 'u', n: 'The Deep Array', pr: 150, a: 'ARRY',
+    q: 'The blips multiply past the deep array\'s patience, red and unhurried and total, ten thousand galaxies of testimony behind them.', qv: 1 },
+  { t: 'p', s: 'dom', n: "Varan's Audit House", pr: 140, r: [10, 50, 150, 450, 750], a: 'AUDT',
+    q: 'Every ledger in the sector is reconciled here, and every reconciliation finds something. That is what a reconciliation is for.' },
+  { t: 'p', s: 'dom', n: 'The Tribute Ships', pr: 160, r: [12, 60, 180, 500, 900], a: 'TRIB',
+    q: 'I signed the instrument of vassalage in a room aboard one of their tribute ships. They kept me waiting four hours.', qv: 1 },
+  { t: 'f', n: 'Orion', pr: 200, a: 'ORIN',
+    q: 'Full evacuation, all remaining forces to the Orion.', qv: 1 },
+  { t: 'p', s: 'eden', n: 'Horizon', pr: 180, r: [14, 70, 200, 550, 950], a: 'HRZN',
+    q: 'We hold it because every day it stands, the rest of Eden believes.', qv: 1 },
+  { t: 'col', n: 'The Column', a: 'CLMN',
+    q: 'Somebody wrote this down, and writing it down is what made it true.' },
+  { t: 'p', s: 'eden', n: 'Oasis Fortress', pr: 180, r: [14, 70, 200, 550, 950], a: 'OASI',
+    q: 'Walls thirty meters of layered plate and stone, artillery nests, sniper towers, gun emplacements in interlocking arcs.', qv: 1 },
+  { t: 'p', s: 'eden', n: 'The Eden Archive', pr: 200, r: [16, 80, 220, 600, 1000], a: 'ARCV',
+    q: 'The drone\'s data and the Eden archive cross-confirm, sir.', qv: 1 },
+  { t: 'free', n: 'Neutral Anchorage', a: 'ANCH',
+    q: 'Nobody\'s guns, nobody\'s tariffs, nobody\'s flag. It stays that way exactly as long as it is useful to everyone.' },
+  { t: 'p', s: 'ven', n: 'Venenum War-Stock', pr: 220, r: [18, 90, 250, 700, 1050], a: 'STOK',
+    q: 'Venenum is the Dominion\'s forge — the yards, the foundries, the war-stock of a sector.', qv: 1 },
+  { t: 'con', n: 'Contingency', a: 'CON',
+    q: 'The plan survives until the galaxy is consulted.' },
+  { t: 'p', s: 'ven', n: 'Venenum Yards', pr: 220, r: [18, 90, 250, 700, 1050], a: 'YRDS',
+    q: 'The forge seized — seized, not razed.', qv: 1 },
+  { t: 'p', s: 'ven', n: 'Venenum Foundries', pr: 240, r: [20, 100, 300, 750, 1100], a: 'FNDR',
+    q: 'I want those foundries stamping our hull numbers within a year.', qv: 1 },
+  { t: 'f', n: 'Harpa', pr: 200, a: 'HARP',
+    q: 'The Harpa fleet resolved out of its own jump at the system\'s far side, right on the mark, and the pincer began to close.', qv: 1 },
+  { t: 'p', s: 'com', n: 'Keth', pr: 260, r: [22, 110, 330, 800, 1150], a: 'KETH',
+    q: 'The quarantines have held it to three worlds. Keth. Oranthe. Vasa.', qv: 1 },
+  { t: 'p', s: 'com', n: 'Oranthe', pr: 260, r: [22, 110, 330, 800, 1150], a: 'ORNT',
+    q: 'My cure will go to Keth and Oranthe and Vasa wearing your flag, at whatever price your leaders decide those lives are worth.', qv: 1 },
+  { t: 'u', n: 'Anthelion Synthesis', pr: 150, a: 'ANTL',
+    q: 'Keth, Oranthe and Vasa remain dependent on the Anthelion synthesis, which is now ours.', qv: 1 },
+  { t: 'p', s: 'com', n: 'Vasa', pr: 280, r: [24, 120, 360, 850, 1200], a: 'VASA',
+    q: 'Vasa is a trade hub, Commander.', qv: 1 },
+  { t: 'goto', n: 'Absorbed', a: 'ABSD',
+    q: 'We do not form alliances. Alliance presumes two parties persisting. We absorb. We consume.', qv: 1 },
+  { t: 'p', s: 'bas', n: 'The Rezar Marches', pr: 300, r: [26, 130, 390, 900, 1275], a: 'REZR',
+    q: 'By spring the buffer will run unbroken from the Rezar marches to the core routes.', qv: 1 },
+  { t: 'p', s: 'bas', n: 'Re-dok Station', pr: 300, r: [26, 130, 390, 900, 1275], a: 'RDOK',
+    q: 'Six levels of platforms under a single vaulted roof, and the walls were mosaic — ten centuries of Basileian history in ten million pieces of colored stone.', qv: 1 },
+  { t: 'col', n: 'The Column', a: 'CLMN',
+    q: 'The figure was correct. That was never the part in question.' },
+  { t: 'p', s: 'bas', n: "Vale's Plaza", pr: 320, r: [28, 150, 450, 1000, 1400], a: 'PLAZ',
+    q: 'At the plaza\'s center stood the stage, flanked by two towers of Vale\'s smiling face, and an empty podium with its small bouquet of microphones waiting like the future.', qv: 1 },
+  { t: 'f', n: "Raven's Claw", pr: 200, a: 'RAVN',
+    q: 'A vessel assembled from the corpses of at least nine other vessels.', qv: 1 },
+  { t: 'con', n: 'Contingency', a: 'CON',
+    q: 'Somewhere a clerk has already decided this, and the clerk is not available.' },
+  { t: 'p', s: 'agora', n: 'The Palace', pr: 350, r: [35, 175, 500, 1100, 1500], a: 'PLCE',
+    q: 'The council chamber of the Union Palace had been built to make men feel the weight of history, and it worked on everyone except the man it belonged to.', qv: 1 },
+  { t: 'tax', n: 'Compact Levy', amt: 100, a: 'LEVY',
+    q: 'They will not experience it as coercion. They will experience it as rescue.', qv: 1 },
+  { t: 'p', s: 'agora', n: 'Cradle', pr: 400, r: [50, 200, 600, 1400, 2000], a: 'CRDL',
+    q: 'The people of Cradle believed they were safe because they were strong.', qv: 1 },
 ];
 
 export const N = BOARD.length;          // 40

@@ -636,6 +636,7 @@ function showSquare(i) {
   const held = owner ? E.holding(owner, i) : null;
   const kind = b.s ? SETS[b.s].n : b.t === 'f' ? 'Fleet' : b.t === 'u' ? 'Utility' : '—';
   let s = `<h3>${esc(b.n)}</h3><div class="sub">${esc(kind)} · square ${i}</div>
+    ${flavour(b)}
     <div class="stat"><span>Landing frequency</span><span>${TRAFFIC[i].toFixed(2)}%</span></div>`;
   if (b.pr) s += `<div class="stat"><span>Price</span><span>${money(b.pr)}</span></div>`;
   if (b.amt) s += `<div class="stat"><span>Charge</span><span>${money(b.amt)}</span></div>`;
@@ -741,6 +742,14 @@ function showDecks() {
     ${deck('Contingency', `${CONTINGENCY.length} cards · mostly movement`, CONTINGENCY)}
     ${deck('The Column', `${COLUMN.length} cards · mostly money`, COLUMN)}
     ${btns([['Close', 'closeSheet', 'pri wide']])}`);
+}
+
+// The line under a square's name. Italic when it is the author's — `qv` marks a
+// line lifted from the novel — and plain when it was written for the game, so
+// which is which is visible at the table rather than only in data.js.
+function flavour(b) {
+  if (!b.q) return '';
+  return `<div class="flav${b.qv ? ' quoted' : ''}">${esc(b.q)}</div>`;
 }
 
 function showLedger() {

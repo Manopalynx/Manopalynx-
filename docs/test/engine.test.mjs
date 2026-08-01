@@ -1864,3 +1864,68 @@ test('favours survive a save', () => {
   const back = deserialize(serialize(G));
   assert.equal(back.players[0].pardons, 2);
 });
+
+/* =============================================================== the setting */
+// The board is somebody's novel. These do not check taste — they check that the
+// data cannot quietly lose the thing that makes it that novel rather than a
+// Monopoly reskin.
+
+test('every square carries a line, and every line is attributed', () => {
+  BOARD.forEach((b, i) => {
+    assert.ok(b.q && b.q.trim().length > 20, `square ${i} (${b.n}) has no line`);
+    assert.ok(b.q.trim().endsWith('.') || b.q.trim().endsWith('?'),
+      `square ${i} (${b.n}) does not finish its sentence: "${b.q}"`);
+    assert.ok(b.qv === undefined || b.qv === 1,
+      `square ${i} (${b.n}) has a strange qv: ${b.qv}`);
+  });
+  // The point of the exercise: most of the board should be the author's words.
+  const quoted = BOARD.filter(b => b.qv).length;
+  assert.ok(quoted >= 28, `only ${quoted} of ${BOARD.length} squares quote the book`);
+});
+
+test('no two squares carry the same line', () => {
+  const seen = new Map();
+  BOARD.forEach((b, i) => {
+    assert.ok(!seen.has(b.q), `squares ${seen.get(b.q)} and ${i} share a line`);
+    seen.set(b.q, i);
+  });
+});
+
+test('the short codes are distinct enough to tell apart on a phone', () => {
+  // Vessa Station and Vasa are both in the book and both on the board, and
+  // their codes were VESA and VASA — one letter apart, 10px high, on opposite
+  // sides of a 45px cell. Two codes may not differ by a single character.
+  const codes = BOARD.map(b => b.a);
+  for (let i = 0; i < codes.length; i++) {
+    for (let j = i + 1; j < codes.length; j++) {
+      const a = codes[i], b = codes[j];
+      if (a === b) {
+        // Repeats are fine only where the square really is the same thing.
+        assert.equal(BOARD[i].n, BOARD[j].n, `${a} names two different squares`);
+        continue;
+      }
+      if (a.length !== b.length) continue;
+      let diff = 0;
+      for (let k = 0; k < a.length; k++) if (a[k] !== b[k]) diff++;
+      assert.ok(diff > 1,
+        `${a} (${BOARD[i].n}) and ${b} (${BOARD[j].n}) differ by one character`);
+    }
+  }
+});
+
+test('a set groups squares the book puts in the same place', () => {
+  // Re-dok sat in the Enigma set for a long time. It is a Basileian world —
+  // "ten centuries of Basileian history" — and nothing in the data said so,
+  // because nothing in the data could. This pins the ones that are checkable:
+  // a set whose name prefixes its squares must actually prefix them.
+  for (const [key, set] of Object.entries(SETS)) {
+    const named = set.sq.filter(i => BOARD[i].n.startsWith(set.n));
+    if (!named.length) continue;
+    assert.ok(named.length >= 1);
+    for (const i of set.sq) {
+      const other = Object.entries(SETS).find(([k, v]) =>
+        k !== key && BOARD[i].n.startsWith(v.n));
+      assert.ok(!other, `${BOARD[i].n} is in ${set.n} but named for ${other?.[1].n}`);
+    }
+  }
+});

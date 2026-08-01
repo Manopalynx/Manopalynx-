@@ -659,6 +659,36 @@ for (const device of DEVICES) {
     else fail('the decks screen scrolls sideways');
   }
 
+  // ---- the line under a square's name ----
+  // Thirty of forty squares quote the novel. The quoted ones are italic against
+  // a gold rule and the written ones are plain, which is the only place a player
+  // can tell which is which — so check the distinction actually renders.
+  const flav = await page.evaluate(() => {
+    const BOARD = window.__BOARD();
+    const out = [];
+    for (let i = 0; i < BOARD.length; i++) {
+      window.showSquare(i);
+      const el = document.querySelector('.sheet .flav');
+      out.push({
+        i, n: BOARD[i].n, qv: !!BOARD[i].qv,
+        shown: el ? el.textContent.trim() : null,
+        quoted: el ? el.classList.contains('quoted') : null,
+        italic: el ? getComputedStyle(el).fontStyle === 'italic' : null
+      });
+      window.closeSheet();
+    }
+    return out;
+  });
+  const noLine = flav.filter(f => !f.shown);
+  if (!noLine.length) pass(`every square shows its line (${flav.length} squares)`);
+  else fail(`${noLine.length} squares show no line: ${noLine.map(f => f.n).join(', ')}`);
+  const mismarked = flav.filter(f => f.shown && f.quoted !== f.qv);
+  if (!mismarked.length) pass("the author's lines are marked apart from the game's");
+  else fail(`${mismarked.length} lines are marked wrong: ${mismarked.map(f => f.n).join(', ')}`);
+  const notItalic = flav.filter(f => f.qv && !f.italic);
+  if (!notItalic.length) pass('quoted lines actually render italic');
+  else fail(`${notItalic.length} quoted lines are not italic: ${notItalic.map(f => f.n).join(', ')}`);
+
   // ---- the galaxy, and the re-render trap it sits in ----
   // The board is rebuilt with innerHTML on every render. If the centre panel is
   // rebuilt with it, the canvas is destroyed and the animation restarts many
