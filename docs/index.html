@@ -95,16 +95,26 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
    cells face inwards the way a real board's do, and the middle is larger.
    40 squares round a 393pt perimeter is ~31px a side whatever shape they are,
    which is why they carry codes rather than names. */
-.board{flex:0 0 auto;display:grid;
-  grid-template-columns:1.55fr repeat(9,1fr) 1.55fr;
-  grid-template-rows:1.55fr repeat(9,1fr) 1.55fr;
+/* Two independent ways this board stopped being square when a 15px mark was
+   added above the code, both closed here.
+   min-height:0 — .board is a flex item in a column, where the automatic minimum
+   height resolves to its content and silently outranks aspect-ratio. That is
+   what actually pinned the board at 497px tall in a 375px-wide viewport.
+   minmax(0,…) — a bare fr track is minmax(AUTO,1fr), so each track floors at its
+   own content and is a second route to the same place.
+   Neither failure is visible as a failure: the board still renders, still plays,
+   and simply pushes the page into a 117px scroll. The probe asserts squareness,
+   which is the only reason it was caught. */
+.board{flex:0 0 auto;min-height:0;display:grid;
+  grid-template-columns:minmax(0,1.55fr) repeat(9,minmax(0,1fr)) minmax(0,1.55fr);
+  grid-template-rows:minmax(0,1.55fr) repeat(9,minmax(0,1fr)) minmax(0,1.55fr);
   gap:1.5px;aspect-ratio:1;width:100%;padding:5px}
 /* A flat fill made the board read as a spreadsheet. The gradient and the hair
    of light along the top edge cost nothing and give each square a face. */
 .cell{position:relative;border:1px solid var(--rule);border-radius:4px;
   background:linear-gradient(168deg,#171B26 0%,#0E1017 62%,#0B0D13 100%);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.035);
-  padding:2px;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+  padding:2px;display:flex;flex-direction:column;overflow:hidden;min-width:0;min-height:0}
 /* The colour band sits on the INWARD edge of each side, as on a real board, so
    the four rows of colour face the middle. Absolutely placed rather than laid
    out, so the text below it is unaffected by which edge the cell is on. */
@@ -123,6 +133,22 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
 .cell .code{font-family:var(--m);font-size:10px;line-height:1.1;color:var(--body);
   margin-top:1px;letter-spacing:-.06em}
 .cell .cpr{font-family:var(--m);font-size:8px;color:var(--dim);margin-top:auto}
+/* The eighteen non-property squares carry a drawn mark.
+   ABSOLUTELY placed, and that is the whole design. A mark stacked above the
+   code was measured and does not fit: a left- or right-edge cell is 30.4px tall
+   on a 393pt screen, and once border, padding and the 7px inward edge are taken
+   there are 17px left — against 15px of icon plus 11px of code. Worse, it did
+   not overflow, it grew the grid: the board went from square to 375x497 and the
+   page picked up a 117px scroll.
+   Out of flow it cannot push a track no matter what size it is drawn at, so the
+   mark reads at cell scale on the deep corners and the shallow edges alike, and
+   the code keeps the whole line to itself on top. */
+.cell .cico{position:absolute;inset:0;margin:auto;width:62%;height:62%;
+  max-width:30px;max-height:30px;color:var(--dim);opacity:.32;z-index:0;pointer-events:none}
+/* Go, Detention, the Anchorage and Absorbed are the landmarks and have the room. */
+.cell.corner .cico{width:54%;height:54%;color:var(--gold);opacity:.42}
+/* Above the mark, and above the colour bar's z-index:1 on fleets and utilities. */
+.cell .code,.cell .cpr{position:relative;z-index:2}
 .cell.e-left .code,.cell.e-right .code,.cell.corner .code{margin-top:0}
 /* Corners are landmarks — Go, the Facility, Absorbed, the Anchorage. They were
    indistinguishable from an ordinary square apart from the label colour. */

@@ -329,6 +329,96 @@ for (const device of DEVICES) {
   await page.evaluate(() => window.closeSheet());
   await page.waitForTimeout(150);
 
+  // ---- the non-property squares must carry a mark, and it must fit ----
+  // .cell is overflow:hidden, so an icon a few pixels too large does not fail —
+  // it crops, and a cropped silhouette still looks deliberate. Rendered boxes
+  // are compared against the cell's own box rather than trusting the CSS.
+  const marks = await page.evaluate(() => {
+    const cells = [...document.querySelectorAll('.cell')];
+    const marked = cells.filter(c => c.classList.contains('marked'));
+    if (!marked.length) return 'no square carries a mark';
+    let drawn = 0, clipped = [], codeHidden = [];
+    for (const c of marked) {
+      const svg = c.querySelector('.cico');
+      const code = c.querySelector('.code');
+      if (!svg) { clipped.push((code?.textContent || '?') + ' has no svg'); continue; }
+      const cb = c.getBoundingClientRect(), sb = svg.getBoundingClientRect();
+      if (sb.width > 0 && sb.height > 0) drawn++;
+      // half a pixel of tolerance for subpixel layout at deviceScaleFactor 3
+      if (sb.top < cb.top - 0.5 || sb.bottom > cb.bottom + 0.5 ||
+          sb.left < cb.left - 0.5 || sb.right > cb.right + 0.5) {
+        clipped.push(code?.textContent || '?');
+      }
+      const rb = code.getBoundingClientRect();
+      if (rb.bottom > cb.bottom + 0.5 || rb.width < 1) codeHidden.push(code.textContent);
+    }
+    return { total: marked.length, drawn, clipped, codeHidden,
+             props: cells.length - marked.length };
+  });
+  if (typeof marks === 'string') fail(marks);
+  else {
+    if (marks.total === 18) pass(`every non-property square carries a mark (${marks.total})`);
+    else fail(`expected 18 marked squares, found ${marks.total}`);
+    if (marks.drawn === marks.total) pass(`every mark renders at a real size (${marks.drawn})`);
+    else fail(`${marks.total - marks.drawn} marks rendered at zero size`);
+    if (!marks.clipped.length) pass('no mark overflows its cell');
+    else fail(`marks cropped by their cell: ${marks.clipped.join(', ')}`);
+    if (!marks.codeHidden.length) pass('the code is still readable beside the mark');
+    else fail(`the mark pushed the code out of: ${marks.codeHidden.join(', ')}`);
+    if (marks.props === 22) pass(`properties keep the colour bar as their identity (${marks.props})`);
+    else fail(`expected 22 unmarked properties, found ${marks.props}`);
+  }
+
+  // ---- no two marks may look alike ----
+  // data.js already forbids two codes of the same length differing by a single
+  // character, because COL/CON — the two decks — were exactly that. A mark is
+  // subject to the same failure and nothing was checking it: the first set drawn
+  // here gave Detention three bars between two rails and The Column three flutes
+  // between two slabs, which is the same silhouette at 20px, on the two busiest
+  // squares on the board (6.19% and 6.63%).
+  //
+  // Each mark is rasterised at 40x40 and compared by intersection-over-union of
+  // its ink. The threshold is not a guess: the bars/column pair measured 0.54
+  // and the closest surviving pair measures 0.463, so 0.50 sits between a known
+  // failure and the known-good set.
+  const alike = await page.evaluate(async () => {
+    const seen = new Map();
+    for (const c of document.querySelectorAll('.cell.marked')) {
+      const svg = c.querySelector('.cico'), code = c.querySelector('.code').textContent.trim();
+      if (svg && !seen.has(svg.innerHTML)) seen.set(svg.innerHTML, code);
+    }
+    if (seen.size < 2) return 'fewer than two distinct marks to compare';
+    const S = 40;
+    const raster = async inner => {
+      const url = 'data:image/svg+xml;base64,' + btoa(
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${S}" height="${S}" fill="#fff">${inner}</svg>`);
+      const img = new Image();
+      await new Promise((ok, no) => { img.onload = ok; img.onerror = () => no(new Error('mark failed to rasterise')); img.src = url; });
+      const cv = document.createElement('canvas'); cv.width = cv.height = S;
+      const g = cv.getContext('2d'); g.drawImage(img, 0, 0, S, S);
+      const d = g.getImageData(0, 0, S, S).data, bits = new Uint8Array(S * S);
+      for (let i = 0; i < S * S; i++) bits[i] = d[i * 4 + 3] > 110 ? 1 : 0;
+      return bits;
+    };
+    const names = [...seen.values()], bits = [];
+    for (const inner of seen.keys()) bits.push(await raster(inner));
+    const empty = names.filter((n, i) => !bits[i].some(v => v));
+    let worst = { v: -1 };
+    for (let i = 0; i < bits.length; i++) for (let j = i + 1; j < bits.length; j++) {
+      let I = 0, U = 0;
+      for (let k = 0; k < bits[i].length; k++) { if (bits[i][k] && bits[j][k]) I++; if (bits[i][k] || bits[j][k]) U++; }
+      const v = U ? I / U : 1;
+      if (v > worst.v) worst = { v, a: names[i], b: names[j] };
+    }
+    return { count: names.length, empty, worst };
+  });
+  if (typeof alike === 'string') fail(alike);
+  else if (alike.empty.length) fail(`these marks rasterise to nothing: ${alike.empty.join(', ')}`);
+  else if (alike.worst.v < 0.50)
+    pass(`no two marks look alike (closest ${alike.worst.a}/${alike.worst.b} at ${alike.worst.v.toFixed(2)})`);
+  else
+    fail(`${alike.worst.a} and ${alike.worst.b} are the same shape (IoU ${alike.worst.v.toFixed(2)}, limit 0.50)`);
+
   // ---- the menu must name the build and the seed ----
   // These exist only to be read off a screenshot, so "the value is in the DOM"
   // is not the assertion — it has to be rendered text that matches the running

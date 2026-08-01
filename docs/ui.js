@@ -155,6 +155,71 @@ const edgeOf = i => {
 
 const pipOf = p => PIPS[p.i % PIPS.length];
 const colourOf = b => b.s ? SETS[b.s].c : b.t === 'f' ? 'var(--fleet)' : b.t === 'u' ? 'var(--util)' : null;
+
+/* ------------------------------------------------------- square marks */
+// A property cell carries a colour bar, a code, a price and its development.
+// The eighteen squares that are not properties carried a four-letter code and
+// nothing else — and twelve of those have no colour bar or price either, so the
+// emptiest cells on the board were also the busiest. Measured from TRAFFIC:
+// those twelve take 27.2% of all landings, Detention alone 6.19% (the busiest
+// square there is), and the two decks 10.4% between them — more than any colour
+// set. The cells you land on most were telling you least.
+//
+// CLMN and CON are the sharpest case. The two decks were once COL/CON, recorded
+// in the README as "the worst possible pair to confuse", and the fix was a
+// naming rule. Four letters at 10px still resolve slowly under a thumb; a
+// silhouette does not. The code stays alongside, because the info panel, the
+// ledger sheet and the traffic table are all keyed on codes.
+//
+// Drawn rather than fetched: inline SVG on currentColor costs no request, no
+// cache entry and no dependency, and stays sharp at 3x. Bold silhouettes only —
+// nothing survives detail at ~15px on a 375pt screen.
+const ICON = {
+  // An open ledger. The square is The Ledger Opens, and the book is the motif
+  // the whole game is named for.
+  go: '<path d="M12 6.4C9.4 4.8 6.6 4.4 3.2 4.8v13.4c3.4-.4 6.2 0 8.8 1.6 2.6-1.6 5.4-2 8.8-1.6V4.8c-3.4-.4-6.2 0-8.8 1.6Z"/>'
+    + '<path d="M11.2 6.8h1.6v12.4h-1.6Z" fill="var(--void)"/>',
+  // A fluted column — The Column, the money deck. Solid and vertical, so it
+  // cannot be mistaken for the branching mark opposite it.
+  col: '<path d="M4 3h16v2.6H4Zm0 15.4h16V21H4Z"/>'
+     + '<path d="M7.6 5.6h1.7v12.8H7.6Zm3.55 0h1.7v12.8h-1.7Zm3.55 0h1.7v12.8h-1.7Z"/>',
+  // A path that forks — Contingency, the movement deck. Deliberately the visual
+  // opposite of the column: open, branching, going two ways at once.
+  con: '<g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">'
+     + '<path d="M12 21.2V15"/><path d="M12 15 8.6 11.6"/><path d="M12 15l3.4-3.4"/></g>'
+     + '<path d="M5 8 9.84 9.16 6.16 12.84Z"/><path d="M19 8 17.84 12.84 14.16 9.16Z"/>',
+  // Money leaving you, onto a plate. Both taxes are a figure you hand over.
+  tax: '<g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+     + '<path d="M12 3.4v10"/><path d="m7.6 9 4.4 4.4L16.4 9"/><path d="M4.6 17.8h14.8"/></g>',
+  // A hull under way. The Pillar of Commerce is the Union's flagship, not a
+  // station, so these read as ships rather than ports.
+  f: '<path d="M22 12 8.2 5.4v13.2Z"/>'
+   + '<rect x="2.2" y="7" width="4.4" height="3.2" rx="1"/>'
+   + '<rect x="2.2" y="13.8" width="4.4" height="3.2" rx="1"/>',
+  // Something listening. The Deep Array is the voice that counts the swarm in.
+  u: '<circle cx="12" cy="17.6" r="2.4"/>'
+   + '<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">'
+   + '<path d="M6.6 12.8a7.6 7.6 0 0 1 10.8 0"/><path d="M3.2 9a12.4 12.4 0 0 1 17.6 0"/></g>',
+  // An eye, not bars. Bars were drawn first and were a mistake: three vertical
+  // strokes between two rails is the same silhouette as the fluted column at
+  // 20px, and Detention (6.19%) and The Column (6.63%) are the two busiest
+  // squares on the board — so the mark meant to end a confusion created a worse
+  // one. The Overseer watches, which is both unmistakable in outline and closer
+  // to what the square is.
+  jail: '<g fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round">'
+      + '<path d="M1.8 12s3.9-6.5 10.2-6.5S22.2 12 22.2 12s-3.9 6.5-10.2 6.5S1.8 12 1.8 12Z"/></g>'
+      + '<circle cx="12" cy="12" r="2.9"/>',
+  // An anchor, for the one corner that asks nothing of you.
+  free: '<circle cx="12" cy="4.4" r="2.4"/>'
+      + '<g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+      + '<path d="M12 7.4V20"/><path d="M7.6 11h8.8"/><path d="M4.6 14.2a7.4 7.4 0 0 0 14.8 0"/></g>',
+  // Mandibles closing. The Absorbed corner is where the Neurex speak, and this
+  // is the one mark on the board that should look wrong rather than designed.
+  goto: '<g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">'
+      + '<path d="M3.4 3.8c0 8.4 4.2 12.6 8.6 15"/><path d="M20.6 3.8c0 8.4-4.2 12.6-8.6 15"/>'
+      + '<path d="M8.4 5.6c.4 4.2 1.8 6.6 3.6 8.2"/><path d="M15.6 5.6c-.4 4.2-1.8 6.6-3.6 8.2"/></g>'
+};
+const iconFor = b => ICON[b.t] || '';
 const posOf = p => (anim && anim.i === p.i ? anim.pos : p.pos);
 
 /* ============================================================ render */
@@ -275,9 +340,11 @@ function renderBoard() {
       .join('');
     const dev = held ? (held.citadel ? '◆' : held.garrisons ? '▪'.repeat(held.garrisons) : held.mortgaged ? '⌀' : '') : '';
     const ownStyle = owner ? `color:${pipOf(owner)};box-shadow:inset 0 0 0 2px ${pipOf(owner)}` : '';
-    h += `<div class="cell e-${edge}${posOf(cur) === i ? ' here' : ''}${selected === i ? ' sel' : ''}"
+    const ico = iconFor(b);
+    h += `<div class="cell e-${edge}${posOf(cur) === i ? ' here' : ''}${selected === i ? ' sel' : ''}${ico ? ' marked' : ''}"
         style="grid-row:${r};grid-column:${c};${ownStyle}" data-i="${i}">
       ${colour ? `<div class="cbar" style="background:${colour}"></div>` : ''}
+      ${ico ? `<svg class="cico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ico}</svg>` : ''}
       <div class="code">${esc(b.a)}</div>
       ${b.pr ? `<div class="cpr">${b.pr}</div>` : ''}
       ${dev ? `<div class="grr">${dev}</div>` : ''}
