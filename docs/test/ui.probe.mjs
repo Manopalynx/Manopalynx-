@@ -735,6 +735,49 @@ for (const device of DEVICES) {
   if (/You would charge/.test(contract.fleetText)) pass('and states what you would charge after');
   else fail('a fleet contract never says what your rent becomes');
 
+  // ---- what a turn and a garrison actually cost ----
+  const costs = await page.evaluate(async () => {
+    const G = window.__G(), SETS = window.__SETS();
+    const p = G.players[G.cur];
+    const eden = SETS.eden.sq;
+    p.cash = 5000;
+    p.holdings = eden.map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+    for (const q of G.players) if (q !== p) q.holdings = q.holdings.filter(h => !eden.includes(h.sq));
+    window.showManage();
+    const rows = [...document.querySelectorAll('.sheet .rowState')].map(e => e.textContent);
+    const upkeepEmpty = document.querySelector('.sheet [data-mg="upkeep"]').textContent;
+    // Build one, so upkeep is no longer zero and the breakdown has something to say.
+    document.querySelector('.sheet [data-fn^="build|"]').click();
+    const upkeepBuilt = document.querySelector('.sheet [data-mg="upkeep"]').textContent;
+    window.closeSheet();
+    G.phase = 'end';
+    window.__render();
+    const endBtn = [...document.querySelectorAll('.act')].find(b => /End turn/.test(b.textContent));
+    return { rows, upkeepEmpty, upkeepBuilt, gc: SETS.eden.gc,
+             endLabel: endBtn ? endBtn.textContent.replace(/\s+/g, ' ').trim() : null };
+  });
+  if (costs.rows.some(r => r.includes(String(costs.gc))))
+    pass(`a holding row states what a garrison costs (${costs.rows[0]})`);
+  else fail(`no garrison cost on any Manage row: ${costs.rows.join(' | ')}`);
+  if (/×/.test(costs.upkeepBuilt))
+    pass(`upkeep is broken down once there is something to break down (${costs.upkeepBuilt})`);
+  else fail(`upkeep shows no breakdown after building: "${costs.upkeepBuilt}"`);
+  if (/upkeep/i.test(costs.endLabel || ''))
+    pass(`the End turn button states the upkeep it charges ("${costs.endLabel}")`);
+  else fail(`End turn button reads "${costs.endLabel}" with upkeep owing`);
+
+  // ---- the selection ring does not outlive its sheet ----
+  const ring = await page.evaluate(async () => {
+    window.showSquare(1);
+    const during = document.querySelectorAll('.cell.sel').length;
+    window.closeSheet();
+    await new Promise(r => setTimeout(r, 40));
+    return { during, after: document.querySelectorAll('.cell.sel').length };
+  });
+  if (ring.during === 1 && ring.after === 0)
+    pass('the selection ring appears with its sheet and goes with it');
+  else fail(`selection ring: ${ring.during} while open, ${ring.after} after closing`);
+
   // ---- the galaxy, and the re-render trap it sits in ----
   // The board is rebuilt with innerHTML on every render. If the centre panel is
   // rebuilt with it, the canvas is destroyed and the animation restarts many

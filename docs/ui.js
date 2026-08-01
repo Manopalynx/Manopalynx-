@@ -293,7 +293,7 @@ function renderBoard() {
     galaxy.resize();
   }
   board.querySelectorAll('[data-i]').forEach(el =>
-    el.onclick = () => { selected = +el.dataset.i; renderBoard(); showSquare(+el.dataset.i); });
+    el.onclick = () => showSquare(+el.dataset.i));
 }
 
 function renderActions() {
@@ -338,7 +338,10 @@ function renderActions() {
     + actBtn('Manage', 'showManage()', '', 'build · pledge')
     + actBtn('Propose', 'showTrade()', '', 'draw a contract')
     + relational
-    + actBtn('End turn', 'act_end()', G.phase === 'end' ? 'pri' : '', '&nbsp;', G.phase !== 'end');
+    // Upkeep is charged by ending the turn, so this is where it belongs. It was
+    // only ever visible inside the Manage sheet, which is not where you pay it.
+    + actBtn('End turn', 'act_end()', G.phase === 'end' ? 'pri' : '',
+        E.upkeep(p) ? `upkeep ${money(E.upkeep(p))}` : '&nbsp;', G.phase !== 'end');
   bindActs();
 }
 
@@ -439,7 +442,14 @@ function sheet(inner) {
   $('sheetRoot').innerHTML = `<div class="scrim"><div class="sheet"><div class="grab"></div>${inner}</div></div>`;
   bindSheet($('sheetRoot'));
 }
-function closeSheet() { $('sheetRoot').innerHTML = ''; }
+// The dashed ring says "this is the square the open sheet is about". Once the
+// sheet is gone it marks nothing, and a marker left behind on a board that has
+// since moved on is just another thing to decode. Cleared here rather than on a
+// timer: nothing should vanish while somebody is still reading it.
+function closeSheet() {
+  $('sheetRoot').innerHTML = '';
+  if (selected !== -1) { selected = -1; renderBoard(); }
+}
 // [label, action, classes, confirmLabel]. A fourth entry arms the button.
 const btns = list => `<div class="mbtns">${list.map(([label, fn, cls = '', confirm]) =>
   `<button class="mbtn ${cls}" data-fn="${fn}"${confirm ? ` data-confirm="${esc(confirm)}"` : ''}>${label}</button>`).join('')}</div>`;
@@ -641,6 +651,9 @@ function toggleScore() { Score.resume(); Score.toggle(); render(); showMenu(); }
 /* ---------------------------------------------------------- square detail */
 function showSquare(i) {
   i = +i;
+  // The ring belongs to the sheet, not to the tap that opened it — setting it in
+  // the click handler meant every other route here showed a sheet marking nothing.
+  if (selected !== i) { selected = i; renderBoard(); }
   const b = BOARD[i];
   const owner = E.ownerOf(G, i);
   const held = owner ? E.holding(owner, i) : null;
@@ -985,8 +998,8 @@ function showManage() {
   for (const h of [...p.holdings].sort((a, b) => a.sq - b.sq)) {
     const b = BOARD[h.sq];
     s += `<div class="row" data-row="${h.sq}">
-      <div><div style="color:${b.s ? SETS[b.s].c : 'var(--body)'};font-size:15px">${esc(b.n)}</div>
-      <div class="rowState" style="font-family:var(--m);font-size:11.5px;color:var(--dim);margin-top:2px"></div></div>
+      <div class="rowMain"><div class="rowName" style="color:${b.s ? SETS[b.s].c : 'var(--body)'}">${esc(b.n)}</div>
+      <div class="rowState"></div></div>
       <div class="rowbtns">${manageControls(p, h)}</div></div>`;
   }
   if (p.debt) s += btns([[`Repay ${money(Math.min(p.cash, p.debt))}`, 'repay', 'dgr wide']]);
@@ -1008,13 +1021,27 @@ function refreshManage() {
   const p = E.current(G);
   const set = (sel, text) => { const el = root.querySelector(sel); if (el) el.textContent = text; };
   set('[data-mg="who"]', `${p.name} · ${money(p.cash)}${p.debt ? ` · debt ${money(p.debt)}` : ''}`);
-  set('[data-mg="upkeep"]', money(E.upkeep(p)));
+  const g = p.holdings.reduce((n, h) => n + h.garrisons, 0);
+  const c = p.holdings.filter(h => h.citadel).length;
+  const parts = [];
+  if (g) parts.push(`${g}×${money(RULES.garrisonUpkeep)}`);
+  if (c) parts.push(`${c}×${money(RULES.citadelUpkeep)}`);
+  if (p.vassals.length) parts.push(`${p.vassals.length} vassal${p.vassals.length === 1 ? '' : 's'}`);
+  set('[data-mg="upkeep"]', money(E.upkeep(p)) + (parts.length ? ` · ${parts.join(' + ')}` : ''));
   set('[data-mg="pools"]', `${G.garrisonPool} garrisons · ${G.citadelPool} citadels`);
 
   for (const h of p.holdings) {
     const row = root.querySelector(`[data-row="${h.sq}"]`);
     if (!row) continue;
-    row.querySelector('.rowState').textContent = `${manageState(h)} · rent ${money(E.rentOf(G, h.sq, 7))}`;
+    // The +G button never said what it would take. The set's garrison cost is in
+    // the square panel, which is two taps away and the wrong moment.
+    const b = BOARD[h.sq];
+    const gc = b.s ? SETS[b.s].gc : 0;
+    let line = `${manageState(h)} · rent ${money(E.rentOf(G, h.sq, 7))}`;
+    if (E.canBuild(G, p, h.sq)) line += ` · +G ${money(gc)}`;
+    else if (E.canRaiseCitadel(G, p, h.sq)) line += ` · citadel ${money(gc)}`;
+    else if (gc && !h.mortgaged && h.garrisons < 3 && !h.citadel) line += ` · +G ${money(gc)}`;
+    row.querySelector('.rowState').textContent = line;
     const controls = row.querySelector('.rowbtns');
     const next = manageControls(p, h);
     if (controls.innerHTML !== next) { controls.innerHTML = next; bindSheet(controls); }
