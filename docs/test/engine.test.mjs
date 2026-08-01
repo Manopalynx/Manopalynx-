@@ -11,7 +11,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { SETS, BOARD, N, JAIL, TRAFFIC, RULES } from '../data.js';
+import { SETS, BOARD, N, JAIL, TRAFFIC, RULES, CONTINGENCY, COLUMN } from '../data.js';
 import {
   createGame, current, ownerOf, holding, ownsSet, garrisonsOf, citadelsOf,
   holdingsValue, netWorth, upkeep, rentOf, paybackTurns, revoltThreshold,
@@ -23,7 +23,7 @@ import {
   serialize, deserialize, payFacilityFee, releaseVassal, aiValue, aiBid, aiWantsToBuy,
   pledge, pledgeValue, redeemCost, raisableValue, parkForSettlement, autoSettle, settleNow,
   threatPenalty, setBuildingTargets, denialTargets, aiCounter, aiAcceptsContract,
-  landingPreview
+  landingPreview, previewAt, cardEffect
 } from '../engine.js';
 
 /* -------------------------------------------------------------- fixtures */
@@ -1573,4 +1573,141 @@ test('the preview is right on every landing across whole games', () => {
   assert.ok(rents > 100, `only ${rents} rents seen`);
   assert.ok(taxes > 10, `only ${taxes} taxes seen`);
   assert.ok(offers > 100, `only ${offers} offers seen`);
+});
+
+/* ================================================================== cards */
+// Three Contingency cards named one square and sent you to another. They were
+// written for the 28-square board and the indices were never remapped, so
+// "You are commanded to Cradle" quietly put you on Oranthe for months. The
+// deck cannot be checked by reading it — the text and the index have to be
+// compared, which is what this does.
+
+test('a movement card names the square it sends you to', () => {
+  for (const [label, deck] of [['Contingency', CONTINGENCY], ['The Column', COLUMN]]) {
+    for (const c of deck) {
+      if (c.go === undefined) continue;
+      const dest = BOARD[c.go].n;
+      assert.ok(c.x.includes(dest),
+        `${label}: "${c.x}" sends the player to ${dest} [${c.go}], which it never names`);
+    }
+  }
+});
+
+test('every card does exactly one thing, and a thing the engine knows', () => {
+  const known = ['cash', 'go', 'back', 'jail', 'fleet', 'util', 'perGarrison', 'perCitadel'];
+  for (const c of [...CONTINGENCY, ...COLUMN]) {
+    const keys = Object.keys(c).filter(k => k !== 'x');
+    assert.equal(keys.length, 1, `"${c.x}" carries ${keys.length} effects: ${keys}`);
+    assert.ok(known.includes(keys[0]), `"${c.x}" uses an unknown effect "${keys[0]}"`);
+    assert.ok(c.x.trim().length > 0);
+    if (keys[0] === 'cash') assert.notEqual(c.cash, 0, 'a card that pays nothing is a wasted draw');
+  }
+});
+
+test('a card that names a figure charges that figure', () => {
+  // The text and the number are written separately, so they can disagree.
+  for (const c of [...CONTINGENCY, ...COLUMN]) {
+    const figures = [...c.x.matchAll(/₡(\d+)/g)].map(m => +m[1]);
+    if (!figures.length) continue;
+    const owed = Math.abs(c.cash ?? c.perGarrison ?? c.perCitadel ?? 0);
+    assert.ok(figures.includes(owed),
+      `"${c.x}" names ${figures} but the effect is ${owed}`);
+  }
+});
+
+test('the effect of a card is stated before it is entered', () => {
+  const G = game();
+  const [a] = G.players;
+  a.pos = 0;
+
+  const move = CONTINGENCY.find(c => c.go === 39);
+  let e = cardEffect(G, move, a);
+  assert.equal(e.to, 39);
+  assert.equal(e.name, 'Cradle');
+  assert.equal(e.passesStart, false, 'square 0 to square 39 never crosses the start');
+  assert.equal(e.then.kind, 'unowned');
+
+  // The same card from further round the board does lap.
+  a.pos = 36;
+  e = cardEffect(G, CONTINGENCY.find(c => c.go === 0), a);
+  assert.equal(e.to, 0);
+  assert.ok(e.passesStart, 'advancing to the start collects the lap payment');
+
+  // Detention is a move that is never a lap.
+  e = cardEffect(G, CONTINGENCY.find(c => c.jail), a);
+  assert.equal(e.detention, true);
+  assert.equal(e.passesStart, false);
+  assert.equal(e.to, JAIL);
+
+  // Backwards never pays.
+  a.pos = 2;
+  e = cardEffect(G, CONTINGENCY.find(c => c.back), a);
+  assert.equal(e.to, 39, 'three back from square 2 wraps to 39');
+  assert.equal(e.passesStart, false, 'walking backwards past the start pays nothing');
+});
+
+test('a per-garrison card states what it will actually cost you', () => {
+  const G = game();
+  const [a] = G.players;
+  const card = CONTINGENCY.find(c => c.perGarrison);
+  assert.equal(cardEffect(G, card, a).per.total, 0, 'nothing held, nothing owed');
+  for (const sq of SETS.eden.sq) own(G, a, sq, { garrisons: 3 });
+  const e = cardEffect(G, card, a);
+  assert.equal(e.per.count, 9);
+  assert.equal(e.per.total, 9 * card.perGarrison);
+});
+
+test('the effect promised is the effect applied, over the whole deck', () => {
+  // Draw every card in both decks in turn and check the promise against what
+  // the engine then does to the player's cash and position.
+  for (const deck of [CONTINGENCY, COLUMN]) {
+    for (const card of deck) {
+      const G = game(seats2, 7);
+      const p = G.players[0];
+      p.pos = 22; p.cash = 5000;             // a Contingency square, mid-board
+      G.dice = [3, 4];
+      G.phase = 'card';
+      G.pendingCard = { card, isContingency: true };
+      const e = cardEffect(G, card, p);
+      const before = p.cash;
+      applyCard(G);
+
+      if (e.cash !== null) {
+        assert.equal(p.cash, before + e.cash, `"${card.x}" promised ${e.cash}`);
+      } else if (e.per) {
+        assert.equal(p.cash, before - e.per.total, `"${card.x}" promised ${e.per.total}`);
+      } else if (e.detention) {
+        assert.equal(p.pos, JAIL);
+        assert.ok(p.inFacility);
+        assert.equal(p.cash, before, 'detention costs nothing on arrival');
+      } else if (e.to !== null) {
+        assert.equal(p.pos, e.to, `"${card.x}" promised ${e.name}`);
+        // Everything unowned here, so the only movement of money is the lap.
+        assert.equal(p.cash, before + (e.passesStart ? RULES.passGo : 0),
+          `"${card.x}" ${e.passesStart ? 'should have paid the lap' : 'should not have paid a lap'}`);
+      }
+    }
+  }
+});
+
+test('the nearest fleet and utility are ahead of you, never behind', () => {
+  const G = game();
+  const [a] = G.players;
+  const fleetCard = CONTINGENCY.find(c => c.fleet);
+  const utilCard = CONTINGENCY.find(c => c.util);
+  const fleets = BOARD.map((b, i) => [b, i]).filter(([b]) => b.t === 'f').map(([, i]) => i);
+  const utils = BOARD.map((b, i) => [b, i]).filter(([b]) => b.t === 'u').map(([, i]) => i);
+  for (let pos = 0; pos < N; pos++) {
+    a.pos = pos;
+    for (const [card, targets] of [[fleetCard, fleets], [utilCard, utils]]) {
+      const e = cardEffect(G, card, a);
+      assert.ok(targets.includes(e.to), `from ${pos} the card lands on ${e.to}`);
+      const steps = (((e.to - pos) % N) + N) % N;
+      assert.ok(steps > 0, 'the card always moves you');
+      for (let k = 1; k < steps; k++) {
+        assert.ok(!targets.includes((pos + k) % N),
+          `from ${pos} it passed a nearer one at ${(pos + k) % N}`);
+      }
+    }
+  }
 });

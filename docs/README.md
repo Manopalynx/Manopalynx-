@@ -21,7 +21,7 @@ Playable. Engine, interface, offline support and save/resume are all in.
 ```
 data.js      board, decks, opponents, economy constants — data only
 engine.js    the rules. No DOM, no timers, no Math.random
-test/        132 passing (plus a browser probe across five viewports)
+test/        143 passing (plus a browser probe across five viewports)
 ```
 
 ## Running the tests
@@ -32,11 +32,14 @@ node --test docs/test/*.test.mjs
 
 There is no build step and no dependency — `node:test` and ES modules only.
 
-Two probes are not tests and are run by hand when a number needs explaining:
+These are not tests. They are measuring instruments, run by hand when a number
+needs explaining:
 
 ```
 node docs/test/balance.mjs [games]     # sweeps the economy levers
 node docs/test/diagnose.mjs [games]    # why games end the way they do
+node docs/test/auctions.mjs [games]    # how much of a game is auctions
+node docs/test/denial.mjs [games]      # how often Varan buys to block rather than to own
 ```
 
 ## Why the engine is separate from the page
@@ -61,12 +64,29 @@ would ever have flagged that.
   after every turn: garrison and citadel pools conserved, no negative cash, no overlord
   cycles, no square held twice, no player ever removed from the table, every game reaches
   an ending.
+- **The decks against themselves.** A card's text and its effect are written side by side
+  and can still disagree. Three Contingency cards did: `go` indices left over from the
+  28-square board meant "You are commanded to Cradle" put you on Oranthe, "Advance to
+  Horizon" on Varan's Audit House, and the *Orion* on Oasis Fortress. Nothing failed. The
+  card lied and the game carried on. Now asserted: **a movement card must name the square
+  it sends you to**, a card that prints a figure must charge that figure, each card carries
+  exactly one effect the engine knows, and every card in both decks is drawn and its
+  promised effect compared against what the engine actually does.
+
+  Note that changing a destination changes `TRAFFIC` — cards are movement, and the table is
+  derived from movement. `test/traffic.test.mjs` catches it; `test/derive-traffic.mjs`
+  regenerates it. Fixing those three moved Horizon from 2.60% to **3.27%**, the second
+  busiest square on the board.
 
 ## Money, and what happens when you run out
 
 Nobody can go below ₡0 and nobody leaves the table. When you owe more than you
-hold, `liquidate()` runs first: it breaks citadels, sells garrisons largest stack
-first, then mortgages your cheapest holdings. Only if that is still not enough
+hold, `liquidate()` runs first, and it gives up the least it can: it pledges
+unbuilt holdings cheapest first, then sells garrisons from the slowest-paying
+set, and breaks a citadel only when there is nothing else left. (It once ran in
+exactly the opposite order, breaking citadels first — the worst possible thing
+to sell — which is a reminder that this paragraph is documentation, not a
+guarantee. `test/engine.test.mjs` is the guarantee.) Only if that is still not enough
 does anything else happen, and it depends who you owe — **the bank** gives you a
 debt marker at 10% a turn, **another player** takes what is left and your oath.
 

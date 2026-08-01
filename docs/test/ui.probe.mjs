@@ -511,6 +511,80 @@ for (const device of DEVICES) {
   else fail(`landing button reads "${landing.own.label}" on your own holding`);
   await page.evaluate(() => window.closeSheet());
 
+  // ---- a drawn card says what it does ----
+  // The flavour text is written to be read, not to be precise: "Varan finds
+  // ₡120 that should not have been there" never said who ends up with it.
+  const cards = await page.evaluate(async () => {
+    const G = window.__G(), E = window.__E();
+    const CON = window.__CON();
+    const p = G.players[G.cur];
+    const read = card => {
+      G.pendingCard = { card, isContingency: true };
+      G.phase = 'card';
+      window.__showCard();
+      const eff = document.querySelector('.sheet .effect');
+      const text = eff ? eff.textContent.replace(/\s+/g, ' ').trim() : null;
+      window.closeSheet();
+      return text;
+    };
+    p.pos = 22; p.cash = 4000; p.holdings = [];
+    G.dice = [3, 4];
+    const out = { every: [] };
+    for (const c of CON) out.every.push({ x: c.x, said: read(c) });
+    out.debit = read(CON.find(c => c.cash < 0));
+    out.credit = read(CON.find(c => c.cash > 0));
+    out.move = read(CON.find(c => c.go === 39));
+    out.detention = read(CON.find(c => c.jail));
+    // A per-garrison charge with something actually held.
+    const eden = window.__SETS().eden.sq;
+    p.holdings = eden.map(sq => ({ sq, garrisons: 3, citadel: 0, mortgaged: 0 }));
+    out.per = read(CON.find(c => c.perGarrison));
+    // The longest card in the deck: does its Enter button still land above the
+    // fold on the smallest phone, or has the effect line pushed it off?
+    //
+    // Two things this has to get right. It must measure AFTER the sheet's rise
+    // animation — during it the button reads 22px low, which shows up as the
+    // same 4px overflow on every viewport at once, and an overflow that does
+    // not vary with screen height is not an overflow. And it must not hold the
+    // game in a forced `card` phase across an await: the game's own scheduler
+    // runs in that gap and works on state the probe invented.
+    let tallest = null, tallestH = 0;
+    for (const c of CON) {
+      G.pendingCard = { card: c, isContingency: true };
+      G.phase = 'card';
+      window.__showCard();
+      const h = document.querySelector('.sheet').scrollHeight;
+      if (h > tallestH) { tallestH = h; tallest = c; }
+      window.closeSheet();
+    }
+    G.pendingCard = { card: tallest, isContingency: true };
+    G.phase = 'card';
+    window.__showCard();
+    await new Promise(r => setTimeout(r, 300));         // one gap, not sixteen
+    const btn = document.querySelector('.sheet .mbtn').getBoundingClientRect();
+    out.worst = { h: btn.bottom, x: tallest.x, vh: window.innerHeight,
+                  fits: btn.bottom <= window.innerHeight };
+    window.closeSheet();
+    G.pendingCard = null; G.phase = 'end';
+    return out;
+  });
+  const missing = cards.every.filter(c => !c.said);
+  if (!missing.length) pass(`every Contingency card states its effect (${cards.every.length} cards)`);
+  else fail(`${missing.length} cards state nothing: ${missing.map(m => m.x).join(' | ')}`);
+  if (/Pay ₡120/.test(cards.debit)) pass(`a charge says so plainly ("${cards.debit}")`);
+  else fail(`the debit card said "${cards.debit}"`);
+  if (/Gain ₡/.test(cards.credit)) pass(`a payment says so plainly ("${cards.credit}")`);
+  else fail(`the credit card said "${cards.credit}"`);
+  if (/Move to Cradle/.test(cards.move)) pass(`a movement card names its destination ("${cards.move}")`);
+  else fail(`the movement card said "${cards.move}"`);
+  if (/Detention/.test(cards.detention)) pass('detention is stated');
+  else fail(`the detention card said "${cards.detention}"`);
+  if (/9 garrisons/.test(cards.per) && /₡225/.test(cards.per))
+    pass(`a per-garrison charge is worked out for you ("${cards.per}")`);
+  else fail(`the per-garrison card said "${cards.per}"`);
+  if (cards.worst.fits) pass(`the longest card fits above the fold, ${Math.round(cards.worst.vh - cards.worst.h)}px clear`);
+  else fail(`"${cards.worst.x}" pushes Enter it to ${Math.round(cards.worst.h)}px, off the screen`);
+
   // ---- the galaxy, and the re-render trap it sits in ----
   // The board is rebuilt with innerHTML on every render. If the centre panel is
   // rebuilt with it, the canvas is destroyed and the animation restarts many

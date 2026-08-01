@@ -4,7 +4,7 @@
 // file animates it.
 
 import {
-  SETS, BOARD, N, JAIL, TRAFFIC, FLEET_RENT, PERSONAS, RULES, EPIGRAPH
+  SETS, BOARD, N, JAIL, TRAFFIC, FLEET_RENT, PERSONAS, RULES, EPIGRAPH, CONTINGENCY
 } from './data.js';
 import * as E from './engine.js';
 import { Score, moodFor } from './score.js';
@@ -830,7 +830,40 @@ function showCard() {
   sheet(`<h3>${isContingency ? 'Contingency' : 'The Column'}</h3>
     <div class="sub">${esc(E.current(G).name)}</div>
     <div class="card">${esc(card.x).replace(/\*(.+?)\*/g, '<em>$1</em>')}</div>
+    ${cardEffectLines(E.cardEffect(G, card))}
     ${btns([['Enter it', 'takeCard', 'pri wide']])}`);
+}
+
+// The flavour text is written to be read. This says what it does.
+//
+// Worth its space for two reasons beyond clarity: a card that moves you also
+// resolves the square it lands on with no stop in between, so without this the
+// arrival is the first the player hears of a bill; and a per-garrison charge
+// has an amount that only the game knows.
+function cardEffectLines(e) {
+  const out = [];
+  if (e.cash !== null) out.push(e.cash > 0 ? `Gain ${money(e.cash)}` : `Pay ${money(-e.cash)}`);
+  if (e.per) {
+    out.push(e.per.count === 0
+      ? `${money(e.per.rate)} for each ${e.per.of} — you hold none, so nothing`
+      : `Pay ${money(e.per.rate)} for each of your ${e.per.count} ${e.per.of}${e.per.count === 1 ? '' : 's'} — ${money(e.per.total)}`);
+  }
+  if (e.detention) out.push('Straight to Overseer Detention, without passing the ledger opening');
+  else if (e.to !== null) {
+    out.push(`Move to ${esc(e.name)}`
+      + (e.passesStart ? `, collecting ${money(e.award)} as the ledger opens` : ''));
+    const t = e.then;
+    if (t) {
+      if (t.kind === 'rent') out.push(`Held by ${esc(chipName(G.players[t.to]))} — you will pay ${money(t.amount)} on arrival`);
+      else if (t.kind === 'unowned') out.push(`Unclaimed — you may take it for ${money(t.amount)}`);
+      else if (t.kind === 'tax') out.push(`You will pay ${money(t.amount)} on arrival`);
+      else if (t.kind === 'own') out.push('Your own holding — nothing due');
+      else if (t.kind === 'pledged') out.push('Pledged — nothing due');
+      else if (t.kind === 'card') out.push('You will draw again');
+    }
+  }
+  if (!out.length) return '';
+  return `<div class="effect">${out.map(l => `<div>${l}</div>`).join('')}</div>`;
 }
 
 /* ---------------------------------------------------------- manage */
@@ -1330,6 +1363,10 @@ window.__tick = () => tick();
 // The panel and the engine each work out rent separately, and once drifted
 // three boards apart. The probe compares them, so it needs both.
 window.__E = () => E;
+window.__CON = () => CONTINGENCY;
+// Cards are dealt by tick(), never by a button, so the sheet has no handle of
+// its own to reach for.
+window.__showCard = () => showCard();
 
 // A background tab can be reaped without warning on iOS, so the save is
 // refreshed whenever the page is hidden as well as after every move.

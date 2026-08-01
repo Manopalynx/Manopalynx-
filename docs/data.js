@@ -102,24 +102,31 @@ export const FLEET_RENT = [0, 25, 50, 100, 200];
 // Solved WITH doubles: a doubles roll moves again, and a third in a row sends
 // you to Detention. Both shape this table, which is why Detention dominates it.
 export const TRAFFIC = [
-  3.14, 2.19, 1.92, 2.20, 2.36, 2.37, 2.26, 1.13, 2.29, 2.26, 6.18, 2.18, 2.70, 2.73,
-  2.50, 2.60, 2.78, 2.38, 3.41, 2.91, 2.96, 2.74, 1.47, 2.74, 2.73, 2.93, 2.70, 3.18,
-  2.84, 2.62, 0.00, 2.65, 2.64, 2.39, 2.54, 2.47, 1.19, 2.25, 2.24, 2.23
+  3.11, 2.15, 1.91, 2.20, 2.37, 2.39, 2.31, 1.15, 2.31, 2.28, 6.19, 2.21, 2.73, 2.25,
+  2.53, 3.08, 3.27, 2.38, 2.93, 2.93, 2.96, 2.78, 1.50, 2.80, 2.77, 2.96, 2.76, 2.70,
+  2.85, 2.59, 0.00, 2.65, 2.62, 2.34, 2.49, 2.40, 1.14, 2.18, 2.18, 2.65
 ];
 
 /* --------------------------------------------------------------------- decks */
 // Each card is one effect. Movement cards resolve their destination normally.
+//
+// A movement card must NAME the square it sends you to, and `go` must be that
+// square's index. These three were written for the 28-square board and never
+// remapped: "commanded to Cradle" sent you to Oranthe, "Advance to Horizon"
+// to Varan's Audit House, and the Orion to Oasis Fortress. Nothing failed —
+// the card simply lied and the game carried on. The test
+// "a movement card names the square it sends you to" now holds this.
 export const CONTINGENCY = [
-  { x: 'You are commanded to Cradle. The capital wishes to see who it belongs to.', go: 27 },
-  { x: 'The ledger opens afresh. Advance to the start of the column.', go: 0 },
-  { x: 'Eden holds, or it does not. Advance to Horizon.', go: 13 },
+  { x: 'You are commanded to Cradle. The capital wishes to see who it belongs to.', go: 39 },
+  { x: 'A new page, and your name at the top of it. Advance to The Ledger Opens.', go: 0 },
+  { x: 'Eden holds, or it does not. Advance to Horizon.', go: 16 },
   { x: 'Requisition order. Report to the nearest fleet.', fleet: 1 },
-  { x: 'The *Orion* signals for you. Advance to it.', go: 18 },
+  { x: 'The *Orion* signals for you. Advance to it.', go: 15 },
   { x: 'A manifest you were not meant to read. Take ₡150 from the bank.', cash: 150 },
   { x: 'The Overseer has taken an interest in your accounts. Report to detention.', jail: 1 },
   { x: 'You are three squares further back than your paperwork claims.', back: 3 },
   { x: 'Anthelion synthesis dividend. Collect ₡100.', cash: 100 },
-  { x: 'Dominion audit. Varan finds ₡120 that should not have been there.', cash: -120 },
+  { x: 'Dominion audit. Varan finds ₡120 in your ledger that should not be there. Forfeit it.', cash: -120 },
   { x: 'Garrison resupply billed to you. Pay ₡25 per garrison held.', perGarrison: 25 },
   { x: 'A world petitions for protection under the Compact. Collect ₡200.', cash: 200 },
   { x: 'The nearest utility falls under emergency requisition. Advance to it.', util: 1 },
@@ -130,7 +137,7 @@ export const CONTINGENCY = [
 
 export const COLUMN = [
   { x: 'The column is settled in your favour. Collect ₡200.', cash: 200 },
-  { x: 'Back to the beginning of the ledger. Advance to Go.', go: 0 },
+  { x: 'Back to the first page. Advance to The Ledger Opens.', go: 0 },
   { x: 'Your name appears on a list you were not shown. Report to Overseer detention.', jail: 1 },
   { x: 'Tithe rebate from a world that overpaid. Collect ₡120.', cash: 120 },
   { x: 'Hull inspection. Pay ₡80.', cash: -80 },

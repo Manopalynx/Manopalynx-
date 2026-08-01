@@ -539,21 +539,64 @@ function toFacility(G, p) {
 // BEFORE they commit to it. "Resolve" told them nothing until it was already
 // done. Structured rather than phrased, so the wording lives in the interface
 // and the arithmetic is testable here.
-export function landingPreview(G) {
-  const p = current(G);
-  const b = BOARD[p.pos];
-  const at = { square: p.pos, name: b.n };
+export function previewAt(G, p, sq, roll = G.dice[0] + G.dice[1]) {
+  const b = BOARD[sq];
+  const at = { square: sq, name: b.n };
   if (b.t === 'goto') return { ...at, kind: 'detention' };
   if (b.t === 'tax') return { ...at, kind: 'tax', amount: b.amt };
   if (b.t === 'con' || b.t === 'col') return { ...at, kind: 'card' };
   if (b.t === 'free' || b.t === 'go' || b.t === 'jail') return { ...at, kind: 'nothing' };
 
-  const owner = ownerOf(G, p.pos);
+  const owner = ownerOf(G, sq);
   if (!owner) return { ...at, kind: 'unowned', amount: b.pr };
   if (owner.i === p.i) return { ...at, kind: 'own' };
-  const amount = rentOf(G, p.pos, G.dice[0] + G.dice[1]);
+  const amount = rentOf(G, sq, roll);
   if (amount === 0) return { ...at, kind: 'pledged' };
   return { ...at, kind: 'rent', amount, to: owner.i };
+}
+
+export const landingPreview = G => previewAt(G, current(G), current(G).pos);
+
+// What a drawn card is about to do, before it is entered. The flavour text is
+// written to be read, not to be precise — "Varan finds ₡120 that should not
+// have been there" does not say who ends up holding it. This does.
+//
+// A card that moves you also resolves the square it drops you on, with no stop
+// in between, so the arrival is part of the effect and is reported with it.
+export function cardEffect(G, card, who = current(G)) {
+  const e = {
+    cash: card.cash ?? null,
+    per: null,
+    detention: !!card.jail,
+    to: null, name: null,
+    passesStart: false, award: RULES.passGo,
+    then: null
+  };
+  if (card.perGarrison) {
+    const n = garrisonsOf(who);
+    e.per = { of: 'garrison', rate: card.perGarrison, count: n, total: n * card.perGarrison };
+  }
+  if (card.perCitadel) {
+    const n = citadelsOf(who);
+    e.per = { of: 'citadel', rate: card.perCitadel, count: n, total: n * card.perCitadel };
+  }
+  // Detention is a move, but never a lap — you are taken, not sent round.
+  if (card.jail) { e.to = JAIL; e.name = BOARD[JAIL].n; return e; }
+
+  let award = true;
+  if (card.go !== undefined) e.to = card.go;
+  else if (card.back) { e.to = (((who.pos - card.back) % N) + N) % N; award = false; }
+  else if (card.fleet) e.to = (who.pos + forwardDistanceTo(who.pos, FLEETS)) % N;
+  else if (card.util) e.to = (who.pos + forwardDistanceTo(who.pos, UTILS)) % N;
+  if (e.to === null) return e;
+
+  e.name = BOARD[e.to].n;
+  if (award) {
+    const steps = (((e.to - who.pos) % N) + N) % N;
+    for (let k = 1; k <= steps; k++) if ((who.pos + k) % N === GO) e.passesStart = true;
+  }
+  e.then = previewAt(G, who, e.to);
+  return e;
 }
 
 export function roll(G, d1, d2) {
