@@ -130,9 +130,9 @@ export const CONTINGENCY = [
   { x: 'Garrison resupply billed to you. Pay ₡25 per garrison held.', perGarrison: 25 },
   { x: 'A world petitions for protection under the Compact. Collect ₡200.', cash: 200 },
   { x: 'The nearest utility falls under emergency requisition. Advance to it.', util: 1 },
-  { x: 'Insurance registry irregularity. Pay ₡90.', cash: -90 },
+  { x: 'An Overseer owes you a favour and is careless enough to put it in writing. Keep it against a future detention.', pardon: 1 },
   { x: 'Salvage rights on a Purifier hulk. Collect ₡180.', cash: 180 },
-  { x: 'Your name appears in a column you did not write. Pay ₡60.', cash: -60 }
+  { x: 'You are named host of the Compact assembly, and hosts settle the accounts. Pay ₡60 to every other overlord.', each: -60 }
 ];
 
 export const COLUMN = [
@@ -143,10 +143,10 @@ export const COLUMN = [
   { x: 'Hull inspection. Pay ₡80.', cash: -80 },
   { x: 'A debt you had written off is repaid with interest. Collect ₡160.', cash: 160 },
   { x: 'Union pension obligations. Pay ₡110.', cash: -110 },
-  { x: 'Confetti still being swept from the plaza drains. Ceremonial costs, ₡70.', cash: -70 },
+  { x: 'A clerk who owes you more than they can repay loses your file for a while. Keep it against a future detention.', pardon: 1 },
   { x: 'Freight tonnage under-declared, and nobody asked. Collect ₡140.', cash: 140 },
   { x: 'Medal ceremony on Agora. The metal is free; the reception is not. Pay ₡50.', cash: -50 },
-  { x: 'Progressive capitals remit early. Collect ₡90.', cash: 90 },
+  { x: 'A tithe you had forgotten is called in, and nobody is placed to refuse. Collect ₡60 from every other overlord.', each: 60 },
   { x: 'A cure, and a lever, from one vial. Collect ₡250.', cash: 250 },
   { x: 'Occupation costs on a world that will not settle. Pay ₡130.', cash: -130 },
   { x: 'Second ledger reconciled. Collect ₡100.', cash: 100 },

@@ -70,6 +70,7 @@ export function createGame({ seats, seed = 1, circuits = 72 } = {}) {
     pos: 0,
     inFacility: false,
     attempts: 0,
+    pardons: 0,                    // Overseer favours held against a future detention
     holdings: [],                  // {sq, garrisons, citadel, mortgaged}
     amends: RULES.amendsPerGame,
     lord: null,
@@ -567,11 +568,18 @@ export function cardEffect(G, card, who = current(G)) {
   const e = {
     cash: card.cash ?? null,
     per: null,
+    each: null,
+    pardon: card.pardon || null,
     detention: !!card.jail,
     to: null, name: null,
     passesStart: false, award: RULES.passGo,
     then: null
   };
+  if (card.each) {
+    const others = G.players.length - 1;
+    e.each = { rate: Math.abs(card.each), others, total: Math.abs(card.each) * others,
+               incoming: card.each > 0 };
+  }
   if (card.perGarrison) {
     const n = garrisonsOf(who);
     e.per = { of: 'garrison', rate: card.perGarrison, count: n, total: n * card.perGarrison };
@@ -602,6 +610,9 @@ export function cardEffect(G, card, who = current(G)) {
 export function roll(G, d1, d2) {
   if (G.phase !== 'roll' || G.over) return null;
   const p = current(G);
+  // An opponent holding a favour spends it rather than sitting there. A human
+  // is offered the button instead, and may prefer to keep it.
+  if (p.inFacility && p.kind === 'ai' && p.pardons > 0) usePardon(G, p);
   const a = d1 ?? 1 + Math.floor(random(G) * 6);
   const b = d2 ?? 1 + Math.floor(random(G) * 6);
   G.dice = [a, b];
@@ -615,9 +626,16 @@ export function roll(G, d1, d2) {
     } else {
       p.attempts++;
       if (p.attempts >= RULES.facilityAttempts) {
-        p.inFacility = false; p.attempts = 0;
-        pay(G, p, null, RULES.facilityFee);
-        note(G, `${p.name} pays ${money(RULES.facilityFee)} and is released.`);
+        // A favour held is spent here rather than wasted. Charging the fee to
+        // somebody holding a free way out would be a trap, not a decision.
+        if (p.pardons > 0) {
+          p.attempts = 0;
+          usePardon(G, p);
+        } else {
+          p.inFacility = false; p.attempts = 0;
+          pay(G, p, null, RULES.facilityFee);
+          note(G, `${p.name} pays ${money(RULES.facilityFee)} and is released.`);
+        }
       } else {
         note(G, `${p.name} remains in the Holding Facility. Attempt ${p.attempts} of ${RULES.facilityAttempts}.`);
         G.phase = 'end';
@@ -649,6 +667,18 @@ export function roll(G, d1, d2) {
 
 // Settle with the Overseer and walk out before rolling. The alternative was
 // three turns with no decision in them, which is dead air in a game this short.
+// An Overseer's favour, spent. Free, and it does not end the turn — you walk
+// out and roll as normal, exactly as if you had settled the fee.
+export function usePardon(G, p = current(G)) {
+  if (!p || !p.inFacility || p.pardons < 1) return false;
+  p.pardons--;
+  p.inFacility = false;
+  p.attempts = 0;
+  note(G, `${p.name} produces an Overseer's favour and walks out. ${p.pardons} left.`);
+  leader(G);
+  return true;
+}
+
 export function payFacilityFee(G) {
   const p = current(G);
   if (G.phase !== 'roll' || !p.inFacility || p.cash < RULES.facilityFee) return false;
@@ -729,6 +759,21 @@ export function applyCard(G) {
   if (c.cash) { if (c.cash > 0) p.cash += c.cash; else pay(G, p, null, -c.cash); }
   if (c.perGarrison) pay(G, p, null, garrisonsOf(p) * c.perGarrison);
   if (c.perCitadel) pay(G, p, null, citadelsOf(p) * c.perCitadel);
+  if (c.pardon) {
+    p.pardons += c.pardon;
+    note(G, `${p.name} holds ${p.pardons} Overseer favour${p.pardons === 1 ? '' : 's'}.`);
+  }
+  // The only cards that move money between players rather than to the bank.
+  // Paid one at a time, because any one of them can bankrupt somebody and that
+  // has to resolve before the next.
+  if (c.each) {
+    const amount = Math.abs(c.each);
+    for (const q of G.players) {
+      if (q.i === p.i) continue;
+      if (c.each > 0) pay(G, q, p, amount); else pay(G, p, q, amount);
+      if (G.phase === 'contest' || G.over) break;
+    }
+  }
   if (G.phase === 'contest' || G.over) return { path: [] };
 
   if (c.jail) { toFacility(G, p); G.phase = 'end'; return { path: [] }; }

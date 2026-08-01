@@ -529,12 +529,15 @@ for (const device of DEVICES) {
     };
     p.pos = 22; p.cash = 4000; p.holdings = [];
     G.dice = [3, 4];
-    const out = { every: [] };
+    const out = { every: [], seats: G.players.length };
     for (const c of CON) out.every.push({ x: c.x, said: read(c) });
     out.debit = read(CON.find(c => c.cash < 0));
     out.credit = read(CON.find(c => c.cash > 0));
     out.move = read(CON.find(c => c.go === 39));
     out.detention = read(CON.find(c => c.jail));
+    out.each = read(CON.find(c => c.each));
+    out.eachRate = Math.abs(CON.find(c => c.each).each);
+    out.pardon = read(CON.find(c => c.pardon));
     // A per-garrison charge with something actually held.
     const eden = window.__SETS().eden.sq;
     p.holdings = eden.map(sq => ({ sq, garrisons: 3, citadel: 0, mortgaged: 0 }));
@@ -582,8 +585,52 @@ for (const device of DEVICES) {
   if (/9 garrisons/.test(cards.per) && /₡225/.test(cards.per))
     pass(`a per-garrison charge is worked out for you ("${cards.per}")`);
   else fail(`the per-garrison card said "${cards.per}"`);
+  // The only cards that reach the other players: the total has to be the rate
+  // times however many are actually at this table, not a figure written down.
+  const eachTotal = cards.eachRate * (cards.seats - 1);
+  if (cards.each && cards.each.includes(String(eachTotal)))
+    pass(`a pay-each card totals it for the table ("${cards.each}")`);
+  else fail(`the pay-each card said "${cards.each}", expected ₡${eachTotal} across ${cards.seats - 1}`);
+  if (cards.pardon && /favour/i.test(cards.pardon)) pass(`a favour says it is kept ("${cards.pardon}")`);
+  else fail(`the favour card said "${cards.pardon}"`);
   if (cards.worst.fits) pass(`the longest card fits above the fold, ${Math.round(cards.worst.vh - cards.worst.h)}px clear`);
   else fail(`"${cards.worst.x}" pushes Enter it to ${Math.round(cards.worst.h)}px, off the screen`);
+
+  // ---- the Overseer's favour, from the button ----
+  // A favour is held for a long time before it is spent, so the button only
+  // exists on the turn you are detained. Check it appears, that it walks you
+  // out, and that it does not also charge the fee.
+  const favour = await page.evaluate(async () => {
+    const G = window.__G();
+    const p = G.players[G.cur];
+    p.inFacility = true; p.attempts = 1; p.pardons = 0; p.cash = 3000;
+    G.phase = 'roll';
+    window.__render();
+    const labels = () => [...document.querySelectorAll('.act')]
+      .map(b => b.textContent.replace(/\s+/g, ' ').trim());
+    const withoutIt = labels().find(l => /Settle|Favour/.test(l));
+    p.pardons = 1;
+    window.__render();
+    const withIt = labels().find(l => /Settle|Favour/.test(l));
+    const btn = [...document.querySelectorAll('.act')].find(b => /Favour/.test(b.textContent));
+    if (!btn) return { withoutIt, withIt, err: 'no Favour button while holding one' };
+    const cash = p.cash;
+    btn.click();
+    await new Promise(r => setTimeout(r, 60));
+    return { withoutIt, withIt, out: !p.inFacility, left: p.pardons,
+             spent: cash - G.players.find(q => q.i === p.i).cash };
+  });
+  if (favour.err) fail(favour.err);
+  else {
+    if (/Settle/.test(favour.withoutIt)) pass(`with no favour the slot settles the fee ("${favour.withoutIt}")`);
+    else fail(`with no favour the slot read "${favour.withoutIt}"`);
+    if (/Favour/.test(favour.withIt)) pass(`holding one puts it on the button ("${favour.withIt}")`);
+    else fail(`holding one, the slot read "${favour.withIt}"`);
+    if (favour.out && favour.left === 0 && favour.spent === 0)
+      pass('spending a favour walks you out for nothing');
+    else fail(`favour left detained=${!favour.out}, held=${favour.left}, spent=${favour.spent}`);
+  }
+  await page.evaluate(() => { const G = window.__G(); G.players.forEach(q => q.pardons = 0); });
 
   // ---- the galaxy, and the re-render trap it sits in ----
   // The board is rebuilt with innerHTML on every render. If the centre panel is

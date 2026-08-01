@@ -308,9 +308,14 @@ function renderActions() {
       : actBtn('Roll', '', '', '&nbsp;', true);
 
   const canAmend = G.phase === 'landed' && p.amends > 0 && p.cash >= E.amendCost(p);
-  // While detained the second slot settles with the Overseer instead of amending.
-  const second = (G.phase === 'roll' && p.inFacility)
-    ? actBtn('Settle', 'act_payFee()', '', money(RULES.facilityFee), p.cash < RULES.facilityFee)
+  // While detained the second slot settles with the Overseer instead of amending
+  // — with a favour if one is held, since paying ₡150 while holding a free way
+  // out is never the better move on the turn you are actually detained.
+  const detained = G.phase === 'roll' && p.inFacility;
+  const second = detained
+    ? (p.pardons > 0
+        ? actBtn('Favour', 'act_pardon()', '', `${p.pardons} held · free`)
+        : actBtn('Settle', 'act_payFee()', '', money(RULES.facilityFee), p.cash < RULES.facilityFee))
     : actBtn('Amend', 'act_amend()', '', `${money(E.amendCost(p))} · ${p.amends} left`, !canAmend);
   const relational = p.lord !== null
     ? actBtn('Second ledger', 'showRevolt()', '', 'hidden')
@@ -530,7 +535,7 @@ function walk(path, done) {
 const ACTIONS = {
   act_roll, act_resolve, act_amend, act_end,
   showSquare, showManage, showTrade, showTithe, showRevolt, showFinal, showLedger,
-  closeSheet, newGame, copyResult, toggleLog, act_payFee, showMenu, toggleScore,
+  closeSheet, newGame, copyResult, toggleLog, act_payFee, act_pardon, showMenu, toggleScore,
   showSettle, settlePledge, settleSellG, settleBreak, settleAuto, settleDone,
   buyNow, declineToAuction, takeCard, sealBid, sealClaim, endAuction, endContest,
   answerContract, build, raiseCitadel, sellDev, toggleMortgage, repay,
@@ -574,6 +579,11 @@ function act_amend() {
 
 function act_payFee() {
   if (!E.payFacilityFee(G)) return;
+  tick();
+}
+
+function act_pardon() {
+  if (!E.usePardon(G)) return;
   tick();
 }
 
@@ -659,10 +669,20 @@ function showSquare(i) {
     const now = E.rentOf(G, i, G.dice[0] + G.dice[1] || 7);
     s += `<div class="stat"><span>You would pay</span><span style="color:${now ? 'var(--warn)' : 'var(--tx)'}">${money(now)}</span></div>`;
   }
-  if (b.t === 'jail') s += `<p style="font-size:14px;line-height:1.5;color:var(--dim);margin-top:12px">
-    Roll doubles and walk out, settle for ${money(RULES.facilityFee)} at any point, or be released
-    on the ${RULES.facilityAttempts}rd attempt and pay it anyway. An Overseer is an official, and
-    officials have a price.</p>`;
+  if (b.t === 'jail') {
+    s += `<p style="font-size:14px;line-height:1.5;color:var(--dim);margin-top:12px">
+      Roll doubles and walk out, settle for ${money(RULES.facilityFee)} at any point, or be released
+      on the ${RULES.facilityAttempts}rd attempt and pay it anyway. An Overseer is an official, and
+      officials have a price.</p>`;
+    // Favours are held for a long time before they are spent, so who is
+    // carrying one is worth knowing before anybody is detained.
+    const holders = G.players.filter(q => q.pardons > 0);
+    if (holders.length) {
+      s += `<div class="stat"><span>Favours held</span><span>` + holders
+        .map(q => `<span style="color:${pipOf(q)}">${esc(chipName(q))} ×${q.pardons}</span>`)
+        .join(' · ') + `</span></div>`;
+    }
+  }
   if (owner) s += `<div class="stat"><span>Held by</span><span style="color:${pipOf(owner)}">${esc(owner.name)}${held.mortgaged ? ' (pledged)' : ''}</span></div>`;
 
   // Tapping a square used to be purely informational. If somebody else holds it
@@ -843,6 +863,12 @@ function showCard() {
 function cardEffectLines(e) {
   const out = [];
   if (e.cash !== null) out.push(e.cash > 0 ? `Gain ${money(e.cash)}` : `Pay ${money(-e.cash)}`);
+  if (e.each) {
+    out.push(e.each.incoming
+      ? `Collect ${money(e.each.rate)} from each of the other ${e.each.others} — ${money(e.each.total)}`
+      : `Pay ${money(e.each.rate)} to each of the other ${e.each.others} — ${money(e.each.total)}`);
+  }
+  if (e.pardon) out.push('Keep an Overseer favour — walks you out of detention, free');
   if (e.per) {
     out.push(e.per.count === 0
       ? `${money(e.per.rate)} for each ${e.per.of} — you hold none, so nothing`

@@ -23,7 +23,7 @@ import {
   serialize, deserialize, payFacilityFee, releaseVassal, aiValue, aiBid, aiWantsToBuy,
   pledge, pledgeValue, redeemCost, raisableValue, parkForSettlement, autoSettle, settleNow,
   threatPenalty, setBuildingTargets, denialTargets, aiCounter, aiAcceptsContract,
-  landingPreview, previewAt, cardEffect
+  landingPreview, previewAt, cardEffect, usePardon
 } from '../engine.js';
 
 /* -------------------------------------------------------------- fixtures */
@@ -1594,7 +1594,8 @@ test('a movement card names the square it sends you to', () => {
 });
 
 test('every card does exactly one thing, and a thing the engine knows', () => {
-  const known = ['cash', 'go', 'back', 'jail', 'fleet', 'util', 'perGarrison', 'perCitadel'];
+  const known = ['cash', 'go', 'back', 'jail', 'fleet', 'util', 'perGarrison', 'perCitadel',
+                 'each', 'pardon'];
   for (const c of [...CONTINGENCY, ...COLUMN]) {
     const keys = Object.keys(c).filter(k => k !== 'x');
     assert.equal(keys.length, 1, `"${c.x}" carries ${keys.length} effects: ${keys}`);
@@ -1609,7 +1610,7 @@ test('a card that names a figure charges that figure', () => {
   for (const c of [...CONTINGENCY, ...COLUMN]) {
     const figures = [...c.x.matchAll(/₡(\d+)/g)].map(m => +m[1]);
     if (!figures.length) continue;
-    const owed = Math.abs(c.cash ?? c.perGarrison ?? c.perCitadel ?? 0);
+    const owed = Math.abs(c.cash ?? c.each ?? c.perGarrison ?? c.perCitadel ?? 0);
     assert.ok(figures.includes(owed),
       `"${c.x}" names ${figures} but the effect is ${owed}`);
   }
@@ -1674,6 +1675,12 @@ test('the effect promised is the effect applied, over the whole deck', () => {
 
       if (e.cash !== null) {
         assert.equal(p.cash, before + e.cash, `"${card.x}" promised ${e.cash}`);
+      } else if (e.each) {
+        const moved = e.each.incoming ? e.each.total : -e.each.total;
+        assert.equal(p.cash, before + moved, `"${card.x}" promised ${moved}`);
+      } else if (e.pardon) {
+        assert.equal(p.pardons, e.pardon, `"${card.x}" promised a favour`);
+        assert.equal(p.cash, before, 'a favour is not money');
       } else if (e.per) {
         assert.equal(p.cash, before - e.per.total, `"${card.x}" promised ${e.per.total}`);
       } else if (e.detention) {
@@ -1710,4 +1717,150 @@ test('the nearest fleet and utility are ahead of you, never behind', () => {
       }
     }
   }
+});
+
+/* ------------------------------------------- cards that reach other players */
+// Every other card in both decks moves money between a player and the bank.
+// These two are the only ones that move it around the table, which is a
+// different code path and the only one that can bankrupt somebody who did not
+// draw the card.
+
+test('a collect-from-each card takes from everyone and gives to the drawer', () => {
+  const G = createGame({ seats: seats4, seed: 3 });
+  const card = COLUMN.find(c => c.each > 0);
+  const p = G.players[0];
+  const before = G.players.map(q => q.cash);
+  const total = G.players.reduce((s, q) => s + q.cash, 0);
+  G.phase = 'card';
+  G.pendingCard = { card, isContingency: false };
+  applyCard(G);
+  assert.equal(p.cash, before[0] + card.each * 3, 'the drawer collects from all three');
+  for (let i = 1; i < 4; i++) assert.equal(G.players[i].cash, before[i] - card.each);
+  assert.equal(G.players.reduce((s, q) => s + q.cash, 0), total,
+    'money moved around the table, none was created');
+});
+
+test('a pay-each card is the same transfer in reverse', () => {
+  const G = createGame({ seats: seats4, seed: 3 });
+  const card = CONTINGENCY.find(c => c.each < 0);
+  const p = G.players[0];
+  const rate = -card.each;
+  const before = G.players.map(q => q.cash);
+  const total = G.players.reduce((s, q) => s + q.cash, 0);
+  G.phase = 'card';
+  G.pendingCard = { card, isContingency: true };
+  applyCard(G);
+  assert.equal(p.cash, before[0] - rate * 3);
+  for (let i = 1; i < 4; i++) assert.equal(G.players[i].cash, before[i] + rate);
+  assert.equal(G.players.reduce((s, q) => s + q.cash, 0), total);
+});
+
+test('an each card scales with how many are at the table', () => {
+  const card = COLUMN.find(c => c.each > 0);
+  for (const seats of [seats2, seats4]) {
+    const G = createGame({ seats, seed: 1 });
+    const e = cardEffect(G, card, G.players[0]);
+    assert.equal(e.each.others, seats.length - 1);
+    assert.equal(e.each.total, card.each * (seats.length - 1));
+    assert.equal(e.each.incoming, true);
+  }
+});
+
+test('a player who cannot cover an each card sells down rather than going negative', () => {
+  const G = createGame({ seats: seats4, seed: 11 });
+  const card = COLUMN.find(c => c.each > 0);
+  const poor = G.players[1];
+  poor.cash = 5;
+  own(G, poor, SETS.eden.sq[0]);
+  G.phase = 'card';
+  G.pendingCard = { card, isContingency: false };
+  applyCard(G);
+  for (const q of G.players) {
+    assert.ok(Number.isFinite(q.cash), `${q.name} holds a non-number`);
+    assert.ok(q.cash >= 0, `${q.name} went to ${q.cash}`);
+  }
+});
+
+/* --------------------------------------------------- the Overseer's favour */
+
+test('a favour card is kept, not spent on the spot', () => {
+  const G = game();
+  const [a] = G.players;
+  const card = COLUMN.find(c => c.pardon);
+  assert.equal(a.pardons, 0, 'nobody starts with one');
+  const cash = a.cash;
+  G.phase = 'card';
+  G.pendingCard = { card, isContingency: false };
+  applyCard(G);
+  assert.equal(a.pardons, 1);
+  assert.equal(a.cash, cash, 'a favour costs nothing and pays nothing');
+  assert.equal(cardEffect(G, card, a).pardon, 1);
+});
+
+test('a favour walks you out of detention for nothing', () => {
+  const G = game();
+  const [a] = G.players;
+  a.pardons = 1;
+  a.inFacility = true;
+  a.attempts = 1;
+  const cash = a.cash;
+  assert.equal(usePardon(G, a), true);
+  assert.equal(a.inFacility, false);
+  assert.equal(a.attempts, 0);
+  assert.equal(a.pardons, 0);
+  assert.equal(a.cash, cash, 'the fee is not charged as well');
+  assert.equal(usePardon(G, a), false, 'and it cannot be spent twice');
+});
+
+test('a favour cannot be spent when you are not detained', () => {
+  const G = game();
+  const [a] = G.players;
+  a.pardons = 2;
+  assert.equal(usePardon(G, a), false);
+  assert.equal(a.pardons, 2, 'a refused attempt does not consume one');
+});
+
+test('holding a favour is never worse than not holding one', () => {
+  // The third failed attempt forces release and charges the fee. Somebody
+  // holding a free way out must not be charged it — that is a trap, not a
+  // decision. Roll non-doubles three times with and without a favour.
+  const run = pardons => {
+    const G = game();
+    const [a] = G.players;
+    a.pardons = pardons;
+    a.inFacility = true;
+    const cash = a.cash;
+    for (let k = 0; k < RULES.facilityAttempts; k++) {
+      G.phase = 'roll';
+      roll(G, 2, 5);
+    }
+    return { spent: cash - a.cash, out: !a.inFacility, left: a.pardons };
+  };
+  const without = run(0);
+  const with1 = run(1);
+  assert.ok(without.out && with1.out, 'both are released');
+  assert.equal(without.spent, RULES.facilityFee);
+  assert.equal(with1.spent, 0, 'the favour was spent instead of the fee');
+  assert.equal(with1.left, 0);
+});
+
+test('an opponent holding a favour uses it rather than sitting there', () => {
+  const G = game([{ name: 'Sam', kind: 'human' }, { name: 'X', kind: 'ai', persona: 'spector' }]);
+  const ai = G.players[1];
+  ai.pardons = 1;
+  ai.inFacility = true;
+  G.cur = 1;
+  G.phase = 'roll';
+  const cash = ai.cash;
+  roll(G, 2, 5);
+  assert.equal(ai.inFacility, false, 'the opponent walked out');
+  assert.equal(ai.pardons, 0);
+  assert.equal(ai.cash, cash);
+});
+
+test('favours survive a save', () => {
+  const G = game();
+  G.players[0].pardons = 2;
+  const back = deserialize(serialize(G));
+  assert.equal(back.players[0].pardons, 2);
 });

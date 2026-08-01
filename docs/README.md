@@ -21,7 +21,7 @@ Playable. Engine, interface, offline support and save/resume are all in.
 ```
 data.js      board, decks, opponents, economy constants — data only
 engine.js    the rules. No DOM, no timers, no Math.random
-test/        143 passing (plus a browser probe across five viewports)
+test/        153 passing (plus a browser probe across five viewports)
 ```
 
 ## Running the tests
@@ -77,6 +77,33 @@ would ever have flagged that.
   derived from movement. `test/traffic.test.mjs` catches it; `test/derive-traffic.mjs`
   regenerates it. Fixing those three moved Horizon from 2.60% to **3.27%**, the second
   busiest square on the board.
+
+## The two decks
+
+Sixteen cards each, mirroring Monopoly's Chance/Community Chest split. **Contingency** is
+the movement deck — four `go` destinations, the nearest fleet, the nearest utility, three
+squares back, and detention. **The Column** is the money deck, eleven of its sixteen being
+a figure that changes.
+
+Three kinds of card are worth knowing about because they are not simply you and the bank:
+
+- **`each`** — one per deck, and the only cards that move money *around the table*. Their
+  size scales with how many are playing, so `Pay ₡60 to every other overlord` costs ₡60
+  two-handed and ₡180 four-handed. They are also the only card that can bankrupt somebody
+  who did not draw it, so they are paid one player at a time and the loop stops if a
+  contest opens.
+- **`pardon`** — an Overseer's favour, one per deck. Kept rather than spent, and spent
+  later from the action row when you are detained. It is applied automatically at the
+  third failed attempt, because charging the ₡150 fee to somebody holding a free way out
+  is a trap rather than a decision. Opponents spend theirs on sight.
+- **`perGarrison` / `perCitadel`** — the only cards whose amount the player cannot work
+  out from the text, which is why the interface computes it for them.
+
+Cards are net **+₡510** (Contingency) and **+₡500** (Column) toward the bank, which reads
+as generous and is not: a player draws about **8 cards a game**, worth roughly **+₡240**,
+against **₡14,400** from lap payments over 72 circuits. The decks are texture, not economy.
+Measured before changing anything, and worth re-measuring rather than assuming if the
+deck composition changes much.
 
 ## Money, and what happens when you run out
 
