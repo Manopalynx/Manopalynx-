@@ -1,0 +1,834 @@
+// GRANDIOSE — THE LEDGER: rules engine.
+//
+// No DOM, no timers, no Math.random. Every game is a pure function of its seed
+// and the actions applied to it, which is the only reason the arithmetic in
+// here can be tested at all — and testing the arithmetic is the point. The
+// numbers on this board never crash when they are wrong. They just quietly
+// report the wrong thing for the whole game.
+//
+// The engine never animates and never waits. Movement returns the path it took
+// and lets the UI walk it; anything needing a decision parks the game in a
+// phase and returns.
+
+import {
+  SETS, BOARD, N, GO, JAIL, GOTO, FLEETS, UTILS, TRAFFIC,
+  CONTINGENCY, COLUMN, PERSONAS, LEADER_LINES, RULES
+} from './data.js';
+
+/* ============================================================ random */
+// mulberry32 — small, fast, and identical across runs for a given seed.
+export function rng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const pick = (G, arr) => arr[Math.floor(G.rand() * arr.length)];
+function shuffled(G, n) {
+  const a = [...Array(n).keys()];
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(G.rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/* ============================================================ setup */
+export function createGame({ seats, seed = 1, circuits = 24 } = {}) {
+  const G = {
+    seed,
+    rand: rng(seed),
+    circuits,
+    players: [],
+    cur: 0,
+    circuit: 1,
+    turn: 0,
+    phase: 'roll',
+    dice: [0, 0],
+    garrisonPool: RULES.garrisonPool,
+    citadelPool: RULES.citadelPool,
+    log: [],
+    over: false,
+    winner: null,
+    endReason: null,
+    auction: null,
+    contest: null,
+    pendingCard: null
+  };
+  seats.forEach((s, i) => G.players.push({
+    i,
+    name: s.name,
+    kind: s.kind,                  // 'human' | 'ai'
+    persona: s.persona || null,
+    cash: RULES.startingCash,
+    pos: 0,
+    inFacility: false,
+    attempts: 0,
+    holdings: [],                  // {sq, garrisons, citadel, mortgaged}
+    amends: RULES.amendsPerGame,
+    lord: null,
+    vassals: [],
+    strength: 0,                   // the second ledger
+    declarations: 0,
+    tithe: 25,
+    debt: 0
+  }));
+  // Decks are dealt from a shuffled order and reshuffled when exhausted, so a
+  // deck cannot be counted after one pass the way the original could.
+  G.decks = {
+    con: { order: shuffled(G, CONTINGENCY.length), at: 0 },
+    col: { order: shuffled(G, COLUMN.length), at: 0 }
+  };
+  return G;
+}
+
+/* ============================================================ accessors */
+export const current = G => G.players[G.cur];
+export const square = i => BOARD[i];
+export const ownerOf = (G, i) => G.players.find(p => p.holdings.some(h => h.sq === i)) || null;
+export const holding = (p, i) => p.holdings.find(h => h.sq === i) || null;
+
+export function ownsSet(G, p, key) {
+  return SETS[key].sq.every(i => {
+    const o = ownerOf(G, i);
+    return o && o.i === p.i;
+  });
+}
+export const countType = (p, t) => p.holdings.filter(h => BOARD[h.sq].t === t).length;
+export const garrisonsOf = p => p.holdings.reduce((s, h) => s + (h.citadel ? 0 : h.garrisons), 0);
+export const citadelsOf = p => p.holdings.reduce((s, h) => s + (h.citadel ? 1 : 0), 0);
+
+/* ============================================================ valuation */
+// Holdings only — no vassal tribute. Used as the base of tribute itself, so it
+// must not recurse.
+export function holdingsValue(p) {
+  let v = p.cash;
+  for (const h of p.holdings) {
+    const b = BOARD[h.sq];
+    v += h.mortgaged ? Math.floor(b.pr / 2) : b.pr;
+    if (b.s) v += (h.citadel ? 5 : h.garrisons) * SETS[b.s].gc;
+  }
+  return v;
+}
+
+// Full net worth: holdings, less debt, plus this player's share of each vassal.
+// One level deep by construction — a vassal's own vassals are counted inside
+// their holdings value, not compounded again.
+export function netWorth(G, p) {
+  let v = holdingsValue(p) - p.debt;
+  for (const vi of p.vassals) {
+    v += Math.floor(holdingsValue(G.players[vi]) * p.tithe / 100);
+  }
+  return v;
+}
+
+export function upkeep(p) {
+  let u = garrisonsOf(p) * RULES.garrisonUpkeep + citadelsOf(p) * RULES.citadelUpkeep;
+  if (p.vassals.length) {
+    u += RULES.vassalUpkeep[Math.min(p.vassals.length - 1, RULES.vassalUpkeep.length - 1)];
+  }
+  return u;
+}
+
+export function rentOf(G, i, roll = 7) {
+  const b = BOARD[i];
+  const o = ownerOf(G, i);
+  if (!o) return 0;
+  const h = holding(o, i);
+  if (h.mortgaged) return 0;
+  if (b.t === 'f') return countType(o, 'f') === FLEETS.length ? 150 : 50;
+  if (b.t === 'u') return (countType(o, 'u') === UTILS.length ? 10 : 4) * roll;
+  if (h.citadel) return b.r[4];
+  if (h.garrisons > 0) return b.r[h.garrisons];
+  return ownsSet(G, o, b.s) ? b.r[0] * 2 : b.r[0];
+}
+
+// Opponent turns to recover a full set built to three garrisons. Traffic is a
+// per-turn landing chance for ONE opponent, so this is per-opponent turns.
+export function paybackTurns(key, traffic) {
+  const s = SETS[key];
+  const cost = s.sq.reduce((a, i) => a + BOARD[i].pr, 0) + s.gc * 3 * s.sq.length;
+  const income = s.sq.reduce((a, i) => a + traffic[i] / 100 * BOARD[i].r[3], 0);
+  return Math.round(cost / income);
+}
+
+export const revoltThreshold = p => RULES.revoltBase + RULES.revoltStep * p.declarations;
+
+/* ============================================================ log */
+function note(G, text) { G.log.unshift({ kind: 'note', text, circuit: G.circuit }); trim(G); }
+function leader(G, force = false) {
+  if (!force && G.rand() >= 0.34) return;
+  G.log.unshift({ kind: 'leader', text: pick(G, LEADER_LINES), circuit: G.circuit });
+  trim(G);
+}
+function leaderSays(G, text) { G.log.unshift({ kind: 'leader', text, circuit: G.circuit }); trim(G); }
+function persona(G, p, key) {
+  const a = PERSONAS[p.persona];
+  if (!a || !a[key]) return;
+  G.log.unshift({ kind: 'voice', text: pick(G, a[key]), who: p.i, circuit: G.circuit });
+  trim(G);
+}
+const trim = G => { if (G.log.length > 120) G.log.pop(); };
+
+/* ============================================================ money */
+// Returns true if settled in full. A shortfall against another PLAYER becomes
+// vassalage; a shortfall against the BANK becomes a debt marker. Nobody is
+// ever removed from the table — that is the whole design.
+export function pay(G, from, to, amount) {
+  if (amount <= 0) return true;
+  if (from.cash < amount) liquidate(G, from, amount - from.cash);
+  if (from.cash >= amount) {
+    from.cash -= amount;
+    if (to) to.cash += amount;
+    return true;
+  }
+  const short = amount - from.cash;
+  if (to) to.cash += from.cash;
+  from.cash = 0;
+  if (to) vassalise(G, from, to);
+  else {
+    from.debt += short;
+    note(G, `${from.name} cannot settle with the bank. Restructuring — debt marker ${money(short)} at ${Math.round(RULES.debtInterest * 100)}% per turn.`);
+    leaderSays(G, 'Debt is not a wound. It is an entry, and entries can be settled. Slowly.');
+  }
+  return false;
+}
+
+// Raise cash the way a desperate holder actually would: break citadels first,
+// then garrisons (largest stack first), then mortgage the cheapest holdings.
+export function liquidate(G, p, need) {
+  let guard = 0;
+  while (p.cash < need && guard++ < 100) {
+    const cit = p.holdings.find(h => h.citadel);
+    if (cit) {
+      const gc = SETS[BOARD[cit.sq].s].gc;
+      // A citadel is worth three garrisons; returning it needs three from the
+      // pool. If the pool cannot cover it the citadel simply cannot be broken.
+      if (G.garrisonPool < 3) { cit.citadel = 0; cit.garrisons = 0; G.citadelPool++; p.cash += Math.floor(gc * 5 / 2); continue; }
+      cit.citadel = 0; cit.garrisons = 3; G.citadelPool++; G.garrisonPool -= 3;
+      p.cash += Math.floor(gc * 5 / 2);
+      continue;
+    }
+    const g = p.holdings.filter(h => h.garrisons > 0).sort((a, b) => b.garrisons - a.garrisons)[0];
+    if (g) { g.garrisons--; G.garrisonPool++; p.cash += Math.floor(SETS[BOARD[g.sq].s].gc / 2); continue; }
+    const m = p.holdings.filter(h => !h.mortgaged).sort((a, b) => BOARD[a.sq].pr - BOARD[b.sq].pr)[0];
+    if (m) { m.mortgaged = 1; p.cash += Math.floor(BOARD[m.sq].pr / 2); continue; }
+    break;
+  }
+}
+
+export function payRent(G, from, to, amount) {
+  let cut = 0, lord = null;
+  if (to.lord !== null) {
+    lord = G.players[to.lord];
+    cut = Math.floor(amount * lord.tithe / 100);
+  }
+  if (lord && lord.i === from.i) {
+    note(G, `${from.name} pays ${money(amount)} to ${to.name}, of which ${money(cut)} returns as tithe — net ${money(amount - cut)}. A vassal cannot fully charge its overlord.`);
+  } else {
+    note(G, `${from.name} pays ${money(amount)} to ${to.name}${cut ? ` — ${money(cut)} tithed onward to ${lord.name}` : ''}.`);
+  }
+  const settled = pay(G, from, to, amount);
+  if (settled && cut) {
+    to.cash -= cut;
+    lord.cash += cut;
+    to.strength += cut;      // every credit tithed is a credit counted
+  }
+  if (from.kind === 'ai') persona(G, from, 'rent');
+  leader(G);
+  return settled;
+}
+
+export const money = v =>
+  (v < 0 ? '-₡' : '₡') + Math.abs(Math.round(v)).toLocaleString('en-GB');
+
+/* ============================================================ vassalage */
+function vassalise(G, p, to) {
+  const previous = p.lord;
+  if (previous !== null && previous !== to.i) {
+    openContest(G, p, G.players[previous], to);
+    return;
+  }
+  if (previous !== null) return;            // already sworn to this creditor
+  bind(G, p, to);
+  p.strength = 0;
+  note(G, `${p.name} cannot settle the column and enters vassalage under ${to.name}.`);
+  leaderSays(G, `A price was reached. ${p.name} keeps a flag and loses the arithmetic behind it. I have signed such an instrument myself.`);
+  if (to.kind === 'ai') persona(G, to, 'vassal');
+  if (p.kind === 'ai') persona(G, p, 'fell');
+  checkVictory(G);
+}
+
+function bind(G, p, to) {
+  // If the creditor was itself sworn to the debtor, the relationship inverts
+  // rather than forming a cycle.
+  if (to.lord === p.i) {
+    p.vassals = p.vassals.filter(x => x !== to.i);
+    to.lord = null;
+    note(G, `The roles invert. ${to.name} throws off ${p.name}.`);
+  }
+  p.lord = to.i;
+  to.vassals.push(p.i);
+}
+
+export function claimValue(bidder, vassal, isIncumbent) {
+  let v = holdingsValue(vassal) * (bidder.tithe / 100) * 2.2;
+  if (bidder.persona === 'varan') v *= isIncumbent ? 1.5 : 1.35;
+  if (bidder.persona === 'vale') v *= 0.8;
+  if (isIncumbent) v *= 1.2;
+  return Math.max(0, Math.round(Math.min(v, bidder.cash * 0.55)));
+}
+
+function openContest(G, vassal, incumbent, claimant) {
+  G.phase = 'contest';
+  G.contest = {
+    vassal: vassal.i, incumbent: incumbent.i, claimant: claimant.i,
+    bids: {}, queue: [], at: 0
+  };
+  for (const x of [incumbent, claimant]) {
+    if (x.kind === 'ai') G.contest.bids[x.i] = claimValue(x, vassal, x.i === incumbent.i);
+    else G.contest.queue.push(x.i);
+  }
+  note(G, `${vassal.name} falls, but is already sworn to ${incumbent.name}. ${claimant.name} presses a competing claim.`);
+  leaderSays(G, 'Two creditors, one debtor, and only one column it can post to. This is the oldest argument there is.');
+  if (!G.contest.queue.length) resolveContest(G);
+}
+
+export function submitClaim(G, playerIndex, amount) {
+  const c = G.contest;
+  if (!c || c.queue[c.at] !== playerIndex) return false;
+  c.bids[playerIndex] = clampBid(G.players[playerIndex], amount);
+  c.at++;
+  if (c.at >= c.queue.length) resolveContest(G);
+  return true;
+}
+
+function resolveContest(G) {
+  const c = G.contest;
+  const v = G.players[c.vassal], a = G.players[c.incumbent], b = G.players[c.claimant];
+  const bidA = c.bids[a.i] || 0, bidB = c.bids[b.i] || 0;
+  const winner = bidB > bidA ? b : a;               // a tie holds for the incumbent
+  winner.cash -= c.bids[winner.i] || 0;
+  c.moved = winner.i === b.i;
+  if (c.moved) {
+    a.vassals = a.vassals.filter(x => x !== v.i);
+    v.lord = null;
+    bind(G, v, b);
+    v.strength = 0;
+  } else {
+    v.strength = Math.floor(v.strength * 0.5);
+  }
+  c.resolved = true;
+  note(G, `${winner.name} takes the claim on ${v.name} for ${money(c.bids[winner.i] || 0)}.`);
+  checkVictory(G);
+}
+
+export function closeContest(G) {
+  G.contest = null;
+  if (!G.over) G.phase = 'end';
+}
+
+export function setTithe(G, p, rate) {
+  p.tithe = rate;
+  note(G, `${p.name} sets the tithe at ${rate}%.`);
+}
+
+export function declareIndependence(G, p) {
+  if (p.lord === null || p.strength < revoltThreshold(p) || p.cash < RULES.revoltCost) return false;
+  const lord = G.players[p.lord];
+  p.cash -= RULES.revoltCost;
+  lord.vassals = lord.vassals.filter(x => x !== p.i);
+  p.lord = null;
+  p.strength = 0;
+  p.declarations++;
+  note(G, `${p.name} declares. The arrangement with ${lord.name} is ended.`);
+  leaderSays(G, 'They kept a second ledger. Of course they did. I taught the galaxy how.');
+  return true;
+}
+
+function checkVictory(G) {
+  const free = G.players.filter(p => p.lord === null);
+  if (free.length === 1 && G.players.length > 1) {
+    G.over = true;
+    G.winner = free[0].i;
+    G.endReason = 'conquest';
+    G.phase = 'over';
+    leaderSays(G, `Every column now posts to one page. ${free[0].name} holds the galaxy, and the ledger is closed.`);
+  }
+}
+
+/* ============================================================ movement */
+// Returns the squares stepped through, so the UI can animate a walk the engine
+// has already finished. Passing (or landing on) Go pays, going backwards never does.
+function advance(G, p, steps, { backwards = false, award = true } = {}) {
+  const path = [];
+  for (let k = 0; k < steps; k++) {
+    p.pos = (((p.pos + (backwards ? -1 : 1)) % N) + N) % N;
+    path.push(p.pos);
+    if (!backwards && award && p.pos === GO) {
+      p.cash += RULES.passGo;
+      note(G, `${p.name} passes the ledger opening. +${money(RULES.passGo)}.`);
+    }
+  }
+  return path;
+}
+
+function forwardDistanceTo(from, targets) {
+  for (let k = 1; k <= N; k++) if (targets.includes((from + k) % N)) return k;
+  return 0;
+}
+
+function toFacility(G, p) {
+  p.pos = JAIL;
+  p.inFacility = true;
+  p.attempts = 0;
+  note(G, `${p.name} is taken to the Holding Facility.`);
+  if (p.kind === 'ai') persona(G, p, 'jail');
+}
+
+/* ============================================================ turn flow */
+export function roll(G, d1, d2) {
+  if (G.phase !== 'roll' || G.over) return null;
+  const p = current(G);
+  const a = d1 ?? 1 + Math.floor(G.rand() * 6);
+  const b = d2 ?? 1 + Math.floor(G.rand() * 6);
+  G.dice = [a, b];
+  const total = a + b, doubles = a === b;
+
+  if (p.inFacility) {
+    // The Neurex cannot be bought. There is no official to blind, no tithe to
+    // pay, no arrangement — Interlude I. You leave on doubles, or you leave
+    // when it has finished assessing you.
+    if (doubles) {
+      p.inFacility = false; p.attempts = 0;
+      note(G, `${p.name} is released from the facility on doubles.`);
+    } else {
+      p.attempts++;
+      if (p.attempts >= RULES.facilityAttempts) {
+        p.inFacility = false; p.attempts = 0;
+        note(G, `${p.name} is released — the assessment concludes.`);
+      } else {
+        note(G, `${p.name} remains in the Holding Facility. Attempt ${p.attempts} of ${RULES.facilityAttempts}.`);
+        G.phase = 'end';
+        return { path: [], doubles, total, held: true };
+      }
+    }
+  }
+  const path = advance(G, p, total);
+  G.phase = 'landed';
+  return { path, doubles, total, held: false };
+}
+
+export const amendCost = p => RULES.amendCosts[RULES.amendsPerGame - p.amends] ?? RULES.amendCosts.at(-1);
+
+export function amendManifest(G) {
+  const p = current(G);
+  if (G.phase !== 'landed' || p.amends <= 0) return null;
+  const cost = amendCost(p);
+  if (p.cash < cost) return null;
+  p.cash -= cost;
+  p.amends--;
+  const path = advance(G, p, 1);
+  note(G, `${p.name} amends the manifest for ${money(cost)} — now on ${BOARD[p.pos].n}.`);
+  leader(G);
+  return { path };
+}
+
+// Resolve whatever the current player is standing on. Chains through cards and
+// the moves they cause, and stops at any phase that needs a decision.
+export function resolveLanding(G) {
+  const p = current(G);
+  let guard = 0;
+  while (guard++ < 12) {
+    const b = BOARD[p.pos];
+    if (b.t === 'goto') { toFacility(G, p); G.phase = 'end'; return; }
+    if (b.t === 'tax') {
+      pay(G, p, null, b.amt);
+      note(G, `${p.name} pays the ${b.n} — ${money(b.amt)}.`);
+      G.phase = G.phase === 'contest' ? 'contest' : 'end';
+      return;
+    }
+    if (b.t === 'con' || b.t === 'col') {
+      const card = drawCard(G, b.t === 'con');
+      G.pendingCard = { card, isContingency: b.t === 'con' };
+      G.phase = 'card';
+      return;                                  // UI acknowledges, then applyCard
+    }
+    if (b.t === 'free' || b.t === 'go' || b.t === 'jail') { G.phase = 'end'; return; }
+
+    const owner = ownerOf(G, p.pos);
+    if (!owner) { G.phase = 'offer'; return; }
+    if (owner.i === p.i) { G.phase = 'end'; return; }
+    const rent = rentOf(G, p.pos, G.dice[0] + G.dice[1]);
+    if (rent === 0) { note(G, `${BOARD[p.pos].n} is mortgaged. Nothing due.`); G.phase = 'end'; return; }
+    payRent(G, p, owner, rent);
+    if (G.phase !== 'contest' && !G.over) G.phase = 'end';
+    return;
+  }
+  G.phase = 'end';
+}
+
+function drawCard(G, isContingency) {
+  const deck = isContingency ? CONTINGENCY : COLUMN;
+  const d = isContingency ? G.decks.con : G.decks.col;
+  if (d.at >= d.order.length) { d.order = shuffled(G, deck.length); d.at = 0; }
+  return deck[d.order[d.at++]];
+}
+
+export function applyCard(G) {
+  const pending = G.pendingCard;
+  if (!pending) return null;
+  const c = pending.card;
+  const p = current(G);
+  G.pendingCard = null;
+  note(G, `${p.name} — ${c.x.replace(/\*/g, '')}`);
+
+  if (c.cash) { if (c.cash > 0) p.cash += c.cash; else pay(G, p, null, -c.cash); }
+  if (c.perGarrison) pay(G, p, null, garrisonsOf(p) * c.perGarrison);
+  if (c.perCitadel) pay(G, p, null, citadelsOf(p) * c.perCitadel);
+  if (G.phase === 'contest' || G.over) return { path: [] };
+
+  if (c.jail) { toFacility(G, p); G.phase = 'end'; return { path: [] }; }
+  let path = [];
+  if (c.go !== undefined) path = advance(G, p, (((c.go - p.pos) % N) + N) % N);
+  else if (c.back) path = advance(G, p, c.back, { backwards: true, award: false });
+  else if (c.fleet) path = advance(G, p, forwardDistanceTo(p.pos, FLEETS));
+  else if (c.util) path = advance(G, p, forwardDistanceTo(p.pos, UTILS));
+  else { G.phase = 'end'; return { path: [] }; }
+
+  resolveLanding(G);
+  return { path };
+}
+
+export function endTurn(G) {
+  if (G.over) return;
+  const p = current(G);
+  const u = upkeep(p);
+  if (u > 0) { pay(G, p, null, u); note(G, `${p.name} pays ${money(u)} in upkeep.`); }
+  if (p.debt) p.debt += Math.ceil(p.debt * RULES.debtInterest);
+  if (G.phase === 'contest' || G.over) return;
+
+  G.cur = (G.cur + 1) % G.players.length;
+  G.turn++;
+  if (G.cur === 0) {
+    G.circuit++;
+    if (G.circuit > G.circuits) {
+      G.over = true;
+      G.endReason = 'circuit-limit';
+      G.phase = 'over';
+      G.winner = [...G.players].sort((a, b) => netWorth(G, b) - netWorth(G, a))[0].i;
+      leaderSays(G, 'The circuit limit is reached. Totals, then, and no more argument.');
+      return;
+    }
+  }
+  G.phase = 'roll';
+  G.dice = [0, 0];
+}
+
+export function extendGame(G, extra = 12) {
+  G.circuits += extra;
+  G.over = false;
+  G.winner = null;
+  G.endReason = null;
+  G.phase = 'roll';
+  G.dice = [0, 0];
+  leaderSays(G, `Nobody has settled, and the column stays open. ${extra} more circuits, then.`);
+}
+
+/* ============================================================ acquisition */
+export function buy(G, p, index = p.pos) {
+  const b = BOARD[index];
+  if (!b.pr || ownerOf(G, index) || p.cash < b.pr || p.debt) return false;
+  p.cash -= b.pr;
+  p.holdings.push({ sq: index, garrisons: 0, citadel: 0, mortgaged: 0 });
+  note(G, `${p.name} takes ${b.n} for ${money(b.pr)}.`);
+  if (p.kind === 'ai') persona(G, p, 'buy');
+  leader(G);
+  G.phase = 'end';
+  return true;
+}
+
+const clampBid = (p, v) => Math.max(0, Math.min(p.cash, Math.floor(Number(v) || 0)));
+
+export function openAuction(G, index) {
+  const eligible = G.players.filter(p => !p.debt && p.cash > 0);
+  if (!eligible.length) {
+    note(G, 'No bidder is solvent. The holding stays unclaimed.');
+    G.phase = 'end';
+    return false;
+  }
+  G.auction = { sq: index, bids: {}, queue: [], at: 0, resolved: false };
+  for (const p of eligible) {
+    if (p.kind === 'ai') G.auction.bids[p.i] = aiBid(G, p, index);
+    else G.auction.queue.push(p.i);
+  }
+  note(G, `${BOARD[index].n} goes to sealed bid.`);
+  G.phase = 'auction';
+  if (!G.auction.queue.length) resolveAuction(G);
+  return true;
+}
+
+export function submitBid(G, playerIndex, amount) {
+  const a = G.auction;
+  if (!a || a.queue[a.at] !== playerIndex) return false;
+  a.bids[playerIndex] = clampBid(G.players[playerIndex], amount);
+  a.at++;
+  if (a.at >= a.queue.length) resolveAuction(G);
+  return true;
+}
+
+function resolveAuction(G) {
+  const a = G.auction;
+  const b = BOARD[a.sq];
+  const ranked = Object.entries(a.bids)
+    .map(([i, v]) => ({ p: G.players[+i], v }))
+    .sort((x, y) => y.v - x.v || G.rand() - 0.5);
+  a.ranked = ranked;
+  a.resolved = true;
+  const win = ranked[0];
+  if (!win || win.v <= 0) {
+    a.winner = null;
+    note(G, `No bid on ${b.n}. It remains unclaimed.`);
+    return;
+  }
+  win.p.cash -= win.v;
+  win.p.holdings.push({ sq: a.sq, garrisons: 0, citadel: 0, mortgaged: 0 });
+  a.winner = win.p.i;
+  a.price = win.v;
+  note(G, `${win.p.name} wins ${b.n} at sealed bid for ${money(win.v)}.`);
+  if (win.p.kind === 'ai') persona(G, win.p, 'won');
+  const runnerUp = ranked.slice(1).find(e => e.p.kind === 'ai' && e.v > 0);
+  if (runnerUp) persona(G, runnerUp.p, 'lost');
+  leader(G);
+}
+
+export function closeAuction(G) {
+  G.auction = null;
+  if (!G.over) G.phase = 'end';
+}
+
+/* ============================================================ development */
+export function canBuild(G, p, sq) {
+  const h = holding(p, sq);
+  const b = BOARD[sq];
+  if (!h || !b.s || h.mortgaged || h.citadel || p.debt) return false;
+  if (!ownsSet(G, p, b.s)) return false;
+  return h.garrisons < 3 && G.garrisonPool > 0 && p.cash >= SETS[b.s].gc;
+}
+export function build(G, p, sq) {
+  if (!canBuild(G, p, sq)) return false;
+  const gc = SETS[BOARD[sq].s].gc;
+  const h = holding(p, sq);
+  p.cash -= gc; h.garrisons++; G.garrisonPool--;
+  note(G, `${p.name} garrisons ${BOARD[sq].n} (${h.garrisons}).`);
+  return true;
+}
+
+export function canRaiseCitadel(G, p, sq) {
+  const h = holding(p, sq);
+  const b = BOARD[sq];
+  if (!h || !b.s || h.mortgaged || h.citadel || p.debt) return false;
+  if (!ownsSet(G, p, b.s)) return false;
+  return h.garrisons === 3 && G.citadelPool > 0 && p.cash >= SETS[b.s].gc;
+}
+export function raiseCitadel(G, p, sq) {
+  if (!canRaiseCitadel(G, p, sq)) return false;
+  const h = holding(p, sq);
+  p.cash -= SETS[BOARD[sq].s].gc;
+  h.citadel = 1; h.garrisons = 0;
+  G.citadelPool--; G.garrisonPool += 3;
+  note(G, `${p.name} raises a citadel on ${BOARD[sq].n} — three garrisons return to the pool.`);
+  return true;
+}
+
+export function sellDevelopment(G, p, sq) {
+  const h = holding(p, sq);
+  if (!h) return false;
+  const gc = SETS[BOARD[sq].s].gc;
+  if (h.citadel) {
+    if (G.garrisonPool < 3) return false;      // cannot break a citadel the pool cannot absorb
+    h.citadel = 0; h.garrisons = 3;
+    G.citadelPool++; G.garrisonPool -= 3;
+    p.cash += Math.floor(gc * 5 / 2);
+    return true;
+  }
+  if (h.garrisons > 0) { h.garrisons--; G.garrisonPool++; p.cash += Math.floor(gc / 2); return true; }
+  return false;
+}
+
+export function mortgage(G, p, sq) {
+  const h = holding(p, sq);
+  if (!h || h.mortgaged || h.garrisons || h.citadel) return false;
+  h.mortgaged = 1;
+  p.cash += Math.floor(BOARD[sq].pr / 2);
+  return true;
+}
+export function redeem(G, p, sq) {
+  const h = holding(p, sq);
+  if (!h || !h.mortgaged) return false;
+  // Half the price back, plus a tenth in interest. Written as a whole-number
+  // ratio on purpose: pr * 0.55 is 220.00000000000003 for Cradle, and ceil()
+  // then quietly overcharges a credit. Money never touches a float here.
+  const cost = Math.ceil(BOARD[sq].pr * RULES.mortgageRedeemNumerator / RULES.mortgageRedeemDenominator);
+  if (p.cash < cost) return false;
+  p.cash -= cost;
+  h.mortgaged = 0;
+  return true;
+}
+export function repayDebt(G, p) {
+  const a = Math.min(p.cash, p.debt);
+  p.cash -= a; p.debt -= a;
+  if (!p.debt) note(G, `${p.name} clears the debt marker and may trade again.`);
+  return a;
+}
+
+/* ============================================================ contracts */
+export function tradable(G, p, sq) {
+  const h = holding(p, sq);
+  if (!h || h.mortgaged || h.garrisons > 0 || h.citadel) return false;
+  const b = BOARD[sq];
+  if (!b.s) return true;
+  // Nothing in a set may move while anything in that set is built up.
+  return !SETS[b.s].sq.some(j => {
+    const o = ownerOf(G, j);
+    if (!o) return false;
+    const hh = holding(o, j);
+    return hh && (hh.garrisons > 0 || hh.citadel);
+  });
+}
+
+export function settleContract(G, { from, to, give, get, cash, direction }) {
+  const a = G.players[from], b = G.players[to];
+  if (give !== null && give !== undefined) {
+    a.holdings = a.holdings.filter(h => h.sq !== give);
+    b.holdings.push({ sq: give, garrisons: 0, citadel: 0, mortgaged: 0 });
+  }
+  if (get !== null && get !== undefined) {
+    b.holdings = b.holdings.filter(h => h.sq !== get);
+    a.holdings.push({ sq: get, garrisons: 0, citadel: 0, mortgaged: 0 });
+  }
+  const amount = Math.max(0, Math.floor(cash || 0));
+  if (amount) {
+    if (direction === 1) { const v = Math.min(amount, a.cash); a.cash -= v; b.cash += v; }
+    else { const v = Math.min(amount, b.cash); b.cash -= v; a.cash += v; }
+  }
+  const parts = [];
+  if (get !== null && get !== undefined) parts.push(`${a.name} takes ${BOARD[get].n}`);
+  if (give !== null && give !== undefined) parts.push(`${b.name} takes ${BOARD[give].n}`);
+  if (amount) parts.push(`${money(amount)} to ${direction === 1 ? b.name : a.name}`);
+  note(G, `Contract settled — ${parts.join(', ') || 'nothing changed hands'}.`);
+  leaderSays(G, pick(G, [
+    'A price was agreed. That is the whole of it.',
+    'Two ledgers reconciled. Both parties believe they won. One of them is right.',
+    'Everything has a price. Somebody has just discovered theirs.'
+  ]));
+  return true;
+}
+
+/* ============================================================ opponents */
+export function aiValue(G, p, sq) {
+  const b = BOARD[sq];
+  if (!b.pr) return 0;
+  if (!b.s) return Math.round(b.pr * (p.persona === 'spector' ? 1.15 : p.persona === 'varan' ? 1.25 : 0.95));
+
+  const s = SETS[b.s];
+  const payback = paybackTurns(b.s, TRAFFIC);
+  const mine = s.sq.filter(i => { const o = ownerOf(G, i); return o && o.i === p.i; }).length;
+  const free = s.sq.filter(i => !ownerOf(G, i)).length;
+  let v;
+  if (p.persona === 'spector') {
+    v = b.pr * (1.6 - payback / 40);
+    if (mine > 0) v *= 1 + 0.45 * mine;
+    if (mine === 0 && mine + free < s.sq.length) v *= 0.55;
+  } else if (p.persona === 'vale') {
+    const prestige = { agora: 1.85, ven: 1.15, eden: 0.72, dom: 0.95, eni: 0.7, syn: 0.8 }[b.s];
+    v = b.pr * prestige * (mine > 0 ? 1.4 : 1);
+  } else {
+    const rivals = s.sq.map(i => ownerOf(G, i)).filter(o => o && o.i !== p.i);
+    const oneRivalHolds = rivals.length && new Set(rivals.map(o => o.i)).size === 1;
+    v = b.pr * (oneRivalHolds ? 1.95 : 1.15) * (mine > 0 ? 1.3 : 1);
+  }
+  return Math.round(v);
+}
+
+export function aiBid(G, p, sq) {
+  const v = aiValue(G, p, sq);
+  const cap = p.persona === 'varan' ? 0.72 : p.persona === 'vale' ? 0.65 : 0.55;
+  let bid = Math.min(v, Math.floor(p.cash * cap));
+  bid = Math.round(bid * (0.9 + G.rand() * 0.2));
+  if (bid < Math.floor(BOARD[sq].pr * 0.35)) bid = 0;
+  return Math.max(0, bid);
+}
+
+export function aiWantsToBuy(G, p, sq) {
+  const b = BOARD[sq];
+  return !p.debt && p.cash > b.pr + 180 && aiValue(G, p, sq) >= b.pr;
+}
+
+export function contractValue(G, who, get, give, cashIn) {
+  let v = cashIn;
+  if (get !== null && get !== undefined) v += aiValue(G, who, get);
+  if (give !== null && give !== undefined) {
+    v -= aiValue(G, who, give);
+    const b = BOARD[give];
+    if (b.s) {
+      const rest = SETS[b.s].sq.filter(j => j !== give);
+      const owners = rest.map(j => ownerOf(G, j)).filter(Boolean);
+      if (owners.length === rest.length && new Set(owners.map(o => o.i)).size === 1) {
+        v -= b.pr * (who.persona === 'varan' ? 2.6 : who.persona === 'spector' ? 1.9 : 0.8);
+      }
+    }
+  }
+  return v;
+}
+
+export function aiAcceptsContract(G, them, proposer, { give, get, cash, direction }) {
+  const cashToThem = direction === 1 ? cash : -cash;
+  const net = contractValue(G, them, give, get, cashToThem);
+  const bar = { spector: 60, varan: 240, vale: -40 }[them.persona] ?? 0;
+  const leaderNow = [...G.players].sort((a, b) => netWorth(G, b) - netWorth(G, a))[0];
+  const spite = them.persona === 'varan' && leaderNow.i === proposer.i ? 260 : 0;
+  return net > bar + spite;
+}
+
+// Everything an opponent does after resolving its square: build, then consider
+// throwing off an overlord, then adjust its tithe.
+export function aiDevelop(G, p) {
+  let guard = 0;
+  while (guard++ < 12) {
+    const reserve = p.persona === 'varan' ? 200 : 450;
+    const options = p.holdings.filter(h => canBuild(G, p, h.sq)
+      && p.cash >= SETS[BOARD[h.sq].s].gc + reserve);
+    if (!options.length) break;
+    options.sort((a, b) =>
+      paybackTurns(BOARD[a.sq].s, TRAFFIC) - paybackTurns(BOARD[b.sq].s, TRAFFIC)
+      || a.garrisons - b.garrisons);
+    build(G, p, options[0].sq);
+  }
+  // Spector deliberately holds at three garrisons and refuses citadels.
+  if (p.persona !== 'spector') {
+    const c = p.holdings.find(h => canRaiseCitadel(G, p, h.sq)
+      && p.cash >= SETS[BOARD[h.sq].s].gc + 600);
+    if (c) raiseCitadel(G, p, c.sq);
+  }
+  if (p.lord !== null && p.strength >= revoltThreshold(p) && p.cash >= RULES.revoltCost + 400) {
+    declareIndependence(G, p);
+    if (p.kind === 'ai') persona(G, p, 'fell');
+  }
+  if (p.vassals.length && G.rand() < 0.3) p.tithe = pick(G, [10, 25, 25, 40, 40, 55]);
+}
+
+/* ============================================================ standings */
+export function standings(G) {
+  return G.players
+    .map(p => ({
+      player: p,
+      worth: netWorth(G, p),
+      status: p.lord !== null ? `vassal · ${G.players[p.lord].name.split(' ')[0]}`
+        : p.vassals.length ? `overlord ×${p.vassals.length}` : 'free'
+    }))
+    .sort((a, b) => b.worth - a.worth);
+}
