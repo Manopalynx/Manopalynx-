@@ -718,12 +718,16 @@ for (const device of DEVICES) {
     const fleetText = document.querySelector('.sheet').textContent.replace(/\s+/g, ' ');
     window.closeSheet();
     G.contract = null;
-    return { text, swatches, completes, breaks, fleetText };
+    return { text, swatches, completes, breaks, fleetText, them: them.name.split(' ').pop() };
   });
   if (contract.swatches >= 2) pass(`a contract shows the colour of what is moving (${contract.swatches} swatches)`);
   else fail(`only ${contract.swatches} colour swatches on a two-square contract`);
-  if (/2 of 3/.test(contract.text)) pass('it shows how much of the set you hold');
-  else fail(`no "n of 3" holding count in the contract: ${contract.text.slice(0, 260)}`);
+  // Both sides, on every square — showing only your own count hides what the
+  // offer quietly does for the other player.
+  const mine = /you\s*2 → 1/.test(contract.text);
+  const theirs = new RegExp(`${contract.them}\\s*1 → 2`).test(contract.text);
+  if (mine && theirs) pass('it shows what each side holds of the set, before and after');
+  else fail(`set counts wrong (yours ${mine}, theirs ${theirs}): ${contract.text.slice(0, 300)}`);
   if (contract.completes) pass('it flags a set completion');
   else fail('receiving the third Eden square was not flagged as completing it');
   if (/Fleets held/.test(contract.fleetText)) pass('a fleet contract counts the fleets');

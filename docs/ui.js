@@ -60,9 +60,12 @@ function drawSetup() {
         </div>`;
       }).join('')}
     </div>
-    <div class="fld"><label>Circuit limit</label>
+    <div class="fld"><label>Circuits before the swarm arrives</label>
       <div class="opts">${[48, 72, 120].map(k =>
         `<button class="opt${setup.circuits === k ? ' on' : ''}" data-t="${k}">${k}</button>`).join('')}</div>
+      <p class="note" style="margin-top:10px">Something is coming from outside the galaxy and
+      it does not negotiate. This is how long you have before it gets here — and whoever holds
+      the most when it does, held the most. The deep array will keep you posted.</p>
     </div>
     <button class="big" id="begin">Open the ledger${seatsUsed < 2 ? ' — add an opponent' : ''}</button>
     <p class="note">Sealed-bid auctions are mandatory and the phone gets passed.
@@ -217,11 +220,10 @@ function paintMid() {
   set('.msg', lastEvent());
   // Once the deep array is reporting, the counter stops being an administrative
   // limit and starts being the thing the whole book is about.
+  // From the first turn, not from the last twelve. Hidden until late, the whole
+  // idea was invisible in any game that did not run to the end.
   const out = E.swarmDistance(G);
-  set('.meta', (out <= RULES.swarmWarning
-      ? `SWARM ${out} OUT`
-      : `CIRCUIT ${G.circuit}/${G.circuits}`)
-    + ` · GARRISONS ${G.garrisonPool} · CITADELS ${G.citadelPool}`);
+  set('.meta', `SWARM ${out} OUT · GARRISONS ${G.garrisonPool} · CITADELS ${G.citadelPool}`);
   const meta = midEl.querySelector('.meta');   // midEl, not $('mid') — it has no id
   if (meta) meta.classList.toggle('near', out <= RULES.swarmWarning);
   if (!diceRolling) {
@@ -1327,8 +1329,15 @@ function showContract() {
       const set = SETS[b.s];
       const mine = set.sq.filter(i => (E.ownerOf(G, i) || {}).i === to.i).length;
       const after = mine + (gaining ? 1 : -1);
+      const theirsNow = set.sq.filter(i => (E.ownerOf(G, i) || {}).i === from.i).length;
+      const theirsThen = theirsNow + (gaining ? -1 : 1);
+      // Both sides, always. Showing only your own count hides the thing you most
+      // need to see: what the offer is quietly doing for the other player.
       s += `<div class="stat"><span><i class="swatch" style="background:${set.c}"></i>
-        ${esc(set.n)}</span><span>${mine} of ${set.sq.length} → <b>${after}</b></span></div>`;
+        ${esc(set.n)}</span><span>of ${set.sq.length}</span></div>
+        <div class="stat sub2"><span>you</span><span>${mine} → <b>${after}</b></span></div>
+        <div class="stat sub2"><span>${esc(chipName(from))}</span>
+          <span>${theirsNow} → <b>${theirsThen}</b></span></div>`;
       if (after === set.sq.length) {
         s += `<div class="warnbox ok">This completes ${esc(set.n)} for you. Rent doubles
           across the set and you can garrison it.</div>`;
@@ -1336,10 +1345,7 @@ function showContract() {
         s += `<div class="warnbox">This breaks your ${esc(set.n)}. You lose the doubled
           rent on all ${set.sq.length}.</div>`;
       }
-      // What it does for the other side of the table matters just as much.
-      const theirs = set.sq.filter(i => (E.ownerOf(G, i) || {}).i === from.i).length;
-      const theirsAfter = theirs + (gaining ? -1 : 1);
-      if (theirsAfter === set.sq.length) {
+      if (theirsThen === set.sq.length) {
         s += `<div class="warnbox">This completes ${esc(set.n)} for ${esc(from.name)}.</div>`;
       }
     } else if (b.t === 'f' || b.t === 'u') {

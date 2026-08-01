@@ -9,9 +9,11 @@
 // Run:  node --test grandiose/test/
 
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 
-import { SETS, BOARD, N, JAIL, TRAFFIC, RULES, CONTINGENCY, COLUMN } from '../data.js';
+import { SETS, BOARD, N, JAIL, TRAFFIC, RULES, CONTINGENCY, COLUMN, SWARM_STAGES,
+         PERSONAS } from '../data.js';
 import {
   createGame, current, ownerOf, holding, ownsSet, garrisonsOf, citadelsOf,
   holdingsValue, netWorth, upkeep, rentOf, paybackTurns, revoltThreshold,
@@ -1955,28 +1957,53 @@ test('playing on pushes the swarm back by exactly what it says', () => {
   assert.equal(G.over, false);
 });
 
-test('the array reports as the swarm closes, and not before', () => {
+test('the array reports at each stage, once, in order', () => {
   const G = createGame({ seats: seats2, seed: 4, circuits: 40 });
-  // Count as they happen: the log trims at 120 entries, so a tally taken at the
-  // end of a long game would silently lose the early ones.
-  const said = () => G.log.filter(l => /deep array|extragalactic|blips/i.test(l.text)).length;
-  // Run whole circuits by hand rather than playing, so the count is exact.
-  const advance = () => { G.cur = G.players.length - 1; endTurn(G); };
-  let announcements = 0;
+  const said = [];
+  const before = () => G.log.filter(l => /deep array|bearing|projection|blips/i.test(l.text)).length;
   for (let c = 0; c < 45 && !G.over; c++) {
-    const before = said();
+    const n = before();
     G.phase = 'end';
-    advance();
-    if (said() > before) {
-      announcements++;
-      assert.ok(swarmDistance(G) <= RULES.swarmWarning,
-        `the array spoke at ${swarmDistance(G)} out, beyond its ${RULES.swarmWarning}`);
-    }
+    G.cur = G.players.length - 1;
+    endTurn(G);
+    if (before() > n) said.push({ circuit: G.circuit, elapsed: (G.circuit - 1) / G.circuits });
   }
-  assert.ok(announcements >= 3, `the array spoke ${announcements} times in a whole game`);
-  assert.ok(announcements <= 6, `the array spoke ${announcements} times — that is nagging`);
+  assert.equal(said.length, SWARM_STAGES.length,
+    `the array spoke ${said.length} times for ${SWARM_STAGES.length} stages`);
+  // Each report lands at or just past its stage, and they arrive in order.
+  said.forEach((r, k) => {
+    assert.ok(r.elapsed >= SWARM_STAGES[k].at,
+      `stage ${k} spoke at ${(r.elapsed * 100).toFixed(0)}%, before its ${SWARM_STAGES[k].at * 100}%`);
+    if (k) assert.ok(r.circuit > said[k - 1].circuit, 'two stages in one circuit');
+  });
 });
 
+test('a stage is never repeated, and playing on reopens them', () => {
+  const G = createGame({ seats: seats2, seed: 4, circuits: 20 });
+  G.circuit = 20;
+  G.swarmMark = SWARM_STAGES.length;          // as if all four had been said
+  const count = () => G.log.filter(l => /deep array|bearing|projection|blips/i.test(l.text)).length;
+  const before = count();
+  G.phase = 'end'; G.cur = G.players.length - 1; endTurn(G);
+  assert.equal(count(), before, 'a stage already reported must not repeat');
+  extendGame(G, 12);
+  assert.equal(G.swarmMark, 0, 'more circuits means the array has more to say');
+});
+
+test('a short game does not deliver two stages at once', () => {
+  // Crossing 25% and 50% in a single circuit would read as comedy.
+  const G = createGame({ seats: seats2, seed: 4, circuits: 4 });
+  const lines = [];
+  for (let c = 0; c < 6 && !G.over; c++) {
+    const n = G.log.length;
+    G.phase = 'end'; G.cur = G.players.length - 1; endTurn(G);
+    const added = G.log.slice(0, G.log.length - n)
+      .filter(l => /deep array|bearing|projection|blips/i.test(l.text));
+    assert.ok(added.length <= 1, `${added.length} reports in one circuit`);
+    lines.push(...added);
+  }
+  assert.ok(lines.length >= 1, 'even a four-circuit game hears from the array');
+});
 test('the Neurex are on the board without being a square you can buy', () => {
   // Absorbed speaks in their voice, and one Contingency card is them passing
   // through. Neither is a holding, because nobody trades with the Neurex.
@@ -2086,4 +2113,33 @@ test('a runoff between opponents alone settles without asking anyone', () => {
     assert.equal(G.auction.resolved, true, `seed ${seed} left an opponent-only auction open`);
     assert.equal(G.auction.queue.length, 0);
   }
+});
+
+test('no player can be dealt the colour the board uses for selection', () => {
+  // The square you last tapped draws a ring, and ownership draws a ring in the
+  // owner's colour. Those two were the same colour — #5ECFC8 is both var(--tx)
+  // and Spector's — so a tapped square looked exactly like a Spector holding.
+  // The interface now uses var(--bright), dashed. This holds the palettes apart
+  // whichever way either of them changes.
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const varOf = name => {
+    const m = new RegExp(`--${name}:\\s*(#[0-9A-Fa-f]{3,8})`).exec(html);
+    assert.ok(m, `--${name} is not defined in index.html`);
+    return m[1].toLowerCase();
+  };
+  const selRule = /\.cell\.sel\{([^}]*)\}/.exec(html);
+  assert.ok(selRule, 'no .cell.sel rule — the selection ring has gone');
+  const selVar = /outline:[^;]*var\(--([a-z-]+)\)/.exec(selRule[1]);
+  assert.ok(selVar, `the selection outline is not a named colour: ${selRule[1]}`);
+  const selColour = varOf(selVar[1]);
+
+  // Every colour a seat can be dealt: the pip palette and every persona.
+  const pips = /const PIPS = \[([^\]]*)\]/.exec(readFileSync(new URL('../ui.js', import.meta.url), 'utf8'));
+  assert.ok(pips, 'no PIPS palette in ui.js');
+  const seatColours = [...pips[1].matchAll(/#[0-9A-Fa-f]{3,8}/g)].map(m => m[0].toLowerCase());
+  for (const persona of Object.values(PERSONAS)) seatColours.push(persona.c.toLowerCase());
+
+  assert.ok(seatColours.length >= 4, 'no seat colours found to compare against');
+  assert.ok(!seatColours.includes(selColour),
+    `the selection ring is ${selColour}, which is also a player colour`);
 });

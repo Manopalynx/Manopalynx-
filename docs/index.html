@@ -136,7 +136,12 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
 .tok.me{width:9px;height:9px;box-shadow:0 0 0 1.5px var(--void),0 0 8px 1px currentColor}
 .cell .grr{position:absolute;top:6px;right:1px;font-family:var(--m);font-size:8px;color:var(--gold)}
 .cell.here{outline:2px solid var(--gold);outline-offset:-2px;z-index:4}
-.cell.sel{outline:2px solid var(--tx);outline-offset:-2px;z-index:5}
+/* Dashed and in a colour NO player can be dealt. It used to be var(--tx), which
+   is exactly Spector's #5ECFC8, so the square you last tapped was indis-
+   tinguishable from a square Spector owned — ownership draws a 2px inset ring
+   in the owner's colour. Held by "the selection ring cannot be mistaken for a
+   player" in test/engine.test.mjs. */
+.cell.sel{outline:2px dashed var(--bright);outline-offset:-3px;z-index:5}
 
 .mid{grid-column:2/11;grid-row:2/11;position:relative;background:#05060A;
   border:1px solid var(--rule);border-radius:8px;overflow:hidden}
@@ -249,6 +254,8 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
 /* The circuit counter, once the deep array has contacts. */
 .meta.near{color:var(--warn)}
 /* A set's colour, inline in a stat row, so a trade shows what it is made of. */
+/* An indented sub-row under a set, for each side's holding count. */
+.stat.sub2{padding-left:19px;font-size:13px;color:var(--dim)}
 .swatch{display:inline-block;width:9px;height:9px;border-radius:2px;
   vertical-align:baseline;margin-right:6px}
 .warnbox.ok{background:rgba(94,207,200,.12);border-color:rgba(94,207,200,.4);color:var(--tx)}

@@ -209,6 +209,19 @@ export const COLUMN = [
   { x: 'The Corridor is still burning, and burning is not free. Pay ₡100.', cash: -100 }
 ];
 
+/* ---------------------------------------------------------------- the swarm */
+// What the deep array says, and when. `at` is the fraction of the game elapsed.
+// Four stages rather than a countdown: the point is that the tone changes while
+// the table is still arguing about colour sets, so the end arrives as pressure
+// rather than as a number running out. Written to escalate — filed, resolved,
+// agreed, and finally not worth reporting because everyone can see it.
+export const SWARM_STAGES = [
+  { at: 0.25, t: 'The deep array logs a bearing it cannot resolve. It is filed, and the filing is the end of it.' },
+  { at: 0.50, t: 'The bearing resolves. Extragalactic, closing, and the count is not small.' },
+  { at: 0.75, t: 'Every projection now agrees on the arrival and disagrees only about the hour.' },
+  { at: 0.95, t: 'The blips multiply past the deep array\'s patience. Whatever is settled by now is settled.' }
+];
+
 /* ------------------------------------------------------------------ opponents */
 export const PERSONAS = {
   spector: {
@@ -288,10 +301,9 @@ export const RULES = {
   // Cradle (400 * 0.55 === 220.00000000000003).
   mortgageRedeemNumerator: 11,
   mortgageRedeemDenominator: 20,
-  // The circuit limit is the swarm arriving. The deep array starts reporting
-  // contacts this many circuits out, and says so again as the count halves —
-  // so the end of the game is something the table can see coming and play
-  // against, rather than a number running out.
+  // The circuit limit is the swarm arriving, and the count is on screen from the
+  // first turn. The array reports at the fractions of the game below; inside
+  // this many circuits the counter itself turns.
   swarmWarning: 12,
   revoltBase: 1400,              // strength needed for a first declaration
   revoltStep: 300,               // added per previous declaration

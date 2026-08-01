@@ -11,7 +11,7 @@
 // phase and returns.
 
 import {
-  SETS, BOARD, N, GO, JAIL, GOTO, FLEETS, UTILS, FLEET_RENT, TRAFFIC,
+  SETS, BOARD, N, GO, JAIL, GOTO, FLEETS, UTILS, FLEET_RENT, TRAFFIC, SWARM_STAGES,
   CONTINGENCY, COLUMN, PERSONAS, LEADER_LINES, RULES
 } from './data.js';
 
@@ -58,6 +58,7 @@ export function createGame({ seats, seed = 1, circuits = 72 } = {}) {
     contest: null,
     pendingCard: null,
     settlement: null,   // a bill parked while a human decides how to raise it
+    swarmMark: 0,       // how many deep-array reports have been made
     doublesRun: 0,      // consecutive doubles this turn
     rollAgain: false    // a doubles roll buys another before the turn settles
   };
@@ -842,24 +843,20 @@ export function swarmDistance(G) {
 }
 
 function announceSwarm(G) {
-  const out = swarmDistance(G);
-  if (out > RULES.swarmWarning || out < 1) return;
-  // Halving points only, so a long game does not narrate every circuit.
-  let step = RULES.swarmWarning;
-  const marks = new Set();
-  while (step >= 1) { marks.add(step); step = Math.floor(step / 2); }
-  if (!marks.has(out)) return;
-  if (out === 1) {
-    leaderSays(G, 'The blips multiply past the deep array\'s patience. One circuit.');
-  } else if (out <= 3) {
-    leaderSays(G, `Extragalactic bearing, range closing, and the count is still rising. ${out} circuits.`);
-  } else {
-    leaderSays(G, `The deep array has contacts on an extragalactic bearing. ${out} circuits out.`);
-  }
+  const elapsed = (G.circuit - 1) / G.circuits;
+  // The highest stage passed, not every stage passed: a short game can cross two
+  // at once and two paragraphs of doom in one turn is comedy, not tension.
+  let reached = -1;
+  for (let k = 0; k < SWARM_STAGES.length; k++) if (elapsed >= SWARM_STAGES[k].at) reached = k;
+  if (reached < (G.swarmMark ?? 0)) return;
+  if (reached < 0) return;
+  leaderSays(G, `${SWARM_STAGES[reached].t} ${swarmDistance(G)} circuits.`);
+  G.swarmMark = reached + 1;
 }
 
 export function extendGame(G, extra = 12) {
   G.circuits += extra;
+  G.swarmMark = 0;                  // a longer run means the array reports again
   G.over = false;
   G.winner = null;
   G.endReason = null;

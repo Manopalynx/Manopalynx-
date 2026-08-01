@@ -21,7 +21,7 @@ Playable. Engine, interface, offline support and save/resume are all in.
 ```
 data.js      board, decks, opponents, economy constants — data only
 engine.js    the rules. No DOM, no timers, no Math.random
-test/        169 passing (plus a browser probe across five viewports)
+test/        172 passing (plus a browser probe across five viewports)
 ```
 
 ## Running the tests
@@ -102,6 +102,12 @@ have caught:
 - **A comment in `SETS` was confidently wrong**, claiming the novel names no Basileian
   world and that Vale's Plaza was an invention. It names several, and the plaza is where
   Vale is assassinated. Corrected in place, because a wrong comment is worse than none.
+- **The selection ring was a player colour.** The square you last tapped drew
+  `outline: 2px solid var(--tx)`, and `--tx` is `#5ECFC8` — which is exactly Spector's pip.
+  Ownership draws a 2px inset ring in the owner's colour, so a square you had merely
+  looked at was pixel-identical to a square Spector held. Reported from play as "what is
+  happening on PLAZ?". It is now dashed and `--bright`, and a test compares the selection
+  colour against the whole pip palette and every persona.
 - **Codes that differ by one character.** `VESA`/`VASA` were both real places one letter
   apart. Writing the test to catch that pair immediately caught `COL`/`CON` — **the two
   decks**, the worst possible pair to confuse — plus `ORAN`/`ORIN`, `ANCH`/`ANTH`/`ARCH`.
@@ -111,11 +117,16 @@ have caught:
 ## The swarm is the clock
 
 The circuit limit was an administrative number that ran out. It is now the thing the
-novel is about. `swarmDistance()` counts circuits to the end; inside `RULES.swarmWarning`
-the deep array starts reporting contacts, and says so again each time the remaining count
-halves — so the last stretch of a game has a shape instead of simply stopping. The centre
-panel switches from `CIRCUIT 14/72` to `SWARM 12 OUT` at that point and turns amber, and
-the end screen closes on the book's last line.
+novel is about. The centre panel counts `SWARM 62 OUT` **from the first turn** — it used
+to switch over only inside the last twelve circuits, which meant that in any game not
+played to the end the whole idea was invisible. The setup screen names the choice as what
+it is: how long you have before it arrives.
+
+The deep array reports at four fractions of the game, in `SWARM_STAGES` — filed, resolved,
+agreed, and finally not worth reporting because everyone can see it. Only the highest
+stage passed is spoken, so a short game cannot deliver two paragraphs of doom in one
+circuit. Playing on resets them, because a longer run means the array has more to say. The
+end screen closes on the book's last line.
 
 The Neurex are deliberately **not** a square you can buy, a jail you can be held in, or a
 faction you can trade with. They do not hold prisoners and they do not take payment —
