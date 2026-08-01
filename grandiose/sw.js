@@ -1,9 +1,13 @@
-// Offline support. Cache-first for the handful of files the game is made of,
-// so once it has been opened it works on a train with no signal.
+// Offline support.
 //
-// Bump CACHE whenever a file changes, or phones will keep serving the old copy
-// from their cache and you will wonder why a fix did not arrive.
-const CACHE = 'grandiose-v1';
+// NETWORK-FIRST, falling back to the cache. Cache-first would load a shade
+// faster, but a phone that has added this to its Home Screen would then keep
+// serving yesterday's build and no fix would ever appear to arrive. While the
+// game is being changed between sessions, "always current, still works with no
+// signal" is worth more than fifty milliseconds.
+//
+// Swap the order if this ever stops changing weekly.
+const CACHE = 'grandiose-v2';
 const FILES = [
   './',
   './index.html',
@@ -34,14 +38,17 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  if (new URL(e.request.url).origin !== self.location.origin) return;
   e.respondWith(
-    caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
-      // Keep the cache warm for anything served successfully from the network.
-      if (res && res.ok && res.type === 'basic') {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
-      }
-      return res;
-    }).catch(() => caches.match('./index.html')))
+    fetch(e.request)
+      .then(res => {
+        if (res && res.ok && res.type === 'basic') {
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        }
+        return res;
+      })
+      .catch(() => caches.match(e.request)
+        .then(hit => hit || caches.match('./index.html')))
   );
 });
