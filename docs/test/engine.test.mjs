@@ -23,7 +23,7 @@ import {
   serialize, deserialize, payFacilityFee, releaseVassal, aiValue, aiBid, aiWantsToBuy,
   pledge, pledgeValue, redeemCost, raisableValue, parkForSettlement, autoSettle, settleNow,
   threatPenalty, setBuildingTargets, denialTargets, aiCounter, aiAcceptsContract,
-  landingPreview, previewAt, cardEffect, usePardon
+  landingPreview, previewAt, cardEffect, usePardon, swarmDistance, extendGame
 } from '../engine.js';
 
 /* -------------------------------------------------------------- fixtures */
@@ -1928,4 +1928,62 @@ test('a set groups squares the book puts in the same place', () => {
       assert.ok(!other, `${BOARD[i].n} is in ${set.n} but named for ${other?.[1].n}`);
     }
   }
+});
+
+/* ================================================================ the swarm */
+// The circuit limit is the swarm arriving. That is a presentation change over a
+// mechanic that already existed, so what is worth asserting is the count: it
+// must reach exactly zero on the circuit the game ends, and never mislead.
+
+test('the swarm count runs down to the end of the game', () => {
+  const G = createGame({ seats: seats2, seed: 4, circuits: 20 });
+  assert.equal(swarmDistance(G), 20, 'at circuit 1 of 20, twenty out');
+  G.circuit = 20;
+  assert.equal(swarmDistance(G), 1, 'the last circuit is one out');
+  G.circuit = 21;
+  assert.equal(swarmDistance(G), 0);
+  G.circuit = 99;
+  assert.equal(swarmDistance(G), 0, 'it never goes negative');
+});
+
+test('playing on pushes the swarm back by exactly what it says', () => {
+  const G = createGame({ seats: seats2, seed: 4, circuits: 20 });
+  G.circuit = 21;
+  assert.equal(swarmDistance(G), 0);
+  extendGame(G, 12);
+  assert.equal(swarmDistance(G), 12, 'twelve more circuits is twelve more out');
+  assert.equal(G.over, false);
+});
+
+test('the array reports as the swarm closes, and not before', () => {
+  const G = createGame({ seats: seats2, seed: 4, circuits: 40 });
+  // Count as they happen: the log trims at 120 entries, so a tally taken at the
+  // end of a long game would silently lose the early ones.
+  const said = () => G.log.filter(l => /deep array|extragalactic|blips/i.test(l.text)).length;
+  // Run whole circuits by hand rather than playing, so the count is exact.
+  const advance = () => { G.cur = G.players.length - 1; endTurn(G); };
+  let announcements = 0;
+  for (let c = 0; c < 45 && !G.over; c++) {
+    const before = said();
+    G.phase = 'end';
+    advance();
+    if (said() > before) {
+      announcements++;
+      assert.ok(swarmDistance(G) <= RULES.swarmWarning,
+        `the array spoke at ${swarmDistance(G)} out, beyond its ${RULES.swarmWarning}`);
+    }
+  }
+  assert.ok(announcements >= 3, `the array spoke ${announcements} times in a whole game`);
+  assert.ok(announcements <= 6, `the array spoke ${announcements} times — that is nagging`);
+});
+
+test('the Neurex are on the board without being a square you can buy', () => {
+  // Absorbed speaks in their voice, and one Contingency card is them passing
+  // through. Neither is a holding, because nobody trades with the Neurex.
+  const absorbed = BOARD.find(b => b.t === 'goto');
+  assert.match(absorbed.q, /absorb|consume/i);
+  assert.equal(absorbed.pr, undefined, 'the Neurex square cannot be bought');
+  const card = CONTINGENCY.find(c => /does not negotiate/i.test(c.x));
+  assert.ok(card, 'no Neurex card in the Contingency deck');
+  assert.ok(card.cash < 0, 'looking at them costs, it does not pay');
 });

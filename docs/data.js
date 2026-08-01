@@ -177,7 +177,6 @@ export const CONTINGENCY = [
   { x: 'Eden holds, or it does not. Advance to Horizon.', go: 16 },
   { x: 'Requisition order. Report to the nearest fleet.', fleet: 1 },
   { x: 'The *Orion* signals for you. Advance to it.', go: 15 },
-  { x: 'A manifest you were not meant to read. Take ₡150 from the bank.', cash: 150 },
   { x: 'The Overseer has taken an interest in your accounts. Report to detention.', jail: 1 },
   { x: 'You are three squares further back than your paperwork claims.', back: 3 },
   { x: 'Anthelion synthesis dividend. Collect ₡100.', cash: 100 },
@@ -186,6 +185,7 @@ export const CONTINGENCY = [
   { x: 'A world petitions for protection under the Compact. Collect ₡200.', cash: 200 },
   { x: 'The nearest utility falls under emergency requisition. Advance to it.', util: 1 },
   { x: 'An Overseer owes you a favour and is careless enough to put it in writing. Keep it against a future detention.', pardon: 1 },
+  { x: 'A forward assessment passes through the system. It does not negotiate, does not tire, and does not stop — and everything it costs to look at it comes out of your ledger. Pay ₡80 to the bank.', cash: -80 },
   { x: 'Salvage rights on a Purifier hulk. Collect ₡180.', cash: 180 },
   { x: 'You are named host of the Compact assembly, and hosts settle the accounts. Pay ₡60 to every other overlord.', each: -60 }
 ];
@@ -288,6 +288,11 @@ export const RULES = {
   // Cradle (400 * 0.55 === 220.00000000000003).
   mortgageRedeemNumerator: 11,
   mortgageRedeemDenominator: 20,
+  // The circuit limit is the swarm arriving. The deep array starts reporting
+  // contacts this many circuits out, and says so again as the count halves —
+  // so the end of the game is something the table can see coming and play
+  // against, rather than a number running out.
+  swarmWarning: 12,
   revoltBase: 1400,              // strength needed for a first declaration
   revoltStep: 300,               // added per previous declaration
   revoltCost: 500,

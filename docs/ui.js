@@ -215,7 +215,15 @@ function paintMid() {
   set('.who', p.name + (p.lord !== null ? ' · vassal' : ''));
   set('.sq', BOARD[posOf(p)].n);
   set('.msg', lastEvent());
-  set('.meta', `CIRCUIT ${G.circuit}/${G.circuits} · GARRISONS ${G.garrisonPool} · CITADELS ${G.citadelPool}`);
+  // Once the deep array is reporting, the counter stops being an administrative
+  // limit and starts being the thing the whole book is about.
+  const out = E.swarmDistance(G);
+  set('.meta', (out <= RULES.swarmWarning
+      ? `SWARM ${out} OUT`
+      : `CIRCUIT ${G.circuit}/${G.circuits}`)
+    + ` · GARRISONS ${G.garrisonPool} · CITADELS ${G.citadelPool}`);
+  const meta = midEl.querySelector('.meta');   // midEl, not $('mid') — it has no id
+  if (meta) meta.classList.toggle('near', out <= RULES.swarmWarning);
   if (!diceRolling) {
     const dice = midEl.querySelectorAll('.die');
     dice[0].textContent = G.dice[0] || '–';
@@ -1386,7 +1394,12 @@ function showFinal() {
   sheet(`<h3>The ledger closes</h3><div class="sub">circuit ${G.circuit} of ${G.circuits}</div>
     <div class="card">${G.endReason === 'conquest'
       ? `Every column posts to one page. <b>${esc(champion.name)}</b> holds the galaxy outright.`
-      : `No single overlord. On totals, <b>${esc(champion.name)}</b> holds the strongest column.`}</div>
+      : `They do not stop. They were never going to stop. On totals, <b>${esc(champion.name)}</b>
+         holds the strongest column when the swarm arrives.`}</div>
+    ${G.endReason === 'conquest' ? '' :
+      `<div class="flav quoted">I have known the bottom line for fifteen years, and I built
+       everything anyway, and I would sign it all again — every clause, every world, every
+       soul — for one more hour of this. Let it come audited.</div>`}
     <table><tr><th>Player</th><th>Holdings</th><th>Status</th></tr>
     ${rows.map(r => `<tr><td style="color:${pipOf(r.player)}">${esc(r.player.name)}</td>
       <td>${money(r.worth)}</td><td>${esc(r.status)}</td></tr>`).join('')}</table>

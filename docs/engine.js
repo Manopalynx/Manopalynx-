@@ -825,12 +825,37 @@ function finishTurn(G) {
       G.endReason = 'circuit-limit';
       G.phase = 'over';
       G.winner = [...G.players].sort((a, b) => netWorth(G, b) - netWorth(G, a))[0].i;
-      leaderSays(G, 'The circuit limit is reached. Totals, then, and no more argument.');
+      leaderSays(G, 'They do not stop. They were never going to stop. Totals, then — and let it come audited.');
       return;
     }
+    announceSwarm(G);
   }
   G.phase = 'roll';
   G.dice = [0, 0];
+}
+
+// The circuit limit is the swarm arriving, and the deep array is what sees it
+// coming. Reported at the warning distance and again each time the remaining
+// count halves, so the last stretch of a game has a shape.
+export function swarmDistance(G) {
+  return Math.max(0, G.circuits - G.circuit + 1);
+}
+
+function announceSwarm(G) {
+  const out = swarmDistance(G);
+  if (out > RULES.swarmWarning || out < 1) return;
+  // Halving points only, so a long game does not narrate every circuit.
+  let step = RULES.swarmWarning;
+  const marks = new Set();
+  while (step >= 1) { marks.add(step); step = Math.floor(step / 2); }
+  if (!marks.has(out)) return;
+  if (out === 1) {
+    leaderSays(G, 'The blips multiply past the deep array\'s patience. One circuit.');
+  } else if (out <= 3) {
+    leaderSays(G, `Extragalactic bearing, range closing, and the count is still rising. ${out} circuits.`);
+  } else {
+    leaderSays(G, `The deep array has contacts on an extragalactic bearing. ${out} circuits out.`);
+  }
 }
 
 export function extendGame(G, extra = 12) {

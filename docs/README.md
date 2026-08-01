@@ -21,7 +21,7 @@ Playable. Engine, interface, offline support and save/resume are all in.
 ```
 data.js      board, decks, opponents, economy constants — data only
 engine.js    the rules. No DOM, no timers, no Math.random
-test/        157 passing (plus a browser probe across five viewports)
+test/        161 passing (plus a browser probe across five viewports)
 ```
 
 ## Running the tests
@@ -106,6 +106,21 @@ have caught:
   decks**, the worst possible pair to confuse — plus `ORAN`/`ORIN`, `ANCH`/`ANTH`/`ARCH`.
   All resolved. The rule is now enforced: two codes of the same length may not differ by
   a single character.
+
+## The swarm is the clock
+
+The circuit limit was an administrative number that ran out. It is now the thing the
+novel is about. `swarmDistance()` counts circuits to the end; inside `RULES.swarmWarning`
+the deep array starts reporting contacts, and says so again each time the remaining count
+halves — so the last stretch of a game has a shape instead of simply stopping. The centre
+panel switches from `CIRCUIT 14/72` to `SWARM 12 OUT` at that point and turns amber, and
+the end screen closes on the book's last line.
+
+The Neurex are deliberately **not** a square you can buy, a jail you can be held in, or a
+faction you can trade with. They do not hold prisoners and they do not take payment —
+*"You will be integrated, or you will be consumed. Which of the two is not a decision you
+are equipped to influence."* They appear three times: as the clock, as the voice on the
+Absorbed corner, and as one Contingency card that costs you money for looking at them.
 
 ## The two decks
 
