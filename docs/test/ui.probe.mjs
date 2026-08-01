@@ -238,6 +238,96 @@ for (const device of DEVICES) {
   }
   await page.evaluate(() => window.closeSheet());
 
+  // ---- the contract sheet ----
+  const trade = await page.evaluate(async () => {
+    const G = window.__G(), SETS = window.__SETS();
+    while (G.players[G.cur].kind !== 'human') G.cur = (G.cur + 1) % G.players.length;
+    const me = G.players[G.cur];
+    const them = G.players.find(q => q !== me);
+    me.debt = 0; me.cash = 5000;
+    const eden = SETS.eden.sq, syn = SETS.syn.sq;
+    // Two of Eden here, the third over there — so the square being asked for
+    // genuinely completes a set and the flag has something to report.
+    // Two of Eden here, the third over there — so the square being asked for
+    // genuinely completes a set. Both sides also hold a spread of other squares,
+    // because a two-row sheet cannot scroll and would not test the scroll at all.
+    const BOARD = window.__BOARD();
+    const spare = BOARD.map((b, k) => [b, k]).filter(([b, k]) => b.s && !eden.includes(k)).map(([, k]) => k);
+    me.holdings = [eden[0], eden[1], ...spare.slice(0, 6)]
+      .map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+    them.holdings = [eden[2], ...spare.slice(6, 12)]
+      .map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+    for (const q of G.players) {
+      if (q !== me && q !== them) q.holdings = q.holdings.filter(h =>
+        !eden.includes(h.sq) && h.sq !== syn[0]);
+    }
+    G.phase = 'end';
+    window.__tick();          // a render alone leaves `busy` set from the last opponent
+    await new Promise(r => setTimeout(r, 30));
+
+    // 1. an owned square offers a route straight into a contract
+    window.showSquare(eden[2]);
+    const offerBtn = document.querySelector('.sheet [data-fn^="offerFor|"]');
+    if (!offerBtn) return 'tapping an owned square offers no way to make an offer';
+    offerBtn.click();
+    await new Promise(r => setTimeout(r, 40));
+    const asked = window.__TR && window.__TR();
+    if (!asked || asked.get !== eden[2] || asked.to !== them.i) {
+      return 'the offer did not open a contract for that square and owner';
+    }
+
+    // 2. the cash field starts empty rather than at a literal zero
+    const cash = document.getElementById('trCash');
+    if (!cash) return 'no cash field';
+    const startedEmpty = cash.value === '';
+
+    // 3. the totals are shown, and follow what is selected
+    const sum = document.querySelector('.tradeSum');
+    if (!sum) return 'no value summary on the contract sheet';
+    const withGet = sum.textContent;
+    cash.value = '250';
+    cash.dispatchEvent(new Event('input'));
+    const withCash = document.querySelector('.tradeSum').textContent;
+
+    // 4. selecting must not rebuild the sheet under the thumb
+    const sheetEl = document.querySelector('.sheet');
+    sheetEl.scrollTop = 90;
+    const scrolledTo = sheetEl.scrollTop;      // may clamp on a short sheet
+    const mine = me.holdings.find(h => !eden.includes(h.sq));
+    const giveBtn = document.querySelector(`[data-fn="tradeSet|give|${mine.sq}"]`);
+    if (!giveBtn) return 'nothing of ours is offered to give';
+    const rowTop = giveBtn.getBoundingClientRect().top;
+    giveBtn.click();
+    const sameSheet = document.querySelector('.sheet') === sheetEl;
+    const sameRow = document.querySelector(`[data-fn="tradeSet|give|${mine.sq}"]`) === giveBtn;
+    return {
+      startedEmpty,
+      totalsChanged: withCash !== withGet,
+      mentionsCompletes: /Completes/.test(document.querySelector('.tradeSum').textContent),
+      sameSheet, sameRow,
+      scrolledTo,
+      scrollKept: sheetEl.scrollTop === scrolledTo,
+      moved: Math.abs(giveBtn.getBoundingClientRect().top - rowTop)
+    };
+  });
+  if (typeof trade === 'string') fail(trade);
+  else {
+    pass('an owned square opens a contract for it');
+    if (trade.startedEmpty) pass('the cash field starts empty, not at zero');
+    else fail('the cash field still needs a 0 deleting');
+    if (trade.totalsChanged) pass('the value summary follows what is offered');
+    else fail('the value summary did not react to the cash offered');
+    if (trade.mentionsCompletes) pass('it flags a set completion');
+    else fail('a completing square was not flagged');
+    if (trade.sameSheet && trade.sameRow && trade.scrollKept && trade.moved <= 1) {
+      pass('selecting a square updates in place and holds the scroll');
+    } else {
+      fail(`the contract sheet rebuilt on selection (scroll kept ${trade.scrollKept}, moved ${trade.moved}px)`);
+    }
+  }
+  await page.evaluate(() => window.closeSheet());
+  await page.waitForTimeout(150);
+
   // ---- there must be a way out of a game in progress ----
   const menu = await page.evaluate(async () => {
     const btn = document.getElementById('menuBtn');

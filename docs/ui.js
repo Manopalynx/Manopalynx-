@@ -518,7 +518,7 @@ const ACTIONS = {
   showSettle, settlePledge, settleSellG, settleBreak, settleAuto, settleDone,
   buyNow, declineToAuction, takeCard, sealBid, sealClaim, endAuction, endContest,
   answerContract, build, raiseCitadel, sellDev, toggleMortgage, repay,
-  setTithe, release, declare, tradeSet, sendTrade, takeCounter, playOn
+  setTithe, release, declare, tradeSet, sendTrade, takeCounter, offerFor, playOn
 };
 for (const k of Object.keys(ACTIONS)) window[k] = ACTIONS[k];
 
@@ -629,8 +629,26 @@ function showSquare(i) {
     Roll doubles and walk out, settle for ${money(RULES.facilityFee)} at any point, or be released
     on the ${RULES.facilityAttempts}rd attempt and pay it anyway. An Overseer is an official, and
     officials have a price.</p>`;
-  if (owner) s += `<div class="stat"><span>Held by</span><span style="color:${pipOf(owner)}">${esc(owner.name)}${held.mortgaged ? ' (mortgaged)' : ''}</span></div>`;
-  s += btns([['The ledger', 'showLedger', ''], ['Close', 'closeSheet', 'pri']]);
+  if (owner) s += `<div class="stat"><span>Held by</span><span style="color:${pipOf(owner)}">${esc(owner.name)}${held.mortgaged ? ' (pledged)' : ''}</span></div>`;
+
+  // Tapping a square used to be purely informational. If somebody else holds it
+  // and it is your turn, this is the shortest route to an offer.
+  const me = E.current(G);
+  const canDeal = owner && me && owner.i !== me.i && me.kind === 'human'
+    && !me.debt && !busy && !G.over;
+  const blocked = canDeal && !E.tradable(G, owner, i);
+  if (blocked) {
+    s += `<div class="warnbox">${held.mortgaged
+      ? 'Pledged — it cannot change hands until it is redeemed.'
+      : (held.garrisons || held.citadel)
+        ? 'Garrisoned — the buildings must go before it can move.'
+        : `${esc(SETS[b.s].n)} is built up. Nothing in the set can move until it is cleared.`}</div>`;
+  }
+  s += btns([
+    ...(canDeal && !blocked ? [[`Offer ${esc(chipName(owner))} for it`, `offerFor|${i}`, 'pri wide']] : []),
+    ['The ledger', 'showLedger', ''],
+    ['Close', 'closeSheet', canDeal && !blocked ? '' : 'pri']
+  ]);
   sheet(s);
 }
 
@@ -930,6 +948,17 @@ function declare() { E.declareIndependence(G, E.current(G)); closeSheet(); tick(
 /* ---------------------------------------------------------- contracts */
 let TR = null;
 let COUNTER = null;      // a price an opponent named after refusing
+// Opens the contract sheet with this square already asked for.
+function offerFor(sq) {
+  sq = +sq;
+  const me = E.current(G);
+  const owner = E.ownerOf(G, sq);
+  if (!owner || owner.i === me.i || me.debt) return;
+  closeSheet();
+  TR = { from: me.i, to: owner.i, get: sq, give: null, cash: 0, direction: 1 };
+  drawTrade();
+}
+
 function showTrade() {
   const me = E.current(G);
   if (me.debt) {
@@ -988,27 +1017,93 @@ function drawTrade() {
     <div class="opts" style="margin-bottom:10px">
       <button class="opt${TR.direction === 1 ? ' on' : ''}" data-fn="tradeSet|direction|1">You pay</button>
       <button class="opt${TR.direction === -1 ? ' on' : ''}" data-fn="tradeSet|direction|-1">They pay</button></div>
-    <input type="number" id="trCash" inputmode="numeric" value="${TR.cash}" min="0" placeholder="0">
+    <input type="number" id="trCash" inputmode="numeric" value="${TR.cash || ''}" min="0" placeholder="0">
+    <div class="tradeSum"></div>
     ${btns([['Propose', 'sendTrade', 'pri'], ['Cancel', 'closeSheet', '']])}`;
   sheet(s);
-  if (TR.get === null && TR.give === null) {
-    const el = $('sheetRoot').querySelector('.mbtn.pri');
-    if (el) el.disabled = true;
+  const cashEl = $('trCash');
+  if (cashEl) {
+    // Empty rather than a literal 0, and select-all on focus, so a number can be
+    // typed straight in instead of deleted first.
+    cashEl.onfocus = () => cashEl.select();
+    cashEl.oninput = () => { readTradeCash(); refreshTrade(); };
   }
+  refreshTrade();
 }
 
 function tradeSet(key, value) {
+  readTradeCash();
+  const v = value === 'null' ? null : +value;
+  if (key === 'to') {
+    // Switching counterparty changes the whole "you receive" list, so this one
+    // genuinely has to rebuild.
+    TR.to = v; TR.get = null; TR.give = null;
+    drawTrade();
+    return;
+  }
+  TR[key] = v;
+  refreshTrade();
+}
+
+const readTradeCash = () => {
   const el = $('trCash');
   if (el) TR.cash = Math.max(0, parseInt(el.value, 10) || 0);
-  const v = value === 'null' ? null : +value;
-  if (key === 'to') { TR.to = v; TR.get = null; TR.give = null; }
-  else TR[key] = v;
-  drawTrade();
+};
+
+// What each side is worth AT LIST. Deliberately not a fairness score: a square
+// that completes your set is worth several times its list price, and a scorer
+// that did not know that would confidently call a brilliant trade a bad one.
+function tradeTotals() {
+  const price = i => (i === null || i === undefined ? 0 : BOARD[i].pr);
+  const cash = TR.cash || 0;
+  return {
+    youGet: price(TR.get) + (TR.direction === -1 ? cash : 0),
+    youGive: price(TR.give) + (TR.direction === 1 ? cash : 0)
+  };
+}
+
+function completesFor(sq, who) {
+  if (sq === null || sq === undefined) return null;
+  const b = BOARD[sq];
+  if (!b.s) return null;
+  const held = SETS[b.s].sq.filter(j => {
+    const o = E.ownerOf(G, j);
+    return o && o.i === who.i;
+  }).length;
+  return held === SETS[b.s].sq.length - 1 ? SETS[b.s].n : null;
+}
+
+// Selection and totals update in place. Rebuilding the whole sheet on every tap
+// scrolled a long list back to the top and moved the row out from under the
+// thumb that had just pressed it — the same defect Holdings had.
+function refreshTrade() {
+  const root = $('sheetRoot');
+  if (!root.querySelector('.tradeSum')) return;
+  const me = G.players[TR.from], them = G.players[TR.to];
+
+  root.querySelectorAll('[data-fn^="tradeSet|get|"]').forEach(b =>
+    b.classList.toggle('on', +b.dataset.fn.split('|')[2] === TR.get));
+  root.querySelectorAll('[data-fn^="tradeSet|give|"]').forEach(b => {
+    const raw = b.dataset.fn.split('|')[2];
+    b.classList.toggle('on', raw === 'null' ? TR.give === null : +raw === TR.give);
+  });
+  root.querySelectorAll('[data-fn^="tradeSet|direction|"]').forEach(b =>
+    b.classList.toggle('on', +b.dataset.fn.split('|')[2] === TR.direction));
+
+  const t = tradeTotals();
+  const mine = completesFor(TR.get, me), theirs = completesFor(TR.give, them);
+  root.querySelector('.tradeSum').innerHTML =
+    `<div class="sumRow"><span>You receive</span><span>${money(t.youGet)} at list</span></div>
+     <div class="sumRow"><span>You give</span><span>${money(t.youGive)} at list</span></div>
+     ${mine ? `<div class="sumFlag">Completes ${esc(mine)} for you</div>` : ''}
+     ${theirs ? `<div class="sumFlag warn">Completes ${esc(theirs)} for ${esc(chipName(them))}</div>` : ''}`;
+
+  const propose = root.querySelector('[data-fn="sendTrade"]');
+  if (propose) propose.disabled = TR.get === null && TR.give === null;
 }
 
 function sendTrade() {
-  const el = $('trCash');
-  if (el) TR.cash = Math.max(0, parseInt(el.value, 10) || 0);
+  readTradeCash();
   const proposal = { ...TR };
   closeSheet();
   const r = E.proposeContract(G, proposal);
@@ -1196,6 +1291,8 @@ window.__G = () => G;
 window.__render = () => render();
 window.__SETS = () => SETS;
 window.__BOARD = () => BOARD;
+window.__TR = () => TR;
+window.__tick = () => tick();
 
 // A background tab can be reaped without warning on iOS, so the save is
 // refreshed whenever the page is hidden as well as after every move.
