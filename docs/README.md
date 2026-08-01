@@ -7,9 +7,16 @@ Nobody is eliminated. When you cannot settle a column you are **absorbed** — y
 flag and lose the arithmetic behind it, and you start keeping a second ledger your overlord
 cannot see. That is the book's thesis, and it is the game's win condition.
 
+## Why this folder is called `docs`
+
+Because GitHub Pages will only publish from a repository's root or from `/docs`,
+and root would publish `upliftledger.html` — a private tool that has no business
+on the web — alongside the game. Serving from `/docs` puts exactly this folder
+online and nothing else in the repository.
+
 ## State
 
-The rules engine is done and tested. The interface is not built yet.
+Playable. Engine, interface, offline support and save/resume are all in.
 
 ```
 data.js      board, decks, opponents, economy constants — data only
@@ -20,7 +27,7 @@ test/        100 passing
 ## Running the tests
 
 ```
-node --test grandiose/test/*.test.mjs
+node --test docs/test/*.test.mjs
 ```
 
 There is no build step and no dependency — `node:test` and ES modules only.
@@ -28,8 +35,8 @@ There is no build step and no dependency — `node:test` and ES modules only.
 Two probes are not tests and are run by hand when a number needs explaining:
 
 ```
-node grandiose/test/balance.mjs [games]     # sweeps the economy levers
-node grandiose/test/diagnose.mjs [games]    # why games end the way they do
+node docs/test/balance.mjs [games]     # sweeps the economy levers
+node docs/test/diagnose.mjs [games]    # why games end the way they do
 ```
 
 ## Why the engine is separate from the page
@@ -100,3 +107,12 @@ Names come from the book. Three squares were changed and each is commented in `d
   when the assessment concludes. The Neurex is the one thing in the book with no price —
   *"no official to blind, no tithe to pay, no arrangement"* — and it was the only square you
   could pay to escape.
+
+## Playing it
+
+Open the Pages URL in Safari, then Share → **Add to Home Screen**. It runs full
+screen with no browser chrome and works with no signal.
+
+The service worker is network-first, so a pushed change arrives the next time the
+app is opened with a connection. If a change seems not to have landed, close the
+app fully (swipe it away) and reopen it.
