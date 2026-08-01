@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<!-- viewport-fit=cover so the board can sit under the notch and the action bar
+     can pad itself past the home indicator -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#08090D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Grandiose">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Grandiose — The Ledger</title>
+<style>
+/* System fonts only. A webfont would need the network, and this has to work on
+   a train with no signal once it is on the home screen. */
+:root{
+  --void:#08090D;--deep:#0F1118;--panel:#161A24;--rule:#242938;
+  --dim:#6B7386;--body:#B6BCCB;--bright:#F2F4F9;
+  --gold:#D9A441;--tx:#5ECFC8;--warn:#E0776A;--vio:#8B7DD8;
+  --syn:#7A6A5C;--eni:#6FA8A3;--dom:#9B6B8E;--eden:#D98E45;
+  --ven:#C25E52;--agora:#4F6FA8;--fleet:#8892A6;--util:#6B7C93;
+  --m:ui-monospace,'SF Mono',Menlo,monospace;
+  --s:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;
+  -webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+input{-webkit-user-select:text;user-select:text}
+html{height:100%}
+body{margin:0;height:100dvh;overflow:hidden;background:var(--void);color:var(--body);
+  font-family:var(--s);font-weight:400;overscroll-behavior:none;
+  font-size:16px;-webkit-text-size-adjust:100%}
+h1,h2,h3{font-family:var(--m);color:var(--bright);margin:0;font-weight:600}
+button{font-family:var(--m);cursor:pointer;border-radius:6px;border:1px solid var(--rule);
+  background:transparent;color:var(--body);font-size:14px}
+button:disabled{opacity:.28}
+.hidden{display:none!important}
+
+/* ---------------------------------------------------------------- setup */
+#setup{height:100dvh;overflow-y:auto;padding:calc(var(--safe-t) + 28px) 20px calc(var(--safe-b) + 32px);
+  -webkit-overflow-scrolling:touch}
+#setup h1{font-size:34px;letter-spacing:-.02em;line-height:1;font-weight:800}
+#setup h1 em{display:block;font-style:normal;font-size:12px;font-weight:500;
+  color:var(--gold);letter-spacing:.34em;margin-top:10px}
+.quote{border-left:2px solid var(--gold);padding:4px 0 4px 14px;margin:24px 0;
+  font-style:italic;font-size:15px;line-height:1.6}
+.quote b{display:block;font-style:normal;font-family:var(--m);font-size:10px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-top:10px;font-weight:400}
+.fld{margin:24px 0}
+.fld label{display:block;font-family:var(--m);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--dim);margin-bottom:10px}
+.opts{display:flex;gap:8px;flex-wrap:wrap}
+.opt{flex:1 1 0;min-width:70px;min-height:48px;background:var(--panel);color:var(--dim);
+  padding:12px 8px;font-size:14px}
+.opt.on{border-color:var(--gold);color:var(--gold);background:rgba(217,164,65,.10)}
+input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(--bright);
+  border:1px solid var(--rule);border-radius:6px;padding:14px;font-family:var(--m);
+  font-size:17px;margin-bottom:10px}
+.big{width:100%;min-height:56px;border-color:var(--gold);color:var(--gold);
+  font-size:13px;letter-spacing:.16em;text-transform:uppercase;margin-top:14px}
+.aiCard{display:flex;gap:12px;align-items:flex-start;background:var(--panel);
+  border:1px solid var(--rule);border-left-width:3px;border-radius:6px;padding:14px;margin-bottom:8px}
+.aiCard .n{font-family:var(--m);font-size:15px;color:var(--bright)}
+.aiCard .d{font-size:14px;color:var(--dim);line-height:1.45;margin-top:4px}
+.note{font-size:13px;color:var(--dim);line-height:1.6;margin-top:22px}
+
+/* ---------------------------------------------------------------- shell */
+#game{display:flex;flex-direction:column;height:100dvh;padding-top:var(--safe-t)}
+
+.bar{flex:0 0 auto;display:flex;gap:6px;overflow-x:auto;padding:7px 8px;
+  border-bottom:1px solid var(--rule);scrollbar-width:none}
+.bar::-webkit-scrollbar{display:none}
+.pchip{flex:0 0 auto;background:var(--panel);border:1px solid var(--rule);border-radius:6px;
+  padding:6px 10px;font-family:var(--m);min-width:88px}
+.pchip.act{border-color:var(--gold);background:rgba(217,164,65,.10)}
+.pchip .nm{color:var(--bright);font-size:12px;display:flex;align-items:center;gap:5px;
+  white-space:nowrap}
+.pchip .cash{color:var(--tx);font-size:14px;margin-top:1px}
+.pip{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.vs{color:var(--vio);font-size:10px;letter-spacing:.03em;white-space:nowrap}
+
+/* ---------------------------------------------------------------- board */
+.board{flex:0 0 auto;display:grid;grid-template-columns:repeat(8,1fr);
+  grid-template-rows:repeat(8,1fr);gap:2px;aspect-ratio:1;width:100%;padding:6px}
+.cell{position:relative;background:var(--deep);border:1px solid var(--rule);border-radius:4px;
+  padding:2px;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.cell .cbar{height:6px;border-radius:2px;flex:0 0 auto}
+/* 10px, not the 6.4px the first build used. 28 squares in an 8x8 grid on a
+   393pt screen leaves 45px cells, so the full name cannot fit and does not try:
+   the cell carries a code, and the centre panel names the square in full. */
+.cell .code{font-family:var(--m);font-size:10px;line-height:1.15;color:var(--body);
+  margin-top:2px;letter-spacing:-.02em}
+.cell .cpr{font-family:var(--m);font-size:9px;color:var(--dim);margin-top:auto}
+.cell.corner{background:#12141C}
+.cell.corner .code{color:var(--gold)}
+.cell.owned{box-shadow:inset 0 0 0 2px currentColor}
+.cell .toks{position:absolute;bottom:2px;right:2px;display:flex;gap:2px;
+  flex-wrap:wrap-reverse;max-width:72%;justify-content:flex-end}
+.tok{width:8px;height:8px;border-radius:50%;border:1px solid rgba(0,0,0,.6)}
+.tok.me{width:11px;height:11px;box-shadow:0 0 0 1.5px var(--void),0 0 8px 1px currentColor}
+.cell .grr{position:absolute;top:8px;right:2px;font-family:var(--m);font-size:9px;color:var(--gold)}
+.cell.here{outline:2px solid var(--gold);outline-offset:-2px;z-index:4}
+.cell.sel{outline:2px solid var(--tx);outline-offset:-2px;z-index:5}
+
+.mid{grid-column:2/8;grid-row:2/8;background:var(--deep);border:1px solid var(--rule);
+  border-radius:8px;padding:10px;display:flex;flex-direction:column;justify-content:center;
+  align-items:center;text-align:center;gap:8px;overflow:hidden}
+.mid .who{font-family:var(--m);font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--gold)}
+.mid .dice{display:flex;gap:8px}
+.die{width:34px;height:34px;border:1px solid var(--rule);border-radius:6px;background:var(--panel);
+  display:flex;align-items:center;justify-content:center;font-family:var(--m);
+  font-size:17px;color:var(--bright)}
+.mid .msg{font-size:14px;line-height:1.4;color:var(--body);max-height:76px;overflow:auto;
+  padding:0 4px}
+.mid .sq{font-size:15px;color:var(--bright);font-family:var(--m)}
+.mid .meta{font-family:var(--m);font-size:10px;letter-spacing:.09em;color:var(--dim)}
+.sndBtn{font-size:10px;letter-spacing:.12em;padding:6px 14px;min-height:32px}
+
+/* ---------------------------------------------------------------- actions */
+.acts{flex:0 0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:6px 8px}
+.act{min-height:52px;padding:8px 4px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.act.pri{border-color:var(--gold);color:var(--gold);background:rgba(217,164,65,.08)}
+.act small{font-size:9.5px;color:var(--dim);letter-spacing:.02em;text-transform:none;
+  font-family:var(--s)}
+
+/* ---------------------------------------------------------------- log */
+.log{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  border-top:1px solid var(--rule);padding:8px 12px calc(var(--safe-b) + 10px);
+  font-size:14px;line-height:1.5}
+.le{padding:6px 0;border-bottom:1px solid rgba(36,41,56,.55)}
+.le:last-child{border:none}
+.le .t{font-family:var(--m);font-size:10px;color:var(--dim);letter-spacing:.08em}
+.le.leader{border-left:2px solid var(--gold);padding-left:10px;font-style:italic}
+.le.voice b{font-family:var(--m);font-size:12px;font-style:normal}
+
+/* ---------------------------------------------------------------- sheets */
+/* Bottom sheets rather than centred boxes: a thumb reaches the bottom of a
+   6.1" phone and does not comfortably reach the middle. */
+.scrim{position:fixed;inset:0;background:rgba(4,5,8,.72);z-index:200;
+  display:flex;align-items:flex-end;justify-content:center;
+  animation:fade .16s ease-out}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.sheet{background:var(--panel);border:1px solid var(--rule);border-bottom:none;
+  border-radius:16px 16px 0 0;width:100%;max-width:560px;max-height:88dvh;overflow-y:auto;
+  -webkit-overflow-scrolling:touch;padding:8px 18px calc(var(--safe-b) + 18px);
+  animation:rise .2s cubic-bezier(.2,.8,.3,1)}
+@keyframes rise{from{transform:translateY(22px)}to{transform:translateY(0)}}
+.grab{width:38px;height:4px;border-radius:2px;background:var(--rule);margin:6px auto 14px}
+.sheet h3{font-size:18px;margin-bottom:4px}
+.sheet .sub{font-family:var(--m);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--dim);margin-bottom:16px}
+.stat{display:flex;justify-content:space-between;gap:12px;padding:9px 0;
+  border-bottom:1px solid var(--rule);font-family:var(--m);font-size:14px}
+.stat span:first-child{color:var(--dim)}
+.stat span:last-child{color:var(--bright);text-align:right}
+.mbtns{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap}
+.mbtn{flex:1 1 44%;min-height:52px;padding:14px 10px;font-size:13px;letter-spacing:.05em;
+  text-transform:uppercase}
+.mbtn.pri{border-color:var(--gold);color:var(--gold);background:rgba(217,164,65,.08)}
+.mbtn.dgr{border-color:var(--warn);color:var(--warn)}
+.mbtn.wide{flex:1 1 100%}
+.card{border-left:3px solid var(--gold);padding:14px 16px;background:var(--deep);
+  border-radius:0 8px 8px 0;font-size:16px;line-height:1.5;margin:12px 0}
+.card em{color:var(--gold);font-style:italic}
+.bars{height:9px;background:var(--rule);border-radius:5px;overflow:hidden;margin-top:8px}
+.bars i{display:block;height:100%;background:var(--vio)}
+table{width:100%;border-collapse:collapse;font-family:var(--m);font-size:13px;margin-top:10px}
+td,th{padding:8px 4px;border-bottom:1px solid var(--rule);text-align:right}
+th{color:var(--dim);font-weight:400;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+td:first-child,th:first-child{text-align:left}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;
+  border-bottom:1px solid var(--rule);padding:11px 0}
+.rowbtns{display:flex;gap:6px;flex:0 0 auto}
+.rowbtns button{min-height:44px;min-width:52px;padding:8px 10px;font-size:12px}
+.pick{display:block;width:100%;text-align:left;padding:12px;margin-bottom:6px;font-size:14px;
+  font-family:var(--s);min-height:52px}
+.pick.on{border-color:var(--gold);color:var(--gold)}
+.pick .why{display:block;font-size:11.5px;color:var(--warn);margin-top:3px}
+.pick .sub2{display:block;font-size:12px;color:var(--dim);margin-top:2px}
+.warnbox{background:rgba(224,119,106,.10);border:1px solid var(--warn);border-radius:8px;
+  padding:12px;font-size:13.5px;line-height:1.5;color:var(--body);margin:12px 0}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<div id="setup"></div>
+<div id="game" class="hidden">
+  <div class="bar" id="bar"></div>
+  <div class="board" id="board"></div>
+  <div class="acts" id="acts"></div>
+  <div class="log" id="log"></div>
+</div>
+<div id="sheetRoot"></div>
+
+<script type="module" src="./ui.js"></script>
+<script>
+// Registered from the page rather than the module so a failure here can never
+// stop the game loading. Offline support is a convenience; the game is not.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

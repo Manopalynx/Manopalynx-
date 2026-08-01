@@ -1,0 +1,14 @@
+{
+  "name": "Grandiose — The Ledger",
+  "short_name": "Grandiose",
+  "description": "A call and uplift of empires. Nobody is eliminated, only absorbed.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#08090D",
+  "theme_color": "#08090D",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ]
+}

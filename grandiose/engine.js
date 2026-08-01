@@ -16,21 +16,21 @@ import {
 } from './data.js';
 
 /* ============================================================ random */
-// mulberry32 — small, fast, and identical across runs for a given seed.
-export function rng(seed) {
-  let a = seed >>> 0;
-  return function () {
-    a = (a + 0x6D2B79F5) >>> 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+// mulberry32, with its state held ON the game rather than in a closure.
+// That is not a style choice: a closure cannot be written to localStorage, and
+// the game has to survive the phone locking mid-turn. State is a plain number,
+// so the whole game serialises with JSON.stringify and resumes exactly.
+export function random(G) {
+  G.rngState = (G.rngState + 0x6D2B79F5) >>> 0;
+  let t = Math.imul(G.rngState ^ (G.rngState >>> 15), 1 | G.rngState);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
-const pick = (G, arr) => arr[Math.floor(G.rand() * arr.length)];
+const pick = (G, arr) => arr[Math.floor(random(G) * arr.length)];
 function shuffled(G, n) {
   const a = [...Array(n).keys()];
   for (let i = n - 1; i > 0; i--) {
-    const j = Math.floor(G.rand() * (i + 1));
+    const j = Math.floor(random(G) * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
@@ -40,7 +40,7 @@ function shuffled(G, n) {
 export function createGame({ seats, seed = 1, circuits = 24 } = {}) {
   const G = {
     seed,
-    rand: rng(seed),
+    rngState: seed >>> 0,
     circuits,
     players: [],
     cur: 0,
@@ -160,7 +160,7 @@ export const revoltThreshold = p => RULES.revoltBase + RULES.revoltStep * p.decl
 /* ============================================================ log */
 function note(G, text) { G.log.unshift({ kind: 'note', text, circuit: G.circuit }); trim(G); }
 function leader(G, force = false) {
-  if (!force && G.rand() >= 0.34) return;
+  if (!force && random(G) >= 0.34) return;
   G.log.unshift({ kind: 'leader', text: pick(G, LEADER_LINES), circuit: G.circuit });
   trim(G);
 }
@@ -393,8 +393,8 @@ function toFacility(G, p) {
 export function roll(G, d1, d2) {
   if (G.phase !== 'roll' || G.over) return null;
   const p = current(G);
-  const a = d1 ?? 1 + Math.floor(G.rand() * 6);
-  const b = d2 ?? 1 + Math.floor(G.rand() * 6);
+  const a = d1 ?? 1 + Math.floor(random(G) * 6);
+  const b = d2 ?? 1 + Math.floor(random(G) * 6);
   G.dice = [a, b];
   const total = a + b, doubles = a === b;
 
@@ -585,7 +585,7 @@ function resolveAuction(G) {
   const b = BOARD[a.sq];
   const ranked = Object.entries(a.bids)
     .map(([i, v]) => ({ p: G.players[+i], v }))
-    .sort((x, y) => y.v - x.v || G.rand() - 0.5);
+    .sort((x, y) => y.v - x.v || random(G) - 0.5);
   a.ranked = ranked;
   a.resolved = true;
   const win = ranked[0];
@@ -880,7 +880,7 @@ export function aiBid(G, p, sq) {
   const v = aiValue(G, p, sq);
   const cap = p.persona === 'varan' ? 0.72 : p.persona === 'vale' ? 0.65 : 0.55;
   let bid = Math.min(v, Math.floor(p.cash * cap));
-  bid = Math.round(bid * (0.9 + G.rand() * 0.2));
+  bid = Math.round(bid * (0.9 + random(G) * 0.2));
   if (bid < Math.floor(BOARD[sq].pr * 0.35)) bid = 0;
   return Math.max(0, bid);
 }
@@ -940,16 +940,39 @@ export function aiDevelop(G, p) {
     declareIndependence(G, p);
     if (p.kind === 'ai') persona(G, p, 'fell');
   }
-  if (p.vassals.length && G.rand() < 0.3) p.tithe = pick(G, [10, 25, 25, 40, 40, 55]);
+  if (p.vassals.length && random(G) < 0.3) p.tithe = pick(G, [10, 25, 25, 40, 40, 55]);
 
   // One contract attempt per turn, and not every turn — an opponent that
   // proposes constantly is noise. Against another opponent this settles
   // immediately; against a human it parks the game in the 'contract' phase for
   // an answer, so callers must check the phase before ending the turn.
-  if (!G.over && G.rand() < 0.5) {
+  if (!G.over && random(G) < 0.5) {
     const c = seekContract(G, p);
     if (c) proposeContract(G, c);
   }
+}
+
+/* ============================================================ save / resume */
+// The whole game is plain data, so this is honest round-tripping rather than a
+// partial snapshot. A phone call, a locked screen or a browser tab reaped in
+// the background must not cost a game in progress.
+export const SAVE_VERSION = 1;
+
+export function serialize(G) {
+  return JSON.stringify({ v: SAVE_VERSION, board: BOARD.length, G });
+}
+
+export function deserialize(text) {
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { return null; }
+  if (!parsed || parsed.v !== SAVE_VERSION) return null;
+  // A save from a different board is not resumable — square indices would mean
+  // different places. Better to lose the game than to resume a corrupted one.
+  if (parsed.board !== BOARD.length) return null;
+  const G = parsed.G;
+  if (!G || !Array.isArray(G.players) || !G.players.length) return null;
+  if (typeof G.rngState !== 'number') return null;
+  return G;
 }
 
 /* ============================================================ standings */

@@ -19,7 +19,8 @@ import {
   applyCard, endTurn, buy, openAuction, submitBid, closeAuction, build,
   raiseCitadel, sellDevelopment, mortgage, redeem, repayDebt, tradable,
   settleContract, declareIndependence, submitClaim, closeContest, standings,
-  setCompletingTargets, seekContract, contractIsLegal, proposeContract, respondToContract
+  setCompletingTargets, seekContract, contractIsLegal, proposeContract, respondToContract,
+  serialize, deserialize
 } from '../engine.js';
 
 /* -------------------------------------------------------------- fixtures */
@@ -982,4 +983,72 @@ test('the same seed produces the same game', () => {
   };
   assert.deepEqual(play(99), play(99));
   assert.notDeepEqual(play(99), play(100));
+});
+
+/* ============================================================ save and resume */
+
+test('every square carries a short code that fits a phone cell', () => {
+  BOARD.forEach((b, i) => {
+    assert.ok(b.a, `square ${i} (${b.n}) has no short code`);
+    assert.ok(b.a.length <= 4, `${b.n} code "${b.a}" is too long for a 45px cell`);
+    assert.equal(b.a, b.a.toUpperCase());
+  });
+});
+
+test('a game round-trips through a save exactly', () => {
+  const G = createGame({ seats: seats4, seed: 5, circuits: 24 });
+  for (let i = 0; i < 40 && !G.over; i++) {
+    if (G.phase === 'roll') roll(G);
+    else if (G.phase === 'landed') resolveLanding(G);
+    else if (G.phase === 'card') applyCard(G);
+    else if (G.phase === 'offer') { if (!buy(G, current(G))) G.phase = 'end'; }
+    else if (G.phase === 'auction') {
+      if (G.auction.resolved) closeAuction(G);
+      else submitBid(G, G.auction.queue[G.auction.at], 120);
+    } else if (G.phase === 'contract') respondToContract(G, false);
+    else if (G.phase === 'contest') {
+      if (G.contest.resolved) closeContest(G);
+      else submitClaim(G, G.contest.queue[G.contest.at], 100);
+    } else endTurn(G);
+  }
+  const restored = deserialize(serialize(G));
+  assert.deepEqual(restored, JSON.parse(JSON.stringify(G)));
+});
+
+test('a resumed game continues identically to one that was never saved', () => {
+  const advance = g => {
+    for (let i = 0; i < 30 && !g.over; i++) {
+      if (g.phase === 'roll') roll(g);
+      else if (g.phase === 'landed') resolveLanding(g);
+      else if (g.phase === 'card') applyCard(g);
+      else if (g.phase === 'offer') { if (!buy(g, current(g))) g.phase = 'end'; }
+      else if (g.phase === 'auction') {
+        if (g.auction.resolved) closeAuction(g);
+        else submitBid(g, g.auction.queue[g.auction.at], 120);
+      } else if (g.phase === 'contract') respondToContract(g, false);
+      else if (g.phase === 'contest') {
+        if (g.contest.resolved) closeContest(g);
+        else submitClaim(g, g.contest.queue[g.contest.at], 100);
+      } else endTurn(g);
+    }
+    return g;
+  };
+  const live = advance(createGame({ seats: seats2, seed: 11, circuits: 24 }));
+  const resumed = deserialize(serialize(live));
+  advance(live);
+  advance(resumed);
+  assert.deepEqual(
+    resumed.players.map(p => [p.cash, p.pos, p.holdings.length]),
+    live.players.map(p => [p.cash, p.pos, p.holdings.length]),
+    'the random stream must survive the save, or a resumed game diverges'
+  );
+});
+
+test('a corrupt, empty or foreign save is refused rather than half-loaded', () => {
+  assert.equal(deserialize('not json'), null);
+  assert.equal(deserialize('{}'), null);
+  assert.equal(deserialize(JSON.stringify({ v: 999, board: 28, G: {} })), null);
+  assert.equal(deserialize(JSON.stringify({ v: 1, board: 40, G: { players: [{}], rngState: 1 } })), null,
+    'a save from a different board must not resume — square indices would mean other places');
+  assert.equal(deserialize(JSON.stringify({ v: 1, board: 28, G: { players: [] } })), null);
 });
