@@ -226,9 +226,6 @@ can strike yours without opening a file. He notices and cares about the differen
 **Re-attach the novel when doing lore work.** The `.docx` does not survive context
 summarisation. Ask; he's happy to.
 
-**Keep replies short.** A long final message cost him 61% of a usage window. Lead with what
-changed, cut the narration. This is a real constraint, not a style note.
-
 ### What I got wrong
 
 Same pattern as Instance 1 — confident, wrong, caught by measuring.
