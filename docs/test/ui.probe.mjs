@@ -689,6 +689,48 @@ for (const device of DEVICES) {
   if (!notItalic.length) pass('quoted lines actually render italic');
   else fail(`${notItalic.length} quoted lines are not italic: ${notItalic.map(f => f.n).join(', ')}`);
 
+  // ---- an incoming contract has to show what it does to your board ----
+  // It used to show name, price, rent and traffic: everything except the two
+  // facts that set the price, which are what colour it is and how much of that
+  // colour each side ends up with.
+  const contract = await page.evaluate(async () => {
+    const G = window.__G(), SETS = window.__SETS(), BOARD = window.__BOARD();
+    const me = G.players[G.cur];
+    const them = G.players.find(q => q !== me && q.kind !== 'human') || G.players[1];
+    const eden = SETS.eden.sq;
+    const fleets = BOARD.map((b, i) => [b, i]).filter(([b]) => b.t === 'f').map(([, i]) => i);
+    for (const q of G.players) q.holdings = [];
+    // Two of Eden and one fleet to me; the third Eden and a second fleet to them.
+    me.holdings = [eden[0], eden[1], fleets[0]].map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+    them.holdings = [eden[2], fleets[1]].map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+    G.contract = { from: them.i, to: me.i, get: eden[0], give: eden[2], cash: 0, direction: 1 };
+    window.__showContract();
+    const sheet = document.querySelector('.sheet');
+    const text = sheet.textContent.replace(/\s+/g, ' ');
+    const swatches = sheet.querySelectorAll('.swatch').length;
+    const completes = /completes .*Eden/i.test(text);
+    const breaks = /breaks your/i.test(text);
+    window.closeSheet();
+
+    // And a fleet, where the rent is purely a count.
+    G.contract = { from: them.i, to: me.i, get: null, give: fleets[1], cash: 0, direction: 1 };
+    window.__showContract();
+    const fleetText = document.querySelector('.sheet').textContent.replace(/\s+/g, ' ');
+    window.closeSheet();
+    G.contract = null;
+    return { text, swatches, completes, breaks, fleetText };
+  });
+  if (contract.swatches >= 2) pass(`a contract shows the colour of what is moving (${contract.swatches} swatches)`);
+  else fail(`only ${contract.swatches} colour swatches on a two-square contract`);
+  if (/2 of 3/.test(contract.text)) pass('it shows how much of the set you hold');
+  else fail(`no "n of 3" holding count in the contract: ${contract.text.slice(0, 260)}`);
+  if (contract.completes) pass('it flags a set completion');
+  else fail('receiving the third Eden square was not flagged as completing it');
+  if (/Fleets held/.test(contract.fleetText)) pass('a fleet contract counts the fleets');
+  else fail(`no fleet count on a fleet contract: ${contract.fleetText.slice(0, 260)}`);
+  if (/You would charge/.test(contract.fleetText)) pass('and states what you would charge after');
+  else fail('a fleet contract never says what your rent becomes');
+
   // ---- the galaxy, and the re-render trap it sits in ----
   // The board is rebuilt with innerHTML on every render. If the centre panel is
   // rebuilt with it, the canvas is destroyed and the animation restarts many

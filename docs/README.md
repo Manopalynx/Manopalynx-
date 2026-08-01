@@ -21,7 +21,7 @@ Playable. Engine, interface, offline support and save/resume are all in.
 ```
 data.js      board, decks, opponents, economy constants — data only
 engine.js    the rules. No DOM, no timers, no Math.random
-test/        161 passing (plus a browser probe across five viewports)
+test/        169 passing (plus a browser probe across five viewports)
 ```
 
 ## Running the tests
@@ -40,6 +40,7 @@ node docs/test/balance.mjs [games]     # sweeps the economy levers
 node docs/test/diagnose.mjs [games]    # why games end the way they do
 node docs/test/auctions.mjs [games]    # how much of a game is auctions
 node docs/test/denial.mjs [games]      # how often Varan buys to block rather than to own
+node docs/test/ties.mjs                # how often a sealed bid ends level
 ```
 
 ## Why the engine is separate from the page
@@ -150,6 +151,22 @@ as generous and is not: a player draws about **8 cards a game**, worth roughly *
 against **₡14,400** from lap payments over 72 circuits. The decks are texture, not economy.
 Measured before changing anything, and worth re-measuring rather than assuming if the
 deck composition changes much.
+
+## Tied bids
+
+A tie for first was settled by `random(G) - 0.5` and nobody was told. `test/ties.mjs`
+measures how often that fired: **19.1%** of auctions when two players both reach for the
+same round number, and 0% when bids are spread — so the real rate is whatever your table
+does, and two people both typing "200" for a ₡200 square is the likeliest thing at a
+sealed-bid table.
+
+The tied bidders now go again, and only they. Nobody may bid below what they already
+committed, so the square cannot become cheaper by tying. An opponent re-prices rather than
+simply raising — `aiBid` carries its own jitter, so a second identical figure is close to
+impossible — and it never bids under its first figure. **If it is still level after the
+runoff it falls to turn order from the current player, and the ledger says so.** That
+termination rule is the point: a runoff with no floor is two stubborn people bidding for
+ever, and a coin flip nobody sees is the defect being fixed, not the method.
 
 ## Money, and what happens when you run out
 

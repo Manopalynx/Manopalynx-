@@ -1987,3 +1987,103 @@ test('the Neurex are on the board without being a square you can buy', () => {
   assert.ok(card, 'no Neurex card in the Contingency deck');
   assert.ok(card.cash < 0, 'looking at them costs, it does not pay');
 });
+
+/* ============================================================== tied bids */
+// A tie for first was settled by a coin flip nobody was told about, on 19% of
+// auctions when two players reach for the same round number.
+
+// One round only. Bidding straight on through a runoff is what the game does,
+// but a test that cannot stop between rounds cannot see the round happen.
+const bidAll = (G, amounts) => {
+  const round = G.auction.round;
+  let guard = 0;
+  while (G.auction && !G.auction.resolved && G.auction.round === round && guard++ < 20) {
+    const who = G.auction.queue[G.auction.at];
+    if (who === undefined) break;
+    submitBid(G, who, amounts[who] ?? 0);
+  }
+};
+
+test('a tie for first sends the tied bidders back for another round', () => {
+  const G = game(seats2, 12);
+  openAuction(G, 1);
+  assert.equal(G.auction.round, 1);
+  bidAll(G, { 0: 200, 1: 200 });
+  assert.equal(G.auction.round, 2, 'a tie must open a second round');
+  assert.equal(G.auction.tiedAt, 200);
+  assert.equal(G.auction.resolved, false, 'it is not settled yet');
+  assert.deepEqual([...G.auction.queue].sort(), [0, 1], 'only the tied bidders go again');
+});
+
+test('the runoff settles it, and only the tied may win', () => {
+  const G = game(seats2, 12);
+  openAuction(G, 1);
+  bidAll(G, { 0: 200, 1: 200 });
+  bidAll(G, { 0: 260, 1: 210 });
+  assert.equal(G.auction.resolved, true);
+  assert.equal(G.auction.winner, 0);
+  assert.equal(G.auction.price, 260);
+});
+
+test('nobody may withdraw below what they already committed', () => {
+  const G = game(seats2, 12);
+  openAuction(G, 1);
+  bidAll(G, { 0: 200, 1: 200 });
+  bidAll(G, { 0: 0, 1: 0 });        // both try to walk away
+  assert.equal(G.auction.bids[0], 200);
+  assert.equal(G.auction.bids[1], 200);
+  assert.equal(G.auction.price, 200, 'the square still sells at the tied figure');
+});
+
+test('a second tie falls to turn order, and says so', () => {
+  const G = game(seats2, 12);
+  G.cur = 1;                        // so seat order runs 1, 0
+  openAuction(G, 1);
+  bidAll(G, { 0: 200, 1: 200 });
+  bidAll(G, { 0: 200, 1: 200 });
+  assert.equal(G.auction.resolved, true);
+  assert.equal(G.auction.tiebreak, 'order');
+  assert.equal(G.auction.winner, 1, 'the current player is first in seat order');
+  assert.ok(G.log.some(l => /turn order/i.test(l.text)), 'and the ledger records why');
+});
+
+test('a tied auction is deterministic — the same seed decides the same way', () => {
+  const play = () => {
+    const G = game(seats2, 77);
+    G.cur = 0;
+    openAuction(G, 3);
+    bidAll(G, { 0: 150, 1: 150 });
+    bidAll(G, { 0: 150, 1: 150 });
+    return G.auction.winner;
+  };
+  assert.equal(play(), play());
+});
+
+test('a runoff never fires when the top bid is clear', () => {
+  const G = game(seats2, 12);
+  openAuction(G, 1);
+  bidAll(G, { 0: 300, 1: 100 });
+  assert.equal(G.auction.round, 1, 'no second round when somebody is ahead');
+  assert.equal(G.auction.winner, 0);
+  assert.equal(G.auction.tiebreak, null);
+});
+
+test('bids level at zero are not a tie worth resolving', () => {
+  const G = game(seats2, 12);
+  openAuction(G, 1);
+  bidAll(G, { 0: 0, 1: 0 });
+  assert.equal(G.auction.round, 1);
+  assert.equal(G.auction.winner, null);
+});
+
+test('a runoff between opponents alone settles without asking anyone', () => {
+  const seats = [{ name: 'A', kind: 'ai', persona: 'spector' },
+                 { name: 'B', kind: 'ai', persona: 'varan' }];
+  for (let seed = 1; seed <= 40; seed++) {
+    const G = createGame({ seats, seed, circuits: 24 });
+    openAuction(G, 1);
+    // No human queue, so it must be fully resolved the moment it opens.
+    assert.equal(G.auction.resolved, true, `seed ${seed} left an opponent-only auction open`);
+    assert.equal(G.auction.queue.length, 0);
+  }
+});

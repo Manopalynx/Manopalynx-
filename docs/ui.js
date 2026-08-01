@@ -815,14 +815,19 @@ function showBid() {
   const a = G.auction;
   const p = G.players[a.queue[a.at]];
   const b = BOARD[a.sq];
-  sheet(`<h3>Sealed bid</h3><div class="sub">${esc(b.n)} · ${esc(p.name)} only</div>
+  sheet(`<h3>${a.round === 2 ? 'Tied — bid again' : 'Sealed bid'}</h3>
+    <div class="sub">${esc(b.n)} · ${esc(p.name)} only</div>
+    ${a.round === 2 ? `<div class="warnbox">Level at ${money(a.tiedAt)}. Only the tied
+      bidders go again, and none of you may go below ${money(a.tiedAt)}. Still level after
+      this and it falls to turn order.</div>` : ''}
     ${a.queue.length > 1 ? `<div class="warnbox"><b>Pass the phone to ${esc(p.name)}.</b>
       Nobody sees any bid until every bid is in.</div>` : ''}
     <div class="stat"><span>List price</span><span>${money(b.pr)}</span></div>
     <div class="stat"><span>You hold</span><span>${money(p.cash)}</span></div>
     <div class="stat"><span>Landing frequency</span><span>${TRAFFIC[a.sq].toFixed(2)}%</span></div>
     ${b.s ? `<div class="stat"><span>Set payback</span><span>${E.paybackTurns(b.s, TRAFFIC)} turns</span></div>` : ''}
-    <input type="number" id="bidIn" inputmode="numeric" placeholder="0" min="0" max="${p.cash}" style="margin-top:14px">
+    <input type="number" id="bidIn" inputmode="numeric" placeholder="${a.round === 2 ? a.tiedAt : 0}"
+      min="${a.round === 2 ? Math.min(a.tiedAt, p.cash) : 0}" max="${p.cash}" style="margin-top:14px">
     ${btns([
       ['Seal it', `sealBid|${p.i}`, 'pri'],
       ['No bid', `sealBid|${p.i}|0`, ''],
@@ -854,7 +859,10 @@ function showAuctionResult() {
   }
   s += a.winner === null || a.winner === undefined
     ? `<div class="card">Nobody bid. It stays unclaimed.</div>`
-    : `<div class="card">${esc(G.players[a.winner].name)} takes it for ${money(a.price)}.</div>`;
+    : `<div class="card">${esc(G.players[a.winner].name)} takes it for ${money(a.price)}.${
+        a.tiebreak === 'order'
+          ? ` Level at ${money(a.price)} even after the runoff, so it fell to turn order.`
+          : a.round === 2 ? ' Won on the second round, after a tie.' : ''}</div>`;
   s += btns([['Continue', 'endAuction', 'pri wide']]);
   sheet(s);
 }
@@ -1305,18 +1313,60 @@ function takeCounter() {
 function showContract() {
   const c = G.contract;
   const from = G.players[c.from], to = G.players[c.to];
-  const brief = (sq, label) => {
+  // `to` is the human being asked. A square is worth what it does to THEIR
+  // board, so every line below is from their side of the table: what colour it
+  // is, how much of that colour each of them ends up holding, and — for fleets
+  // and utilities, whose rent is purely a count — what they would charge after.
+  const brief = (sq, label, gaining) => {
     if (sq === null || sq === undefined) return '';
     const b = BOARD[sq];
-    return `<div class="sub" style="margin:14px 0 6px">${label}</div>
-      <div class="stat"><span>${esc(b.n)}</span><span>${money(b.pr)}</span></div>
-      <div class="stat"><span>Rent now</span><span>${money(E.rentOf(G, sq, 7))}</span></div>
+    let s = `<div class="sub" style="margin:14px 0 6px">${label}</div>
+      <div class="stat"><span>${esc(b.n)}</span><span>${money(b.pr)}</span></div>`;
+
+    if (b.s) {
+      const set = SETS[b.s];
+      const mine = set.sq.filter(i => (E.ownerOf(G, i) || {}).i === to.i).length;
+      const after = mine + (gaining ? 1 : -1);
+      s += `<div class="stat"><span><i class="swatch" style="background:${set.c}"></i>
+        ${esc(set.n)}</span><span>${mine} of ${set.sq.length} → <b>${after}</b></span></div>`;
+      if (after === set.sq.length) {
+        s += `<div class="warnbox ok">This completes ${esc(set.n)} for you. Rent doubles
+          across the set and you can garrison it.</div>`;
+      } else if (mine === set.sq.length) {
+        s += `<div class="warnbox">This breaks your ${esc(set.n)}. You lose the doubled
+          rent on all ${set.sq.length}.</div>`;
+      }
+      // What it does for the other side of the table matters just as much.
+      const theirs = set.sq.filter(i => (E.ownerOf(G, i) || {}).i === from.i).length;
+      const theirsAfter = theirs + (gaining ? -1 : 1);
+      if (theirsAfter === set.sq.length) {
+        s += `<div class="warnbox">This completes ${esc(set.n)} for ${esc(from.name)}.</div>`;
+      }
+    } else if (b.t === 'f' || b.t === 'u') {
+      const kind = b.t === 'f' ? 'f' : 'u';
+      const held = E.countType(to, kind);
+      const after = held + (gaining ? 1 : -1);
+      const word = kind === 'f' ? 'fleet' : 'utility';
+      s += `<div class="stat"><span><i class="swatch" style="background:var(--${kind === 'f' ? 'fleet' : 'util'})"></i>
+        ${word === 'fleet' ? 'Fleets' : 'Utilities'} held</span>
+        <span>${held} → <b>${after}</b></span></div>`;
+      // Rent on these is a count, so the figure that matters is what YOU would
+      // charge afterwards — not what it earns its current owner today.
+      const now = kind === 'f' ? FLEET_RENT[held] || 0 : held === 2 ? 70 : held === 1 ? 28 : 0;
+      const then = kind === 'f' ? FLEET_RENT[after] || 0 : after === 2 ? 70 : after === 1 ? 28 : 0;
+      s += `<div class="stat"><span>You would charge</span>
+        <span>${money(now)} → <b style="color:${then > now ? 'var(--tx)' : 'var(--warn)'}">${money(then)}</b>${
+          kind === 'u' ? ' <small>on a 7</small>' : ''}</span></div>`;
+    }
+
+    s += `<div class="stat"><span>Rent now</span><span>${money(E.rentOf(G, sq, 7))}</span></div>
       <div class="stat"><span>Landing frequency</span><span>${TRAFFIC[sq].toFixed(2)}%</span></div>`;
+    return s;
   };
   sheet(`<h3>${esc(from.name)} → ${esc(to.name)}</h3>
     <div class="sub">${esc(to.name)}'s eyes only — pass the phone</div>
-    ${brief(c.get, `${esc(to.name)} gives up`)}
-    ${brief(c.give, `${esc(to.name)} receives`)}
+    ${brief(c.get, `${esc(to.name)} gives up`, false)}
+    ${brief(c.give, `${esc(to.name)} receives`, true)}
     <div class="card">${c.cash
       ? (c.direction === 1
         ? `${esc(to.name)} also receives ${money(c.cash)}`
@@ -1453,6 +1503,7 @@ window.__COL = () => COLUMN;
 // Cards are dealt by tick(), never by a button, so the sheet has no handle of
 // its own to reach for.
 window.__showCard = () => showCard();
+window.__showContract = () => showContract();
 
 // A background tab can be reaped without warning on iOS, so the save is
 // refreshed whenever the page is hidden as well as after every move.
