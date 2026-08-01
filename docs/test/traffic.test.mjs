@@ -10,7 +10,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { BOARD, N, JAIL, TRAFFIC } from '../data.js';
+import { BOARD, N, JAIL, GOTO, TRAFFIC } from '../data.js';
 import { createGame, current, roll, resolveLanding, applyCard, endTurn } from '../engine.js';
 
 const ROLLS = 400_000;
@@ -67,13 +67,21 @@ test('the published traffic table matches the engine that moves the pieces', () 
               `on ${worst.i} (${worst.name})`);
 });
 
-test('the Holding Facility is the most-landed square by a wide margin', () => {
+test('Detention is the most-landed square by a wide margin', () => {
   const rest = TRAFFIC.filter((_, i) => i !== JAIL);
   assert.ok(TRAFFIC[JAIL] > Math.max(...rest) * 1.7,
-    'the Facility should dominate the board — Eden is priced on sitting just past it');
+    'Detention should dominate the board — Eden is priced on sitting just past it');
+});
+
+test('the squares six to nine past Detention are the busiest properties', () => {
+  // The reason the orange set wins games in Monopoly, and why Eden sits there.
+  const hot = [6, 7, 8, 9].map(d => TRAFFIC[(JAIL + d) % N]);
+  const average = TRAFFIC.reduce((a, b) => a + b, 0) / N;
+  assert.ok(Math.max(...hot) > average * 1.15,
+    'the landing zone past Detention is not hotter than the board average');
 });
 
 test('Absorbed is never a resting square', () => {
   const measured = measure(12345);
-  assert.equal(measured[21], 0, 'a piece cannot end a turn on Absorbed');
+  assert.equal(measured[GOTO], 0, 'a piece cannot end a turn on Absorbed');
 });

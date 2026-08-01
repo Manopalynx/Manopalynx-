@@ -11,7 +11,7 @@
 // phase and returns.
 
 import {
-  SETS, BOARD, N, GO, JAIL, GOTO, FLEETS, UTILS, TRAFFIC,
+  SETS, BOARD, N, GO, JAIL, GOTO, FLEETS, UTILS, FLEET_RENT, TRAFFIC,
   CONTINGENCY, COLUMN, PERSONAS, LEADER_LINES, RULES
 } from './data.js';
 
@@ -37,7 +37,7 @@ function shuffled(G, n) {
 }
 
 /* ============================================================ setup */
-export function createGame({ seats, seed = 1, circuits = 24 } = {}) {
+export function createGame({ seats, seed = 1, circuits = 48 } = {}) {
   const G = {
     seed,
     rngState: seed >>> 0,
@@ -56,7 +56,9 @@ export function createGame({ seats, seed = 1, circuits = 24 } = {}) {
     endReason: null,
     auction: null,
     contest: null,
-    pendingCard: null
+    pendingCard: null,
+    doublesRun: 0,      // consecutive doubles this turn
+    rollAgain: false    // a doubles roll buys another before the turn settles
   };
   seats.forEach((s, i) => G.players.push({
     i,
@@ -139,7 +141,7 @@ export function rentOf(G, i, roll = 7) {
   if (!o) return 0;
   const h = holding(o, i);
   if (h.mortgaged) return 0;
-  if (b.t === 'f') return countType(o, 'f') === FLEETS.length ? 150 : 50;
+  if (b.t === 'f') return FLEET_RENT[countType(o, 'f')] || 0;
   if (b.t === 'u') return (countType(o, 'u') === UTILS.length ? 10 : 4) * roll;
   if (h.citadel) return b.r[4];
   if (h.garrisons > 0) return b.r[h.garrisons];
@@ -263,12 +265,22 @@ function vassalise(G, p, to) {
 }
 
 function bind(G, p, to) {
-  // If the creditor was itself sworn to the debtor, the relationship inverts
-  // rather than forming a cycle.
-  if (to.lord === p.i) {
-    p.vassals = p.vassals.filter(x => x !== to.i);
-    to.lord = null;
-    note(G, `The roles invert. ${to.name} throws off ${p.name}.`);
+  // If the creditor is anywhere beneath the debtor in the chain of oaths,
+  // binding p to it would close a loop — A sworn to B sworn to C sworn to A —
+  // and every walk of the chain after that would never terminate.
+  //
+  // The direct case (your own vassal bankrupts you) inverts. So does the
+  // indirect one: whichever player in that chain is sworn directly to p throws
+  // p off, and only then can p swear to its creditor.
+  let at = to, guard = 0;
+  while (at.lord !== null && guard++ < G.players.length + 1) {
+    if (at.lord === p.i) {
+      p.vassals = p.vassals.filter(x => x !== at.i);
+      at.lord = null;
+      note(G, `The roles invert. ${at.name} throws off ${p.name}.`);
+      break;
+    }
+    at = G.players[at.lord];
   }
   p.lord = to.i;
   to.vassals.push(p.i);
@@ -382,6 +394,8 @@ function forwardDistanceTo(from, targets) {
 }
 
 function toFacility(G, p) {
+  G.rollAgain = false;              // arriving here ends your turn, doubles or not
+  G.doublesRun = 0;
   p.pos = JAIL;
   p.inFacility = true;
   p.attempts = 0;
@@ -397,6 +411,7 @@ export function roll(G, d1, d2) {
   const b = d2 ?? 1 + Math.floor(random(G) * 6);
   G.dice = [a, b];
   const total = a + b, doubles = a === b;
+  const wasDetained = p.inFacility;
 
   if (p.inFacility) {
     if (doubles) {
@@ -415,6 +430,23 @@ export function roll(G, d1, d2) {
       }
     }
   }
+  // Doubles roll again — and a third in a row is a pattern an Overseer notices.
+  if (!wasDetained && doubles) {
+    G.doublesRun++;
+    if (G.doublesRun >= RULES.doublesToDetention) {
+      G.doublesRun = 0;
+      G.rollAgain = false;
+      note(G, `${p.name} rolls a third doubles. That is a pattern, and patterns get filed.`);
+      toFacility(G, p);
+      G.phase = 'end';
+      return { path: [], doubles, total, held: false, caught: true };
+    }
+    G.rollAgain = true;
+  } else {
+    G.doublesRun = 0;
+    G.rollAgain = false;
+  }
+
   const path = advance(G, p, total);
   G.phase = 'landed';
   return { path, doubles, total, held: false };
@@ -517,6 +549,16 @@ export function applyCard(G) {
 export function endTurn(G) {
   if (G.over) return;
   const p = current(G);
+  // A doubles roll buys another roll. Upkeep is charged once per turn, not per
+  // roll, so the turn is not settled until the doubles run ends.
+  if (G.rollAgain && !p.inFacility) {
+    G.rollAgain = false;
+    G.phase = 'roll';
+    G.dice = [0, 0];
+    return;
+  }
+  G.rollAgain = false;
+  G.doublesRun = 0;
   const u = upkeep(p);
   if (u > 0) { pay(G, p, null, u); note(G, `${p.name} pays ${money(u)} in upkeep.`); }
   if (p.debt) p.debt += Math.ceil(p.debt * RULES.debtInterest);

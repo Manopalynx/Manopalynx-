@@ -37,7 +37,7 @@ function clearSave() {
 }
 
 /* ============================================================ setup */
-const setup = { humans: 2, names: ['Sam', 'Meelah'], ais: [], circuits: 24 };
+const setup = { humans: 2, names: ['Sam', 'Meelah'], ais: [], circuits: 48 };
 
 function drawSetup() {
   const saved = loadSaved();
@@ -61,12 +61,12 @@ function drawSetup() {
       }).join('')}
     </div>
     <div class="fld"><label>Circuit limit</label>
-      <div class="opts">${[16, 24, 36].map(k =>
+      <div class="opts">${[24, 48, 72].map(k =>
         `<button class="opt${setup.circuits === k ? ' on' : ''}" data-t="${k}">${k}</button>`).join('')}</div>
     </div>
     <button class="big" id="begin">Open the ledger${seatsUsed < 2 ? ' — add an opponent' : ''}</button>
     <p class="note">Sealed-bid auctions are mandatory and the phone gets passed.
-    Garrisons are finite. Neutral Anchorage pays nothing. The Neurex cannot be bought.<br><br>
+    Garrisons are finite. Neutral Anchorage pays nothing. Doubles roll again — three in a row and an Overseer files you.<br><br>
     The game saves itself after every move, so a call or a locked screen costs nothing.</p>`;
 
   let nw = '';
@@ -122,19 +122,32 @@ function startShell() {
 }
 
 /* ============================================================ board geometry */
-// Go bottom-right, play running anticlockwise along the bottom.
+// Go bottom-right, play running anticlockwise along the bottom — an 11x11
+// perimeter, which is 4 corners plus 9 a side: exactly Monopoly's 40.
+const SIDE = (N + 4) / 4;                       // 11
 const GRID = (() => {
   const m = new Array(N);
-  m[0] = [8, 8];
-  for (let k = 1; k <= 6; k++) m[k] = [8, 8 - k];
-  m[7] = [8, 1];
-  for (let k = 1; k <= 6; k++) m[7 + k] = [8 - k, 1];
-  m[14] = [1, 1];
-  for (let k = 1; k <= 6; k++) m[14 + k] = [1, 1 + k];
-  m[21] = [1, 8];
-  for (let k = 1; k <= 6; k++) m[21 + k] = [1 + k, 8];
+  const last = SIDE, per = SIDE - 2;             // 9 squares between corners
+  m[0] = [last, last];
+  for (let k = 1; k <= per; k++) m[k] = [last, last - k];
+  m[per + 1] = [last, 1];
+  for (let k = 1; k <= per; k++) m[per + 1 + k] = [last - k, 1];
+  m[2 * (per + 1)] = [1, 1];
+  for (let k = 1; k <= per; k++) m[2 * (per + 1) + k] = [1, 1 + k];
+  m[3 * (per + 1)] = [1, last];
+  for (let k = 1; k <= per; k++) m[3 * (per + 1) + k] = [1 + k, last];
   return m;
 })();
+// Which edge a square sits on, so the deep cells can face inwards like a real
+// board rather than every cell being an identical square.
+const edgeOf = i => {
+  const per = SIDE - 2;
+  if (i === 0 || i === per + 1 || i === 2 * (per + 1) || i === 3 * (per + 1)) return 'corner';
+  if (i < per + 1) return 'bottom';
+  if (i < 2 * (per + 1)) return 'left';
+  if (i < 3 * (per + 1)) return 'top';
+  return 'right';
+};
 
 const pipOf = p => PIPS[p.i % PIPS.length];
 const colourOf = b => b.s ? SETS[b.s].c : b.t === 'f' ? 'var(--fleet)' : b.t === 'u' ? 'var(--util)' : null;
@@ -252,13 +265,14 @@ function renderBoard() {
     const owner = E.ownerOf(G, i);
     const held = owner ? E.holding(owner, i) : null;
     const colour = colourOf(b);
-    const corner = [0, 7, 14, 21].includes(i);
+    const edge = edgeOf(i);
+    const corner = edge === 'corner';
     const toks = G.players.filter(q => posOf(q) === i)
       .map(q => `<div class="tok${q.i === G.cur ? ' me' : ''}" style="background:${pipOf(q)};color:${pipOf(q)}"></div>`)
       .join('');
     const dev = held ? (held.citadel ? '◆' : held.garrisons ? '▪'.repeat(held.garrisons) : held.mortgaged ? '⌀' : '') : '';
     const ownStyle = owner ? `color:${pipOf(owner)};box-shadow:inset 0 0 0 2px ${pipOf(owner)}` : '';
-    h += `<div class="cell${corner ? ' corner' : ''}${posOf(cur) === i ? ' here' : ''}${selected === i ? ' sel' : ''}"
+    h += `<div class="cell e-${edge}${posOf(cur) === i ? ' here' : ''}${selected === i ? ' sel' : ''}"
         style="grid-row:${r};grid-column:${c};${ownStyle}" data-i="${i}">
       ${colour ? `<div class="cbar" style="background:${colour}"></div>` : ''}
       <div class="code">${esc(b.a)}</div>
@@ -1003,6 +1017,8 @@ function copyResult() {
 // A handle for the browser probe in test/. Not used by the game itself.
 window.__G = () => G;
 window.__render = () => render();
+window.__SETS = () => SETS;
+window.__BOARD = () => BOARD;
 
 // A background tab can be reaped without warning on iOS, so the save is
 // refreshed whenever the page is hidden as well as after every move.

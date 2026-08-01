@@ -72,8 +72,16 @@ for (const device of DEVICES) {
   console.log(`        cell ${layout.cell}px · code ${layout.codeFont}px · price ${layout.priceFont}px ` +
               `· log ${layout.logFont}px · smallest button ${layout.minAct}px`);
 
-  if (layout.codeFont >= 9.5) pass('square labels are legible');
+  if (layout.codeFont >= 10) pass('square labels are legible');
   else fail(`square label font is ${layout.codeFont}px`);
+  // Legible is not the same as fitting. Measure every code for overflow rather
+  // than trusting that four characters happen to sit inside a 31px cell.
+  const clipped = await page.evaluate(() =>
+    [...document.querySelectorAll('.cell .code')]
+      .filter(el => el.scrollWidth > el.clientWidth + 0.5)
+      .map(el => el.textContent));
+  if (!clipped.length) pass('no square code is clipped by its cell');
+  else fail(`${clipped.length} codes overflow their cell: ${clipped.slice(0, 6).join(', ')}`);
   if (layout.logFont >= 13) pass('body text is legible');
   else fail(`log font is ${layout.logFont}px`);
   if (layout.minAct >= 44) pass('action buttons meet the 44pt tap target');
@@ -178,8 +186,14 @@ for (const device of DEVICES) {
     const G = window.__G();
     const p = G.players[G.cur];
     p.cash = 6000;
-    p.holdings = [13, 14, 15, 1, 3, 6, 8, 10].map(sq =>
-      ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+    // Looked up rather than hardcoded, so this survives the board changing again.
+    const eden = window.__SETS().eden.sq;
+    const extra = window.__BOARD()
+      .map((b, k) => [b, k])
+      .filter(([b, k]) => b.s && !eden.includes(k))
+      .slice(0, 5)
+      .map(([, k]) => k);
+    p.holdings = [...eden, ...extra].map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
     for (const q of G.players) {
       if (q !== p) q.holdings = q.holdings.filter(h => !p.holdings.some(x => x.sq === h.sq));
     }
@@ -187,13 +201,13 @@ for (const device of DEVICES) {
     const sheet = document.querySelector('.sheet');
     sheet.scrollTop = 120;                   // as if the player had scrolled to a holding
     const scrolled = sheet.scrollTop;
-    const rowBefore = document.querySelector('[data-row="13"]');
+    const rowBefore = document.querySelector(`[data-row="${eden[0]}"]`);
     const topBefore = rowBefore.getBoundingClientRect().top;
     const btn = rowBefore.querySelector('[data-fn^="build|"]');
     if (!btn) return 'no build button on a completed set';
     btn.click();
     const sheetAfter = document.querySelector('.sheet');
-    const rowAfter = document.querySelector('[data-row="13"]');
+    const rowAfter = document.querySelector(`[data-row="${eden[0]}"]`);
     return {
       sameSheet: sheet === sheetAfter,
       sameRow: rowBefore === rowAfter,
@@ -257,25 +271,23 @@ for (const device of DEVICES) {
     if (!G) return 'no game handle';
     const p = G.players[G.cur];
     p.cash = 5000;
-    p.holdings = [
-      { sq: 13, garrisons: 0, citadel: 0, mortgaged: 0 },
-      { sq: 14, garrisons: 0, citadel: 0, mortgaged: 0 },
-      { sq: 15, garrisons: 0, citadel: 0, mortgaged: 0 }
-    ];
-    for (const q of G.players) if (q !== p) q.holdings = q.holdings.filter(h => ![13, 14, 15].includes(h.sq));
+    const eden = window.__SETS().eden.sq;
+    p.holdings = eden.map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+    for (const q of G.players) if (q !== p) q.holdings = q.holdings.filter(h => !eden.includes(h.sq));
     const poolBefore = G.garrisonPool, cashBefore = p.cash;
     ui.showManage();
     const btn = document.querySelector('.sheet [data-fn^="build|"]');
     if (!btn) return 'no build button offered on a completed set';
     btn.click();
     return {
+      gc: window.__SETS().eden.gc,
       spent: cashBefore - G.players[G.cur].cash,
       fromPool: poolBefore - G.garrisonPool,
-      garrisons: G.players[G.cur].holdings.find(h => h.sq === 13)?.garrisons
+      garrisons: G.players[G.cur].holdings.find(h => h.sq === eden[0])?.garrisons
     };
   });
   if (typeof built === 'string') fail(built);
-  else if (built.spent === 100 && built.fromPool === 1 && built.garrisons === 1) {
+  else if (built.spent === built.gc && built.fromPool === 1 && built.garrisons === 1) {
     pass('building through Manage charges the set cost and draws from the pool');
   } else fail(`building misbehaved: ${JSON.stringify(built)}`);
   await page.evaluate(() => window.closeSheet());

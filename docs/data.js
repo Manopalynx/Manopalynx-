@@ -12,70 +12,84 @@
 // gc = cost of one garrison on any square in the set.
 // sq = board indices belonging to the set.
 export const SETS = {
-  syn:  { n: 'Syndicate', c: 'var(--syn)',  gc: 50,  sq: [1, 3] },
-  eni:  { n: 'Enigma',    c: 'var(--eni)',  gc: 50,  sq: [6, 8, 10] },
-  dom:  { n: 'Dominion',  c: 'var(--dom)',  gc: 100, sq: [12, 16] },
-  eden: { n: 'Eden',      c: 'var(--eden)', gc: 100, sq: [13, 14, 15] },
-  ven:  { n: 'Venenum',   c: 'var(--ven)',  gc: 150, sq: [19, 20] },
-  // Was "Basileia", holding Basileia Prime and Cradle. Both were wrong:
-  // Cradle is the capital on Agora — the Union's, then the Federation's — and
-  // the book names no Basileian world at all (only the Emperor, the Empire and
-  // Vale's Progressive Movement). The top tier is now the seat of power the
-  // Leader actually ends the book holding. Two locations inside one capital is
-  // the genre convention, not a mistake — cf. Park Lane and Mayfair.
-  agora:{ n: 'Agora',     c: 'var(--agora)',gc: 200, sq: [25, 27] }
+  syn:  { n: 'Syndicate',  c: 'var(--syn)',   gc: 50,  sq: [1, 3] },
+  eni:  { n: 'Enigma',     c: 'var(--eni)',   gc: 50,  sq: [6, 8, 9] },
+  dom:  { n: 'Dominion',   c: 'var(--dom)',   gc: 100, sq: [11, 13, 14] },
+  eden: { n: 'Eden',       c: 'var(--eden)',  gc: 100, sq: [16, 18, 19] },
+  ven:  { n: 'Venenum',    c: 'var(--ven)',   gc: 150, sq: [21, 23, 24] },
+  // Keth, Oranthe and Vasa are the three fever systems that acceded to the
+  // Compact because the Union held the Anthelion cure — "they will not
+  // experience it as coercion, they will experience it as rescue". Three worlds
+  // bought with medicine, and now a colour group you complete and charge rent on.
+  com:  { n: 'The Compact', c: 'var(--com)',  gc: 150, sq: [26, 27, 29] },
+  // The largest empire in the galaxy had no squares at all. The book names no
+  // Basileian world, so the Marches and the Court are inventions; Vale's Plaza
+  // is not — it is where he was shot.
+  bas:  { n: 'Basileia',   c: 'var(--bas)',   gc: 200, sq: [31, 32, 34] },
+  agora:{ n: 'Agora',      c: 'var(--agora)', gc: 200, sq: [37, 39] }
 };
 
 /* ---------------------------------------------------------------------- board */
+// Monopoly's exact skeleton: 22 properties in eight sets (2·3·3·3·3·3·3·2),
+// four fleets, two utilities, three Contingency, three Column, two taxes and
+// four corners. Prices and rents follow its ladder too — a century of
+// balancing is worth inheriting rather than reinventing.
+//
 // t: go | p (property) | f (fleet) | u (utility) | tax | col | con | jail | goto | free
 // r: rent ladder — [bare, 1 garrison, 2, 3, citadel]
+// a: four-character code. 40 squares round a 393pt perimeter leaves ~33px a
+//    side, so no full name fits at any cell shape; the centre panel names it.
 export const BOARD = [
-  { t: 'go',                n: 'The Ledger Opens', a: 'GO' },
-  { t: 'p',  s: 'syn',      n: 'Vessa Station',          pr: 60,  r: [8, 25, 75, 225, 300], a: 'VESA' },
-  { t: 'col',               n: 'The Column', a: 'COL' },
-  { t: 'p',  s: 'syn',      n: 'The Corridor',           pr: 60,  r: [8, 25, 75, 225, 300], a: 'CORR' },
-  { t: 'tax',               n: 'Dominion Tithe',         amt: 200, a: 'TITH' },
-  { t: 'f',                 n: 'Pillar of Commerce',     pr: 200, a: 'PILR' },
-  { t: 'p',  s: 'eni',      n: 'Enigma Uplands',         pr: 100, r: [12, 40, 120, 340, 450], a: 'UPLD' },
-  // Was the "Neurex Holding Facility", and could not be paid out of, because
-  // the Neurex is the one power in the book with no price — "no official to
-  // blind, no tithe to pay, no arrangement". That was faithful and it played
-  // badly: three dead turns with nothing to decide.
-  // An Overseer is the Dominion's eye, installed in every facility and aboard
-  // every ship, and the Leader's whole origin is buying officials. Detention by
-  // one can absolutely be bought out of, so the square is now theirs.
-  { t: 'jail',              n: 'Overseer Detention',      a: 'OVSR' },
-  { t: 'p',  s: 'eni',      n: 'Enigma Agricultural Belt', pr: 100, r: [12, 40, 120, 340, 450], a: 'BELT' },
-  { t: 'con',               n: 'Contingency', a: 'CON' },
-  { t: 'p',  s: 'eni',      n: 'Re-dok Station',         pr: 120, r: [16, 50, 150, 400, 520], a: 'RDOK' },
-  // Was "Spector", which collides with the opponent of the same name. The deep
-  // array is the Leader's own long-range sensor net — Interlude V, "the display
-  // carries the deep-array feed, and the feed carries the future".
-  { t: 'u',                 n: 'The Deep Array',         pr: 150, a: 'ARRY' },
-  { t: 'p',  s: 'dom',      n: 'Ortox Transit',          pr: 140, r: [18, 60, 180, 500, 650], a: 'ORTX' },
-  { t: 'p',  s: 'eden',     n: 'Horizon',                pr: 180, r: [22, 80, 240, 640, 800], a: 'HRZN' },
-  { t: 'p',  s: 'eden',     n: 'Oasis Fortress',         pr: 180, r: [22, 80, 240, 640, 800], a: 'OASI' },
-  { t: 'p',  s: 'eden',     n: 'Eden Farmlands',         pr: 200, r: [26, 90, 260, 700, 880], a: 'FARM' },
-  { t: 'p',  s: 'dom',      n: "Varan's Audit House",    pr: 160, r: [22, 70, 200, 550, 700], a: 'AUDT' },
-  { t: 'col',               n: 'The Column', a: 'COL' },
-  { t: 'f',                 n: 'Orion',                  pr: 200, a: 'ORIN' },
-  { t: 'p',  s: 'ven',      n: 'Venenum Yards',          pr: 240, r: [30, 110, 320, 850, 1000], a: 'YRDS' },
-  { t: 'p',  s: 'ven',      n: 'Venenum Foundries',      pr: 260, r: [34, 120, 350, 900, 1100], a: 'FNDR' },
-  { t: 'goto',              n: 'Absorbed', a: 'ABSD' },
-  { t: 'free',              n: 'Neutral Anchorage', a: 'ANCH' },
-  { t: 'con',               n: 'Contingency', a: 'CON' },
-  { t: 'u',                 n: 'Anthelion Synthesis',    pr: 150, a: 'ANTH' },
-  { t: 'p',  s: 'agora',    n: 'The Palace',             pr: 350, r: [50, 175, 500, 1200, 1600], a: 'PLCE' },
-  { t: 'tax',               n: 'Compact Levy',           amt: 100, a: 'LEVY' },
-  { t: 'p',  s: 'agora',    n: 'Cradle',                 pr: 400, r: [60, 200, 600, 1400, 1900], a: 'CRDL' }
+  { t: 'go', n: 'The Ledger Opens', a: 'GO' },
+  { t: 'p', s: 'syn', n: 'Vessa Station', pr: 60, r: [2, 10, 30, 90, 250], a: 'VESA' },
+  { t: 'col', n: 'The Column', a: 'COL' },
+  { t: 'p', s: 'syn', n: 'The Corridor', pr: 60, r: [4, 20, 60, 180, 450], a: 'CORR' },
+  { t: 'tax', n: 'Dominion Tithe', amt: 200, a: 'TITH' },
+  { t: 'f', n: 'Pillar of Commerce', pr: 200, a: 'PILR' },
+  { t: 'p', s: 'eni', n: 'Enigma Uplands', pr: 100, r: [6, 30, 90, 270, 550], a: 'UPLD' },
+  { t: 'con', n: 'Contingency', a: 'CON' },
+  { t: 'p', s: 'eni', n: 'Enigma Agricultural Belt', pr: 100, r: [6, 30, 90, 270, 550], a: 'BELT' },
+  { t: 'p', s: 'eni', n: 'Re-dok Station', pr: 120, r: [8, 40, 100, 300, 600], a: 'RDOK' },
+  { t: 'jail', n: 'Overseer Detention', a: 'OVSR' },
+  { t: 'p', s: 'dom', n: 'Ortox Transit', pr: 140, r: [10, 50, 150, 450, 750], a: 'ORTX' },
+  { t: 'u', n: 'The Deep Array', pr: 150, a: 'ARRY' },
+  { t: 'p', s: 'dom', n: "Varan's Audit House", pr: 140, r: [10, 50, 150, 450, 750], a: 'AUDT' },
+  { t: 'p', s: 'dom', n: 'The Tribute Yards', pr: 160, r: [12, 60, 180, 500, 900], a: 'TRIB' },
+  { t: 'f', n: 'Orion', pr: 200, a: 'ORIN' },
+  { t: 'p', s: 'eden', n: 'Horizon', pr: 180, r: [14, 70, 200, 550, 950], a: 'HRZN' },
+  { t: 'col', n: 'The Column', a: 'COL' },
+  { t: 'p', s: 'eden', n: 'Oasis Fortress', pr: 180, r: [14, 70, 200, 550, 950], a: 'OASI' },
+  { t: 'p', s: 'eden', n: 'Eden Farmlands', pr: 200, r: [16, 80, 220, 600, 1000], a: 'FARM' },
+  { t: 'free', n: 'Neutral Anchorage', a: 'ANCH' },
+  { t: 'p', s: 'ven', n: 'Venenum Drydocks', pr: 220, r: [18, 90, 250, 700, 1050], a: 'DRYD' },
+  { t: 'con', n: 'Contingency', a: 'CON' },
+  { t: 'p', s: 'ven', n: 'Venenum Yards', pr: 220, r: [18, 90, 250, 700, 1050], a: 'YRDS' },
+  { t: 'p', s: 'ven', n: 'Venenum Foundries', pr: 240, r: [20, 100, 300, 750, 1100], a: 'FNDR' },
+  { t: 'f', n: 'Harpa', pr: 200, a: 'HARP' },
+  { t: 'p', s: 'com', n: 'Keth', pr: 260, r: [22, 110, 330, 800, 1150], a: 'KETH' },
+  { t: 'p', s: 'com', n: 'Oranthe', pr: 260, r: [22, 110, 330, 800, 1150], a: 'ORAN' },
+  { t: 'u', n: 'Anthelion Synthesis', pr: 150, a: 'ANTH' },
+  { t: 'p', s: 'com', n: 'Vasa', pr: 280, r: [24, 120, 360, 850, 1200], a: 'VASA' },
+  { t: 'goto', n: 'Absorbed', a: 'ABSD' },
+  { t: 'p', s: 'bas', n: 'The Far Marches', pr: 300, r: [26, 130, 390, 900, 1275], a: 'MRCH' },
+  { t: 'p', s: 'bas', n: 'The Imperial Court', pr: 300, r: [26, 130, 390, 900, 1275], a: 'CRT' },
+  { t: 'col', n: 'The Column', a: 'COL' },
+  { t: 'p', s: 'bas', n: "Vale's Plaza", pr: 320, r: [28, 150, 450, 1000, 1400], a: 'PLAZ' },
+  { t: 'f', n: "Raven's Claw", pr: 200, a: 'RAVN' },
+  { t: 'con', n: 'Contingency', a: 'CON' },
+  { t: 'p', s: 'agora', n: 'The Palace', pr: 350, r: [35, 175, 500, 1100, 1500], a: 'PLCE' },
+  { t: 'tax', n: 'Compact Levy', amt: 100, a: 'LEVY' },
+  { t: 'p', s: 'agora', n: 'Cradle', pr: 400, r: [50, 200, 600, 1400, 2000], a: 'CRDL' }
 ];
 
-export const N = BOARD.length;          // 28
+export const N = BOARD.length;          // 40
 export const GO = 0;
-export const JAIL = 7;
-export const GOTO = 21;
-export const FLEETS = [5, 18];
-export const UTILS = [11, 24];
+export const JAIL = 10;
+export const GOTO = 30;
+export const FLEETS = [5, 15, 25, 35];
+export const UTILS = [12, 28];
+// Monopoly's railroad ladder, by how many you hold.
+export const FLEET_RENT = [0, 25, 50, 100, 200];
 
 /* ------------------------------------------------------------------- traffic */
 // Long-run share of turns ending on each square, as a percentage.
@@ -85,12 +99,12 @@ export const UTILS = [11, 24];
 // more than 0.5pp from the value below. It is a solved figure, not a guess —
 // but it is not exact, and nothing in the UI should claim that it is.
 //
-// Doubles have no movement consequence in this game (no extra roll, no
-// three-doubles rule) — they only release you from the Facility. The table is
-// solved for the rules as implemented.
+// Solved WITH doubles: a doubles roll moves again, and a third in a row sends
+// you to Detention. Both shape this table, which is why Detention dominates it.
 export const TRAFFIC = [
-  3.94, 3.06, 2.69, 3.16, 3.24, 3.56, 3.64, 8.14, 3.34, 1.83, 3.48, 4.02, 3.63, 4.42,
-  3.83, 4.00, 3.69, 3.46, 4.43, 3.99, 4.03, 0.00, 3.92, 1.88, 3.93, 3.56, 3.39, 3.70
+  3.14, 2.19, 1.92, 2.20, 2.36, 2.37, 2.26, 1.13, 2.29, 2.26, 6.18, 2.18, 2.70, 2.73,
+  2.50, 2.60, 2.78, 2.38, 3.41, 2.91, 2.96, 2.74, 1.47, 2.74, 2.73, 2.93, 2.70, 3.18,
+  2.84, 2.62, 0.00, 2.65, 2.64, 2.39, 2.54, 2.47, 1.19, 2.25, 2.24, 2.23
 ];
 
 /* --------------------------------------------------------------------- decks */
@@ -194,10 +208,13 @@ export const EPIGRAPH = {
 
 /* ------------------------------------------------------------------ economy */
 export const RULES = {
-  startingCash: 1800,
+  // Monopoly's ladder with a little more float. Measured: at two seats and 48
+  // circuits this lifts absorption from 40% of games to 53%, because players
+  // stop being too cash-starved by the buying phase to ever build.
+  startingCash: 2000,
   passGo: 200,
-  garrisonPool: 16,
-  citadelPool: 6,
+  garrisonPool: 32,
+  citadelPool: 12,
   amendCosts: [500, 700, 900],   // cost of nudging one square, by amendments used
   amendsPerGame: 3,
   garrisonUpkeep: 10,            // per garrison, per turn
@@ -212,6 +229,7 @@ export const RULES = {
   revoltBase: 1400,              // strength needed for a first declaration
   revoltStep: 300,               // added per previous declaration
   revoltCost: 500,
+  doublesToDetention: 3,         // three doubles in a row and you are filed
   facilityAttempts: 3,           // doubles, or pay the fee, or three attempts
   facilityFee: 150               // an Overseer is an official, and officials have a price
 };

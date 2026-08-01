@@ -21,7 +21,8 @@
   --dim:#6B7386;--body:#B6BCCB;--bright:#F2F4F9;
   --gold:#D9A441;--tx:#5ECFC8;--warn:#E0776A;--vio:#8B7DD8;
   --syn:#7A6A5C;--eni:#6FA8A3;--dom:#9B6B8E;--eden:#D98E45;
-  --ven:#C25E52;--agora:#4F6FA8;--fleet:#8892A6;--util:#6B7C93;
+  --ven:#C25E52;--com:#C9A227;--bas:#4E8C5A;--agora:#4F6FA8;
+  --fleet:#8892A6;--util:#6B7C93;
   --m:ui-monospace,'SF Mono',Menlo,monospace;
   --s:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
   --safe-b:env(safe-area-inset-bottom,0px);
@@ -86,21 +87,39 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
 .vs{color:var(--vio);font-size:10px;letter-spacing:.03em;white-space:nowrap}
 
 /* ---------------------------------------------------------------- board */
-.board{flex:0 0 auto;display:grid;grid-template-columns:repeat(8,1fr);
-  grid-template-rows:repeat(8,1fr);gap:2px;aspect-ratio:1;width:100%;padding:6px}
+/* 11 tracks: a deep corner, nine shallow squares, a deep corner — so the edge
+   cells face inwards the way a real board's do, and the middle is larger.
+   40 squares round a 393pt perimeter is ~31px a side whatever shape they are,
+   which is why they carry codes rather than names. */
+.board{flex:0 0 auto;display:grid;
+  grid-template-columns:1.55fr repeat(9,1fr) 1.55fr;
+  grid-template-rows:1.55fr repeat(9,1fr) 1.55fr;
+  gap:1.5px;aspect-ratio:1;width:100%;padding:5px}
 /* A flat fill made the board read as a spreadsheet. The gradient and the hair
    of light along the top edge cost nothing and give each square a face. */
 .cell{position:relative;border:1px solid var(--rule);border-radius:4px;
   background:linear-gradient(168deg,#171B26 0%,#0E1017 62%,#0B0D13 100%);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.035);
   padding:2px;display:flex;flex-direction:column;overflow:hidden;min-width:0}
-.cell .cbar{height:6px;border-radius:2px;flex:0 0 auto}
+/* The colour band sits on the INWARD edge of each side, as on a real board, so
+   the four rows of colour face the middle. Absolutely placed rather than laid
+   out, so the text below it is unaffected by which edge the cell is on. */
+.cell .cbar{position:absolute;border-radius:1px;z-index:1}
+.cell.e-bottom .cbar{top:0;left:0;right:0;height:5px}
+.cell.e-top    .cbar{bottom:0;left:0;right:0;height:5px}
+.cell.e-left   .cbar{right:0;top:0;bottom:0;width:5px}
+.cell.e-right  .cbar{left:0;top:0;bottom:0;width:5px}
+.cell.e-bottom{padding-top:7px}
+.cell.e-top{padding-bottom:7px}
+.cell.e-left{padding-right:7px}
+.cell.e-right{padding-left:7px}
 /* 10px, not the 6.4px the first build used. 28 squares in an 8x8 grid on a
    393pt screen leaves 45px cells, so the full name cannot fit and does not try:
    the cell carries a code, and the centre panel names the square in full. */
-.cell .code{font-family:var(--m);font-size:10px;line-height:1.15;color:var(--body);
-  margin-top:2px;letter-spacing:-.02em}
-.cell .cpr{font-family:var(--m);font-size:9px;color:var(--dim);margin-top:auto}
+.cell .code{font-family:var(--m);font-size:10px;line-height:1.1;color:var(--body);
+  margin-top:1px;letter-spacing:-.06em}
+.cell .cpr{font-family:var(--m);font-size:8px;color:var(--dim);margin-top:auto}
+.cell.e-left .code,.cell.e-right .code,.cell.corner .code{margin-top:0}
 /* Corners are landmarks — Go, the Facility, Absorbed, the Anchorage. They were
    indistinguishable from an ordinary square apart from the label colour. */
 .cell.corner{background:radial-gradient(120% 120% at 50% 0%,#20242F 0%,#12141C 58%,#0C0E14 100%);
@@ -109,13 +128,13 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
 .cell.owned{box-shadow:inset 0 0 0 2px currentColor}
 .cell .toks{position:absolute;bottom:2px;right:2px;display:flex;gap:2px;
   flex-wrap:wrap-reverse;max-width:72%;justify-content:flex-end}
-.tok{width:8px;height:8px;border-radius:50%;border:1px solid rgba(0,0,0,.6)}
-.tok.me{width:11px;height:11px;box-shadow:0 0 0 1.5px var(--void),0 0 8px 1px currentColor}
-.cell .grr{position:absolute;top:8px;right:2px;font-family:var(--m);font-size:9px;color:var(--gold)}
+.tok{width:7px;height:7px;border-radius:50%;border:1px solid rgba(0,0,0,.6)}
+.tok.me{width:9px;height:9px;box-shadow:0 0 0 1.5px var(--void),0 0 8px 1px currentColor}
+.cell .grr{position:absolute;top:6px;right:1px;font-family:var(--m);font-size:8px;color:var(--gold)}
 .cell.here{outline:2px solid var(--gold);outline-offset:-2px;z-index:4}
 .cell.sel{outline:2px solid var(--tx);outline-offset:-2px;z-index:5}
 
-.mid{grid-column:2/8;grid-row:2/8;position:relative;background:#05060A;
+.mid{grid-column:2/11;grid-row:2/11;position:relative;background:#05060A;
   border:1px solid var(--rule);border-radius:8px;overflow:hidden}
 .galaxyCanvas{position:absolute;inset:0;width:100%;height:100%;
   pointer-events:none;z-index:0}

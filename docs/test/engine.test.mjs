@@ -40,14 +40,18 @@ const own = (G, p, sq, extra = {}) =>
 
 /* ============================================================ board shape */
 
-test('board is 28 squares and the named indices agree with the data', () => {
-  assert.equal(BOARD.length, 28);
-  assert.equal(N, 28);
+test('board is 40 squares and the named indices agree with the data', () => {
+  assert.equal(BOARD.length, 40);
+  assert.equal(N, 40);
   assert.equal(BOARD[0].t, 'go');
   assert.equal(BOARD[JAIL].t, 'jail');
-  assert.equal(BOARD[21].t, 'goto');
-  assert.equal(BOARD.filter(b => b.t === 'f').length, 2);
+  assert.equal(BOARD[30].t, 'goto');
+  assert.equal(BOARD.filter(b => b.t === 'f').length, 4);
   assert.equal(BOARD.filter(b => b.t === 'u').length, 2);
+  assert.equal(BOARD.filter(b => b.t === 'con').length, 3);
+  assert.equal(BOARD.filter(b => b.t === 'col').length, 3);
+  assert.equal(BOARD.filter(b => b.pr && b.s).length, 22, '22 properties, as Monopoly has');
+  assert.equal(Object.keys(SETS).length, 8);
 });
 
 test('every set lists squares that exist, carry that set, and share a garrison cost', () => {
@@ -83,7 +87,7 @@ test('the traffic table has one entry per square and sums to 100%', () => {
   assert.equal(TRAFFIC.length, N);
   const sum = TRAFFIC.reduce((a, b) => a + b, 0);
   assert.ok(Math.abs(sum - 100) < 0.5, `traffic sums to ${sum.toFixed(2)}, not 100`);
-  assert.equal(TRAFFIC[21], 0, 'Absorbed cannot be a resting square');
+  assert.equal(TRAFFIC[30], 0, 'Absorbed cannot be a resting square');
 });
 
 /* ============================================================ rent */
@@ -118,25 +122,26 @@ test('a mortgaged holding charges nothing, built or not', () => {
   assert.equal(rentOf(G, 1), 0);
 });
 
-test('fleet rent is 50 alone and 150 for both', () => {
+test('fleet rent doubles with each fleet held', () => {
   const G = game();
   const [a] = G.players;
-  own(G, a, 5);
-  assert.equal(rentOf(G, 5), 50);
-  own(G, a, 18);
-  assert.equal(rentOf(G, 5), 150);
-  assert.equal(rentOf(G, 18), 150);
+  const fleets = BOARD.map((b, i) => [b, i]).filter(([b]) => b.t === 'f').map(([, i]) => i);
+  const expected = [25, 50, 100, 200];
+  fleets.forEach((sq, k) => {
+    own(G, a, sq);
+    assert.equal(rentOf(G, fleets[0]), expected[k], `${k + 1} fleet(s)`);
+  });
 });
 
 test('utility rent is 4x the roll alone and 10x for both', () => {
   const G = game();
   const [a] = G.players;
-  own(G, a, 11);
-  assert.equal(rentOf(G, 11, 7), 28);
-  assert.equal(rentOf(G, 11, 12), 48);
-  own(G, a, 24);
-  assert.equal(rentOf(G, 11, 7), 70);
-  assert.equal(rentOf(G, 24, 3), 30);
+  own(G, a, 12);
+  assert.equal(rentOf(G, 12, 7), 28);
+  assert.equal(rentOf(G, 12, 12), 48);
+  own(G, a, 28);
+  assert.equal(rentOf(G, 12, 7), 70);
+  assert.equal(rentOf(G, 28, 3), 30);
 });
 
 test('an unowned square charges nothing', () => {
@@ -157,7 +162,7 @@ test('holdings value counts cash, list price, and buildings at garrison cost', (
   const G = game();
   const [a] = G.players;
   a.cash = 1000;
-  own(G, a, 13, { garrisons: 2 });                // Horizon, eden, gc 100
+  own(G, a, 16, { garrisons: 2 });                // Horizon, eden, gc 100
   // 1000 cash + 180 list + 2 x 100 garrisons
   assert.equal(holdingsValue(a), 1000 + 180 + 200);
 });
@@ -166,7 +171,7 @@ test('a mortgaged holding is valued at half its list price', () => {
   const G = game();
   const [a] = G.players;
   a.cash = 0;
-  own(G, a, 13, { mortgaged: 1 });
+  own(G, a, 16, { mortgaged: 1 });
   assert.equal(holdingsValue(a), 90);
 });
 
@@ -174,7 +179,7 @@ test('a citadel is valued as five garrisons', () => {
   const G = game();
   const [a] = G.players;
   a.cash = 0;
-  own(G, a, 13, { citadel: 1 });
+  own(G, a, 16, { citadel: 1 });
   assert.equal(holdingsValue(a), 180 + 5 * 100);
 });
 
@@ -204,8 +209,8 @@ test('net worth does not compound a vassal chain twice', () => {
 test('upkeep is 10 per garrison and 30 per citadel', () => {
   const G = game();
   const [a] = G.players;
-  own(G, a, 13, { garrisons: 3 });
-  own(G, a, 14, { citadel: 1 });
+  own(G, a, 16, { garrisons: 3 });
+  own(G, a, 18, { citadel: 1 });
   assert.equal(garrisonsOf(a), 3);
   assert.equal(citadelsOf(a), 1);
   assert.equal(upkeep(a), 3 * 10 + 1 * 30);
@@ -214,7 +219,7 @@ test('upkeep is 10 per garrison and 30 per citadel', () => {
 test('a citadel replaces its garrisons rather than adding to them', () => {
   const G = game();
   const [a] = G.players;
-  own(G, a, 13, { citadel: 1, garrisons: 3 });
+  own(G, a, 16, { citadel: 1, garrisons: 3 });
   assert.equal(garrisonsOf(a), 0, 'a citadel square must not also count garrisons');
   assert.equal(upkeep(a), 30);
 });
@@ -233,17 +238,13 @@ test('holding vassals adds a fixed overhead by count', () => {
 /* ============================================================ payback */
 
 test('set payback matches a hand-computed figure', () => {
-  // Eden: squares 13,14,15 at 180+180+200 = 560 list, plus 3 garrisons on each
-  // at 100 = 900. Cost 1460.
-  // Income per opponent turn at 3 garrisons:
-  //   13: 4.42% x 640 = 28.288
-  //   14: 3.83% x 640 = 24.512
-  //   15: 4.00% x 700 = 28.000
-  //   total 80.80  ->  1460 / 80.80 = 18.07 -> 18
-  const cost = 560 + 900;
-  const income = 0.0442 * 640 + 0.0383 * 640 + 0.0400 * 700;
+  // Hand-checked against the data rather than against a frozen number, so the
+  // board can change without this becoming a lie.
+  const eden = SETS.eden.sq;
+  const cost = eden.reduce((t, i) => t + BOARD[i].pr, 0) + SETS.eden.gc * 3 * eden.length;
+  const income = eden.reduce((t, i) => t + TRAFFIC[i] / 100 * BOARD[i].r[3], 0);
+  assert.equal(cost, 180 + 180 + 200 + 900);
   assert.equal(paybackTurns('eden', TRAFFIC), Math.round(cost / income));
-  assert.equal(paybackTurns('eden', TRAFFIC), 18);
 });
 
 test('every set has a finite, positive payback', () => {
@@ -260,8 +261,8 @@ test('a payment within cash simply moves', () => {
   const G = game();
   const [a, b] = G.players;
   assert.equal(pay(G, a, b, 500), true);
-  assert.equal(a.cash, 1300);
-  assert.equal(b.cash, 2300);
+  assert.equal(a.cash, RULES.startingCash - 500);
+  assert.equal(b.cash, RULES.startingCash + 500);
 });
 
 test('a shortfall against the bank becomes a debt marker for exactly the gap', () => {
@@ -286,12 +287,12 @@ test('liquidation sells citadels, then garrisons, then mortgages', () => {
   const G = game();
   const [a] = G.players;
   a.cash = 0;
-  own(G, a, 13, { citadel: 1 });       // eden, gc 100 -> breaking pays floor(100*5/2)=250
+  own(G, a, 16, { citadel: 1 });       // eden, gc 100 -> breaking pays floor(100*5/2)=250
   own(G, a, 1);                        // syn, list 60 -> mortgage pays 30
   liquidate(G, a, 250);
   assert.equal(a.cash, 250);
-  assert.equal(holding(a, 13).citadel, 0);
-  assert.equal(holding(a, 13).garrisons, 3, 'a broken citadel leaves three garrisons');
+  assert.equal(holding(a, 16).citadel, 0);
+  assert.equal(holding(a, 16).garrisons, 3, 'a broken citadel leaves three garrisons');
   assert.equal(holding(a, 1).mortgaged, 0, 'mortgaging should not have been needed');
 });
 
@@ -299,11 +300,11 @@ test('liquidation mortgages the cheapest holding first', () => {
   const G = game();
   const [a] = G.players;
   a.cash = 0;
-  own(G, a, 27);                        // Cradle, 400 -> 200
+  own(G, a, 39);                        // Cradle, 400 -> 200
   own(G, a, 1);                         // Vessa, 60 -> 30
   liquidate(G, a, 20);
   assert.equal(holding(a, 1).mortgaged, 1);
-  assert.equal(holding(a, 27).mortgaged, 0);
+  assert.equal(holding(a, 39).mortgaged, 0);
 });
 
 test('a shortfall against a player ends in vassalage, not elimination', () => {
@@ -312,7 +313,7 @@ test('a shortfall against a player ends in vassalage, not elimination', () => {
   a.cash = 50;
   assert.equal(pay(G, a, b, 900), false);
   assert.equal(a.cash, 0);
-  assert.equal(b.cash, 1850, 'the creditor receives everything that was there');
+  assert.equal(b.cash, RULES.startingCash + 50, 'the creditor receives everything that was there');
   assert.equal(a.lord, b.i);
   assert.deepEqual(b.vassals, [a.i]);
   assert.equal(a.debt, 0, 'vassalage replaces the debt rather than adding to it');
@@ -324,7 +325,7 @@ test('an overlord takes its cut of a vassal rent, and the vassal banks it as str
   const G = game(seats4);
   const [a, b, c] = G.players;   // c collects, b is c's overlord
   c.lord = b.i; b.vassals = [c.i]; b.tithe = 40;
-  own(G, c, 13);                                  // Horizon, bare rent 22
+  own(G, c, 16);                                  // Horizon, bare rent 22
   const before = { a: a.cash, b: b.cash, c: c.cash };
   payRent(G, a, c, 100);
   assert.equal(a.cash, before.a - 100);
@@ -339,8 +340,8 @@ test('a vassal cannot fully charge its own overlord', () => {
   b.lord = a.i; a.vassals = [b.i]; a.tithe = 25;
   payRent(G, a, b, 200);
   // a pays 200, then 25% returns as tithe: net 150 out, 150 in.
-  assert.equal(a.cash, 1800 - 200 + 50);
-  assert.equal(b.cash, 1800 + 200 - 50);
+  assert.equal(a.cash, RULES.startingCash - 200 + 50);
+  assert.equal(b.cash, RULES.startingCash + 200 - 50);
 });
 
 test('no tithe is taken when the rent cannot be settled', () => {
@@ -478,19 +479,19 @@ test('a successful defence halves what the vassal had put aside', () => {
 test('passing the ledger opening pays 200 exactly once per lap', () => {
   const G = game();
   const [a] = G.players;
-  a.pos = 25;
-  roll(G, 3, 4);                    // 25 + 7 = 32 -> 4, passing 0
+  a.pos = 37;
+  roll(G, 3, 4);                    // 37 + 7 = 44 -> 4, passing 0
   assert.equal(a.pos, 4);
-  assert.equal(a.cash, 1800 + RULES.passGo);
+  assert.equal(a.cash, RULES.startingCash + RULES.passGo);
 });
 
 test('landing exactly on the ledger opening still pays', () => {
   const G = game();
   const [a] = G.players;
-  a.pos = 21;
+  a.pos = 33;
   roll(G, 3, 4);
   assert.equal(a.pos, 0);
-  assert.equal(a.cash, 1800 + RULES.passGo);
+  assert.equal(a.cash, RULES.startingCash + RULES.passGo);
 });
 
 test('a card that sends you backwards past Go pays nothing', () => {
@@ -500,8 +501,8 @@ test('a card that sends you backwards past Go pays nothing', () => {
   G.pendingCard = { card: { x: 'back', back: 3 }, isContingency: true };
   G.phase = 'card';
   applyCard(G);
-  assert.equal(a.pos, 27);
-  assert.equal(a.cash, 1800, 'going backwards never pays the ledger opening');
+  assert.equal(a.pos, 39);
+  assert.equal(a.cash, RULES.startingCash, 'going backwards never pays the ledger opening');
   assert.equal(G.phase, 'offer');
 });
 
@@ -513,19 +514,19 @@ test('a card sending you to Go pays for the lap', () => {
   G.phase = 'card';
   applyCard(G);
   assert.equal(a.pos, 0);
-  assert.equal(a.cash, 1800 + RULES.passGo);
+  assert.equal(a.cash, RULES.startingCash + RULES.passGo);
 });
 
 test('Absorbed sends you to the Facility without paying for the lap', () => {
   const G = game();
   const [a] = G.players;
-  a.pos = 14;
-  roll(G, 3, 4);                     // -> 21, Absorbed
-  assert.equal(a.pos, 21);
+  a.pos = 23;
+  roll(G, 3, 4);                     // -> 30, Absorbed
+  assert.equal(a.pos, 30);
   resolveLanding(G);
   assert.equal(a.pos, JAIL);
   assert.equal(a.inFacility, true);
-  assert.equal(a.cash, 1800);
+  assert.equal(a.cash, RULES.startingCash);
 });
 
 test('the nearest-fleet card advances forwards only', () => {
@@ -535,18 +536,18 @@ test('the nearest-fleet card advances forwards only', () => {
   G.pendingCard = { card: { x: 'fleet', fleet: 1 }, isContingency: true };
   G.phase = 'card';
   applyCard(G);
-  assert.equal(a.pos, 18, 'from 6 the next fleet forwards is 18, not 5 behind');
+  assert.equal(a.pos, 15, 'from 6 the next fleet forwards is 18, not 5 behind');
 });
 
 test('the nearest-utility card wraps past Go and pays for the lap', () => {
   const G = game();
   const [a] = G.players;
-  a.pos = 25;
+  a.pos = 37;
   G.pendingCard = { card: { x: 'util', util: 1 }, isContingency: true };
   G.phase = 'card';
   applyCard(G);
-  assert.equal(a.pos, 11);
-  assert.equal(a.cash, 1800 + RULES.passGo);
+  assert.equal(a.pos, 12);
+  assert.equal(a.cash, RULES.startingCash + RULES.passGo);
 });
 
 /* ============================================================ the Facility */
@@ -569,7 +570,7 @@ test('an Overseer can be settled with before rolling', () => {
   const [a] = G.players;
   a.inFacility = true; a.pos = JAIL; a.attempts = 1;
   assert.equal(payFacilityFee(G), true);
-  assert.equal(a.cash, 1800 - RULES.facilityFee);
+  assert.equal(a.cash, RULES.startingCash - RULES.facilityFee);
   assert.equal(a.inFacility, false);
   assert.equal(a.attempts, 0);
   assert.equal(G.phase, 'roll', 'you still have your roll after paying');
@@ -627,7 +628,7 @@ test('an amendment moves one square, charges the fee, and spends the allowance',
   G.phase = 'landed';
   amendManifest(G);
   assert.equal(a.pos, 5);
-  assert.equal(a.cash, 1800 - 500);
+  assert.equal(a.cash, RULES.startingCash - 500);
   assert.equal(a.amends, 2);
 });
 
@@ -651,7 +652,7 @@ test('a garrison needs the full set, the pool, and the money', () => {
   assert.equal(build(G, a, 1), false, 'half a set cannot be garrisoned');
   own(G, a, 3);
   assert.equal(build(G, a, 1), true);
-  assert.equal(a.cash, 1800 - SETS.syn.gc);
+  assert.equal(a.cash, RULES.startingCash - SETS.syn.gc);
   assert.equal(G.garrisonPool, RULES.garrisonPool - 1);
 });
 
@@ -687,10 +688,10 @@ test('development cannot exceed the pools', () => {
 test('selling a garrison refunds half and returns it to the pool', () => {
   const G = game();
   const [a] = G.players;
-  own(G, a, 13, { garrisons: 2 });
+  own(G, a, 16, { garrisons: 2 });
   G.garrisonPool = RULES.garrisonPool - 2;
   const before = a.cash;
-  assert.equal(sellDevelopment(G, a, 13), true);
+  assert.equal(sellDevelopment(G, a, 16), true);
   assert.equal(a.cash, before + SETS.eden.gc / 2);
   assert.equal(G.garrisonPool, RULES.garrisonPool - 1);
 });
@@ -698,19 +699,19 @@ test('selling a garrison refunds half and returns it to the pool', () => {
 test('mortgage pays half the list price and redemption costs 55%', () => {
   const G = game();
   const [a] = G.players;
-  own(G, a, 27);                      // Cradle, 400
-  assert.equal(mortgage(G, a, 27), true);
-  assert.equal(a.cash, 1800 + 200);
-  assert.equal(redeem(G, a, 27), true);
-  assert.equal(a.cash, 1800 + 200 - 220);
-  assert.equal(holding(a, 27).mortgaged, 0);
+  own(G, a, 39);                      // Cradle, 400
+  assert.equal(mortgage(G, a, 39), true);
+  assert.equal(a.cash, RULES.startingCash + 200);
+  assert.equal(redeem(G, a, 39), true);
+  assert.equal(a.cash, RULES.startingCash + 200 - 220);
+  assert.equal(holding(a, 39).mortgaged, 0);
 });
 
 test('a built square cannot be mortgaged', () => {
   const G = game();
   const [a] = G.players;
-  own(G, a, 13, { garrisons: 1 });
-  assert.equal(mortgage(G, a, 13), false);
+  own(G, a, 16, { garrisons: 1 });
+  assert.equal(mortgage(G, a, 16), false);
 });
 
 test('a debt marker blocks buying and building', () => {
@@ -737,37 +738,37 @@ test('repaying a debt takes what is available and no more', () => {
 test('buying takes the list price and records the holding', () => {
   const G = game();
   const [a] = G.players;
-  a.pos = 13;
+  a.pos = 16;
   assert.equal(buy(G, a), true);
-  assert.equal(a.cash, 1800 - 180);
-  assert.equal(ownerOf(G, 13).i, a.i);
+  assert.equal(a.cash, RULES.startingCash - 180);
+  assert.equal(ownerOf(G, 16).i, a.i);
 });
 
 test('an owned square cannot be bought again', () => {
   const G = game();
   const [a, b] = G.players;
-  own(G, a, 13);
-  b.pos = 13;
+  own(G, a, 16);
+  b.pos = 16;
   assert.equal(buy(G, b), false);
 });
 
 test('a sealed auction pays the highest bid, not the list price', () => {
   const G = game();
   const [a, b] = G.players;
-  openAuction(G, 13);                    // Horizon, list 180
+  openAuction(G, 16);                    // Horizon, list 180
   submitBid(G, a.i, 250);
   submitBid(G, b.i, 400);
   assert.equal(G.auction.winner, b.i);
-  assert.equal(b.cash, 1800 - 400);
-  assert.equal(a.cash, 1800, 'a losing bid costs nothing');
-  assert.equal(ownerOf(G, 13).i, b.i);
+  assert.equal(b.cash, RULES.startingCash - 400);
+  assert.equal(a.cash, RULES.startingCash, 'a losing bid costs nothing');
+  assert.equal(ownerOf(G, 16).i, b.i);
 });
 
 test('a bid is capped at the bidder’s cash and cannot be negative', () => {
   const G = game();
   const [a, b] = G.players;
   a.cash = 300;
-  openAuction(G, 13);
+  openAuction(G, 16);
   submitBid(G, a.i, 99999);
   submitBid(G, b.i, -50);
   assert.equal(G.auction.bids[a.i], 300);
@@ -778,11 +779,11 @@ test('a bid is capped at the bidder’s cash and cannot be negative', () => {
 test('an auction nobody bids on leaves the square unclaimed', () => {
   const G = game();
   const [a, b] = G.players;
-  openAuction(G, 13);
+  openAuction(G, 16);
   submitBid(G, a.i, 0);
   submitBid(G, b.i, 0);
   assert.equal(G.auction.winner, null);
-  assert.equal(ownerOf(G, 13), null);
+  assert.equal(ownerOf(G, 16), null);
 });
 
 /* ============================================================ contracts */
@@ -790,46 +791,46 @@ test('an auction nobody bids on leaves the square unclaimed', () => {
 test('a built set is frozen — nothing in it can be traded', () => {
   const G = game();
   const [a, b] = G.players;
-  own(G, a, 13, { garrisons: 1 });
-  own(G, a, 14); own(G, a, 15);
-  assert.equal(tradable(G, a, 14), false, 'a sibling square is built');
-  assert.equal(tradable(G, a, 13), false);
+  own(G, a, 16, { garrisons: 1 });
+  own(G, a, 18); own(G, a, 19);
+  assert.equal(tradable(G, a, 18), false, 'a sibling square is built');
+  assert.equal(tradable(G, a, 16), false);
 });
 
 test('a mortgaged holding cannot be traded', () => {
   const G = game();
   const [a] = G.players;
-  own(G, a, 13, { mortgaged: 1 });
-  assert.equal(tradable(G, a, 13), false);
+  own(G, a, 16, { mortgaged: 1 });
+  assert.equal(tradable(G, a, 16), false);
 });
 
 test('settling a contract moves both squares and the cash', () => {
   const G = game();
   const [a, b] = G.players;
-  own(G, a, 1); own(G, b, 13);
-  settleContract(G, { from: a.i, to: b.i, give: 1, get: 13, cash: 200, direction: 1 });
-  assert.equal(ownerOf(G, 13).i, a.i);
+  own(G, a, 1); own(G, b, 16);
+  settleContract(G, { from: a.i, to: b.i, give: 1, get: 16, cash: 200, direction: 1 });
+  assert.equal(ownerOf(G, 16).i, a.i);
   assert.equal(ownerOf(G, 1).i, b.i);
-  assert.equal(a.cash, 1600);
-  assert.equal(b.cash, 2000);
+  assert.equal(a.cash, RULES.startingCash - 200);
+  assert.equal(b.cash, RULES.startingCash + 200);
 });
 
 test('a contract cannot pay out more cash than the payer holds', () => {
   const G = game();
   const [a, b] = G.players;
   a.cash = 100;
-  own(G, b, 13);
-  settleContract(G, { from: a.i, to: b.i, give: null, get: 13, cash: 5000, direction: 1 });
+  own(G, b, 16);
+  settleContract(G, { from: a.i, to: b.i, give: null, get: 16, cash: 5000, direction: 1 });
   assert.equal(a.cash, 0);
-  assert.equal(b.cash, 1900);
+  assert.equal(b.cash, RULES.startingCash + 100);
 });
 
 test('a traded square arrives undeveloped', () => {
   const G = game();
   const [a, b] = G.players;
-  own(G, b, 13);
-  settleContract(G, { from: a.i, to: b.i, give: null, get: 13, cash: 0, direction: 1 });
-  assert.deepEqual(holding(a, 13), { sq: 13, garrisons: 0, citadel: 0, mortgaged: 0 });
+  own(G, b, 16);
+  settleContract(G, { from: a.i, to: b.i, give: null, get: 16, cash: 0, direction: 1 });
+  assert.deepEqual(holding(a, 16), { sq: 16, garrisons: 0, citadel: 0, mortgaged: 0 });
 });
 
 /* ============================================================ seeking trades */
@@ -837,12 +838,12 @@ test('a traded square arrives undeveloped', () => {
 test('a set-completing target is found only when one other player holds the last square', () => {
   const G = game(seats4);
   const [a, b, c] = G.players;
-  own(G, a, 13); own(G, a, 14);
+  own(G, a, 16); own(G, a, 18);
   assert.deepEqual(setCompletingTargets(G, a), [], 'square 15 is still unowned — buy it, do not trade for it');
-  own(G, b, 15);
+  own(G, b, 19);
   const found = setCompletingTargets(G, a);
   assert.equal(found.length, 1);
-  assert.equal(found[0].sq, 15);
+  assert.equal(found[0].sq, 19);
   assert.equal(found[0].owner.i, b.i);
   assert.equal(found[0].set, 'eden');
 });
@@ -850,7 +851,7 @@ test('a set-completing target is found only when one other player holds the last
 test('a set split across two other players offers no single completing trade', () => {
   const G = game(seats4);
   const [a, b, c] = G.players;
-  own(G, a, 13); own(G, b, 14); own(G, c, 15);
+  own(G, a, 16); own(G, b, 18); own(G, c, 19);
   assert.deepEqual(setCompletingTargets(G, a), []);
 });
 
@@ -864,12 +865,12 @@ test('a built square is not a completing target — it cannot legally move', () 
 test('a sought contract asks for the completing square and offers cash', () => {
   const G = game(seats4);
   const [a, b] = G.players;
-  own(G, a, 13); own(G, a, 14); own(G, b, 15);
+  own(G, a, 16); own(G, a, 18); own(G, b, 19);
   const c = seekContract(G, a);
   assert.ok(c, 'a contract should have been found');
   assert.equal(c.from, a.i);
   assert.equal(c.to, b.i);
-  assert.equal(c.get, 15);
+  assert.equal(c.get, 19);
   assert.equal(c.direction, 1);
   assert.ok(c.cash > 0);
   assert.ok(c.cash <= a.cash - 300, 'a proposer keeps a reserve');
@@ -878,7 +879,7 @@ test('a sought contract asks for the completing square and offers cash', () => {
 test('no contract is sought without the cash to make one worth answering', () => {
   const G = game(seats4);
   const [a, b] = G.players;
-  own(G, a, 13); own(G, a, 14); own(G, b, 15);
+  own(G, a, 16); own(G, a, 18); own(G, b, 19);
   a.cash = 320;
   assert.equal(seekContract(G, a), null);
 });
@@ -886,11 +887,11 @@ test('no contract is sought without the cash to make one worth answering', () =>
 test('a proposer will not offer away a square from a set it is trying to close', () => {
   const G = game(seats4);
   const [a, b] = G.players;
-  own(G, a, 13); own(G, a, 14); own(G, b, 15);   // chasing Eden
+  own(G, a, 16); own(G, a, 18); own(G, b, 19);   // chasing Eden
   own(G, a, 1);                                   // spare, no set of ours
   const c = seekContract(G, a);
-  assert.notEqual(c.give, 13);
-  assert.notEqual(c.give, 14);
+  assert.notEqual(c.give, 16);
+  assert.notEqual(c.give, 18);
 });
 
 /* ============================================================ contracts in play */
@@ -898,8 +899,8 @@ test('a proposer will not offer away a square from a set it is trying to close',
 test('an illegal contract is rejected before anyone is asked', () => {
   const G = game(seats4);
   const [a, b] = G.players;
-  own(G, b, 13, { garrisons: 1 });
-  assert.equal(contractIsLegal(G, { from: a.i, to: b.i, get: 13, give: null, cash: 100, direction: 1 }), false);
+  own(G, b, 16, { garrisons: 1 });
+  assert.equal(contractIsLegal(G, { from: a.i, to: b.i, get: 16, give: null, cash: 100, direction: 1 }), false);
   assert.equal(contractIsLegal(G, { from: a.i, to: a.i, get: null, give: null, cash: 100, direction: 1 }), false);
   assert.equal(contractIsLegal(G, { from: a.i, to: b.i, get: null, give: null, cash: 0, direction: 1 }), false);
   a.debt = 50;
@@ -910,26 +911,26 @@ test('an illegal contract is rejected before anyone is asked', () => {
 test('a proposal to an opponent is answered at once', () => {
   const G = game(seats4);
   const a = G.players[0], ai = G.players[2];
-  own(G, ai, 13);
-  const r = proposeContract(G, { from: a.i, to: ai.i, get: 13, give: null, cash: 900, direction: 1 });
+  own(G, ai, 16);
+  const r = proposeContract(G, { from: a.i, to: ai.i, get: 16, give: null, cash: 900, direction: 1 });
   assert.equal(r.ok, true);
   assert.equal(r.pending, false);
   assert.equal(typeof r.accepted, 'boolean');
-  if (r.accepted) assert.equal(ownerOf(G, 13).i, a.i);
+  if (r.accepted) assert.equal(ownerOf(G, 16).i, a.i);
 });
 
 test('a generous offer is accepted and a derisory one refused', () => {
   const generous = (() => {
     const G = game(seats4);
     const a = G.players[0], ai = G.players[2];
-    own(G, ai, 13);
-    return proposeContract(G, { from: a.i, to: ai.i, get: 13, give: null, cash: 1500, direction: 1 }).accepted;
+    own(G, ai, 16);
+    return proposeContract(G, { from: a.i, to: ai.i, get: 16, give: null, cash: 1500, direction: 1 }).accepted;
   })();
   const derisory = (() => {
     const G = game(seats4);
     const a = G.players[0], ai = G.players[2];
-    own(G, ai, 13);
-    return proposeContract(G, { from: a.i, to: ai.i, get: 13, give: null, cash: 1, direction: 1 }).accepted;
+    own(G, ai, 16);
+    return proposeContract(G, { from: a.i, to: ai.i, get: 16, give: null, cash: 1, direction: 1 }).accepted;
   })();
   assert.equal(generous, true);
   assert.equal(derisory, false);
@@ -938,51 +939,51 @@ test('a generous offer is accepted and a derisory one refused', () => {
 test('a proposal to a human parks the game and waits for an answer', () => {
   const G = game(seats4);
   const [a, b] = G.players;
-  own(G, b, 13);
+  own(G, b, 16);
   G.phase = 'end';
-  const r = proposeContract(G, { from: a.i, to: b.i, get: 13, give: null, cash: 400, direction: 1 });
+  const r = proposeContract(G, { from: a.i, to: b.i, get: 16, give: null, cash: 400, direction: 1 });
   assert.equal(r.pending, true);
   assert.equal(G.phase, 'contract');
-  assert.equal(ownerOf(G, 13).i, b.i, 'nothing moves until the answer');
+  assert.equal(ownerOf(G, 16).i, b.i, 'nothing moves until the answer');
   respondToContract(G, true);
-  assert.equal(ownerOf(G, 13).i, a.i);
-  assert.equal(a.cash, 1800 - 400);
+  assert.equal(ownerOf(G, 16).i, a.i);
+  assert.equal(a.cash, RULES.startingCash - 400);
   assert.equal(G.phase, 'end', 'the turn resumes where it was interrupted');
 });
 
 test('refusing a parked contract moves nothing', () => {
   const G = game(seats4);
   const [a, b] = G.players;
-  own(G, b, 13);
+  own(G, b, 16);
   G.phase = 'end';
-  proposeContract(G, { from: a.i, to: b.i, get: 13, give: null, cash: 400, direction: 1 });
+  proposeContract(G, { from: a.i, to: b.i, get: 16, give: null, cash: 400, direction: 1 });
   respondToContract(G, false);
-  assert.equal(ownerOf(G, 13).i, b.i);
-  assert.equal(a.cash, 1800);
+  assert.equal(ownerOf(G, 16).i, b.i);
+  assert.equal(a.cash, RULES.startingCash);
   assert.equal(G.contract, null);
 });
 
 test('a contract that became illegal while parked does not settle', () => {
   const G = game(seats4);
   const [a, b] = G.players;
-  own(G, b, 13); own(G, b, 14); own(G, b, 15);
+  own(G, b, 16); own(G, b, 18); own(G, b, 19);
   G.phase = 'end';
-  proposeContract(G, { from: a.i, to: b.i, get: 13, give: null, cash: 400, direction: 1 });
-  holding(b, 14).garrisons = 1;                  // the set is built up mid-negotiation
+  proposeContract(G, { from: a.i, to: b.i, get: 16, give: null, cash: 400, direction: 1 });
+  holding(b, 18).garrisons = 1;                  // the set is built up mid-negotiation
   assert.equal(respondToContract(G, true), false);
-  assert.equal(ownerOf(G, 13).i, b.i);
-  assert.equal(a.cash, 1800, 'no cash moves on a lapsed contract');
+  assert.equal(ownerOf(G, 16).i, b.i);
+  assert.equal(a.cash, RULES.startingCash, 'no cash moves on a lapsed contract');
 });
 
 test('opponents now trade with each other, not only with humans', () => {
   const G = game(seats4);
   const spector = G.players[2], varan = G.players[3];
-  own(G, spector, 13); own(G, spector, 14);
-  own(G, varan, 15);
+  own(G, spector, 16); own(G, spector, 18);
+  own(G, varan, 19);
   const c = seekContract(G, spector);
   assert.ok(c, 'an opponent should seek the completing square');
   assert.equal(c.to, varan.i);
-  const before = ownerOf(G, 15).i;
+  const before = ownerOf(G, 19).i;
   proposeContract(G, c);
   assert.equal(G.phase !== 'contract', true, 'an opponent answers immediately');
   assert.notEqual(typeof before, 'undefined');
@@ -1071,7 +1072,31 @@ test('a corrupt, empty or foreign save is refused rather than half-loaded', () =
   assert.equal(deserialize('not json'), null);
   assert.equal(deserialize('{}'), null);
   assert.equal(deserialize(JSON.stringify({ v: 999, board: 28, G: {} })), null);
-  assert.equal(deserialize(JSON.stringify({ v: 1, board: 40, G: { players: [{}], rngState: 1 } })), null,
+  assert.equal(deserialize(JSON.stringify({ v: 1, board: 28, G: { players: [{}], rngState: 1 } })), null,
     'a save from a different board must not resume — square indices would mean other places');
   assert.equal(deserialize(JSON.stringify({ v: 1, board: 28, G: { players: [] } })), null);
+});
+
+test('a chain of oaths can never close into a loop', () => {
+  // Sam is sworn to Meelah, Meelah to Spector. Now Spector falls to Sam.
+  // Without breaking the chain first this closes a cycle and any walk of it
+  // never terminates.
+  const G = game(seats4);
+  const [sam, meelah, spector] = G.players;
+  sam.lord = meelah.i; meelah.vassals = [sam.i];
+  meelah.lord = spector.i; spector.vassals = [meelah.i];
+  spector.cash = 0;
+  pay(G, spector, sam, 500);
+
+  for (const p of G.players) {
+    const seen = new Set();
+    let at = p.lord, guard = 0;
+    while (at !== null) {
+      assert.ok(!seen.has(at), `cycle reached from ${p.name}`);
+      assert.ok(guard++ < G.players.length + 2, 'chain does not terminate');
+      seen.add(at);
+      at = G.players[at].lord;
+    }
+  }
+  assert.equal(spector.lord, sam.i, 'the creditor still takes the oath');
 });

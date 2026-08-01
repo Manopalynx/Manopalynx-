@@ -21,7 +21,7 @@ Playable. Engine, interface, offline support and save/resume are all in.
 ```
 data.js      board, decks, opponents, economy constants — data only
 engine.js    the rules. No DOM, no timers, no Math.random
-test/        100 passing
+test/        108 passing
 ```
 
 ## Running the tests
@@ -62,37 +62,37 @@ would ever have flagged that.
   cycles, no square held twice, no player ever removed from the table, every game reaches
   an ending.
 
-## The game reaching its own ending — and how
+## Balance: what has been found to matter
 
-At first, absorption decided **0 of 120** four-seat games. Every one ran out the circuit
-limit and ended on totals, which is the fallback branch, not the design.
+Absorption is the designed ending. Getting games to actually reach it took two
+findings, and ruled out two plausible suspects.
 
-The obvious suspect was the money supply — ₡200 a lap on a 28-square board is a lap every
-four rolls. That was wrong. Sweeping the lap payment from ₡200 down to ₡100 and tripling
-upkeep moved the four-seat absorption rate **not at all**, flat 0% across the whole sweep.
+**Trading matters most.** Before opponents traded with each other, colour sets
+almost never completed, rents stayed at bare-square level, and absorption decided
+15 of 120 two-seat games. Nothing about the board was wrong — the original file's
+AI only ever proposed contracts to humans, so two opponents never closed a set
+between them. Adding it moved everything with no economy constant touched.
 
-The real cause, measured with `diagnose.mjs`: rents never left bare-square level, because
-colour sets almost never completed. Sets complete through *trading*, and nothing traded —
-neither the harness nor the opponents. The original file's AI only ever proposed contracts
-to humans, so opponents never closed a set with each other in the whole game.
+**Game length matters next.** A lap on 40 squares takes ~5.7 rolls instead of
+~4, so the old 24-circuit limit was not enough turns to acquire, trade and build.
+Swept at two seats:
 
-Adding trading on both sides fixed it, with **no economy constant touched**:
+| circuits | 24 | 36 | 48 | 60 |
+|---|---|---|---|---|
+| games decided by absorption | 7% | 23% | 53% | 67% |
 
-| | before trading | after |
-|---|---|---|
-| colour sets completed per game (of 6) | 1.1 | 3.8 |
-| median rent standing on the board | ₡26 | ₡50 |
-| cash alone covers a player's worst exposure | 93% | 74% |
-| two-seat games decided by absorption | 15/120 | **56/120** |
-| four-seat games where vassalage appeared | 31/120 | **96/120** |
+The default is 48, which is roughly 80 turns at two seats.
 
-All three balance targets are now enforced tests rather than aspirations.
+**Ruled out: the money supply.** Sweeping the lap payment from ₡200 down to ₡100
+and tripling upkeep moved the four-seat rate not at all.
 
-Absorption endings by table: two humans **56/120**, plus one opponent **27/120**, plus two
-opponents **5/120**, one human against three **8/120**. The rate falls with seat count
-because absorbing three rivals inside 24 circuits is a tall order — a four-seat game usually
-ends on totals *with an overlord and vassals already in place*, which is the Compact rather
-than outright conquest, and reads as a legitimate ending rather than a failure to reach one.
+**Ruled out: the auto-liquidation safety net.** Only 4–9% of players ever need it
+against their largest exposure, so it is not what catches them.
+
+Current, 120 games each: two humans **57/120**, plus one opponent **45/120**,
+plus two **20/120**, one human against three **50/120**. Vassalage appears
+somewhere in **103 of 120** four-seat games. All enforced as tests.
+
 
 ## Canon
 
