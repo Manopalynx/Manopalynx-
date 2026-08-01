@@ -21,7 +21,8 @@ import {
   settleContract, declareIndependence, submitClaim, closeContest, standings,
   setCompletingTargets, seekContract, contractIsLegal, proposeContract, respondToContract,
   serialize, deserialize, payFacilityFee, releaseVassal, aiValue, aiBid, aiWantsToBuy,
-  pledge, pledgeValue, redeemCost, raisableValue, parkForSettlement, autoSettle, settleNow
+  pledge, pledgeValue, redeemCost, raisableValue, parkForSettlement, autoSettle, settleNow,
+  threatPenalty, setBuildingTargets, denialTargets, aiCounter, aiAcceptsContract
 } from '../engine.js';
 
 /* -------------------------------------------------------------- fixtures */
@@ -1336,4 +1337,134 @@ test('liquidation raises the whole bill, not just the gap', () => {
   own(G, a, SETS.eden.sq[2]);          // 200 -> pledges for 100
   assert.equal(pay(G, a, b, 250), true, 'it can cover 250 from 100 cash plus 280 of pledges');
   assert.equal(a.lord, null, 'and must not fall while it still holds sellable assets');
+});
+
+/* ============================================================ how they trade */
+
+test('a rival one square from a set is priced in, not only a completed one', () => {
+  // Previously the penalty fired ONLY when handing the square over completed a
+  // rival's set. One away was invisible to everyone except Varan, who noticed
+  // it by a different route entirely.
+  const eden = SETS.eden.sq;
+  const priceOf = (persona, rivalHolds) => {
+    const G = game([{ name: 'Sam', kind: 'human' }, { name: 'X', kind: 'ai', persona }]);
+    const [sam, ai] = G.players;
+    ai.holdings = [{ sq: eden[2], garrisons: 0, citadel: 0, mortgaged: 0 }];
+    sam.holdings = eden.slice(0, rivalHolds).map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+    sam.cash = 100000;
+    for (let c = 0; c <= 12000; c += 10) {
+      if (aiAcceptsContract(G, ai, sam, { get: eden[2], give: null, cash: c, direction: 1 })) return c;
+    }
+    return Infinity;
+  };
+  for (const persona of ['spector', 'varan', 'vale']) {
+    const none = priceOf(persona, 0), one = priceOf(persona, 1), two = priceOf(persona, 2);
+    assert.ok(one > none, `${persona} should charge more when a rival holds one of the set`);
+    assert.ok(two > one, `${persona} should charge more again when it would complete the set`);
+  }
+});
+
+test('the three of them read the same threat differently', () => {
+  const eden = SETS.eden.sq;
+  const G = game([
+    { name: 'Sam', kind: 'human' },
+    { name: 'S', kind: 'ai', persona: 'spector' },
+    { name: 'V', kind: 'ai', persona: 'varan' },
+    { name: 'A', kind: 'ai', persona: 'vale' }
+  ]);
+  G.players[0].holdings = eden.slice(0, 2).map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+  const [, spector, varan, vale] = G.players;
+  const pen = p => threatPenalty(G, p, eden[2]);
+  assert.ok(pen(varan) > pen(spector), 'Varan should fear a rival set most');
+  assert.ok(pen(spector) > pen(vale), 'Vale should barely notice');
+});
+
+test('an opponent holding part of a set will now trade to build it', () => {
+  // It used to seek only the LAST square of a set, so one holding out of three
+  // made it mute — it could close a position but never build one.
+  const eden = SETS.eden.sq;
+  for (const persona of ['spector', 'varan', 'vale']) {
+    const G = game([{ name: 'Sam', kind: 'human' }, { name: 'X', kind: 'ai', persona }]);
+    const [sam, ai] = G.players;
+    ai.holdings = [{ sq: eden[0], garrisons: 0, citadel: 0, mortgaged: 0 }];
+    sam.holdings = eden.slice(1).map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+    const c = seekContract(G, ai);
+    assert.ok(c, `${persona} made no offer while holding one of three`);
+    assert.ok(eden.includes(c.get), `${persona} asked for something outside the set it started`);
+  }
+});
+
+test('Varan buys the square a rival needs, purely to stop them', () => {
+  const ven = SETS.ven.sq;
+  const G = game([
+    { name: 'Sam', kind: 'human' },
+    { name: 'Vale', kind: 'ai', persona: 'vale' },
+    { name: 'Varan', kind: 'ai', persona: 'varan' }
+  ]);
+  const [sam, vale, varan] = G.players;
+  sam.holdings = ven.slice(0, 2).map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+  vale.holdings = [{ sq: ven[2], garrisons: 0, citadel: 0, mortgaged: 0 }];
+  const c = seekContract(G, varan);
+  assert.ok(c, 'Varan should act on a rival one square from a set');
+  assert.equal(c.get, ven[2]);
+  assert.equal(c.to, vale.i, 'he buys it from whoever holds it');
+  assert.equal(denialTargets(G, varan).length, 1);
+  // Vale already holds the blocking square, so there is nothing for him to buy.
+  assert.equal(denialTargets(G, vale).length, 0);
+});
+
+test('the others can see the same threat and do not act on it', () => {
+  const ven = SETS.ven.sq;
+  const G = game([
+    { name: 'Sam', kind: 'human' },
+    { name: 'Vale', kind: 'ai', persona: 'vale' },
+    { name: 'Spector', kind: 'ai', persona: 'spector' }
+  ]);
+  const [sam, vale, spector] = G.players;
+  sam.holdings = ven.slice(0, 2).map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+  vale.holdings = [{ sq: ven[2], garrisons: 0, citadel: 0, mortgaged: 0 }];
+  assert.equal(denialTargets(G, spector).length, 1, 'the threat is plainly visible');
+  const c = seekContract(G, spector);
+  assert.ok(!c || c.get !== ven[2], 'but Spector does not buy things to spite people');
+});
+
+test('a refusal names a price, in each of their voices', () => {
+  const sq = SETS.eden.sq[2];
+  const counters = {};
+  for (const persona of ['spector', 'varan', 'vale']) {
+    // Varan declines to counter some of the time, so give him several goes.
+    for (let seed = 1; seed <= 12 && !counters[persona]; seed++) {
+      const G = game([{ name: 'Sam', kind: 'human' }, { name: 'X', kind: 'ai', persona }], seed);
+      G.players[1].holdings = [{ sq, garrisons: 0, citadel: 0, mortgaged: 0 }];
+      const r = proposeContract(G, { from: 0, to: 1, get: sq, give: null, cash: 100, direction: 1 });
+      assert.equal(r.accepted, false, 'a hundred credits should not carry it');
+      if (r.counter) counters[persona] = r.counter.cash;
+    }
+    assert.ok(counters[persona], `${persona} never named a price in twelve tries`);
+    assert.ok(counters[persona] > 100, 'a counter must ask for more than was offered');
+  }
+  assert.ok(counters.varan > counters.spector, 'Varan asks over the odds');
+  assert.ok(counters.vale < counters.spector, 'Vale shades his own price down');
+});
+
+test('a counter is never named above what the proposer could pay', () => {
+  const sq = SETS.agora.sq[1];
+  const G = game([{ name: 'Sam', kind: 'human' }, { name: 'X', kind: 'ai', persona: 'spector' }]);
+  G.players[0].cash = 50;
+  G.players[1].holdings = [{ sq, garrisons: 0, citadel: 0, mortgaged: 0 }];
+  const r = proposeContract(G, { from: 0, to: 1, get: sq, give: null, cash: 10, direction: 1 });
+  assert.equal(r.counter, null, 'naming an unaffordable price is just noise');
+});
+
+test('accepting a counter settles at the countered price', () => {
+  const sq = SETS.eden.sq[2];
+  const G = game([{ name: 'Sam', kind: 'human' }, { name: 'X', kind: 'ai', persona: 'spector' }]);
+  const [sam, ai] = G.players;
+  ai.holdings = [{ sq, garrisons: 0, citadel: 0, mortgaged: 0 }];
+  const r = proposeContract(G, { from: 0, to: 1, get: sq, give: null, cash: 100, direction: 1 });
+  assert.ok(r.counter);
+  const before = sam.cash;
+  settleContract(G, r.counter);
+  assert.equal(ownerOf(G, sq).i, sam.i);
+  assert.equal(sam.cash, before - r.counter.cash);
 });

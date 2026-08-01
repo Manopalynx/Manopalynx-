@@ -518,7 +518,7 @@ const ACTIONS = {
   showSettle, settlePledge, settleSellG, settleBreak, settleAuto, settleDone,
   buyNow, declineToAuction, takeCard, sealBid, sealClaim, endAuction, endContest,
   answerContract, build, raiseCitadel, sellDev, toggleMortgage, repay,
-  setTithe, release, declare, tradeSet, sendTrade, playOn
+  setTithe, release, declare, tradeSet, sendTrade, takeCounter, playOn
 };
 for (const k of Object.keys(ACTIONS)) window[k] = ACTIONS[k];
 
@@ -929,6 +929,7 @@ function declare() { E.declareIndependence(G, E.current(G)); closeSheet(); tick(
 
 /* ---------------------------------------------------------- contracts */
 let TR = null;
+let COUNTER = null;      // a price an opponent named after refusing
 function showTrade() {
   const me = E.current(G);
   if (me.debt) {
@@ -1019,12 +1020,44 @@ function sendTrade() {
   }
   if (r.pending) { tick(); return; }              // a human must answer
   if (!r.accepted) {
+    const them = G.players[proposal.to];
     const line = G.log[0];
-    sheet(`<h3>Refused</h3><div class="sub">${esc(G.players[proposal.to].name)}</div>
-      <div class="card">“${esc(line ? line.text : 'No.')}”</div>
-      ${btns([['Close', 'closeSheet', 'pri wide']])}`);
+    if (r.counter) {
+      COUNTER = r.counter;
+      const me = G.players[proposal.from];
+      sheet(`<h3>Refused — but they name a price</h3><div class="sub">${esc(them.name)}</div>
+        <div class="card">“${esc(line ? line.text : '')}”</div>
+        <div class="stat"><span>You offered</span><span>${money(proposal.cash)}</span></div>
+        <div class="stat"><span>They want</span><span>${money(r.counter.cash)}</span></div>
+        <div class="stat"><span>You hold</span><span>${money(me.cash)}</span></div>
+        ${btns([
+          [`Pay ${money(r.counter.cash)}`, 'takeCounter', 'pri', `Confirm — ${money(r.counter.cash)}`],
+          ['Walk away', 'closeSheet', '']
+        ])}`);
+      if (me.cash < r.counter.cash) {
+        const el = $('sheetRoot').querySelector('.mbtn.pri');
+        if (el) { el.disabled = true; el.textContent = 'You cannot cover it'; }
+      }
+    } else {
+      sheet(`<h3>Refused</h3><div class="sub">${esc(them.name)}</div>
+        <div class="card">“${esc(line ? line.text : 'No.')}”</div>
+        ${btns([['Close', 'closeSheet', 'pri wide']])}`);
+    }
   }
   save(); render();
+}
+
+function takeCounter() {
+  if (!COUNTER) return;
+  const c = COUNTER;
+  COUNTER = null;
+  closeSheet();
+  if (!E.contractIsLegal(G, c)) { tick(); return; }
+  const me = G.players[c.from];
+  if (me.cash < c.cash) { tick(); return; }
+  E.settleContract(G, c);
+  save();
+  tick();
 }
 
 function showContract() {

@@ -21,7 +21,7 @@ Playable. Engine, interface, offline support and save/resume are all in.
 ```
 data.js      board, decks, opponents, economy constants — data only
 engine.js    the rules. No DOM, no timers, no Math.random
-test/        124 passing (plus a browser probe across five viewports)
+test/        132 passing (plus a browser probe across five viewports)
 ```
 
 ## Running the tests
@@ -124,6 +124,34 @@ Current, 120 games each: two humans **57/120**, plus one opponent **45/120**,
 plus two **20/120**, one human against three **50/120**. Vassalage appears
 somewhere in **103 of 120** four-seat games. All enforced as tests.
 
+
+## How the three of them trade
+
+They are not the same opponent with different lines. Each reads the board its
+own way, and the differences are visible at the table.
+
+**Pricing a threat.** Handing over a square that helps a rival costs them
+something in their own reckoning — more when it completes a set, less when it
+merely brings someone within one. What an opponent charges for the last Eden
+square, by how much of Eden you already hold:
+
+| you hold | Spector | Varan | Vale |
+|---|---|---|---|
+| none | ₡430 | ₡800 | ₡180 |
+| one of three | ₡570 | ₡1,230 | ₡200 |
+| two of three | ₡810 | ₡1,530 | ₡340 |
+
+Vale sells Eden below its ₡200 list when you hold none of it — he rates it 0.75
+on prestige and genuinely does not want it.
+
+**What they chase when no set is one square away.** Spector goes where the board
+pays back fastest. Vale goes for the address. Varan goes for whatever stops
+somebody else — he will buy the square *you* need from a third party, gaining
+nothing but your set.
+
+**Refusing.** A refusal names a price. Spector states the true figure and will
+not move off it; Varan asks over the odds and sometimes declines to answer at
+all; Vale shades his own price down because he would rather deal than not.
 
 ## Canon
 

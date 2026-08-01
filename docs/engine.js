@@ -958,22 +958,87 @@ export function setCompletingTargets(G, p) {
   return out;
 }
 
+// A square in a set `p` has already started, held by one other player. Not a
+// completing square — just progress. Opponents used to seek only the last
+// square of a set, which meant one holding out of three made them mute: they
+// could close a position but never build one.
+export function setBuildingTargets(G, p) {
+  const out = [];
+  for (const [key, s] of Object.entries(SETS)) {
+    let mine = 0;
+    const gettable = [];
+    for (const i of s.sq) {
+      const o = ownerOf(G, i);
+      if (!o) { mine = -1; break; }                 // still buyable outright
+      if (o.i === p.i) mine++;
+      else if (tradable(G, o, i)) gettable.push({ sq: i, owner: o, set: key });
+    }
+    if (mine <= 0 || !gettable.length) continue;
+    if (mine === s.sq.length - 1) continue;         // that is a completing target
+    out.push(...gettable);
+  }
+  return out;
+}
+
+// The square a RIVAL needs. Varan buys it so that they cannot — the whole of his
+// character is bidding to deny rather than to acquire, and until now that only
+// showed up in auctions.
+export function denialTargets(G, p) {
+  const out = [];
+  for (const [key, s] of Object.entries(SETS)) {
+    const owners = s.sq.map(i => ownerOf(G, i));
+    if (owners.some(o => !o)) continue;
+    const counts = new Map();
+    for (const o of owners) counts.set(o.i, (counts.get(o.i) || 0) + 1);
+    for (const [pi, n] of counts) {
+      if (pi === p.i || n !== s.sq.length - 1) continue;
+      const sq = s.sq.find(i => ownerOf(G, i).i !== pi);
+      const holder = ownerOf(G, sq);
+      if (holder.i === p.i || !tradable(G, holder, sq)) continue;
+      out.push({ sq, owner: holder, set: key, denies: pi });
+    }
+  }
+  return out;
+}
+
 // Builds the best contract `p` can offer for a set-completing square, or null.
 // `lens` selects whose valuation model to reason with, so a human seat in the
 // test harness can use the same search without pretending to be an opponent.
 export function seekContract(G, p, lens = p.persona || 'spector') {
   if (p.debt) return null;
-  const targets = setCompletingTargets(G, p);
-  if (!targets.length) return null;
-
   const asLens = { ...p, persona: lens };
-  targets.sort((a, b) => aiValue(G, asLens, b.sq) - aiValue(G, asLens, a.sq));
+
+  // Closing a set always comes first — it is the only thing that changes rent.
+  // What each of them does when there is no set to close is where they differ.
+  let targets = setCompletingTargets(G, p);
+  if (targets.length) {
+    targets.sort((a, b) => aiValue(G, asLens, b.sq) - aiValue(G, asLens, a.sq));
+  } else if (lens === 'varan') {
+    // Varan would rather stop you than help himself.
+    targets = denialTargets(G, p);
+    if (!targets.length) targets = setBuildingTargets(G, p);
+    targets.sort((a, b) => BOARD[b.sq].pr - BOARD[a.sq].pr);
+  } else if (lens === 'vale') {
+    // Vale chases the address, not the arithmetic.
+    targets = setBuildingTargets(G, p);
+    targets.sort((a, b) => aiValue(G, asLens, b.sq) - aiValue(G, asLens, a.sq));
+  } else {
+    // Spector builds where the board pays back fastest.
+    targets = setBuildingTargets(G, p);
+    targets.sort((a, b) => (PAYBACK[BOARD[a.sq].s] ?? 99) - (PAYBACK[BOARD[b.sq].s] ?? 99));
+  }
+  if (!targets.length) return null;
   const target = targets[0];
   const them = G.players[target.owner.i];
   if (them.debt) return null;
 
   const reserve = 300;
-  const ceiling = Math.min(Math.round(aiValue(G, asLens, target.sq) * 1.4), p.cash - reserve);
+  // Closing a set is worth a premium. Denying one is worth more to Varan than
+  // owning it. Merely building is worth less than either.
+  const eagerness = target.denies !== undefined ? 1.6
+    : setCompletingTargets(G, p).length ? 1.4
+    : 0.95;
+  const ceiling = Math.min(Math.round(aiValue(G, asLens, target.sq) * eagerness), p.cash - reserve);
   if (ceiling < Math.floor(BOARD[target.sq].pr * 0.5)) return null;
 
   // A sweetener, if we hold something spare that does not break a set of ours.
@@ -1028,9 +1093,20 @@ export function proposeContract(G, c) {
     text: pick(G, accepted ? lines.yes : lines.no)
   });
   trim(G);
-  if (accepted) settleContract(G, c);
-  else note(G, `${them.name} refuses the contract.`);
-  return { ok: true, pending: false, accepted };
+  if (accepted) { settleContract(G, c); return { ok: true, pending: false, accepted: true }; }
+
+  note(G, `${them.name} refuses the contract.`);
+  const counter = aiCounter(G, them, proposer, c);
+  if (counter) {
+    const line = {
+      spector: `It prices at ${money(counter.cash)}. That is the figure, not an opening position.`,
+      varan: `${money(counter.cash)}. I am under no obligation to be reasonable.`,
+      vale: `Make it ${money(counter.cash)} and we shall say no more about it.`
+    }[them.persona] || `${money(counter.cash)}.`;
+    G.log.unshift({ kind: 'voice', who: them.i, circuit: G.circuit, text: line });
+    trim(G);
+  }
+  return { ok: true, pending: false, accepted: false, counter };
 }
 
 export function respondToContract(G, accept) {
@@ -1111,30 +1187,82 @@ export function aiWantsToBuy(G, p, sq) {
   return !p.debt && p.cash > b.pr + 180 && aiValue(G, p, sq) >= b.pr;
 }
 
+// What handing this square over does FOR SOMEBODY ELSE, priced from `who`'s
+// point of view. Previously this only fired when the square completed a rival's
+// set outright — so a rival one square away was worth nothing to anyone but
+// Varan, who noticed it by a different route. Now the threat is graduated, and
+// each of them reads it differently.
+const THREAT = {
+  //          completes their set   brings them within one
+  spector:  { full: 1.9,            near: 0.70 },   // reads it as arithmetic
+  varan:    { full: 2.6,            near: 1.10 },   // reads it as a thing to prevent
+  vale:     { full: 0.8,            near: 0.10 }    // barely reads it at all
+};
+
+export function threatPenalty(G, who, give) {
+  const b = BOARD[give];
+  if (!b.s) return 0;
+  const set = SETS[b.s];
+  const counts = new Map();
+  for (const j of set.sq) {
+    if (j === give) continue;
+    const o = ownerOf(G, j);
+    if (o && o.i !== who.i) counts.set(o.i, (counts.get(o.i) || 0) + 1);
+  }
+  const best = counts.size ? Math.max(...counts.values()) : 0;
+  const after = best + 1;                         // what the best-placed rival would hold
+  const t = THREAT[who.persona] || THREAT.spector;
+  if (after >= set.sq.length) return b.pr * t.full;
+  if (after === set.sq.length - 1) return b.pr * t.near;
+  return 0;
+}
+
 export function contractValue(G, who, get, give, cashIn) {
   let v = cashIn;
   if (get !== null && get !== undefined) v += aiValue(G, who, get);
   if (give !== null && give !== undefined) {
     v -= aiValue(G, who, give);
-    const b = BOARD[give];
-    if (b.s) {
-      const rest = SETS[b.s].sq.filter(j => j !== give);
-      const owners = rest.map(j => ownerOf(G, j)).filter(Boolean);
-      if (owners.length === rest.length && new Set(owners.map(o => o.i)).size === 1) {
-        v -= b.pr * (who.persona === 'varan' ? 2.6 : who.persona === 'spector' ? 1.9 : 0.8);
-      }
-    }
+    v -= threatPenalty(G, who, give);
   }
   return v;
 }
 
-export function aiAcceptsContract(G, them, proposer, { give, get, cash, direction }) {
-  const cashToThem = direction === 1 ? cash : -cash;
-  const net = contractValue(G, them, give, get, cashToThem);
-  const bar = { spector: 60, varan: 240, vale: -40 }[them.persona] ?? 0;
+const BAR = { spector: 60, varan: 240, vale: -40 };
+
+function acceptanceBar(G, them, proposer) {
+  const bar = BAR[them.persona] ?? 0;
   const leaderNow = [...G.players].sort((a, b) => netWorth(G, b) - netWorth(G, a))[0];
   const spite = them.persona === 'varan' && leaderNow.i === proposer.i ? 260 : 0;
-  return net > bar + spite;
+  return bar + spite;
+}
+
+export function aiAcceptsContract(G, them, proposer, { give, get, cash, direction }) {
+  const cashToThem = direction === 1 ? cash : -cash;
+  return contractValue(G, them, give, get, cashToThem) > acceptanceBar(G, them, proposer);
+}
+
+// The least cash that WOULD have carried it, and what each of them does with
+// that number. A refusal that just says no is a coin flip; a refusal that names
+// a price is a negotiation, which is what this game is supposed to be about.
+export function aiCounter(G, them, proposer, c) {
+  if (c.direction !== 1) return null;              // only counter offers of cash
+  // Solve the acceptance test for cash rather than searching for it.
+  const withoutCash = contractValue(G, them, c.give, c.get, 0);
+  const needed = Math.ceil(acceptanceBar(G, them, proposer) - withoutCash) + 1;
+  if (needed <= c.cash) return null;               // they would have taken it
+
+  let ask;
+  if (them.persona === 'spector') {
+    ask = needed;                                  // the true figure, stated
+  } else if (them.persona === 'vale') {
+    ask = Math.max(needed, Math.round(needed * 0.88));  // shades his own price down
+  } else {
+    // Varan does not always deign to counter, and never at cost.
+    if (random(G) < 0.4) return null;
+    ask = Math.round(needed * 1.35);
+  }
+  if (ask > proposer.cash) return null;            // pointless to name a price they cannot meet
+  return { ...c, cash: ask };
 }
 
 // Everything an opponent does after resolving its square: build, then consider
