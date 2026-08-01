@@ -17,9 +17,11 @@ const URL = process.env.URL || 'http://127.0.0.1:877/docs/index.html';
 const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 
 const DEVICES = [
-  { name: 'iPhone SE',        width: 375, height: 667 },
-  { name: 'iPhone 16',        width: 393, height: 852 },
-  { name: 'iPhone 16 Pro Max', width: 440, height: 956 }
+  { name: 'iPhone SE',              width: 375, height: 667 },
+  { name: 'iPhone 16',              width: 393, height: 852 },
+  { name: 'iPhone 16 Pro Max',      width: 440, height: 956 },
+  { name: 'iPhone 16 landscape',    width: 852, height: 393 },
+  { name: 'iPhone 16 PM landscape', width: 956, height: 440 }
 ];
 
 let failures = 0;
@@ -90,6 +92,15 @@ for (const device of DEVICES) {
   else fail(`page scrolls sideways: ${layout.scrollW} > ${layout.clientW}`);
   if (layout.bodyScroll <= 1) pass('everything fits without scrolling the page');
   else fail(`body scrolls by ${layout.bodyScroll}px`);
+  const board = await page.evaluate(() => {
+    const b = document.querySelector('#board').getBoundingClientRect();
+    return { w: +b.width.toFixed(1), h: +b.height.toFixed(1),
+             fitsW: b.width <= innerWidth + 1, fitsH: b.height <= innerHeight + 1 };
+  });
+  if (board.fitsW && board.fitsH) pass(`the board fits the screen (${board.w}x${board.h})`);
+  else fail(`the board is ${board.w}x${board.h} in a ${await page.evaluate(() => innerWidth + 'x' + innerHeight)} viewport`);
+  if (Math.abs(board.w - board.h) <= 2) pass('the board is square');
+  else fail(`the board is not square: ${board.w}x${board.h}`);
 
   // ---- play real turns ----
   const clickIf = async sel => {

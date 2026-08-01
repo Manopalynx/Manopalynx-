@@ -1100,3 +1100,35 @@ test('a chain of oaths can never close into a loop', () => {
   }
   assert.equal(spector.lord, sam.i, 'the creditor still takes the oath');
 });
+
+test('liquidation says what it sold', () => {
+  // It used to strip a board in silence, which is how a player can watch their
+  // position collapse and believe the game did nothing.
+  const G = game();
+  const [a] = G.players;
+  a.cash = 0;
+  own(G, a, SETS.eden.sq[0], { citadel: 1 });
+  own(G, a, SETS.syn.sq[0]);
+  own(G, a, SETS.syn.sq[1]);
+  const before = G.log.length;
+  liquidate(G, a, 400);
+  const entries = G.log.slice(0, G.log.length - before).map(l => l.text).join(' ');
+  assert.ok(G.log.length > before, 'liquidation wrote nothing to the ledger');
+  assert.match(entries, /raises/, 'the entry does not say what was raised');
+  assert.match(entries, /citadel/, 'breaking a citadel went unreported');
+});
+
+test('a rent that forces a sale reports both the rent and the sale', () => {
+  const G = game();
+  const [a, b] = G.players;
+  // Fire-sale value: three garrisons at half of 100 = 150, plus the holding
+  // mortgaged at half of 180 = 90. With 10 in hand that covers 200, not 300.
+  a.cash = 10;
+  own(G, a, SETS.eden.sq[0], { garrisons: 3 });
+  G.garrisonPool -= 3;
+  payRent(G, a, b, 200);
+  const text = G.log.map(l => l.text).join(' ');
+  assert.match(text, /pays/, 'the rent went unreported');
+  assert.match(text, /sells 3 garrisons|mortgages/, 'the forced sale went unreported');
+  assert.equal(a.lord, null, 'the sale covered it, so no oath was taken');
+});

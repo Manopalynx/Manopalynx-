@@ -202,6 +202,9 @@ export function pay(G, from, to, amount) {
 // Raise cash the way a desperate holder actually would: break citadels first,
 // then garrisons (largest stack first), then mortgage the cheapest holdings.
 export function liquidate(G, p, need) {
+  const before = p.cash;
+  let citadels = 0, garrisons = 0;
+  const mortgaged = [];
   let guard = 0;
   while (p.cash < need && guard++ < 100) {
     const cit = p.holdings.find(h => h.citadel);
@@ -209,16 +212,34 @@ export function liquidate(G, p, need) {
       const gc = SETS[BOARD[cit.sq].s].gc;
       // A citadel is worth three garrisons; returning it needs three from the
       // pool. If the pool cannot cover it the citadel simply cannot be broken.
+      citadels++;
       if (G.garrisonPool < 3) { cit.citadel = 0; cit.garrisons = 0; G.citadelPool++; p.cash += Math.floor(gc * 5 / 2); continue; }
       cit.citadel = 0; cit.garrisons = 3; G.citadelPool++; G.garrisonPool -= 3;
       p.cash += Math.floor(gc * 5 / 2);
       continue;
     }
     const g = p.holdings.filter(h => h.garrisons > 0).sort((a, b) => b.garrisons - a.garrisons)[0];
-    if (g) { g.garrisons--; G.garrisonPool++; p.cash += Math.floor(SETS[BOARD[g.sq].s].gc / 2); continue; }
+    if (g) { g.garrisons--; G.garrisonPool++; garrisons++; p.cash += Math.floor(SETS[BOARD[g.sq].s].gc / 2); continue; }
     const m = p.holdings.filter(h => !h.mortgaged).sort((a, b) => BOARD[a.sq].pr - BOARD[b.sq].pr)[0];
-    if (m) { m.mortgaged = 1; p.cash += Math.floor(BOARD[m.sq].pr / 2); continue; }
+    if (m) { m.mortgaged = 1; mortgaged.push(BOARD[m.sq].n); p.cash += Math.floor(BOARD[m.sq].pr / 2); continue; }
     break;
+  }
+
+  // Say what was sold. This used to happen in complete silence: a player could
+  // have their citadels broken and half their board mortgaged to cover a rent,
+  // and the ledger would not carry a single line about it. Losing your position
+  // is exactly the thing a ledger should record.
+  const parts = [];
+  if (citadels) parts.push(`breaks ${citadels} citadel${citadels === 1 ? '' : 's'}`);
+  if (garrisons) parts.push(`sells ${garrisons} garrison${garrisons === 1 ? '' : 's'}`);
+  if (mortgaged.length) {
+    parts.push(mortgaged.length > 2
+      ? `mortgages ${mortgaged.length} holdings`
+      : `mortgages ${mortgaged.join(' and ')}`);
+  }
+  if (parts.length) {
+    note(G, `${p.name} raises ${money(p.cash - before)} to settle — ${parts.join(', ')}.`);
+    if (mortgaged.length >= 3 || citadels) leader(G);
   }
 }
 

@@ -353,7 +353,10 @@ function toggleLog() { logOpen = !logOpen; renderLog(); }
 
 function renderLog() {
   const wrap = $('logWrap');
-  wrap.classList.toggle('open', logOpen);
+  // In landscape the ledger has a column of its own and is always open; the
+  // toggle is hidden there, so the class must not be able to shut it.
+  const landscape = window.matchMedia('(orientation:landscape) and (max-height:560px)').matches;
+  wrap.classList.toggle('open', logOpen || landscape);
   const count = G.log.length;
   $('logToggle').innerHTML =
     `<span>${logOpen ? 'The ledger' : esc(topLine())}</span><b>${logOpen ? '▾' : `▴ ${count}`}</b>`;
@@ -1024,5 +1027,9 @@ window.__BOARD = () => BOARD;
 // refreshed whenever the page is hidden as well as after every move.
 document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
 window.addEventListener('pagehide', save);
+// Rotating changes which layout applies, and the board's cells and the galaxy
+// canvas both need re-measuring afterwards.
+window.addEventListener('orientationchange', () => setTimeout(() => { if (G) render(); }, 220));
+window.addEventListener('resize', () => { if (G) renderLog(); });
 
 drawSetup();

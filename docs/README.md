@@ -21,7 +21,7 @@ Playable. Engine, interface, offline support and save/resume are all in.
 ```
 data.js      board, decks, opponents, economy constants — data only
 engine.js    the rules. No DOM, no timers, no Math.random
-test/        108 passing
+test/        110 passing
 ```
 
 ## Running the tests
@@ -61,6 +61,18 @@ would ever have flagged that.
   after every turn: garrison and citadel pools conserved, no negative cash, no overlord
   cycles, no square held twice, no player ever removed from the table, every game reaches
   an ending.
+
+## Money, and what happens when you run out
+
+Nobody can go below ₡0 and nobody leaves the table. When you owe more than you
+hold, `liquidate()` runs first: it breaks citadels, sells garrisons largest stack
+first, then mortgages your cheapest holdings. Only if that is still not enough
+does anything else happen, and it depends who you owe — **the bank** gives you a
+debt marker at 10% a turn, **another player** takes what is left and your oath.
+
+That last step is rare. Liquidation covers it most of the time, which is why it
+must say so: it used to strip a board in complete silence, and a player could
+watch their position collapse and reasonably conclude the game had done nothing.
 
 ## Balance: what has been found to matter
 
@@ -112,6 +124,11 @@ Names come from the book. Three squares were changed and each is commented in `d
 
 Open the Pages URL in Safari, then Share → **Add to Home Screen**. It runs full
 screen with no browser chrome and works with no signal.
+
+Both orientations work. Turning the phone sideways does not make the board any
+bigger — it is square, so it is bound by the short edge either way — but it moves
+the chips, buttons and ledger into a column beside it instead of leaving ~250pt
+of slack under it with nothing to do.
 
 The service worker is network-first, so a pushed change arrives the next time the
 app is opened with a connection. If a change seems not to have landed, close the
