@@ -4,7 +4,7 @@
 // file animates it.
 
 import {
-  SETS, BOARD, N, JAIL, TRAFFIC, PERSONAS, RULES, EPIGRAPH
+  SETS, BOARD, N, JAIL, TRAFFIC, FLEET_RENT, PERSONAS, RULES, EPIGRAPH
 } from './data.js';
 import * as E from './engine.js';
 import { Score, moodFor } from './score.js';
@@ -304,7 +304,7 @@ function renderActions() {
     ? actBtn('Roll', 'act_roll()', 'pri',
         p.inFacility ? `held · attempt ${p.attempts + 1} of ${RULES.facilityAttempts}` : '&nbsp;')
     : G.phase === 'landed'
-      ? actBtn('Resolve', 'act_resolve()', 'pri', esc(BOARD[p.pos].n))
+      ? (() => { const q = phraseLanding(E.landingPreview(G)); return actBtn(q.label, 'act_resolve()', 'pri', q.sub); })()
       : actBtn('Roll', '', '', '&nbsp;', true);
 
   const canAmend = G.phase === 'landed' && p.amends > 0 && p.cash >= E.amendCost(p);
@@ -325,6 +325,22 @@ function renderActions() {
     + relational
     + actBtn('End turn', 'act_end()', G.phase === 'end' ? 'pri' : '', '&nbsp;', G.phase !== 'end');
   bindActs();
+}
+
+// "Resolve" told you nothing until it was already done. The label is now the
+// action and the amount; the sub-line is who or why. The square's full name is
+// already in the centre panel, so it does not need repeating here.
+function phraseLanding(v) {
+  switch (v.kind) {
+    case 'rent':      return { label: `Pay ${money(v.amount)}`, sub: `to ${esc(chipName(G.players[v.to]))}` };
+    case 'tax':       return { label: `Pay ${money(v.amount)}`, sub: esc(v.name) };
+    case 'unowned':   return { label: `Buy ${money(v.amount)}`, sub: 'or decline to auction' };
+    case 'card':      return { label: 'Draw', sub: esc(v.name) };
+    case 'detention': return { label: 'Absorbed', sub: 'taken to Detention' };
+    case 'own':       return { label: 'Your holding', sub: 'nothing due' };
+    case 'pledged':   return { label: 'Nothing due', sub: 'pledged' };
+    default:          return { label: 'Nothing due', sub: esc(v.name) };
+  }
 }
 
 const actBtn = (label, fn, cls = '', sub = '&nbsp;', disabled = false) =>
@@ -623,8 +639,26 @@ function showSquare(i) {
       <tr><td>3</td><td>${money(b.r[3])}</td></tr>
       <tr><td>Citadel</td><td>${money(b.r[4])}</td></tr></table>`;
   }
-  if (b.t === 'f') s += `<div class="stat"><span>Rent</span><span>₡50 · ₡150 for both</span></div>`;
-  if (b.t === 'u') s += `<div class="stat"><span>Rent</span><span>4× roll · 10× for both</span></div>`;
+  // Built from FLEET_RENT rather than written out. The old hardcoded line said
+  // "₡50 · ₡150 for both" — true of the two-fleet board this game had three
+  // boards ago, and quietly wrong ever since.
+  if (b.t === 'f') {
+    const held = owner ? E.countType(owner, 'f') : 0;
+    s += `<table><tr><th>Fleets held</th><th>Rent</th></tr>` +
+      FLEET_RENT.slice(1).map((r, k) => `<tr${held === k + 1 ? ' style="color:var(--gold)"' : ''}>
+        <td>${k + 1}${held === k + 1 ? ' — now' : ''}</td><td>${money(r)}</td></tr>`).join('') +
+      `</table>`;
+  }
+  if (b.t === 'u') {
+    const held = owner ? E.countType(owner, 'u') : 0;
+    s += `<table><tr><th>Utilities held</th><th>Rent</th></tr>
+      <tr${held === 1 ? ' style="color:var(--gold)"' : ''}><td>1${held === 1 ? ' — now' : ''}</td><td>4× the roll</td></tr>
+      <tr${held === 2 ? ' style="color:var(--gold)"' : ''}><td>2${held === 2 ? ' — now' : ''}</td><td>10× the roll</td></tr></table>`;
+  }
+  if (owner && owner.i !== (E.current(G) || {}).i) {
+    const now = E.rentOf(G, i, G.dice[0] + G.dice[1] || 7);
+    s += `<div class="stat"><span>You would pay</span><span style="color:${now ? 'var(--warn)' : 'var(--tx)'}">${money(now)}</span></div>`;
+  }
   if (b.t === 'jail') s += `<p style="font-size:14px;line-height:1.5;color:var(--dim);margin-top:12px">
     Roll doubles and walk out, settle for ${money(RULES.facilityFee)} at any point, or be released
     on the ${RULES.facilityAttempts}rd attempt and pay it anyway. An Overseer is an official, and
@@ -1293,6 +1327,9 @@ window.__SETS = () => SETS;
 window.__BOARD = () => BOARD;
 window.__TR = () => TR;
 window.__tick = () => tick();
+// The panel and the engine each work out rent separately, and once drifted
+// three boards apart. The probe compares them, so it needs both.
+window.__E = () => E;
 
 // A background tab can be reaped without warning on iOS, so the save is
 // refreshed whenever the page is hidden as well as after every move.

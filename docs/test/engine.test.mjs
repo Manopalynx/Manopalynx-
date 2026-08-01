@@ -22,7 +22,8 @@ import {
   setCompletingTargets, seekContract, contractIsLegal, proposeContract, respondToContract,
   serialize, deserialize, payFacilityFee, releaseVassal, aiValue, aiBid, aiWantsToBuy,
   pledge, pledgeValue, redeemCost, raisableValue, parkForSettlement, autoSettle, settleNow,
-  threatPenalty, setBuildingTargets, denialTargets, aiCounter, aiAcceptsContract
+  threatPenalty, setBuildingTargets, denialTargets, aiCounter, aiAcceptsContract,
+  landingPreview
 } from '../engine.js';
 
 /* -------------------------------------------------------------- fixtures */
@@ -1467,4 +1468,109 @@ test('accepting a counter settles at the countered price', () => {
   settleContract(G, r.counter);
   assert.equal(ownerOf(G, sq).i, sam.i);
   assert.equal(sam.cash, before - r.counter.cash);
+});
+
+/* ==================================================== the landing preview */
+// The button now states the amount before you press it, which means the figure
+// on the button and the figure taken from your cash are two separate pieces of
+// arithmetic that have to agree. They did not, once, on fleet rent — the panel
+// said ₡50 and the engine took ₡25 — so the agreement is asserted here rather
+// than trusted.
+
+test('the preview names the same rent the engine charges', () => {
+  const G = game();
+  const [a, b] = G.players;
+  const fleets = BOARD.map((sq, i) => [sq, i]).filter(([sq]) => sq.t === 'f').map(([, i]) => i);
+  own(G, b, fleets[0]);
+  a.pos = fleets[0];
+  G.dice = [3, 4];
+  G.phase = 'landed';
+  const v = landingPreview(G);
+  assert.equal(v.kind, 'rent');
+  assert.equal(v.to, b.i);
+  assert.equal(v.amount, rentOf(G, fleets[0], 7));
+  assert.equal(v.amount, 25, 'one fleet is ₡25, whatever an older board said');
+});
+
+test('the preview follows the roll on a utility', () => {
+  const G = game();
+  const [a, b] = G.players;
+  own(G, b, 12);
+  a.pos = 12;
+  G.phase = 'landed';
+  G.dice = [4, 5];
+  assert.equal(landingPreview(G).amount, 36);
+  G.dice = [6, 6];
+  assert.equal(landingPreview(G).amount, 48);
+});
+
+test('the preview reports what is due, not what is owned', () => {
+  const G = game();
+  const [a, b] = G.players;
+  own(G, b, 1, { mortgaged: 1 });
+  a.pos = 1;
+  G.phase = 'landed';
+  assert.equal(landingPreview(G).kind, 'pledged', 'a pledged holding charges nothing');
+
+  own(G, a, 3);
+  a.pos = 3;
+  assert.equal(landingPreview(G).kind, 'own');
+
+  a.pos = 6;
+  const v = landingPreview(G);
+  assert.equal(v.kind, 'unowned');
+  assert.equal(v.amount, BOARD[6].pr);
+});
+
+test('the preview is right on every landing across whole games', () => {
+  let rents = 0, taxes = 0, offers = 0;
+  for (let seed = 1; seed <= 25; seed++) {
+    const G = createGame({ seats: seats4, seed, circuits: 12 });
+    for (let i = 0; i < 6000 && !G.over; i++) {
+      if (G.phase === 'landed') {
+        const p = current(G);
+        const v = landingPreview(G);
+        const before = p.cash;
+        assert.equal(v.square, p.pos);
+        assert.equal(v.name, BOARD[p.pos].n);
+        resolveLanding(G);
+
+        if (v.kind === 'rent' || v.kind === 'tax') {
+          // Only assert against cash when cash alone covered it. Anything short
+          // parks in settlement and moves money on a later call.
+          if (before >= v.amount && G.phase !== 'settle') {
+            assert.equal(p.cash, before - v.amount,
+              `${v.kind} on ${v.name} previewed ${v.amount}`);
+          }
+          v.kind === 'rent' ? rents++ : taxes++;
+        } else if (v.kind === 'unowned') {
+          assert.equal(G.phase, 'offer', `${v.name} was unowned but no offer followed`);
+          assert.equal(v.amount, BOARD[p.pos].pr);
+          offers++;
+        } else if (v.kind === 'detention') {
+          assert.equal(p.pos, JAIL);
+          assert.ok(p.inFacility);
+        } else if (v.kind === 'own' || v.kind === 'pledged') {
+          assert.equal(p.cash, before, `${v.name} said nothing was due and then took something`);
+        }
+        continue;
+      }
+      if (G.phase === 'roll') roll(G);
+      else if (G.phase === 'card') applyCard(G);
+      else if (G.phase === 'offer') { if (!buy(G, current(G))) G.phase = 'end'; }
+      else if (G.phase === 'auction') {
+        if (G.auction.resolved) closeAuction(G);
+        else submitBid(G, G.auction.queue[G.auction.at], 120);
+      } else if (G.phase === 'contract') respondToContract(G, false);
+      else if (G.phase === 'settle') { autoSettle(G); settleNow(G); }
+      else if (G.phase === 'contest') {
+        if (G.contest.resolved) closeContest(G);
+        else submitClaim(G, G.contest.queue[G.contest.at], 100);
+      } else endTurn(G);
+    }
+  }
+  // If the loop never reached these the assertions above proved nothing.
+  assert.ok(rents > 100, `only ${rents} rents seen`);
+  assert.ok(taxes > 10, `only ${taxes} taxes seen`);
+  assert.ok(offers > 100, `only ${offers} offers seen`);
 });

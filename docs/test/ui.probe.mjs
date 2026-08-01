@@ -408,6 +408,109 @@ for (const device of DEVICES) {
   await page.evaluate(() => window.closeSheet());
   await page.waitForTimeout(200);
 
+  // ---- what the panel says against what the engine charges ----
+  // The panel used to write its fleet rents out by hand. They were true of a
+  // two-fleet board three boards ago and silently wrong ever since: the panel
+  // said ₡50, the engine took ₡25, and nothing failed. Read the figures back
+  // out of the rendered panel and compare them to rentOf.
+  const quoted = await page.evaluate(async () => {
+    const G = window.__G(), E = window.__E(), BOARD = window.__BOARD();
+    const me = G.players[G.cur];
+    const them = G.players.find(q => q !== me);
+    const fleets = BOARD.map((b, i) => [b, i]).filter(([b]) => b.t === 'f').map(([, i]) => i);
+    const utils  = BOARD.map((b, i) => [b, i]).filter(([b]) => b.t === 'u').map(([, i]) => i);
+    for (const q of G.players) q.holdings = [];
+    G.dice = [4, 5];   // 9
+
+    // Read "You would pay" and the highlighted row out of the rendered panel.
+    const read = sq => {
+      window.showSquare(sq);
+      const sheet = document.querySelector('.sheet');
+      const num = t => {
+        const m = /₡([\d,]+)/.exec(t || '');
+        return m ? +m[1].replace(/,/g, '') : null;
+      };
+      const stat = [...sheet.querySelectorAll('.stat')]
+        .find(d => /You would pay/.test(d.textContent));
+      const row = [...sheet.querySelectorAll('tr')].find(r => /— now/.test(r.textContent));
+      const out = {
+        shown: stat ? num(stat.textContent) : null,
+        row: row ? num(row.textContent) : null,
+        rowText: row ? row.textContent.replace(/\s+/g, ' ').trim() : null,
+        engine: E.rentOf(G, sq, G.dice[0] + G.dice[1])
+      };
+      window.closeSheet();
+      return out;
+    };
+
+    const results = [];
+    for (let n = 1; n <= fleets.length; n++) {
+      them.holdings = fleets.slice(0, n).map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+      results.push({ what: `${n} fleet(s)`, ...read(fleets[0]) });
+    }
+    for (let n = 1; n <= utils.length; n++) {
+      them.holdings = utils.slice(0, n).map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+      results.push({ what: `${n} utility(ies)`, ...read(utils[0]), noRowFigure: true });
+    }
+    // A built holding, where the table is a fixed column of the data.
+    const eden = window.__SETS().eden.sq;
+    them.holdings = eden.map(sq => ({ sq, garrisons: 2, citadel: 0, mortgaged: 0 }));
+    results.push({ what: 'a set at 2 garrisons', ...read(eden[0]), noRowFigure: true });
+    return results;
+  });
+  for (const r of quoted) {
+    if (r.shown === r.engine) pass(`panel quotes ${r.what} at ₡${r.engine}, the same as the engine`);
+    else fail(`panel says ₡${r.shown} for ${r.what}, engine charges ₡${r.engine}`);
+    if (r.noRowFigure) continue;
+    if (r.row === r.engine) pass(`  and marks the current tier (${r.rowText})`);
+    else fail(`  the highlighted tier reads ${r.rowText} against ₡${r.engine}`);
+  }
+
+  // ---- the landing button states the bill before it is paid ----
+  // "Resolve" told the player nothing. Whatever the button now says has to be
+  // the figure the engine is about to take.
+  const landing = await page.evaluate(async () => {
+    const G = window.__G(), E = window.__E(), BOARD = window.__BOARD();
+    const me = G.players[G.cur];
+    const them = G.players.find(q => q !== me);
+    const seen = {};
+    const sample = () => {
+      window.__render();
+      const btn = document.querySelector('.acts .act.pri') || document.querySelector('.act.pri');
+      return btn ? btn.textContent.replace(/\s+/g, ' ').trim() : null;
+    };
+
+    // rent owed to a named opponent
+    for (const q of G.players) q.holdings = [];
+    const syn = window.__SETS().syn.sq;
+    them.holdings = [{ sq: syn[0], garrisons: 0, citadel: 0, mortgaged: 0 }];
+    me.pos = syn[0]; me.cash = 3000; G.dice = [3, 4]; G.phase = 'landed';
+    seen.rent = { label: sample(), owed: E.rentOf(G, syn[0], 7), who: them.name };
+
+    // an unowned square quotes its price
+    const spare = BOARD.findIndex((b, i) => b.pr && !G.players.some(q => q.holdings.some(h => h.sq === i)));
+    me.pos = spare; G.phase = 'landed';
+    seen.buy = { label: sample(), price: BOARD[spare].pr };
+
+    // your own holding asks for nothing
+    me.holdings = [{ sq: syn[1], garrisons: 0, citadel: 0, mortgaged: 0 }];
+    me.pos = syn[1]; G.phase = 'landed';
+    seen.own = { label: sample() };
+    return seen;
+  });
+  const says = (label, ...needles) =>
+    !!label && needles.every(n => label.toLowerCase().includes(String(n).toLowerCase()));
+  if (says(landing.rent.label, 'pay', landing.rent.owed, landing.rent.who.split(' ')[0]))
+    pass(`the landing button names the bill and the creditor ("${landing.rent.label}")`);
+  else fail(`landing button reads "${landing.rent.label}", expected ₡${landing.rent.owed} to ${landing.rent.who}`);
+  if (says(landing.buy.label, 'buy', landing.buy.price))
+    pass(`an unowned square quotes its price ("${landing.buy.label}")`);
+  else fail(`landing button reads "${landing.buy.label}", expected the price ₡${landing.buy.price}`);
+  if (says(landing.own.label, 'nothing due') || says(landing.own.label, 'your holding'))
+    pass(`your own square asks for nothing ("${landing.own.label}")`);
+  else fail(`landing button reads "${landing.own.label}" on your own holding`);
+  await page.evaluate(() => window.closeSheet());
+
   // ---- the galaxy, and the re-render trap it sits in ----
   // The board is rebuilt with innerHTML on every render. If the centre panel is
   // rebuilt with it, the canvas is destroyed and the animation restarts many

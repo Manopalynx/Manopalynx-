@@ -535,6 +535,27 @@ function toFacility(G, p) {
 }
 
 /* ============================================================ turn flow */
+// What is about to happen on the square the current player is standing on,
+// BEFORE they commit to it. "Resolve" told them nothing until it was already
+// done. Structured rather than phrased, so the wording lives in the interface
+// and the arithmetic is testable here.
+export function landingPreview(G) {
+  const p = current(G);
+  const b = BOARD[p.pos];
+  const at = { square: p.pos, name: b.n };
+  if (b.t === 'goto') return { ...at, kind: 'detention' };
+  if (b.t === 'tax') return { ...at, kind: 'tax', amount: b.amt };
+  if (b.t === 'con' || b.t === 'col') return { ...at, kind: 'card' };
+  if (b.t === 'free' || b.t === 'go' || b.t === 'jail') return { ...at, kind: 'nothing' };
+
+  const owner = ownerOf(G, p.pos);
+  if (!owner) return { ...at, kind: 'unowned', amount: b.pr };
+  if (owner.i === p.i) return { ...at, kind: 'own' };
+  const amount = rentOf(G, p.pos, G.dice[0] + G.dice[1]);
+  if (amount === 0) return { ...at, kind: 'pledged' };
+  return { ...at, kind: 'rent', amount, to: owner.i };
+}
+
 export function roll(G, d1, d2) {
   if (G.phase !== 'roll' || G.over) return null;
   const p = current(G);
