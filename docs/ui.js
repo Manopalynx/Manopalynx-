@@ -333,15 +333,18 @@ function renderLog() {
 }
 
 /* ============================================================ sheets */
-function sheet(inner) {
-  $('sheetRoot').innerHTML = `<div class="scrim"><div class="sheet"><div class="grab"></div>${inner}</div></div>`;
-  $('sheetRoot').querySelectorAll('[data-fn]').forEach(b => {
+function bindSheet(scope) {
+  scope.querySelectorAll('[data-fn]').forEach(b => {
     b.onclick = () => {
       Score.resume();
       const [name, ...args] = b.dataset.fn.split('|');
       ACTIONS[name](...args);
     };
   });
+}
+function sheet(inner) {
+  $('sheetRoot').innerHTML = `<div class="scrim"><div class="sheet"><div class="grab"></div>${inner}</div></div>`;
+  bindSheet($('sheetRoot'));
 }
 function closeSheet() { $('sheetRoot').innerHTML = ''; }
 const btns = list => `<div class="mbtns">${list.map(([label, fn, cls = '']) =>
@@ -417,12 +420,18 @@ function tick() {
 
 // Walks a piece square by square, then continues. The engine has already
 // finished the move; this is only the eye catching up.
+// The engine finishes a move before it returns, so a piece's real position is
+// already its destination. Anything that renders between the engine call and
+// the first step of the walk shows the piece arriving and then snapping back to
+// start again. hold() pins it where it was, and must be called BEFORE any
+// render that follows an engine move.
+function hold(p, from) { anim = { i: p.i, pos: from }; }
+
 function walk(path, done) {
-  if (!path || !path.length) { done(); return; }
+  if (!path || !path.length) { anim = null; renderBoard(); done(); return; }
   const p = E.current(G);
-  let k = 0;
-  anim = { i: p.i, pos: path[0] };
-  renderBoard();
+  if (!anim || anim.i !== p.i) anim = { i: p.i, pos: path[0] };
+  let k = -1;                       // the piece is already held at its origin
   const step = () => {
     k++;
     if (k >= path.length) { anim = null; renderBoard(); done(); return; }
@@ -447,8 +456,10 @@ for (const k of Object.keys(ACTIONS)) window[k] = ACTIONS[k];
 function act_roll() {
   if (G.phase !== 'roll') return;
   const p = E.current(G);
+  const from = p.pos;
   const r = E.roll(G);
   if (!r) return;
+  hold(p, from);                    // before the render, or it flashes to the destination
   busy = true; render();
   tumbleDice(G.dice, () => {
     if (r.held) { busy = false; tick(); return; }
@@ -467,8 +478,11 @@ function act_resolve() {
 }
 
 function act_amend() {
+  const p = E.current(G);
+  const from = p.pos;
   const r = E.amendManifest(G);
   if (!r) return;
+  hold(p, from);
   busy = true; render();
   walk(r.path, () => { busy = false; E.resolveLanding(G); tick(); });
 }
@@ -480,9 +494,12 @@ function act_end() {
 }
 
 function runCard() {
+  const p = E.current(G);
+  const from = p.pos;
   const r = E.applyCard(G);
   closeSheet();
   if (!r) { tick(); return; }
+  if (r.path && r.path.length) hold(p, from);
   busy = true; render();
   walk(r.path, () => { busy = false; tick(); });
 }
@@ -647,11 +664,25 @@ function showCard() {
 }
 
 /* ---------------------------------------------------------- manage */
+const manageState = h => h.mortgaged ? 'MORTGAGED' : h.citadel ? 'CITADEL'
+  : `${h.garrisons} garrison${h.garrisons === 1 ? '' : 's'}`;
+
+function manageControls(p, h) {
+  let c = '';
+  if (E.canBuild(G, p, h.sq)) c += `<button data-fn="build|${h.sq}">+G</button>`;
+  if (E.canRaiseCitadel(G, p, h.sq)) c += `<button data-fn="raiseCitadel|${h.sq}">◆</button>`;
+  if (h.garrisons > 0 || h.citadel) c += `<button data-fn="sellDev|${h.sq}">−</button>`;
+  if (!h.garrisons && !h.citadel) {
+    c += `<button data-fn="toggleMortgage|${h.sq}">${h.mortgaged ? 'Redeem' : 'Mortgage'}</button>`;
+  }
+  return c;
+}
+
 function showManage() {
   const p = E.current(G);
-  let s = `<h3>Holdings</h3><div class="sub">${esc(p.name)} · ${money(p.cash)}${p.debt ? ` · debt ${money(p.debt)}` : ''}</div>
-    <div class="stat"><span>Upkeep per turn</span><span>${money(E.upkeep(p))}</span></div>
-    <div class="stat"><span>Pools</span><span>${G.garrisonPool} garrisons · ${G.citadelPool} citadels</span></div>`;
+  let s = `<h3>Holdings</h3><div class="sub" data-mg="who"></div>
+    <div class="stat"><span>Upkeep per turn</span><span data-mg="upkeep"></span></div>
+    <div class="stat"><span>Pools</span><span data-mg="pools"></span></div>`;
   if (p.debt) {
     s += `<div class="warnbox">A debt marker blocks buying, building and contracts until it is cleared.
       It grows ${Math.round(RULES.debtInterest * 100)}% every turn.</div>`;
@@ -660,34 +691,55 @@ function showManage() {
 
   for (const h of [...p.holdings].sort((a, b) => a.sq - b.sq)) {
     const b = BOARD[h.sq];
-    const state = h.mortgaged ? 'MORTGAGED' : h.citadel ? 'CITADEL'
-      : `${h.garrisons} garrison${h.garrisons === 1 ? '' : 's'}`;
-    let controls = '';
-    if (E.canBuild(G, p, h.sq)) controls += `<button data-fn="build|${h.sq}">+G</button>`;
-    if (E.canRaiseCitadel(G, p, h.sq)) controls += `<button data-fn="raiseCitadel|${h.sq}">◆</button>`;
-    if (h.garrisons > 0 || h.citadel) controls += `<button data-fn="sellDev|${h.sq}">−</button>`;
-    if (!h.garrisons && !h.citadel) {
-      controls += `<button data-fn="toggleMortgage|${h.sq}">${h.mortgaged ? 'Redeem' : 'Mortgage'}</button>`;
-    }
-    s += `<div class="row">
+    s += `<div class="row" data-row="${h.sq}">
       <div><div style="color:${b.s ? SETS[b.s].c : 'var(--body)'};font-size:15px">${esc(b.n)}</div>
-      <div style="font-family:var(--m);font-size:11.5px;color:var(--dim);margin-top:2px">
-      ${state} · rent ${money(E.rentOf(G, h.sq, 7))}</div></div>
-      <div class="rowbtns">${controls}</div></div>`;
+      <div class="rowState" style="font-family:var(--m);font-size:11.5px;color:var(--dim);margin-top:2px"></div></div>
+      <div class="rowbtns">${manageControls(p, h)}</div></div>`;
   }
   if (p.debt) s += btns([[`Repay ${money(Math.min(p.cash, p.debt))}`, 'repay', 'dgr wide']]);
   s += btns([['Done', 'closeSheet', 'pri wide']]);
   sheet(s);
+  refreshManage();
 }
-function build(sq) { E.build(G, E.current(G), +sq); save(); render(); showManage(); }
-function raiseCitadel(sq) { E.raiseCitadel(G, E.current(G), +sq); save(); render(); showManage(); }
-function sellDev(sq) { E.sellDevelopment(G, E.current(G), +sq); save(); render(); showManage(); }
+
+// Updates the open Holdings sheet IN PLACE.
+//
+// Rebuilding the whole sheet after every purchase threw away the scrolled
+// element and put the list back at the top, so the row you had just tapped
+// walked out from under your thumb and the next tap landed on a different
+// holding. The row count never changes here — you cannot acquire or lose a
+// property from this sheet — so only the text and the buttons need to move.
+function refreshManage() {
+  const root = $('sheetRoot');
+  if (!root.querySelector('[data-mg="upkeep"]')) return;      // sheet not open
+  const p = E.current(G);
+  const set = (sel, text) => { const el = root.querySelector(sel); if (el) el.textContent = text; };
+  set('[data-mg="who"]', `${p.name} · ${money(p.cash)}${p.debt ? ` · debt ${money(p.debt)}` : ''}`);
+  set('[data-mg="upkeep"]', money(E.upkeep(p)));
+  set('[data-mg="pools"]', `${G.garrisonPool} garrisons · ${G.citadelPool} citadels`);
+
+  for (const h of p.holdings) {
+    const row = root.querySelector(`[data-row="${h.sq}"]`);
+    if (!row) continue;
+    row.querySelector('.rowState').textContent = `${manageState(h)} · rent ${money(E.rentOf(G, h.sq, 7))}`;
+    const controls = row.querySelector('.rowbtns');
+    const next = manageControls(p, h);
+    if (controls.innerHTML !== next) { controls.innerHTML = next; bindSheet(controls); }
+  }
+  const repayBtn = root.querySelector('[data-fn="repay"]');
+  if (repayBtn) repayBtn.textContent = `Repay ${money(Math.min(p.cash, p.debt))}`;
+}
+
+const afterManage = () => { save(); render(); refreshManage(); };
+function build(sq) { E.build(G, E.current(G), +sq); afterManage(); }
+function raiseCitadel(sq) { E.raiseCitadel(G, E.current(G), +sq); afterManage(); }
+function sellDev(sq) { E.sellDevelopment(G, E.current(G), +sq); afterManage(); }
 function toggleMortgage(sq) {
   const p = E.current(G), h = E.holding(p, +sq);
   if (h.mortgaged) E.redeem(G, p, +sq); else E.mortgage(G, p, +sq);
-  save(); render(); showManage();
+  afterManage();
 }
-function repay() { E.repayDebt(G, E.current(G)); save(); render(); showManage(); }
+function repay() { E.repayDebt(G, E.current(G)); afterManage(); }
 
 /* ---------------------------------------------------------- tithe / revolt */
 function showTithe() {
@@ -701,7 +753,18 @@ function showTithe() {
       `<button class="opt${p.tithe === r ? ' on' : ''}" data-fn="setTithe|${r}">${r}%</button>`).join('')}</div>
     ${btns([['Done', 'closeSheet', 'pri wide']])}`);
 }
-function setTithe(r) { E.setTithe(G, E.current(G), +r); save(); render(); showTithe(); }
+function setTithe(r) {
+  E.setTithe(G, E.current(G), +r);
+  save(); render();
+  // In place, for the same reason Holdings is: rebuilding the sheet moves the
+  // buttons out from under the thumb that just pressed one.
+  const p = E.current(G), root = $('sheetRoot');
+  root.querySelectorAll('[data-fn^="setTithe|"]').forEach(b =>
+    b.classList.toggle('on', +b.dataset.fn.split('|')[1] === p.tithe));
+  const sub = root.querySelector('.sub');
+  if (sub) sub.textContent =
+    `${p.vassals.length} vassal${p.vassals.length > 1 ? 's' : ''} · upkeep ${money(E.upkeep(p))}/turn`;
+}
 
 function showRevolt() {
   const p = E.current(G);

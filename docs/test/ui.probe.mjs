@@ -145,6 +145,74 @@ for (const device of DEVICES) {
     else fail('resume produced an empty game');
   } else fail('no resume offered after reload');
 
+  // ---- the piece must not flash to its destination before it walks ----
+  // The engine finishes a move before returning, so p.pos is already the
+  // destination. Any render between the engine call and the first step of the
+  // walk shows the piece arrive, then snap back to start and walk there again.
+  const jump = await page.evaluate(() => {
+    const G = window.__G();
+    // Forced rather than waited for: the play loop rarely leaves the game in a
+    // roll phase with a human to move, and this check must actually run.
+    while (G.players[G.cur].kind !== 'human') G.cur = (G.cur + 1) % G.players.length;
+    G.phase = 'roll';
+    const p = G.players[G.cur];
+    p.inFacility = false;
+    const from = p.pos;
+    window.act_roll();                       // renders synchronously before any timer
+    const cell = document.querySelector('.tok.me');
+    const shown = cell && cell.closest('[data-i]') ? +cell.closest('[data-i]').dataset.i : -1;
+    return { from, shown, engineNowAt: G.players[G.cur].pos };
+  });
+  if (jump === 'skip') console.log('        (skipped the jump check — not in a roll phase)');
+  else if (jump.shown === jump.from && jump.engineNowAt !== jump.from) {
+    pass('the piece stays put when the dice are rolled, then walks');
+  } else if (jump.shown === jump.engineNowAt && jump.from !== jump.engineNowAt) {
+    fail(`the piece jumped straight to square ${jump.shown} before walking back to ${jump.from}`);
+  } else {
+    console.log(`        (jump check inconclusive: ${JSON.stringify(jump)})`);
+  }
+  await page.waitForTimeout(2200);           // let that move finish before carrying on
+
+  // ---- the Holdings sheet must not move under the thumb ----
+  const managed = await page.evaluate(async () => {
+    const G = window.__G();
+    const p = G.players[G.cur];
+    p.cash = 6000;
+    p.holdings = [13, 14, 15, 1, 3, 6, 8, 10].map(sq =>
+      ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+    for (const q of G.players) {
+      if (q !== p) q.holdings = q.holdings.filter(h => !p.holdings.some(x => x.sq === h.sq));
+    }
+    window.showManage();
+    const sheet = document.querySelector('.sheet');
+    sheet.scrollTop = 120;                   // as if the player had scrolled to a holding
+    const scrolled = sheet.scrollTop;
+    const rowBefore = document.querySelector('[data-row="13"]');
+    const topBefore = rowBefore.getBoundingClientRect().top;
+    const btn = rowBefore.querySelector('[data-fn^="build|"]');
+    if (!btn) return 'no build button on a completed set';
+    btn.click();
+    const sheetAfter = document.querySelector('.sheet');
+    const rowAfter = document.querySelector('[data-row="13"]');
+    return {
+      sameSheet: sheet === sheetAfter,
+      sameRow: rowBefore === rowAfter,
+      scrollBefore: scrolled,
+      scrollAfter: sheetAfter.scrollTop,
+      moved: Math.abs(rowAfter.getBoundingClientRect().top - topBefore)
+    };
+  });
+  if (typeof managed === 'string') fail(managed);
+  else {
+    if (managed.sameSheet && managed.sameRow) pass('building updates the sheet in place');
+    else fail('the Holdings sheet is rebuilt on every purchase');
+    if (managed.scrollAfter === managed.scrollBefore) pass('the scroll position survives a purchase');
+    else fail(`the list jumped from ${managed.scrollBefore} to ${managed.scrollAfter} on purchase`);
+    if (managed.moved <= 1) pass('the row you tapped does not move');
+    else fail(`the row moved ${managed.moved.toFixed(1)}px under the thumb`);
+  }
+  await page.evaluate(() => window.closeSheet());
+
   // ---- the galaxy, and the re-render trap it sits in ----
   // The board is rebuilt with innerHTML on every render. If the centre panel is
   // rebuilt with it, the canvas is destroyed and the animation restarts many
