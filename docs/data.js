@@ -15,6 +15,12 @@
 // The interface shows quoted lines in italic and written ones plainly, so the
 // distinction is visible at the table and not only in this file.
 
+// The build, shown in the menu so a screenshot says which version it came from.
+// Sam plays from the Home Screen where a stale service worker looks identical to
+// a current one, so "the fix didn't land" was previously unanswerable by either
+// of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
+export const BUILD = 'grandiose-v27';
+
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
 // sq = board indices belonging to the set.
@@ -123,6 +129,9 @@ export const BOARD = [
     q: 'Six levels of platforms under a single vaulted roof, and the walls were mosaic — ten centuries of Basileian history in ten million pieces of colored stone.', qv: 1 },
   { t: 'col', n: 'The Column', a: 'CLMN',
     q: 'The figure was correct. That was never the part in question.' },
+  // CANON. The plaza is real and is where Vale is assassinated, but the book
+  // never names it — it is "a plaza on Re-dok". "Vale's Plaza" is the game's
+  // coinage and is the author's to overrule. The quoted line below is verbatim.
   { t: 'p', s: 'bas', n: "Vale's Plaza", pr: 320, r: [28, 150, 450, 1000, 1400], a: 'PLAZ',
     q: 'At the plaza\'s center stood the stage, flanked by two towers of Vale\'s smiling face, and an empty podium with its small bouquet of microphones waiting like the future.', qv: 1 },
   { t: 'f', n: "Raven's Claw", pr: 200, a: 'RAVN',

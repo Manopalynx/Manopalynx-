@@ -4,7 +4,8 @@
 // file animates it.
 
 import {
-  SETS, BOARD, N, JAIL, TRAFFIC, FLEET_RENT, PERSONAS, RULES, EPIGRAPH, CONTINGENCY, COLUMN
+  SETS, BOARD, N, JAIL, TRAFFIC, FLEET_RENT, PERSONAS, RULES, EPIGRAPH, CONTINGENCY, COLUMN,
+  BUILD
 } from './data.js';
 import * as E from './engine.js';
 import { Score, moodFor } from './score.js';
@@ -644,7 +645,12 @@ function showMenu() {
     ])}
     <p style="font-size:13px;color:var(--dim);line-height:1.5;margin-top:14px">
     The game saves itself after every move. Closing the app does not lose it —
-    only starting a new one does.</p>`);
+    only starting a new one does.</p>
+    <p style="font-size:12px;color:var(--dim);line-height:1.6;margin-top:10px;
+       font-variant-numeric:tabular-nums" id="buildLine">
+    Build <b>${esc(BUILD)}</b> · seed <b>${G.seed >>> 0}</b><br>
+    Quote both of these in a bug report — the build says whether you are on the
+    current version, and the seed replays the same dice and the same opponents.</p>`);
 }
 function toggleScore() { Score.resume(); Score.toggle(); render(); showMenu(); }
 

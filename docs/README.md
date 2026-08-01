@@ -312,8 +312,21 @@ all; Vale shades his own price down because he would rather deal than not.
 Names come from the book. Three squares were changed and each is commented in `data.js`:
 
 - **Cradle** and **The Palace** now form the top set, called **Agora**. It was "Basileia",
-  holding "Basileia Prime" and Cradle — but Cradle is the capital on Agora, the Union's and
-  then the Federation's, and the book names no Basileian world at all.
+  holding "Basileia Prime" and Cradle — but **Basileia is an empire, not a world**: *"the
+  largest empire in the galaxy by territory. The oldest fleet. The richest core worlds."*
+  Naming a two-square colour set after the whole empire put a polity where a planet goes,
+  and "Basileia Prime" appears **nowhere in the book** — that one was invented. Cradle is
+  the capital on Agora, the Union's and then the Federation's.
+
+  An earlier version of this paragraph said the book "names no Basileian world at all".
+  That is false and worth recording as false: **Re-dok is one** — *"the Basileians came in
+  after them"* — and it is where Adran Vale is assassinated. The rename was right; the
+  reason given for it was not.
+- **Vale's Plaza** is the game's name for a real place the book never names. The plaza is
+  on Re-dok, it is where Vale is shot, and `PLAZ`'s quoted line is verbatim from the scene
+  — so its `qv: 1` is correct. But `qv` marks the *line*, not the *name*, and this file's
+  own rule is that a square departing from the book carries a comment saying so. That
+  comment was missing; it is now in `data.js`.
 - **The Deep Array** replaces the utility named "Spector", which collided with the opponent
   of the same name.
 - **The Neurex Holding Facility** can no longer be bought out of. You leave on doubles, or

@@ -329,6 +329,29 @@ for (const device of DEVICES) {
   await page.evaluate(() => window.closeSheet());
   await page.waitForTimeout(150);
 
+  // ---- the menu must name the build and the seed ----
+  // These exist only to be read off a screenshot, so "the value is in the DOM"
+  // is not the assertion — it has to be rendered text that matches the running
+  // game. Values are copied out here rather than held by reference, because the
+  // New game check below abandons this game and would mutate anything retained.
+  const stamp = await page.evaluate(() => {
+    document.getElementById('menuBtn').click();
+    const el = document.getElementById('buildLine');
+    if (!el) return 'the menu shows no build/seed line';
+    return { text: (el.textContent || '').replace(/\s+/g, ' ').trim(), seed: window.__G().seed };
+  });
+  if (typeof stamp === 'string') fail(stamp);
+  else {
+    const build = stamp.text.match(/Build (grandiose-v\d+)/);
+    if (build) pass(`the menu names the build (${build[1]})`);
+    else fail(`the menu does not print a build version — got "${stamp.text.slice(0, 80)}"`);
+    const shown = stamp.text.match(/seed (\d+)/);
+    if (!shown) fail(`the menu does not print a seed — got "${stamp.text.slice(0, 80)}"`);
+    else if (+shown[1] === (stamp.seed >>> 0)) pass(`the seed shown is the seed in play (${shown[1]})`);
+    else fail(`the menu shows seed ${shown[1]} but the game is running ${stamp.seed >>> 0}`);
+  }
+  await page.evaluate(() => document.querySelector('[data-fn="closeSheet"]')?.click());
+
   // ---- there must be a way out of a game in progress ----
   const menu = await page.evaluate(async () => {
     const btn = document.getElementById('menuBtn');

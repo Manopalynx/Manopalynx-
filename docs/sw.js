@@ -7,7 +7,10 @@
 // signal" is worth more than fifty milliseconds.
 //
 // Swap the order if this ever stops changing weekly.
-const CACHE = 'grandiose-v26';
+// Must match BUILD in data.js exactly — test/build.test.mjs asserts it, because
+// the menu shows BUILD and it would be worse than useless if it named a build
+// the cache was not actually serving.
+const CACHE = 'grandiose-v27';
 const FILES = [
   './',
   './index.html',
