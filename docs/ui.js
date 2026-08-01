@@ -167,7 +167,7 @@ function render() {
 const chipName = p => p.kind === 'ai' ? p.name.split(' ').pop() : p.name.split(' ')[0];
 
 function renderBar() {
-  $('bar').innerHTML = G.players.map((p, i) => {
+  const chips = G.players.map((p, i) => {
     const rel = p.lord !== null
       ? `<div class="vs">vassal · ${esc(chipName(G.players[p.lord]))}</div>`
       : p.vassals.length ? `<div class="vs">overlord ×${p.vassals.length}</div>` : '';
@@ -176,6 +176,8 @@ function renderBar() {
       <div class="cash">${money(p.cash)}</div>
       ${p.debt ? `<div class="vs" style="color:var(--warn)">debt ${money(p.debt)}</div>` : ''}${rel}</div>`;
   }).join('');
+  $('bar').innerHTML = chips + `<button class="menuBtn" id="menuBtn" aria-label="Menu">☰</button>`;
+  $('menuBtn').onclick = () => { Score.resume(); showMenu(); };
 }
 
 // The centre panel is built ONCE and re-attached after each render rather than
@@ -193,14 +195,7 @@ function ensureMid() {
       <div class="sq"></div>
       <div class="msg"></div>
       <div class="meta"></div>
-      <button class="sndBtn"></button>
     </div>`;
-  midEl.querySelector('.sndBtn').onclick = ev => {
-    ev.stopPropagation();
-    Score.resume();
-    Score.toggle();
-    paintMid();
-  };
   return midEl;
 }
 
@@ -226,9 +221,6 @@ function paintMid() {
     dice[0].textContent = G.dice[0] || '–';
     dice[1].textContent = G.dice[1] || '–';
   }
-  const snd = midEl.querySelector('.sndBtn');
-  snd.textContent = Score.on ? '♪ SCORE ON' : '♪ SCORE OFF';
-  snd.style.color = Score.on ? 'var(--gold)' : 'var(--dim)';
 }
 
 // A roll that simply appears is a number changing. A roll that tumbles for a
@@ -380,10 +372,33 @@ function topLine() {
 }
 
 /* ============================================================ sheets */
+// Arm-then-confirm for anything expensive or irreversible. One tap turns the
+// button into a warning that says what it is about to do; a second commits.
+// It disarms on any other press, or after a few seconds, so an armed button
+// can never sit waiting for a stray thumb.
+let armTimer = null;
+function disarmAll(root = document) {
+  clearTimeout(armTimer);
+  root.querySelectorAll('[data-armed="1"]').forEach(b => {
+    b.dataset.armed = '0';
+    if (b.dataset.label) b.innerHTML = b.dataset.label;
+    b.classList.remove('armed');
+  });
+}
 function bindSheet(scope) {
   scope.querySelectorAll('[data-fn]').forEach(b => {
     b.onclick = () => {
       Score.resume();
+      if (b.dataset.confirm && b.dataset.armed !== '1') {
+        disarmAll(document);
+        b.dataset.label = b.innerHTML;
+        b.dataset.armed = '1';
+        b.innerHTML = b.dataset.confirm;
+        b.classList.add('armed');
+        armTimer = setTimeout(() => disarmAll(document), 4000);
+        return;
+      }
+      disarmAll(document);
       const [name, ...args] = b.dataset.fn.split('|');
       ACTIONS[name](...args);
     };
@@ -394,8 +409,9 @@ function sheet(inner) {
   bindSheet($('sheetRoot'));
 }
 function closeSheet() { $('sheetRoot').innerHTML = ''; }
-const btns = list => `<div class="mbtns">${list.map(([label, fn, cls = '']) =>
-  `<button class="mbtn ${cls}" data-fn="${fn}">${label}</button>`).join('')}</div>`;
+// [label, action, classes, confirmLabel]. A fourth entry arms the button.
+const btns = list => `<div class="mbtns">${list.map(([label, fn, cls = '', confirm]) =>
+  `<button class="mbtn ${cls}" data-fn="${fn}"${confirm ? ` data-confirm="${esc(confirm)}"` : ''}>${label}</button>`).join('')}</div>`;
 
 /* ============================================================ the flow */
 // One place decides what happens next. Every action ends by calling tick().
@@ -498,7 +514,7 @@ function walk(path, done) {
 const ACTIONS = {
   act_roll, act_resolve, act_amend, act_end,
   showSquare, showManage, showTrade, showTithe, showRevolt, showFinal, showLedger,
-  closeSheet, newGame, copyResult, toggleLog, act_payFee,
+  closeSheet, newGame, copyResult, toggleLog, act_payFee, showMenu, toggleScore,
   showSettle, settlePledge, settleSellG, settleBreak, settleAuto, settleDone,
   buyNow, declineToAuction, takeCard, sealBid, sealClaim, endAuction, endContest,
   answerContract, build, raiseCitadel, sellDev, toggleMortgage, repay,
@@ -563,6 +579,27 @@ function runCard() {
 }
 
 function takeCard() { runCard(); }
+
+/* ---------------------------------------------------------- menu */
+// There was no way out of a game in progress at all — the only route back to
+// the setup screen was finishing and pressing New game.
+function showMenu() {
+  const p = E.current(G);
+  sheet(`<h3>The ledger</h3><div class="sub">circuit ${G.circuit} of ${G.circuits}</div>
+    <div class="stat"><span>Whose turn</span><span>${esc(p.name)}</span></div>
+    <div class="stat"><span>Garrisons left</span><span>${G.garrisonPool} · citadels ${G.citadelPool}</span></div>
+    <div class="stat"><span>Score</span><span>${Score.on ? 'on' : 'off'}</span></div>
+    ${btns([
+      [Score.on ? 'Turn the score off' : 'Turn the score on', 'toggleScore', 'wide'],
+      ['What the board pays', 'showLedger', 'wide'],
+      ['Back to the board', 'closeSheet', 'pri'],
+      ['New game', 'newGame', 'dgr', 'Confirm — abandons this game']
+    ])}
+    <p style="font-size:13px;color:var(--dim);line-height:1.5;margin-top:14px">
+    The game saves itself after every move. Closing the app does not lose it —
+    only starting a new one does.</p>`);
+}
+function toggleScore() { Score.resume(); Score.toggle(); render(); showMenu(); }
 
 /* ---------------------------------------------------------- square detail */
 function showSquare(i) {
@@ -631,7 +668,8 @@ function showOffer() {
       ? [['To auction', 'declineToAuction|0', 'pri wide']]
       : [[`Buy ${money(b.pr)}`, 'buyNow', 'pri'],
          ['Decline, but bid', 'declineToAuction|0', ''],
-         ['Decline and pass', 'declineToAuction|1', 'wide']])}`);
+         ['Decline and pass', 'declineToAuction|1', 'wide',
+          'Confirm — no bid at all on this one']])}`);
   if (!p.debt && p.cash < b.pr) {
     const el = $('sheetRoot').querySelector('.mbtn.pri');
     if (el) { el.disabled = true; el.textContent = 'Not enough cash'; }
@@ -662,7 +700,8 @@ function showBid() {
     ${btns([
       ['Seal it', `sealBid|${p.i}`, 'pri'],
       ['No bid', `sealBid|${p.i}|0`, ''],
-      [`Everything · ${money(p.cash)}`, `sealBid|${p.i}|max`, 'wide']
+      [`Everything · ${money(p.cash)}`, `sealBid|${p.i}|max`, 'wide',
+       `Confirm — bid every credit you hold (${money(p.cash)})`]
     ])}`);
   setTimeout(() => { const el = $('bidIn'); if (el) el.focus(); }, 80);
 }
@@ -875,7 +914,10 @@ function showRevolt() {
     ${ready
       ? `<p style="font-size:15px;color:var(--gold);margin-top:16px;line-height:1.5">You have enough.
          Declaring costs ${money(RULES.revoltCost)} and ends the arrangement permanently.</p>
-         ${btns([[`Declare — ${money(RULES.revoltCost)}`, 'declare', 'pri'], ['Not yet', 'closeSheet', '']])}`
+         ${btns([
+           [`Declare — ${money(RULES.revoltCost)}`, 'declare', 'pri',
+            `Confirm — ${money(RULES.revoltCost)}, and the arrangement ends for good`],
+           ['Not yet', 'closeSheet', '']])}`
       : `<p style="font-size:14px;color:var(--dim);margin-top:14px">Keep paying. Every credit tithed is a credit counted.</p>
          ${btns([['Close', 'closeSheet', 'pri wide']])}`}`);
   if (ready && p.cash < RULES.revoltCost) {
@@ -1084,7 +1126,7 @@ function showFinal() {
     ${btns([
       ...(G.endReason === 'conquest' ? [] : [['Play on — +12 circuits', 'playOn', 'wide']]),
       ['Copy result', 'copyResult', ''],
-      ['New game', 'newGame', 'pri'],
+      ['New game', 'newGame', 'pri', 'Confirm — starts over'],
       ['Back to board', 'closeSheet', 'wide']
     ])}<div id="cpOut"></div>`);
 }

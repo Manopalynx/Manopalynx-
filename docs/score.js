@@ -69,13 +69,47 @@ export const Score = {
     this.master.connect(t.destination);
 
     this.drone(); this.wind();
+    this.watch();
     this.ready = true;
     this.nextT = t.currentTime + .15;
     this.master.gain.linearRampToValueAtTime(this.on ? .9 : 0, t.currentTime + 3.4);
     this.timer = setInterval(() => this.sched(), 150);
   },
 
-  resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+  // Any state that is not 'running'. iOS uses 'interrupted' after backgrounding,
+  // a call or Siri — and the old check only looked for 'suspended', so coming
+  // back from any of those left the score off for good.
+  resume() {
+    if (!this.ctx) return;
+    if (this.ctx.state === 'running') return;
+    const r = this.ctx.resume();
+    if (r && r.then) r.then(() => this.catchUp()).catch(() => {});
+    else this.catchUp();
+  },
+
+  // The schedule clock keeps its own time, so after five minutes in the
+  // background nextT is five minutes behind. Left alone, sched() would schedule
+  // every missed bar in one pass with start times in the PAST, and Web Audio
+  // fires those immediately — a few hundred bars at once.
+  catchUp() {
+    if (!this.ctx) return;
+    if (this.nextT < this.ctx.currentTime) this.nextT = this.ctx.currentTime + 0.12;
+  },
+
+  // Called once from init(). Between them these cover coming back to the app
+  // without touching anything, and the case where iOS refuses to resume without
+  // a gesture — the next tap anywhere will do it.
+  watch() {
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) this.resume(); });
+    window.addEventListener('pageshow', () => this.resume());
+    window.addEventListener('focus', () => this.resume());
+    document.addEventListener('pointerdown', () => this.resume(), { passive: true });
+    if (this.ctx.addEventListener) {
+      this.ctx.addEventListener('statechange', () => {
+        if (this.ctx.state !== 'running' && this.on) this.resume();
+      });
+    }
+  },
 
   drone() {
     [[1, .085], [1.5, .05], [4, .022], [6, .014]].forEach(([m, g], i) => {
@@ -156,7 +190,9 @@ export const Score = {
   },
 
   sched() {
-    if (!this.ready || this.ctx.state === 'suspended') return;
+    if (!this.ready || this.ctx.state !== 'running') return;
+    // Belt and braces: whatever put the clock behind, never try to play the past.
+    if (this.nextT < this.ctx.currentTime - 0.5) this.catchUp();
     const beat = 60 / 70, barLen = beat * 4;
     while (this.nextT < this.ctx.currentTime + 1.8) {
       this.play(this.nextT, barLen, beat);
@@ -210,6 +246,7 @@ export const Score = {
     this.on = !this.on;
     if (this.ctx) {
       this.resume();
+      this.catchUp();
       this.master.gain.linearRampToValueAtTime(this.on ? .9 : 0, this.ctx.currentTime + .5);
     }
     return this.on;

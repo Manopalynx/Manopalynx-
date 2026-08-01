@@ -21,7 +21,7 @@ Playable. Engine, interface, offline support and save/resume are all in.
 ```
 data.js      board, decks, opponents, economy constants — data only
 engine.js    the rules. No DOM, no timers, no Math.random
-test/        124 passing
+test/        124 passing (plus a browser probe across five viewports)
 ```
 
 ## Running the tests
@@ -143,6 +143,10 @@ Names come from the book. Three squares were changed and each is commented in `d
 
 Open the Pages URL in Safari, then Share → **Add to Home Screen**. It runs full
 screen with no browser chrome and works with no signal.
+
+There is a **☰** in the top bar for the menu: the score, the traffic table, and
+a way out of a game in progress. Anything destructive arms before it fires — one
+tap turns the button into a warning that names the consequence, a second commits.
 
 Both orientations work. Turning the phone sideways does not make the board any
 bigger — it is square, so it is bound by the short edge either way — but it moves

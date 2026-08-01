@@ -238,6 +238,38 @@ for (const device of DEVICES) {
   }
   await page.evaluate(() => window.closeSheet());
 
+  // ---- there must be a way out of a game in progress ----
+  const menu = await page.evaluate(async () => {
+    const btn = document.getElementById('menuBtn');
+    if (!btn) return 'no menu button in the bar';
+    btn.click();
+    const sheet = document.querySelector('.sheet');
+    if (!sheet) return 'the menu did not open';
+    const newGame = sheet.querySelector('[data-fn="newGame"]');
+    if (!newGame) return 'the menu offers no way to start over';
+    const before = newGame.textContent;
+    newGame.click();                       // first tap must ARM, not fire
+    const armed = newGame.dataset.armed === '1' && newGame.textContent !== before;
+    const stillPlaying = !!window.__G() && !document.getElementById('game').classList.contains('hidden');
+    // and a second tap must actually do it
+    newGame.click();
+    await new Promise(r => setTimeout(r, 60));
+    const wentToSetup = !document.getElementById('setup').classList.contains('hidden');
+    return { armed, stillPlaying, wentToSetup };
+  });
+  if (typeof menu === 'string') fail(menu);
+  else {
+    if (menu.armed && menu.stillPlaying) pass('a destructive button arms before it fires');
+    else fail('New game fired on a single tap');
+    if (menu.wentToSetup) pass('the menu can abandon a game and return to setup');
+    else fail('confirming New game did not return to the menu screen');
+  }
+  // put a game back for the checks that follow
+  await page.evaluate(() => { document.querySelector('[data-a="spector"]').click(); });
+  await page.click('#begin');
+  await page.waitForSelector('#game:not(.hidden)');
+  await page.waitForTimeout(400);
+
   // ---- being short must ask, not decide for you ----
   const settle = await page.evaluate(async () => {
     const G = window.__G();
