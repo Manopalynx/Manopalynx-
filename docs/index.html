@@ -240,6 +240,14 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
   margin:-4px 0 12px;padding-left:19px}
 .effect div{padding:2px 0}
 .effect div:first-child{color:var(--tx)}
+/* The deck reference. Effect first and in the reading colour, flavour under it
+   in the dim one — the opposite weighting to a drawn card, because here the
+   player is looking up what a deck holds rather than savouring one of them. */
+.deckrow{padding:9px 0;border-bottom:1px solid var(--rule)}
+.deckrow:last-child{border-bottom:0}
+.deckwhat{font-family:var(--m);font-size:13px;color:var(--tx)}
+.decksays{font-size:13.5px;line-height:1.45;color:var(--dim);margin-top:3px}
+.decksays em{color:var(--gold);font-style:italic}
 .bars{height:9px;background:var(--rule);border-radius:5px;overflow:hidden;margin-top:8px}
 .bars i{display:block;height:100%;background:var(--vio)}
 table{width:100%;border-collapse:collapse;font-family:var(--m);font-size:13px;margin-top:10px}

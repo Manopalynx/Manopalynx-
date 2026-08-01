@@ -632,6 +632,33 @@ for (const device of DEVICES) {
   }
   await page.evaluate(() => { const G = window.__G(); G.players.forEach(q => q.pardons = 0); });
 
+  // ---- the deck reference ----
+  // Both decks, listed. The failure that matters is a card silently missing or
+  // a row with no effect against it, not the wording.
+  const decks = await page.evaluate(() => {
+    window.showDecks();
+    const sheet = document.querySelector('.sheet');
+    if (!sheet) return 'the decks sheet did not open';
+    const rows = [...sheet.querySelectorAll('.deckrow')].map(r => ({
+      what: r.querySelector('.deckwhat')?.textContent.trim(),
+      says: r.querySelector('.decksays')?.textContent.trim()
+    }));
+    const wide = sheet.scrollWidth > sheet.clientWidth + 1;
+    window.closeSheet();
+    return { rows, wide, expected: window.__CON().length + window.__COL().length };
+  });
+  if (typeof decks === 'string') fail(decks);
+  else {
+    if (decks.rows.length === decks.expected)
+      pass(`the decks screen lists all ${decks.expected} cards`);
+    else fail(`the decks screen lists ${decks.rows.length} of ${decks.expected} cards`);
+    const blank = decks.rows.filter(r => !r.what || r.what === '—' || !r.says);
+    if (!blank.length) pass('every card there states an effect');
+    else fail(`${blank.length} rows have no effect against them: ${blank.map(b => b.says).join(' | ')}`);
+    if (!decks.wide) pass('the decks screen does not scroll sideways');
+    else fail('the decks screen scrolls sideways');
+  }
+
   // ---- the galaxy, and the re-render trap it sits in ----
   // The board is rebuilt with innerHTML on every render. If the centre panel is
   // rebuilt with it, the canvas is destroyed and the animation restarts many

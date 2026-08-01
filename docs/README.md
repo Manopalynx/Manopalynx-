@@ -99,6 +99,8 @@ Three kinds of card are worth knowing about because they are not simply you and 
 - **`perGarrison` / `perCitadel`** — the only cards whose amount the player cannot work
   out from the text, which is why the interface computes it for them.
 
+Both decks can be read in full in-game, from the menu or from the ledger sheet.
+
 Cards are net **+₡510** (Contingency) and **+₡500** (Column) toward the bank, which reads
 as generous and is not: a player draws about **8 cards a game**, worth roughly **+₡240**,
 against **₡14,400** from lap payments over 72 circuits. The decks are texture, not economy.

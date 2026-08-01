@@ -4,7 +4,7 @@
 // file animates it.
 
 import {
-  SETS, BOARD, N, JAIL, TRAFFIC, FLEET_RENT, PERSONAS, RULES, EPIGRAPH, CONTINGENCY
+  SETS, BOARD, N, JAIL, TRAFFIC, FLEET_RENT, PERSONAS, RULES, EPIGRAPH, CONTINGENCY, COLUMN
 } from './data.js';
 import * as E from './engine.js';
 import { Score, moodFor } from './score.js';
@@ -534,7 +534,7 @@ function walk(path, done) {
 /* ============================================================ actions */
 const ACTIONS = {
   act_roll, act_resolve, act_amend, act_end,
-  showSquare, showManage, showTrade, showTithe, showRevolt, showFinal, showLedger,
+  showSquare, showManage, showTrade, showTithe, showRevolt, showFinal, showLedger, showDecks,
   closeSheet, newGame, copyResult, toggleLog, act_payFee, act_pardon, showMenu, toggleScore,
   showSettle, settlePledge, settleSellG, settleBreak, settleAuto, settleDone,
   buyNow, declineToAuction, takeCard, sealBid, sealClaim, endAuction, endContest,
@@ -618,6 +618,7 @@ function showMenu() {
     ${btns([
       [Score.on ? 'Turn the score off' : 'Turn the score on', 'toggleScore', 'wide'],
       ['What the board pays', 'showLedger', 'wide'],
+      ['The decks', 'showDecks', 'wide'],
       ['Back to the board', 'closeSheet', 'pri'],
       ['New game', 'newGame', 'dgr', 'Confirm — abandons this game']
     ])}
@@ -706,6 +707,42 @@ function showSquare(i) {
   sheet(s);
 }
 
+// A reference list of both decks. Deliberately player-independent: the effect
+// line on a drawn card says what it will do to YOU, which is the right thing
+// there and the wrong thing here, where the question is what is in the deck.
+function deckEffect(c) {
+  if (c.cash !== undefined) return c.cash > 0 ? `Gain ${money(c.cash)}` : `Pay ${money(-c.cash)}`;
+  if (c.each) return c.each > 0
+    ? `Collect ${money(c.each)} from every other overlord`
+    : `Pay ${money(-c.each)} to every other overlord`;
+  if (c.pardon) return 'Keep an Overseer favour';
+  if (c.perGarrison) return `Pay ${money(c.perGarrison)} per garrison held`;
+  if (c.perCitadel) return `Pay ${money(c.perCitadel)} per citadel held`;
+  if (c.jail) return 'Straight to Overseer Detention';
+  if (c.go !== undefined) return `Move to ${esc(BOARD[c.go].n)}`;
+  if (c.back) return `Move back ${c.back} squares`;
+  if (c.fleet) return 'Move to the nearest fleet';
+  if (c.util) return 'Move to the nearest utility';
+  return '—';
+}
+
+function showDecks() {
+  const deck = (title, sub, cards) => `<h4 style="font-family:var(--m);font-size:13px;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--gold);margin:18px 0 6px">${title}</h4>
+    <div class="sub" style="margin-bottom:8px">${sub}</div>` + cards.map(c =>
+      `<div class="deckrow"><div class="deckwhat">${deckEffect(c)}</div>
+       <div class="decksays">${esc(c.x).replace(/\*(.+?)\*/g, '<em>$1</em>')}</div></div>`).join('');
+
+  sheet(`<h3>The decks</h3><div class="sub">everything that can be drawn</div>
+    <p style="font-size:14px;line-height:1.5;color:var(--dim)">Both decks are dealt from a
+    shuffled order and reshuffled when they run out, so neither can be counted after one pass.
+    Amounts that depend on the table — the two that pay every overlord — are worked out when
+    the card is drawn.</p>
+    ${deck('Contingency', `${CONTINGENCY.length} cards · mostly movement`, CONTINGENCY)}
+    ${deck('The Column', `${COLUMN.length} cards · mostly money`, COLUMN)}
+    ${btns([['Close', 'closeSheet', 'pri wide']])}`);
+}
+
 function showLedger() {
   let s = `<h3>The ledger</h3><div class="sub">what the board actually pays</div>
     <p style="font-size:14px;line-height:1.5;color:var(--dim)">Landing frequency is solved from
@@ -721,7 +758,7 @@ function showLedger() {
   s += `</table><p style="font-size:14px;color:var(--dim);line-height:1.5;margin-top:12px">
     The Holding Facility takes ${TRAFFIC[JAIL].toFixed(1)}% of all landings — more than twice any
     other square. Eden sits six, seven and eight squares past it, which is where two dice most
-    want to land.</p>${btns([['Close', 'closeSheet', 'pri wide']])}`;
+    want to land.</p>${btns([['The decks', 'showDecks', ''], ['Close', 'closeSheet', 'pri']])}`;
   sheet(s);
 }
 
@@ -1390,6 +1427,7 @@ window.__tick = () => tick();
 // three boards apart. The probe compares them, so it needs both.
 window.__E = () => E;
 window.__CON = () => CONTINGENCY;
+window.__COL = () => COLUMN;
 // Cards are dealt by tick(), never by a button, so the sheet has no handle of
 // its own to reach for.
 window.__showCard = () => showCard();
