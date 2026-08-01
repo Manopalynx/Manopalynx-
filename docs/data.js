@@ -305,6 +305,10 @@ export const RULES = {
   // first turn. The array reports at the fractions of the game below; inside
   // this many circuits the counter itself turns.
   swarmWarning: 12,
+  // Squares a single contract may carry each way. Three covers every realistic
+  // deal — two lesser worlds for the one that closes a set, with cash on top —
+  // and keeps the sheet readable on a phone.
+  tradeMax: 3,
   revoltBase: 1400,              // strength needed for a first declaration
   revoltStep: 300,               // added per previous declaration
   revoltCost: 500,

@@ -25,7 +25,8 @@ import {
   serialize, deserialize, payFacilityFee, releaseVassal, aiValue, aiBid, aiWantsToBuy,
   pledge, pledgeValue, redeemCost, raisableValue, parkForSettlement, autoSettle, settleNow,
   threatPenalty, setBuildingTargets, denialTargets, aiCounter, aiAcceptsContract,
-  landingPreview, previewAt, cardEffect, usePardon, swarmDistance, extendGame
+  landingPreview, previewAt, cardEffect, usePardon, swarmDistance, extendGame,
+  sqList, contractValue
 } from '../engine.js';
 
 /* -------------------------------------------------------------- fixtures */
@@ -2142,4 +2143,148 @@ test('no player can be dealt the colour the board uses for selection', () => {
   assert.ok(seatColours.length >= 4, 'no seat colours found to compare against');
   assert.ok(!seatColours.includes(selColour),
     `the selection ring is ${selColour}, which is also a player colour`);
+});
+
+/* ========================================================= bundled contracts */
+// A contract carries up to RULES.tradeMax squares each way. The valuation is
+// the reason this is not just "make it an array": priced as a sum of parts, a
+// bundle of squares that complete nothing beats the one square that completes
+// a set, which is the first thing anyone would try.
+
+const bundleGame = () => {
+  const G = game([{ name: 'Sam', kind: 'human' }, { name: 'X', kind: 'ai', persona: 'spector' }]);
+  return G;
+};
+
+test('a contract moves every square on both sides', () => {
+  const G = bundleGame();
+  const [a, b] = G.players;
+  const eden = SETS.eden.sq, ven = SETS.ven.sq;
+  own(G, a, ven[0]); own(G, a, ven[1]);
+  own(G, b, eden[0]); own(G, b, eden[1]);
+  const c = { from: 0, to: 1, get: [eden[0], eden[1]], give: [ven[0], ven[1]], cash: 0, direction: 1 };
+  assert.equal(contractIsLegal(G, c), true);
+  settleContract(G, c);
+  for (const sq of eden.slice(0, 2)) assert.equal(ownerOf(G, sq).i, 0, `${sq} did not move`);
+  for (const sq of ven.slice(0, 2)) assert.equal(ownerOf(G, sq).i, 1, `${sq} did not move`);
+  assert.equal(a.holdings.length, 2);
+  assert.equal(b.holdings.length, 2);
+});
+
+test('a contract may not exceed the cap, or name a square twice', () => {
+  const G = bundleGame();
+  const [a, b] = G.players;
+  const spare = BOARD.map((x, i) => [x, i]).filter(([x]) => x.pr).map(([, i]) => i);
+  for (const sq of spare.slice(0, 5)) own(G, b, sq);
+  own(G, a, spare[9]);
+  const tooMany = spare.slice(0, RULES.tradeMax + 1);
+  assert.equal(contractIsLegal(G, { from: 0, to: 1, get: tooMany, give: [], cash: 0, direction: 1 }),
+    false, `${tooMany.length} squares should exceed the cap of ${RULES.tradeMax}`);
+  assert.equal(contractIsLegal(G, { from: 0, to: 1, get: [spare[0], spare[0]], give: [], cash: 0, direction: 1 }),
+    false, 'the same square twice is not a trade');
+  assert.equal(contractIsLegal(G, { from: 0, to: 1, get: spare.slice(0, RULES.tradeMax), give: [], cash: 0, direction: 1 }),
+    true, 'exactly the cap is fine');
+});
+
+test('a bare index still works wherever an array is expected', () => {
+  const G = bundleGame();
+  const [a, b] = G.players;
+  own(G, b, SETS.eden.sq[0]);
+  const c = { from: 0, to: 1, get: SETS.eden.sq[0], give: null, cash: 0, direction: 1 };
+  assert.equal(contractIsLegal(G, c), true, 'an older single-square contract is still legal');
+  settleContract(G, c);
+  assert.equal(ownerOf(G, SETS.eden.sq[0]).i, 0);
+});
+
+test('three squares that complete nothing do not outvalue one that completes a set', () => {
+  // The exploit the bundle valuation exists to prevent. Spector holds two of
+  // Eden; Sam holds the third plus three squares from three different sets that
+  // do nothing for anybody.
+  const G = bundleGame();
+  const [sam, ai] = G.players;
+  const eden = SETS.eden.sq;
+  own(G, ai, eden[0]); own(G, ai, eden[1]);
+  own(G, sam, eden[2]);
+  const junk = [SETS.syn.sq[0], SETS.eni.sq[0], SETS.dom.sq[0]];
+  for (const sq of junk) own(G, sam, sq);
+
+  // Gains only — "what will you give me for these three?" is the shape of the
+  // exploit, and it is the comparison that has to come out right.
+  const forJunk = contractValue(G, ai, junk, [], 0, sam.i);
+  const forEden = contractValue(G, ai, [eden[2]], [], 0, sam.i);
+  assert.ok(forEden > forJunk,
+    `Eden's last square valued ${forEden}, three unrelated squares ${forJunk}`);
+  assert.ok(forEden > forJunk * 2,
+    `three unrelated squares (${forJunk}) came within half of closing a set (${forEden})`);
+  // Every figure that reaches a price must be a whole credit.
+  for (const v of [forJunk, forEden]) assert.equal(v, Math.round(v), `${v} is not a whole credit`);
+
+  // And the offer that strips his set for junk must simply be refused.
+  assert.equal(aiAcceptsContract(G, ai, sam, { get: [eden[0]], give: junk, cash: 0, direction: 1 }),
+    false, 'three junk squares bought a completed set');
+});
+
+test('completing a set is worth more than the square alone', () => {
+  // The point of pricing the resulting board: the last square of a set lifts
+  // the value of the two already held, so it must beat its own list price.
+  const G = bundleGame();
+  const ai = G.players[1], sam = G.players[0];
+  const eden = SETS.eden.sq;
+  own(G, ai, eden[0]); own(G, ai, eden[1]);
+  own(G, sam, eden[2]);
+  const closing = contractValue(G, ai, [eden[2]], [], 0, sam.i);
+  assert.ok(closing > BOARD[eden[2]].pr,
+    `closing Eden valued at ${closing}, below its ${BOARD[eden[2]].pr} list price`);
+});
+
+test('two squares of one set are priced together, not twice over', () => {
+  // Handing a rival two of a three-set completes it. Charged per square, each
+  // give was judged without the other and the threat was missed entirely.
+  const G = bundleGame();
+  const [sam, ai] = G.players;
+  const eden = SETS.eden.sq;
+  own(G, ai, eden[0]); own(G, ai, eden[1]);
+  own(G, sam, eden[2]);
+  // Sam holds one; giving it completes Eden for the AI, which the AI values.
+  const both = contractValue(G, sam, [], [eden[2]], 0, ai.i);
+  assert.ok(both < 0, `handing over the square that completes a rival's set scored ${both}`);
+});
+
+test('a bundle survives a save', () => {
+  const G = bundleGame();
+  const [a, b] = G.players;
+  own(G, b, SETS.eden.sq[0]); own(G, b, SETS.eden.sq[1]);
+  G.contract = { from: 0, to: 1, get: [SETS.eden.sq[0], SETS.eden.sq[1]], give: [], cash: 50, direction: 1 };
+  G.phase = 'contract';
+  const back = deserialize(serialize(G));
+  assert.deepEqual(back.contract.get, [SETS.eden.sq[0], SETS.eden.sq[1]]);
+});
+
+test('whole games still play out with the bundle valuation in place', () => {
+  // contractValue now builds a scratch board on every call, which every opponent
+  // decision runs through. This is the "did that break anything" net.
+  for (let seed = 1; seed <= 12; seed++) {
+    const G = createGame({ seats: seats4, seed, circuits: 20 });
+    let steps = 0;
+    while (!G.over && steps++ < 60000) {
+      if (G.phase === 'roll') roll(G);
+      else if (G.phase === 'landed') resolveLanding(G);
+      else if (G.phase === 'card') applyCard(G);
+      else if (G.phase === 'settle') { autoSettle(G); settleNow(G); }
+      else if (G.phase === 'offer') { if (!buy(G, current(G))) G.phase = 'end'; }
+      else if (G.phase === 'auction') {
+        if (G.auction.resolved) closeAuction(G);
+        else submitBid(G, G.auction.queue[G.auction.at], 120);
+      } else if (G.phase === 'contract') respondToContract(G, false);
+      else if (G.phase === 'contest') {
+        if (G.contest.resolved) closeContest(G);
+        else submitClaim(G, G.contest.queue[G.contest.at], 100);
+      } else endTurn(G);
+      for (const p of G.players) {
+        assert.ok(Number.isFinite(p.cash), `${p.name} holds a non-number on seed ${seed}`);
+        assert.ok(p.cash >= 0, `${p.name} went to ${p.cash} on seed ${seed}`);
+      }
+    }
+    assert.ok(G.over, `seed ${seed} never finished`);
+  }
 });

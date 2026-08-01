@@ -21,7 +21,7 @@ Playable. Engine, interface, offline support and save/resume are all in.
 ```
 data.js      board, decks, opponents, economy constants — data only
 engine.js    the rules. No DOM, no timers, no Math.random
-test/        172 passing (plus a browser probe across five viewports)
+test/        180 passing (plus a browser probe across five viewports)
 ```
 
 ## Running the tests
@@ -178,6 +178,39 @@ impossible — and it never bids under its first figure. **If it is still level 
 runoff it falls to turn order from the current player, and the ledger says so.** That
 termination rule is the point: a runoff with no floor is two stubborn people bidding for
 ever, and a coin flip nobody sees is the defect being fixed, not the method.
+
+## Contracts carry up to three squares each way
+
+`RULES.tradeMax` is 3 — enough for two lesser worlds plus cash for the one that closes a
+set, and few enough that the sheet stays readable on a phone. `get` and `give` are arrays;
+`sqList()` normalises a bare index or a null, so older saves and older call sites still
+work.
+
+**The valuation is the reason this is not simply "make it an array."** A contract used to
+be priced as a sum of parts:
+
+    value = cash + aiValue(each gained) − aiValue(each given) − threat
+
+Sum the parts and three squares that complete nothing beat the one square that completes a
+set — the first thing anyone tries, and it would have made all three opponents farmable
+exactly when trading finally matters. `contractValue()` now builds the board the contract
+would produce and prices **that**: the difference between two whole positions. A square
+that closes a set lifts the value of the ones already held; a square that closes nothing
+lifts nothing. Measured on the same position, three unrelated squares are worth **₡171** to
+Spector against **₡679** for the one that finishes Eden.
+
+Two things that only showed up once it was measured:
+
+- **`aiValue`'s `mine` counted the square itself.** It was written to price a square you do
+  *not* hold, so `mine` means "the rest of the set I already have". On a post-trade board
+  every square counted itself, and a lone worthless world collected the foothold bonus
+  meant for a second one. It now takes an `ignore` argument, and `positionValue` passes it.
+- **`threatPenalty` returned a float.** `180 * 0.7` is `125.99999999999999`, and that
+  reached counter-offers and displayed prices — the same shape as the ₡221 redemption bug.
+  Rounded.
+
+Threat is charged **once per set** on the resulting board. Per square, a two-square gift to
+one set was counted twice and the fact that the two *together* complete it was missed.
 
 ## Money, and what happens when you run out
 

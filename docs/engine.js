@@ -1083,13 +1083,15 @@ export function tradable(G, p, sq) {
 
 export function settleContract(G, { from, to, give, get, cash, direction }) {
   const a = G.players[from], b = G.players[to];
-  if (give !== null && give !== undefined) {
-    a.holdings = a.holdings.filter(h => h.sq !== give);
-    b.holdings.push({ sq: give, garrisons: 0, citadel: 0, mortgaged: 0 });
+  const gets = sqList(get), gives = sqList(give);
+  const fresh = sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 });
+  if (gives.length) {
+    a.holdings = a.holdings.filter(h => !gives.includes(h.sq));
+    for (const sq of gives) b.holdings.push(fresh(sq));
   }
-  if (get !== null && get !== undefined) {
-    b.holdings = b.holdings.filter(h => h.sq !== get);
-    a.holdings.push({ sq: get, garrisons: 0, citadel: 0, mortgaged: 0 });
+  if (gets.length) {
+    b.holdings = b.holdings.filter(h => !gets.includes(h.sq));
+    for (const sq of gets) a.holdings.push(fresh(sq));
   }
   const amount = Math.max(0, Math.floor(cash || 0));
   if (amount) {
@@ -1097,8 +1099,9 @@ export function settleContract(G, { from, to, give, get, cash, direction }) {
     else { const v = Math.min(amount, b.cash); b.cash -= v; a.cash += v; }
   }
   const parts = [];
-  if (get !== null && get !== undefined) parts.push(`${a.name} takes ${BOARD[get].n}`);
-  if (give !== null && give !== undefined) parts.push(`${b.name} takes ${BOARD[give].n}`);
+  const names = list => list.map(sq => BOARD[sq].n).join(', ');
+  if (gets.length) parts.push(`${a.name} takes ${names(gets)}`);
+  if (gives.length) parts.push(`${b.name} takes ${names(gives)}`);
   if (amount) parts.push(`${money(amount)} to ${direction === 1 ? b.name : a.name}`);
   note(G, `Contract settled — ${parts.join(', ') || 'nothing changed hands'}.`);
   leaderSays(G, pick(G, [
@@ -1237,13 +1240,15 @@ export function contractIsLegal(G, c) {
   if (!c || c.from === c.to) return false;
   const a = G.players[c.from], b = G.players[c.to];
   if (!a || !b || a.debt || b.debt) return false;
-  if (c.get !== null && c.get !== undefined) {
-    if (!holding(b, c.get) || !tradable(G, b, c.get)) return false;
-  }
-  if (c.give !== null && c.give !== undefined) {
-    if (!holding(a, c.give) || !tradable(G, a, c.give)) return false;
-  }
-  if (c.get === null && c.give === null && !c.cash) return false;
+  const gets = sqList(c.get), gives = sqList(c.give);
+  if (gets.length > RULES.tradeMax || gives.length > RULES.tradeMax) return false;
+  // A square named twice, or named on both sides, is not a trade — it is a bug
+  // in whatever built the contract, and it would move a holding twice.
+  const all = [...gets, ...gives];
+  if (new Set(all).size !== all.length) return false;
+  for (const sq of gets) if (!holding(b, sq) || !tradable(G, b, sq)) return false;
+  for (const sq of gives) if (!holding(a, sq) || !tradable(G, a, sq)) return false;
+  if (!gets.length && !gives.length && !c.cash) return false;
   return true;
 }
 
@@ -1308,13 +1313,19 @@ const CONTRACT_LINES = {
 };
 
 /* ============================================================ opponents */
-export function aiValue(G, p, sq) {
+export function aiValue(G, p, sq, ignore = null) {
   const b = BOARD[sq];
   if (!b.pr) return 0;
   if (!b.s) return Math.round(b.pr * (p.persona === 'spector' ? 1.15 : p.persona === 'varan' ? 1.25 : 0.95));
 
   const s = SETS[b.s];
-  const mine = s.sq.filter(i => { const o = ownerOf(G, i); return o && o.i === p.i; }).length;
+  // `ignore` leaves one square out of the count. aiValue was written to price a
+  // square you do NOT hold, so `mine` means "the rest of the set I already have".
+  // Valuing a post-trade board without this, every square counts itself, and a
+  // lone worthless world picks up the foothold bonus meant for a second one.
+  const mine = s.sq.filter(i => i !== ignore && (() => {
+    const o = ownerOf(G, i); return o && o.i === p.i;
+  })()).length;
   const free = s.sq.filter(i => !ownerOf(G, i)).length;
   let v;
   if (p.persona === 'spector') {
@@ -1384,19 +1395,79 @@ export function threatPenalty(G, who, give) {
   const best = counts.size ? Math.max(...counts.values()) : 0;
   const after = best + 1;                         // what the best-placed rival would hold
   const t = THREAT[who.persona] || THREAT.spector;
-  if (after >= set.sq.length) return b.pr * t.full;
-  if (after === set.sq.length - 1) return b.pr * t.near;
+  // Rounded. This figure reaches a counter-offer and a displayed price, and
+  // 180 * 0.7 is 125.99999999999999 — the same shape as the ₡221 redemption.
+  if (after >= set.sq.length) return Math.round(b.pr * t.full);
+  if (after === set.sq.length - 1) return Math.round(b.pr * t.near);
   return 0;
 }
 
-export function contractValue(G, who, get, give, cashIn) {
-  let v = cashIn;
-  if (get !== null && get !== undefined) v += aiValue(G, who, get);
-  if (give !== null && give !== undefined) {
-    v -= aiValue(G, who, give);
-    v -= threatPenalty(G, who, give);
+// A contract carries up to RULES.tradeMax squares each way. Older saves and
+// older call sites pass a bare index or null, so everything normalises here
+// rather than in eight places.
+export const sqList = v =>
+  v === null || v === undefined ? [] : Array.isArray(v) ? v.slice() : [v];
+
+// The board a contract would produce. aiValue and the threat test both read
+// ownership straight off the board, so the honest way to price a bundle is to
+// build the board it makes and price THAT. Adding up the pieces is what lets
+// somebody hand over three squares that complete nothing and have the total
+// come out ahead of the one square that completes a set.
+function boardAfter(G, whoIdx, otherIdx, gets, gives) {
+  const fresh = sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 });
+  const players = G.players.slice();
+  const a = { ...players[whoIdx] }, b = { ...players[otherIdx] };
+  a.holdings = players[whoIdx].holdings.filter(h => !gives.includes(h.sq)).concat(gets.map(fresh));
+  b.holdings = players[otherIdx].holdings.filter(h => !gets.includes(h.sq)).concat(gives.map(fresh));
+  players[whoIdx] = a; players[otherIdx] = b;
+  return { ...G, players };
+}
+
+// What every square this player holds is worth to them on a given board. The
+// difference between two of these is the only figure a bundle can be priced by:
+// a square that completes a set lifts the value of the ones already held, and
+// a square that completes nothing lifts nothing.
+const positionValue = (G, p) =>
+  p.holdings.reduce((n, h) => n + aiValue(G, p, h.sq, h.sq), 0);
+
+// Handing over squares can put a rival one short of a set, or finish it. Charged
+// once per SET on the resulting board — charging per square counted a two-square
+// gift to the same set twice, and missed that the two together complete it.
+function bundleThreat(after, who, gives) {
+  const bySet = new Map();
+  for (const sq of gives) {
+    const b = BOARD[sq];
+    if (b.s) bySet.set(b.s, (bySet.get(b.s) || 0) + b.pr);
   }
-  return v;
+  const t = THREAT[who.persona] || THREAT.spector;
+  let total = 0;
+  for (const [key, price] of bySet) {
+    const set = SETS[key];
+    const counts = new Map();
+    for (const j of set.sq) {
+      const o = ownerOf(after, j);
+      if (o && o.i !== who.i) counts.set(o.i, (counts.get(o.i) || 0) + 1);
+    }
+    const best = counts.size ? Math.max(...counts.values()) : 0;
+    if (best >= set.sq.length) total += Math.round(price * t.full);
+    else if (best === set.sq.length - 1) total += Math.round(price * t.near);
+  }
+  return total;
+}
+
+export function contractValue(G, who, get, give, cashIn, otherIdx) {
+  const gets = sqList(get), gives = sqList(give);
+  if (otherIdx === undefined || otherIdx === null) {
+    // No counterparty named: fall back to the old per-square sum. Only reachable
+    // from a caller that predates bundles.
+    let v = cashIn;
+    for (const sq of gets) v += aiValue(G, who, sq);
+    for (const sq of gives) { v -= aiValue(G, who, sq); v -= threatPenalty(G, who, sq); }
+    return v;
+  }
+  const after = boardAfter(G, who.i, otherIdx, gets, gives);
+  const gain = positionValue(after, after.players[who.i]) - positionValue(G, who);
+  return cashIn + gain - bundleThreat(after, who, gives);
 }
 
 const BAR = { spector: 60, varan: 240, vale: -40 };
@@ -1410,7 +1481,8 @@ function acceptanceBar(G, them, proposer) {
 
 export function aiAcceptsContract(G, them, proposer, { give, get, cash, direction }) {
   const cashToThem = direction === 1 ? cash : -cash;
-  return contractValue(G, them, give, get, cashToThem) > acceptanceBar(G, them, proposer);
+  return contractValue(G, them, give, get, cashToThem, proposer.i)
+    > acceptanceBar(G, them, proposer);
 }
 
 // The least cash that WOULD have carried it, and what each of them does with
@@ -1419,7 +1491,7 @@ export function aiAcceptsContract(G, them, proposer, { give, get, cash, directio
 export function aiCounter(G, them, proposer, c) {
   if (c.direction !== 1) return null;              // only counter offers of cash
   // Solve the acceptance test for cash rather than searching for it.
-  const withoutCash = contractValue(G, them, c.give, c.get, 0);
+  const withoutCash = contractValue(G, them, c.give, c.get, 0, proposer.i);
   const needed = Math.ceil(acceptanceBar(G, them, proposer) - withoutCash) + 1;
   if (needed <= c.cash) return null;               // they would have taken it
 

@@ -1139,7 +1139,7 @@ function offerFor(sq) {
   const owner = E.ownerOf(G, sq);
   if (!owner || owner.i === me.i || me.debt) return;
   closeSheet();
-  TR = { from: me.i, to: owner.i, get: sq, give: null, cash: 0, direction: 1 };
+  TR = { from: me.i, to: owner.i, get: [sq], give: [], cash: 0, direction: 1 };
   drawTrade();
 }
 
@@ -1152,7 +1152,7 @@ function showTrade() {
     return;
   }
   const others = G.players.filter(q => q.i !== me.i);
-  if (!TR || TR.from !== me.i) TR = { from: me.i, to: others[0].i, get: null, give: null, cash: 0, direction: 1 };
+  if (!TR || TR.from !== me.i) TR = { from: me.i, to: others[0].i, get: [], give: [], cash: 0, direction: 1 };
   drawTrade();
 }
 
@@ -1181,21 +1181,22 @@ function drawTrade() {
   };
 
   let s = `<h3>Draw a contract</h3><div class="sub">${esc(me.name)} · ${money(me.cash)} in hand</div>`;
-  if (suggestion && suggestion.to === TR.to && TR.get === null) {
+  if (suggestion && suggestion.to === TR.to && !TR.get.length) {
     s += `<div class="warnbox" style="border-color:var(--gold);background:rgba(217,164,65,.08)">
       <b>${esc(BOARD[suggestion.get].n)}</b> would complete ${esc(SETS[BOARD[suggestion.get].s].n)} for you.</div>`;
   }
   s += `<div class="opts" style="margin-bottom:16px">${others.map(o =>
     `<button class="opt${TR.to === o.i ? ' on' : ''}" data-fn="tradeSet|to|${o.i}">${esc(o.name.split(' ')[0])}</button>`).join('')}</div>`;
 
-  s += `<div class="sub" style="margin:4px 0 8px">You receive</div>`;
+  // Tapping a square adds or removes it. Up to RULES.tradeMax a side, which is
+  // what makes "two lesser worlds for the one that closes a set" possible at all.
+  s += `<div class="sub" data-count="get" style="margin:4px 0 8px">You receive — ${TR.get.length} of ${RULES.tradeMax}</div>`;
   s += them.holdings.length
-    ? [...them.holdings].sort((a, b) => a.sq - b.sq).map(h => row(them, h.sq, TR.get === h.sq, `tradeSet|get|${h.sq}`)).join('')
+    ? [...them.holdings].sort((a, b) => a.sq - b.sq).map(h => row(them, h.sq, TR.get.includes(h.sq), `tradeSet|get|${h.sq}`)).join('')
     : `<p style="color:var(--dim);font-size:14px">${esc(them.name)} holds nothing.</p>`;
 
-  s += `<div class="sub" style="margin:18px 0 8px">You give</div>
-    <button class="pick${TR.give === null ? ' on' : ''}" data-fn="tradeSet|give|null">Nothing</button>`;
-  s += [...me.holdings].sort((a, b) => a.sq - b.sq).map(h => row(me, h.sq, TR.give === h.sq, `tradeSet|give|${h.sq}`)).join('');
+  s += `<div class="sub" data-count="give" style="margin:18px 0 8px">You give — ${TR.give.length} of ${RULES.tradeMax}</div>`;
+  s += [...me.holdings].sort((a, b) => a.sq - b.sq).map(h => row(me, h.sq, TR.give.includes(h.sq), `tradeSet|give|${h.sq}`)).join('');
 
   s += `<div class="sub" style="margin:18px 0 8px">Credits</div>
     <div class="opts" style="margin-bottom:10px">
@@ -1221,11 +1222,17 @@ function tradeSet(key, value) {
   if (key === 'to') {
     // Switching counterparty changes the whole "you receive" list, so this one
     // genuinely has to rebuild.
-    TR.to = v; TR.get = null; TR.give = null;
+    TR.to = v; TR.get = []; TR.give = [];
     drawTrade();
     return;
   }
-  TR[key] = v;
+  // Toggle. Tapping a chosen square takes it back out, which is the only way to
+  // change your mind without starting the contract again.
+  const list = TR[key];
+  const at = list.indexOf(v);
+  if (at >= 0) list.splice(at, 1);
+  else if (list.length < RULES.tradeMax) list.push(v);
+  else return;                       // at the cap: say nothing, change nothing
   refreshTrade();
 }
 
@@ -1238,23 +1245,33 @@ const readTradeCash = () => {
 // that completes your set is worth several times its list price, and a scorer
 // that did not know that would confidently call a brilliant trade a bad one.
 function tradeTotals() {
-  const price = i => (i === null || i === undefined ? 0 : BOARD[i].pr);
+  const sum = list => list.reduce((n, i) => n + BOARD[i].pr, 0);
   const cash = TR.cash || 0;
   return {
-    youGet: price(TR.get) + (TR.direction === -1 ? cash : 0),
-    youGive: price(TR.give) + (TR.direction === 1 ? cash : 0)
+    youGet: sum(TR.get) + (TR.direction === -1 ? cash : 0),
+    youGive: sum(TR.give) + (TR.direction === 1 ? cash : 0)
   };
 }
 
-function completesFor(sq, who) {
-  if (sq === null || sq === undefined) return null;
-  const b = BOARD[sq];
-  if (!b.s) return null;
-  const held = SETS[b.s].sq.filter(j => {
-    const o = E.ownerOf(G, j);
-    return o && o.i === who.i;
-  }).length;
-  return held === SETS[b.s].sq.length - 1 ? SETS[b.s].n : null;
+// Which sets a whole bundle finishes for somebody. Asked per square, two
+// squares of the same set each looked like they completed nothing, because
+// each was counted without the other.
+function completesFor(list, who) {
+  const squares = Array.isArray(list) ? list : list === null || list === undefined ? [] : [list];
+  const bySet = new Map();
+  for (const sq of squares) {
+    const b = BOARD[sq];
+    if (b.s) bySet.set(b.s, (bySet.get(b.s) || 0) + 1);
+  }
+  const done = [];
+  for (const [key, incoming] of bySet) {
+    const held = SETS[key].sq.filter(j => {
+      const o = E.ownerOf(G, j);
+      return o && o.i === who.i;
+    }).length;
+    if (held + incoming >= SETS[key].sq.length) done.push(SETS[key].n);
+  }
+  return done.length ? done.join(' and ') : null;
 }
 
 // Selection and totals update in place. Rebuilding the whole sheet on every tap
@@ -1266,10 +1283,14 @@ function refreshTrade() {
   const me = G.players[TR.from], them = G.players[TR.to];
 
   root.querySelectorAll('[data-fn^="tradeSet|get|"]').forEach(b =>
-    b.classList.toggle('on', +b.dataset.fn.split('|')[2] === TR.get));
-  root.querySelectorAll('[data-fn^="tradeSet|give|"]').forEach(b => {
-    const raw = b.dataset.fn.split('|')[2];
-    b.classList.toggle('on', raw === 'null' ? TR.give === null : +raw === TR.give);
+    b.classList.toggle('on', TR.get.includes(+b.dataset.fn.split('|')[2])));
+  root.querySelectorAll('[data-fn^="tradeSet|give|"]').forEach(b =>
+    b.classList.toggle('on', TR.give.includes(+b.dataset.fn.split('|')[2])));
+  // The counts in the two headings move as squares go in and out.
+  const heads = root.querySelectorAll('[data-count]');
+  heads.forEach(h => {
+    const k = h.dataset.count;
+    h.textContent = `${k === 'get' ? 'You receive' : 'You give'} — ${TR[k].length} of ${RULES.tradeMax}`;
   });
   root.querySelectorAll('[data-fn^="tradeSet|direction|"]').forEach(b =>
     b.classList.toggle('on', +b.dataset.fn.split('|')[2] === TR.direction));
@@ -1346,47 +1367,65 @@ function showContract() {
   // board, so every line below is from their side of the table: what colour it
   // is, how much of that colour each of them ends up holding, and — for fleets
   // and utilities, whose rent is purely a count — what they would charge after.
-  const brief = (sq, label, gaining) => {
-    if (sq === null || sq === undefined) return '';
-    const b = BOARD[sq];
-    let s = `<div class="sub" style="margin:14px 0 6px">${label}</div>
-      <div class="stat"><span>${esc(b.n)}</span><span>${money(b.pr)}</span></div>`;
+  // A contract can carry several squares each way now, so the heading is written
+  // once and each square gets its own block underneath.
+  const briefAll = (list, label, gaining) => {
+    const squares = E.sqList(list);
+    if (!squares.length) return '';
+    return `<div class="sub" style="margin:14px 0 6px">${label}${
+      squares.length > 1 ? ` — ${squares.length} squares` : ''}</div>`
+      + squares.map(sq => brief(sq, gaining)).join('');
+  };
+  // Counts must reflect the WHOLE contract, not one square at a time. With two
+  // squares of the same set moving together, per-square arithmetic reports each
+  // as if the other were not in the deal and both come out wrong.
+  const toGains = E.sqList(c.give), toLoses = E.sqList(c.get);
+  const inSet = (list, key) => list.filter(sq => BOARD[sq].s === key).length;
+  const ofType = (list, t) => list.filter(sq => BOARD[sq].t === t).length;
 
-    if (b.s) {
-      const set = SETS[b.s];
+  // A set's arithmetic is a property of the whole contract, so it is printed
+  // once. Printed per square, a two-for-one inside one set repeated the same
+  // "2 → 2" under both, which reads like a bug even though it is right.
+  const shown = new Set();
+  const brief = (sq, gaining) => {
+    const b = BOARD[sq];
+    let s = `<div class="stat"><span>${esc(b.n)}</span><span>${money(b.pr)}</span></div>`;
+    const tag = b.s || b.t;
+    const first = !shown.has(tag);
+    shown.add(tag);
+
+    if (b.s && first) {
+      const set = SETS[b.s], key = b.s;
       const mine = set.sq.filter(i => (E.ownerOf(G, i) || {}).i === to.i).length;
-      const after = mine + (gaining ? 1 : -1);
+      const after = mine + inSet(toGains, key) - inSet(toLoses, key);
       const theirsNow = set.sq.filter(i => (E.ownerOf(G, i) || {}).i === from.i).length;
-      const theirsThen = theirsNow + (gaining ? -1 : 1);
-      // Both sides, always. Showing only your own count hides the thing you most
-      // need to see: what the offer is quietly doing for the other player.
+      const theirsThen = theirsNow + inSet(toLoses, key) - inSet(toGains, key);
       s += `<div class="stat"><span><i class="swatch" style="background:${set.c}"></i>
         ${esc(set.n)}</span><span>of ${set.sq.length}</span></div>
         <div class="stat sub2"><span>you</span><span>${mine} → <b>${after}</b></span></div>
         <div class="stat sub2"><span>${esc(chipName(from))}</span>
           <span>${theirsNow} → <b>${theirsThen}</b></span></div>`;
-      if (after === set.sq.length) {
+      if (after === set.sq.length && mine < set.sq.length) {
         s += `<div class="warnbox ok">This completes ${esc(set.n)} for you. Rent doubles
           across the set and you can garrison it.</div>`;
-      } else if (mine === set.sq.length) {
+      } else if (mine === set.sq.length && after < set.sq.length) {
         s += `<div class="warnbox">This breaks your ${esc(set.n)}. You lose the doubled
           rent on all ${set.sq.length}.</div>`;
       }
-      if (theirsThen === set.sq.length) {
+      if (theirsThen === set.sq.length && theirsNow < set.sq.length) {
         s += `<div class="warnbox">This completes ${esc(set.n)} for ${esc(from.name)}.</div>`;
       }
-    } else if (b.t === 'f' || b.t === 'u') {
-      const kind = b.t === 'f' ? 'f' : 'u';
+    } else if ((b.t === 'f' || b.t === 'u') && first) {
+      const kind = b.t;
       const held = E.countType(to, kind);
-      const after = held + (gaining ? 1 : -1);
-      const word = kind === 'f' ? 'fleet' : 'utility';
+      const after = held + ofType(toGains, kind) - ofType(toLoses, kind);
       s += `<div class="stat"><span><i class="swatch" style="background:var(--${kind === 'f' ? 'fleet' : 'util'})"></i>
-        ${word === 'fleet' ? 'Fleets' : 'Utilities'} held</span>
+        ${kind === 'f' ? 'Fleets' : 'Utilities'} held</span>
         <span>${held} → <b>${after}</b></span></div>`;
       // Rent on these is a count, so the figure that matters is what YOU would
       // charge afterwards — not what it earns its current owner today.
-      const now = kind === 'f' ? FLEET_RENT[held] || 0 : held === 2 ? 70 : held === 1 ? 28 : 0;
-      const then = kind === 'f' ? FLEET_RENT[after] || 0 : after === 2 ? 70 : after === 1 ? 28 : 0;
+      const rate = n => kind === 'f' ? (FLEET_RENT[n] || 0) : n === 2 ? 70 : n === 1 ? 28 : 0;
+      const now = rate(held), then = rate(after);
       s += `<div class="stat"><span>You would charge</span>
         <span>${money(now)} → <b style="color:${then > now ? 'var(--tx)' : 'var(--warn)'}">${money(then)}</b>${
           kind === 'u' ? ' <small>on a 7</small>' : ''}</span></div>`;
@@ -1398,8 +1437,8 @@ function showContract() {
   };
   sheet(`<h3>${esc(from.name)} → ${esc(to.name)}</h3>
     <div class="sub">${esc(to.name)}'s eyes only — pass the phone</div>
-    ${brief(c.get, `${esc(to.name)} gives up`, false)}
-    ${brief(c.give, `${esc(to.name)} receives`, true)}
+    ${briefAll(c.get, `${esc(to.name)} gives up`, false)}
+    ${briefAll(c.give, `${esc(to.name)} receives`, true)}
     <div class="card">${c.cash
       ? (c.direction === 1
         ? `${esc(to.name)} also receives ${money(c.cash)}`
@@ -1527,6 +1566,7 @@ window.__render = () => render();
 window.__SETS = () => SETS;
 window.__BOARD = () => BOARD;
 window.__TR = () => TR;
+window.__RULES = () => RULES;
 window.__tick = () => tick();
 // The panel and the engine each work out rent separately, and once drifted
 // three boards apart. The probe compares them, so it needs both.

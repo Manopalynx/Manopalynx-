@@ -272,8 +272,9 @@ for (const device of DEVICES) {
     offerBtn.click();
     await new Promise(r => setTimeout(r, 40));
     const asked = window.__TR && window.__TR();
-    if (!asked || asked.get !== eden[2] || asked.to !== them.i) {
-      return 'the offer did not open a contract for that square and owner';
+    const wanted = asked ? (Array.isArray(asked.get) ? asked.get : [asked.get]) : [];
+    if (!asked || !wanted.includes(eden[2]) || asked.to !== them.i) {
+      return `the offer did not open a contract for that square and owner (got ${JSON.stringify(asked && asked.get)})`;
     }
 
     // 2. the cash field starts empty rather than at a literal zero
@@ -701,9 +702,12 @@ for (const device of DEVICES) {
     const fleets = BOARD.map((b, i) => [b, i]).filter(([b]) => b.t === 'f').map(([, i]) => i);
     for (const q of G.players) q.holdings = [];
     // Two of Eden and one fleet to me; the third Eden and a second fleet to them.
-    me.holdings = [eden[0], eden[1], fleets[0]].map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+    const ven = SETS.ven.sq;
+    me.holdings = [eden[0], eden[1], ven[0], fleets[0]].map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
     them.holdings = [eden[2], fleets[1]].map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
-    G.contract = { from: them.i, to: me.i, get: eden[0], give: eden[2], cash: 0, direction: 1 };
+    // me gives a Venenum square and receives the third Eden — a real completion.
+    // A same-set swap correctly completes nothing, which is not what this checks.
+    G.contract = { from: them.i, to: me.i, get: [ven[0]], give: [eden[2]], cash: 0, direction: 1 };
     window.__showContract();
     const sheet = document.querySelector('.sheet');
     const text = sheet.textContent.replace(/\s+/g, ' ');
@@ -724,8 +728,8 @@ for (const device of DEVICES) {
   else fail(`only ${contract.swatches} colour swatches on a two-square contract`);
   // Both sides, on every square — showing only your own count hides what the
   // offer quietly does for the other player.
-  const mine = /you\s*2 → 1/.test(contract.text);
-  const theirs = new RegExp(`${contract.them}\\s*1 → 2`).test(contract.text);
+  const mine = /you\s*2 → 3/.test(contract.text);
+  const theirs = new RegExp(`${contract.them}\\s*1 → 0`).test(contract.text);
   if (mine && theirs) pass('it shows what each side holds of the set, before and after');
   else fail(`set counts wrong (yours ${mine}, theirs ${theirs}): ${contract.text.slice(0, 300)}`);
   if (contract.completes) pass('it flags a set completion');
@@ -777,6 +781,70 @@ for (const device of DEVICES) {
   if (ring.during === 1 && ring.after === 0)
     pass('the selection ring appears with its sheet and goes with it');
   else fail(`selection ring: ${ring.during} while open, ${ring.after} after closing`);
+
+  // ---- a contract carrying more than one square each way ----
+  const bundle = await page.evaluate(async () => {
+    const G = window.__G(), SETS = window.__SETS(), E = window.__E();
+    const me = G.players[G.cur];
+    const them = G.players.find(q => q !== me);
+    const eden = SETS.eden.sq, ven = SETS.ven.sq;
+    for (const q of G.players) q.holdings = [];
+    // I already hold one of Eden, so taking their two completes it — which is
+    // the whole point of being able to bundle in the first place.
+    me.holdings = [eden[2], ven[0], ven[1]].map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+    them.holdings = [eden[0], eden[1]].map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+    me.debt = 0; them.debt = 0;
+    G.phase = 'end';
+
+    window.showTrade();
+    const pick = (kind, sq) => {
+      const b = document.querySelector(`.sheet [data-fn="tradeSet|${kind}|${sq}"]`);
+      if (b) b.click();
+      return !!b;
+    };
+    // Switch to the right counterparty first, then take both of theirs and
+    // offer both of ours.
+    const toBtn = document.querySelector(`.sheet [data-fn="tradeSet|to|${them.i}"]`);
+    if (toBtn) toBtn.click();
+    // Whatever an earlier section left selected, take it back out first — the
+    // sheet deliberately remembers a contract in progress.
+    for (const kind of ['get', 'give']) {
+      for (const sq of [...window.__TR()[kind]]) {
+        const b = document.querySelector(`.sheet [data-fn="tradeSet|${kind}|${sq}"]`);
+        if (b) b.click();
+      }
+    }
+    const ok = [pick('get', eden[0]), pick('get', eden[1]),
+                pick('give', ven[0]), pick('give', ven[1])].every(Boolean);
+    // Snapshot the counts NOW. TR is a live object and the cap test below adds
+    // to it, so reading .length at return time reports the wrong moment.
+    const gets = window.__TR().get.length, gives = window.__TR().give.length;
+    const sum = document.querySelector('.sheet .tradeSum')?.textContent.replace(/\s+/g, ' ') || '';
+    const heads = [...document.querySelectorAll('.sheet [data-count]')].map(h => h.textContent.trim());
+
+    // Now cap: a third and fourth square must not go in beyond the cap.
+    const spare = window.__BOARD().map((b, i) => [b, i])
+      .filter(([b, i]) => b.pr && !eden.includes(i) && !ven.includes(i)).map(([, i]) => i);
+    for (const sq of spare.slice(0, 3)) {
+      them.holdings.push({ sq, garrisons: 0, citadel: 0, mortgaged: 0 });
+    }
+    window.showTrade();
+    for (const sq of [eden[0], eden[1], ...spare.slice(0, 3)]) pick('get', sq);
+    const capped = window.__TR().get.length;
+
+    window.closeSheet();
+    return { ok, gets, gives, sum, heads, capped,
+             max: window.__RULES().tradeMax };
+  });
+  if (bundle.ok && bundle.gets === 2 && bundle.gives === 2)
+    pass('a contract can carry two squares each way');
+  else fail(`bundle selection: picked=${bundle.ok}, ${bundle.gets} gets, ${bundle.gives} gives`);
+  if (bundle.heads.some(h => /2 of 3/.test(h))) pass(`the sheet counts the bundle (${bundle.heads.join(' / ')})`);
+  else fail(`no running count in the headings: ${bundle.heads.join(' / ')}`);
+  if (/Completes/.test(bundle.sum)) pass(`the totals flag what a bundle completes (${bundle.sum})`);
+  else fail(`the summary said nothing about completion: ${bundle.sum}`);
+  if (bundle.capped === bundle.max) pass(`the cap holds at ${bundle.max} squares`);
+  else fail(`selected ${bundle.capped} squares against a cap of ${bundle.max}`);
 
   // ---- the galaxy, and the re-render trap it sits in ----
   // The board is rebuilt with innerHTML on every render. If the centre panel is
