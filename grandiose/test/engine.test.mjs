@@ -18,7 +18,8 @@ import {
   pay, liquidate, payRent, money, roll, amendCost, amendManifest, resolveLanding,
   applyCard, endTurn, buy, openAuction, submitBid, closeAuction, build,
   raiseCitadel, sellDevelopment, mortgage, redeem, repayDebt, tradable,
-  settleContract, declareIndependence, submitClaim, closeContest, standings
+  settleContract, declareIndependence, submitClaim, closeContest, standings,
+  setCompletingTargets, seekContract, contractIsLegal, proposeContract, respondToContract
 } from '../engine.js';
 
 /* -------------------------------------------------------------- fixtures */
@@ -805,6 +806,162 @@ test('a traded square arrives undeveloped', () => {
   own(G, b, 13);
   settleContract(G, { from: a.i, to: b.i, give: null, get: 13, cash: 0, direction: 1 });
   assert.deepEqual(holding(a, 13), { sq: 13, garrisons: 0, citadel: 0, mortgaged: 0 });
+});
+
+/* ============================================================ seeking trades */
+
+test('a set-completing target is found only when one other player holds the last square', () => {
+  const G = game(seats4);
+  const [a, b, c] = G.players;
+  own(G, a, 13); own(G, a, 14);
+  assert.deepEqual(setCompletingTargets(G, a), [], 'square 15 is still unowned — buy it, do not trade for it');
+  own(G, b, 15);
+  const found = setCompletingTargets(G, a);
+  assert.equal(found.length, 1);
+  assert.equal(found[0].sq, 15);
+  assert.equal(found[0].owner.i, b.i);
+  assert.equal(found[0].set, 'eden');
+});
+
+test('a set split across two other players offers no single completing trade', () => {
+  const G = game(seats4);
+  const [a, b, c] = G.players;
+  own(G, a, 13); own(G, b, 14); own(G, c, 15);
+  assert.deepEqual(setCompletingTargets(G, a), []);
+});
+
+test('a built square is not a completing target — it cannot legally move', () => {
+  const G = game(seats4);
+  const [a, b] = G.players;
+  own(G, a, 1); own(G, b, 3, { garrisons: 1 });
+  assert.deepEqual(setCompletingTargets(G, a), []);
+});
+
+test('a sought contract asks for the completing square and offers cash', () => {
+  const G = game(seats4);
+  const [a, b] = G.players;
+  own(G, a, 13); own(G, a, 14); own(G, b, 15);
+  const c = seekContract(G, a);
+  assert.ok(c, 'a contract should have been found');
+  assert.equal(c.from, a.i);
+  assert.equal(c.to, b.i);
+  assert.equal(c.get, 15);
+  assert.equal(c.direction, 1);
+  assert.ok(c.cash > 0);
+  assert.ok(c.cash <= a.cash - 300, 'a proposer keeps a reserve');
+});
+
+test('no contract is sought without the cash to make one worth answering', () => {
+  const G = game(seats4);
+  const [a, b] = G.players;
+  own(G, a, 13); own(G, a, 14); own(G, b, 15);
+  a.cash = 320;
+  assert.equal(seekContract(G, a), null);
+});
+
+test('a proposer will not offer away a square from a set it is trying to close', () => {
+  const G = game(seats4);
+  const [a, b] = G.players;
+  own(G, a, 13); own(G, a, 14); own(G, b, 15);   // chasing Eden
+  own(G, a, 1);                                   // spare, no set of ours
+  const c = seekContract(G, a);
+  assert.notEqual(c.give, 13);
+  assert.notEqual(c.give, 14);
+});
+
+/* ============================================================ contracts in play */
+
+test('an illegal contract is rejected before anyone is asked', () => {
+  const G = game(seats4);
+  const [a, b] = G.players;
+  own(G, b, 13, { garrisons: 1 });
+  assert.equal(contractIsLegal(G, { from: a.i, to: b.i, get: 13, give: null, cash: 100, direction: 1 }), false);
+  assert.equal(contractIsLegal(G, { from: a.i, to: a.i, get: null, give: null, cash: 100, direction: 1 }), false);
+  assert.equal(contractIsLegal(G, { from: a.i, to: b.i, get: null, give: null, cash: 0, direction: 1 }), false);
+  a.debt = 50;
+  own(G, b, 1);
+  assert.equal(contractIsLegal(G, { from: a.i, to: b.i, get: 1, give: null, cash: 100, direction: 1 }), false);
+});
+
+test('a proposal to an opponent is answered at once', () => {
+  const G = game(seats4);
+  const a = G.players[0], ai = G.players[2];
+  own(G, ai, 13);
+  const r = proposeContract(G, { from: a.i, to: ai.i, get: 13, give: null, cash: 900, direction: 1 });
+  assert.equal(r.ok, true);
+  assert.equal(r.pending, false);
+  assert.equal(typeof r.accepted, 'boolean');
+  if (r.accepted) assert.equal(ownerOf(G, 13).i, a.i);
+});
+
+test('a generous offer is accepted and a derisory one refused', () => {
+  const generous = (() => {
+    const G = game(seats4);
+    const a = G.players[0], ai = G.players[2];
+    own(G, ai, 13);
+    return proposeContract(G, { from: a.i, to: ai.i, get: 13, give: null, cash: 1500, direction: 1 }).accepted;
+  })();
+  const derisory = (() => {
+    const G = game(seats4);
+    const a = G.players[0], ai = G.players[2];
+    own(G, ai, 13);
+    return proposeContract(G, { from: a.i, to: ai.i, get: 13, give: null, cash: 1, direction: 1 }).accepted;
+  })();
+  assert.equal(generous, true);
+  assert.equal(derisory, false);
+});
+
+test('a proposal to a human parks the game and waits for an answer', () => {
+  const G = game(seats4);
+  const [a, b] = G.players;
+  own(G, b, 13);
+  G.phase = 'end';
+  const r = proposeContract(G, { from: a.i, to: b.i, get: 13, give: null, cash: 400, direction: 1 });
+  assert.equal(r.pending, true);
+  assert.equal(G.phase, 'contract');
+  assert.equal(ownerOf(G, 13).i, b.i, 'nothing moves until the answer');
+  respondToContract(G, true);
+  assert.equal(ownerOf(G, 13).i, a.i);
+  assert.equal(a.cash, 1800 - 400);
+  assert.equal(G.phase, 'end', 'the turn resumes where it was interrupted');
+});
+
+test('refusing a parked contract moves nothing', () => {
+  const G = game(seats4);
+  const [a, b] = G.players;
+  own(G, b, 13);
+  G.phase = 'end';
+  proposeContract(G, { from: a.i, to: b.i, get: 13, give: null, cash: 400, direction: 1 });
+  respondToContract(G, false);
+  assert.equal(ownerOf(G, 13).i, b.i);
+  assert.equal(a.cash, 1800);
+  assert.equal(G.contract, null);
+});
+
+test('a contract that became illegal while parked does not settle', () => {
+  const G = game(seats4);
+  const [a, b] = G.players;
+  own(G, b, 13); own(G, b, 14); own(G, b, 15);
+  G.phase = 'end';
+  proposeContract(G, { from: a.i, to: b.i, get: 13, give: null, cash: 400, direction: 1 });
+  holding(b, 14).garrisons = 1;                  // the set is built up mid-negotiation
+  assert.equal(respondToContract(G, true), false);
+  assert.equal(ownerOf(G, 13).i, b.i);
+  assert.equal(a.cash, 1800, 'no cash moves on a lapsed contract');
+});
+
+test('opponents now trade with each other, not only with humans', () => {
+  const G = game(seats4);
+  const spector = G.players[2], varan = G.players[3];
+  own(G, spector, 13); own(G, spector, 14);
+  own(G, varan, 15);
+  const c = seekContract(G, spector);
+  assert.ok(c, 'an opponent should seek the completing square');
+  assert.equal(c.to, varan.i);
+  const before = ownerOf(G, 15).i;
+  proposeContract(G, c);
+  assert.equal(G.phase !== 'contract', true, 'an opponent answers immediately');
+  assert.notEqual(typeof before, 'undefined');
 });
 
 /* ============================================================ determinism */

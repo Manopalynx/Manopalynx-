@@ -6,7 +6,8 @@ import { SETS, BOARD, RULES } from '../data.js';
 import {
   createGame, current, ownerOf, roll, resolveLanding, applyCard, endTurn,
   buy, openAuction, submitBid, closeAuction, submitClaim, closeContest,
-  aiWantsToBuy, aiDevelop, garrisonsOf, citadelsOf
+  aiWantsToBuy, aiDevelop, garrisonsOf, citadelsOf,
+  seekContract, proposeContract, respondToContract
 } from '../engine.js';
 
 // Plays one game to its end. Returns the finished state.
@@ -48,11 +49,17 @@ export function playGame({ seats, seed = 1, circuits = 24, onTurn = null, maxSte
       }
       case 'end': {
         if (p.kind === 'ai') aiDevelop(G, p);
-        else humanDevelop(G, p);
+        else { humanDevelop(G, p); humanTrade(G, p); }
+        // Either party may have parked a proposal awaiting a human answer.
+        if (G.phase === 'contract') respondToContract(G, harnessAccepts(G, G.contract));
+        if (G.over) break;
         endTurn(G);
         if (onTurn) onTurn(G);
         break;
       }
+      case 'contract':
+        respondToContract(G, harnessAccepts(G, G.contract));
+        break;
       default:
         return G;
     }
@@ -79,6 +86,25 @@ function humanDevelop(G, p) {
     h.garrisons++;
     G.garrisonPool--;
   }
+}
+
+// Humans in the harness chase set completion the same way an opponent does.
+// Without this nobody trades, no set ever closes, and every rent on the board
+// stays at bare-square level — which is exactly the state the balance probe
+// was measuring before trading existed.
+function humanTrade(G, p) {
+  const c = seekContract(G, p, 'spector');
+  if (c) proposeContract(G, c);
+}
+
+// A plain counterparty policy: take the deal if what arrives is worth a
+// noticeable premium over what leaves, valued at list price.
+function harnessAccepts(G, c) {
+  if (!c) return false;
+  const has = i => (i !== null && i !== undefined ? BOARD[i].pr : 0);
+  const gains = has(c.give) + (c.direction === 1 ? c.cash : 0);
+  const loses = has(c.get) + (c.direction === -1 ? c.cash : 0);
+  return gains >= loses * 1.15;
 }
 
 /* ------------------------------------------------------------- invariants */

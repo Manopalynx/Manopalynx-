@@ -14,7 +14,7 @@ The rules engine is done and tested. The interface is not built yet.
 ```
 data.js      board, decks, opponents, economy constants — data only
 engine.js    the rules. No DOM, no timers, no Math.random
-test/        84 passing, 3 recorded balance targets
+test/        100 passing
 ```
 
 ## Running the tests
@@ -55,29 +55,37 @@ would ever have flagged that.
   cycles, no square held twice, no player ever removed from the table, every game reaches
   an ending.
 
-## Not solved: the game rarely reaches its own ending
+## The game reaching its own ending — and how
 
-Recorded as three `todo` tests in `test/game.test.mjs` rather than quietly ignored.
+At first, absorption decided **0 of 120** four-seat games. Every one ran out the circuit
+limit and ended on totals, which is the fallback branch, not the design.
 
-Measured, at four seats: absorption decides **0 of 120** games. Every one ends on totals at
-the circuit limit, which is the fallback branch, not the design.
+The obvious suspect was the money supply — ₡200 a lap on a 28-square board is a lap every
+four rolls. That was wrong. Sweeping the lap payment from ₡200 down to ₡100 and tripling
+upkeep moved the four-seat absorption rate **not at all**, flat 0% across the whole sweep.
 
-The cause is measured, not guessed:
+The real cause, measured with `diagnose.mjs`: rents never left bare-square level, because
+colour sets almost never completed. Sets complete through *trading*, and nothing traded —
+neither the harness nor the opponents. The original file's AI only ever proposed contracts
+to humans, so opponents never closed a set with each other in the whole game.
 
-| | 2 seats | 3 seats | 4 seats |
-|---|---|---|---|
-| median rent standing on the board | ₡28 | ₡28 | ₡26 |
-| player's cash alone covers their worst exposure | 94% | 91% | 93% |
-| colour sets completed per game (of 6) | 1.4 | 1.8 | 1.1 |
+Adding trading on both sides fixed it, with **no economy constant touched**:
 
-Rents stay at bare-square level because sets almost never complete, so nobody is ever
-squeezed hard enough to fall. It is **not** the money supply: sweeping the lap payment from
-₡200 down to ₡100 and tripling upkeep moves the four-seat absorption rate not at all.
+| | before trading | after |
+|---|---|---|
+| colour sets completed per game (of 6) | 1.1 | 3.8 |
+| median rent standing on the board | ₡26 | ₡50 |
+| cash alone covers a player's worst exposure | 93% | 74% |
+| two-seat games decided by absorption | 15/120 | **56/120** |
+| four-seat games where vassalage appeared | 31/120 | **96/120** |
 
-**Before tuning any number**, note the confound: sets complete through *trading*, and neither
-the test harness nor the opponents trade. The original file's AI only ever proposed contracts
-to humans, so opponents never completed sets with each other. Add trading to both, re-measure,
-and only then decide whether the board itself needs changing.
+All three balance targets are now enforced tests rather than aspirations.
+
+Absorption endings by table: two humans **56/120**, plus one opponent **27/120**, plus two
+opponents **5/120**, one human against three **8/120**. The rate falls with seat count
+because absorbing three rivals inside 24 circuits is a tall order — a four-seat game usually
+ends on totals *with an overlord and vassals already in place*, which is the Compact rather
+than outright conquest, and reads as a legitimate ending rather than a failure to reach one.
 
 ## Canon
 

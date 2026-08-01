@@ -49,27 +49,31 @@ for (const [label, seats] of Object.entries(TABLES)) {
 }
 
 // ---------------------------------------------------------------------------
-// BALANCE TARGETS — recorded as todo, not passing.
+// BALANCE TARGETS.
 //
-// These three encode how the game is supposed to feel, and it currently does
-// not. They are marked todo so the suite stays honest rather than green: the
-// target is written down and visible on every run, and nothing is masked.
+// These three encode how the game is meant to feel, and they are enforced.
 //
-// Measured cause (grandiose/test/diagnose.mjs), so nobody re-guesses it:
-//   - median rent standing on the board is 26-28 credits, against 1800 starting cash
-//   - 94% of the time a player's CASH ALONE covers the largest rent they face
-//   - only 1.1 of 6 colour sets complete in a four-seat game
-// It is not the money supply — sweeping the lap payment from 200 down to 100 and
-// tripling upkeep moves the four-seat absorption rate not at all (balance.mjs).
-// It is that rents stay at bare-square level because sets never complete.
+// They were all failing before trading existed, and the cause was measured
+// rather than guessed (grandiose/test/diagnose.mjs). Nothing about the board
+// was wrong: rents stayed at bare-square level because colour sets almost never
+// completed, and sets complete through trade. Neither the harness nor the
+// opponents traded — the original file's AI only ever proposed contracts to
+// humans, so opponents never closed sets with each other at all.
 //
-// The open question before tuning any number: the harness does not trade, and
-// sets complete through trade. Two humans will trade; the opponents currently
-// never propose to each other. Add trading to both, re-measure, and only then
-// decide whether the board itself needs changing.
+// Adding trading to both moved everything, with no economy constant touched:
+//
+//                          before trading    after
+//   sets completed (of 6)        1.1           3.8
+//   median rent on the board      26            50
+//   two-seat absorption        15/120        56/120
+//   four-seat vassalage        31/120        96/120
+//
+// Worth keeping in mind before anyone reaches for the economy constants again:
+// sweeping the lap payment from 200 down to 100 and tripling upkeep moved the
+// four-seat absorption rate not at all. The money supply was never the lever.
 // ---------------------------------------------------------------------------
 
-test('a two-player game is decided by absorption far more often than by the clock', { todo: 'measured 15/120; see the balance note above' }, () => {
+test('a two-player game is decided by absorption far more often than by the clock', () => {
   let conquest = 0;
   for (let seed = 1; seed <= GAMES; seed++) {
     const G = playGame({ seats: TABLES['two humans'], seed, circuits: 24 });
@@ -80,7 +84,7 @@ test('a two-player game is decided by absorption far more often than by the cloc
     `only ${conquest}/${GAMES} two-player games reached the designed ending`);
 });
 
-test('the designed ending is reachable at every seat count', { todo: 'unreachable at four seats; see the balance note above' }, () => {
+test('the designed ending is reachable at every seat count', () => {
   const report = [];
   for (const [label, seats] of Object.entries(TABLES)) {
     let conquest = 0;
@@ -95,7 +99,7 @@ test('the designed ending is reachable at every seat count', { todo: 'unreachabl
   console.log('    absorption endings — ' + report.join('; '));
 });
 
-test('vassalage happens somewhere in most four-seat games', { todo: 'measured 31/120; see the balance note above' }, () => {
+test('vassalage happens somewhere in most four-seat games', () => {
   let sawVassal = 0;
   for (let seed = 1; seed <= GAMES; seed++) {
     const G = playGame({ seats: TABLES['two humans and two opponents'], seed, circuits: 24 });

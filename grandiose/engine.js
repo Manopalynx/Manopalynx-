@@ -728,6 +728,128 @@ export function settleContract(G, { from, to, give, get, cash, direction }) {
   return true;
 }
 
+// A square that would complete a set for `p` if they could get it, together
+// with who holds it. This is the only trade worth seeking: rents stay at
+// bare-square level until a set closes, so set completion is what moves the game.
+export function setCompletingTargets(G, p) {
+  const out = [];
+  for (const [key, s] of Object.entries(SETS)) {
+    let mine = 0, target = null, blocked = false;
+    for (const i of s.sq) {
+      const o = ownerOf(G, i);
+      if (!o) { blocked = true; break; }          // still buyable — no trade needed
+      if (o.i === p.i) mine++;
+      else if (target) { blocked = true; break; } // two different holders: one trade cannot close it
+      else target = { sq: i, owner: o, set: key };
+    }
+    if (blocked || !target || mine !== s.sq.length - 1) continue;
+    if (!tradable(G, target.owner, target.sq)) continue;
+    out.push(target);
+  }
+  return out;
+}
+
+// Builds the best contract `p` can offer for a set-completing square, or null.
+// `lens` selects whose valuation model to reason with, so a human seat in the
+// test harness can use the same search without pretending to be an opponent.
+export function seekContract(G, p, lens = p.persona || 'spector') {
+  if (p.debt) return null;
+  const targets = setCompletingTargets(G, p);
+  if (!targets.length) return null;
+
+  const asLens = { ...p, persona: lens };
+  targets.sort((a, b) => aiValue(G, asLens, b.sq) - aiValue(G, asLens, a.sq));
+  const target = targets[0];
+  const them = G.players[target.owner.i];
+  if (them.debt) return null;
+
+  const reserve = 300;
+  const ceiling = Math.min(Math.round(aiValue(G, asLens, target.sq) * 1.4), p.cash - reserve);
+  if (ceiling < Math.floor(BOARD[target.sq].pr * 0.5)) return null;
+
+  // A sweetener, if we hold something spare that does not break a set of ours.
+  const completing = new Set(targets.map(t => t.set));
+  const spare = p.holdings
+    .filter(h => tradable(G, p, h.sq))
+    .filter(h => !BOARD[h.sq].s || !completing.has(BOARD[h.sq].s))
+    .sort((a, b) => aiValue(G, asLens, a.sq) - aiValue(G, asLens, b.sq))[0] || null;
+  const give = spare ? spare.sq : null;
+
+  let cash = ceiling;
+  if (them.kind === 'ai') {
+    // Pay just enough to clear their bar rather than the whole ceiling.
+    const bar = { spector: 60, varan: 240, vale: -40 }[them.persona] ?? 0;
+    const needed = aiValue(G, them, target.sq)
+      - (give !== null ? aiValue(G, them, give) : 0) + bar + 40;
+    cash = Math.min(ceiling, Math.max(0, Math.round(needed)));
+  }
+  return { from: p.i, to: them.i, get: target.sq, give, cash: Math.max(0, cash), direction: 1 };
+}
+
+// Validates a proposal against the board before anyone is asked to agree to it.
+export function contractIsLegal(G, c) {
+  if (!c || c.from === c.to) return false;
+  const a = G.players[c.from], b = G.players[c.to];
+  if (!a || !b || a.debt || b.debt) return false;
+  if (c.get !== null && c.get !== undefined) {
+    if (!holding(b, c.get) || !tradable(G, b, c.get)) return false;
+  }
+  if (c.give !== null && c.give !== undefined) {
+    if (!holding(a, c.give) || !tradable(G, a, c.give)) return false;
+  }
+  if (c.get === null && c.give === null && !c.cash) return false;
+  return true;
+}
+
+// Puts a proposal to its target. An opponent answers at once; a human is parked
+// in the 'contract' phase for respondToContract().
+export function proposeContract(G, c) {
+  if (!contractIsLegal(G, c)) return { ok: false, reason: 'illegal' };
+  const them = G.players[c.to];
+  if (them.kind === 'human') {
+    G.contract = { ...c, resumePhase: G.phase };
+    G.phase = 'contract';
+    return { ok: true, pending: true };
+  }
+  const proposer = G.players[c.from];
+  const accepted = aiAcceptsContract(G, them, proposer, c);
+  const lines = CONTRACT_LINES[them.persona] || { yes: ['—'], no: ['—'] };
+  G.log.unshift({
+    kind: 'voice', who: them.i, circuit: G.circuit,
+    text: pick(G, accepted ? lines.yes : lines.no)
+  });
+  trim(G);
+  if (accepted) settleContract(G, c);
+  else note(G, `${them.name} refuses the contract.`);
+  return { ok: true, pending: false, accepted };
+}
+
+export function respondToContract(G, accept) {
+  const c = G.contract;
+  if (!c) return false;
+  G.contract = null;
+  G.phase = c.resumePhase || 'end';
+  if (!accept) { note(G, `${G.players[c.to].name} refuses the contract.`); return false; }
+  if (!contractIsLegal(G, c)) { note(G, 'The contract lapsed before it could be signed.'); return false; }
+  settleContract(G, c);
+  return true;
+}
+
+const CONTRACT_LINES = {
+  spector: {
+    yes: ['The arithmetic favours it. Done.', 'Accepted. It prices correctly.'],
+    no: ['No. Your side is worth more than mine.', 'Declined. The numbers do not meet.']
+  },
+  varan: {
+    yes: ['Filed, and against my better judgement.', 'Approved. Do not read anything into it.'],
+    no: ['Denied.', 'I am not in the business of improving your position.', 'No. Next.']
+  },
+  vale: {
+    yes: ['Delightful. Let us shake on it.', 'Yes! I do enjoy an arrangement.'],
+    no: ['Ah — I think not, on reflection.', 'A charming idea, and no.']
+  }
+};
+
 /* ============================================================ opponents */
 export function aiValue(G, p, sq) {
   const b = BOARD[sq];
@@ -819,6 +941,15 @@ export function aiDevelop(G, p) {
     if (p.kind === 'ai') persona(G, p, 'fell');
   }
   if (p.vassals.length && G.rand() < 0.3) p.tithe = pick(G, [10, 25, 25, 40, 40, 55]);
+
+  // One contract attempt per turn, and not every turn — an opponent that
+  // proposes constantly is noise. Against another opponent this settles
+  // immediately; against a human it parks the game in the 'contract' phase for
+  // an answer, so callers must check the phase before ending the turn.
+  if (!G.over && G.rand() < 0.5) {
+    const c = seekContract(G, p);
+    if (c) proposeContract(G, c);
+  }
 }
 
 /* ============================================================ standings */
