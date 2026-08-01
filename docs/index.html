@@ -86,7 +86,11 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
 /* ---------------------------------------------------------------- board */
 .board{flex:0 0 auto;display:grid;grid-template-columns:repeat(8,1fr);
   grid-template-rows:repeat(8,1fr);gap:2px;aspect-ratio:1;width:100%;padding:6px}
-.cell{position:relative;background:var(--deep);border:1px solid var(--rule);border-radius:4px;
+/* A flat fill made the board read as a spreadsheet. The gradient and the hair
+   of light along the top edge cost nothing and give each square a face. */
+.cell{position:relative;border:1px solid var(--rule);border-radius:4px;
+  background:linear-gradient(168deg,#171B26 0%,#0E1017 62%,#0B0D13 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035);
   padding:2px;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 .cell .cbar{height:6px;border-radius:2px;flex:0 0 auto}
 /* 10px, not the 6.4px the first build used. 28 squares in an 8x8 grid on a
@@ -95,8 +99,11 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
 .cell .code{font-family:var(--m);font-size:10px;line-height:1.15;color:var(--body);
   margin-top:2px;letter-spacing:-.02em}
 .cell .cpr{font-family:var(--m);font-size:9px;color:var(--dim);margin-top:auto}
-.cell.corner{background:#12141C}
-.cell.corner .code{color:var(--gold)}
+/* Corners are landmarks — Go, the Facility, Absorbed, the Anchorage. They were
+   indistinguishable from an ordinary square apart from the label colour. */
+.cell.corner{background:radial-gradient(120% 120% at 50% 0%,#20242F 0%,#12141C 58%,#0C0E14 100%);
+  border-color:#31374A}
+.cell.corner .code{color:var(--gold);letter-spacing:.06em}
 .cell.owned{box-shadow:inset 0 0 0 2px currentColor}
 .cell .toks{position:absolute;bottom:2px;right:2px;display:flex;gap:2px;
   flex-wrap:wrap-reverse;max-width:72%;justify-content:flex-end}
@@ -106,19 +113,33 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
 .cell.here{outline:2px solid var(--gold);outline-offset:-2px;z-index:4}
 .cell.sel{outline:2px solid var(--tx);outline-offset:-2px;z-index:5}
 
-.mid{grid-column:2/8;grid-row:2/8;background:var(--deep);border:1px solid var(--rule);
-  border-radius:8px;padding:10px;display:flex;flex-direction:column;justify-content:center;
-  align-items:center;text-align:center;gap:8px;overflow:hidden}
+.mid{grid-column:2/8;grid-row:2/8;position:relative;background:#05060A;
+  border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+.galaxyCanvas{position:absolute;inset:0;width:100%;height:100%;
+  pointer-events:none;z-index:0}
+.midInner{position:relative;z-index:1;height:100%;padding:10px;display:flex;
+  flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:8px;
+  /* the disc is behind live text, so the text needs its own footing */
+  text-shadow:0 1px 6px rgba(3,4,8,.95),0 0 18px rgba(3,4,8,.8)}
 .mid .who{font-family:var(--m);font-size:12px;letter-spacing:.12em;text-transform:uppercase;
   color:var(--gold)}
 .mid .dice{display:flex;gap:8px}
-.die{width:34px;height:34px;border:1px solid var(--rule);border-radius:6px;background:var(--panel);
+.die{width:34px;height:34px;border:1px solid var(--rule);border-radius:6px;
+  background:linear-gradient(160deg,#1F2430,#12151D);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 2px 8px rgba(0,0,0,.5);
   display:flex;align-items:center;justify-content:center;font-family:var(--m);
   font-size:17px;color:var(--bright)}
+.mid.rolling .die{animation:tumble .1s linear infinite;border-color:var(--gold)}
+@keyframes tumble{
+  0%{transform:translateY(0) rotate(0)}
+  25%{transform:translateY(-3px) rotate(-7deg)}
+  75%{transform:translateY(2px) rotate(6deg)}
+  100%{transform:translateY(0) rotate(0)}}
 .mid .msg{font-size:14px;line-height:1.4;color:var(--body);max-height:76px;overflow:auto;
   padding:0 4px}
 .mid .sq{font-size:15px;color:var(--bright);font-family:var(--m)}
-.mid .meta{font-family:var(--m);font-size:10px;letter-spacing:.09em;color:var(--dim)}
+.mid .meta{font-family:var(--m);font-size:9px;letter-spacing:.02em;color:var(--dim);
+  white-space:nowrap}
 .sndBtn{font-size:10px;letter-spacing:.12em;padding:6px 14px;min-height:32px}
 
 /* ---------------------------------------------------------------- actions */

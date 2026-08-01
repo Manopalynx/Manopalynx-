@@ -8,6 +8,7 @@ import {
 } from './data.js';
 import * as E from './engine.js';
 import { Score, moodFor } from './score.js';
+import { startGalaxy } from './galaxy.js';
 
 const $ = id => document.getElementById(id);
 const SAVE_KEY = 'grandiose-ledger-v1';
@@ -159,6 +160,85 @@ function renderBar() {
   }).join('');
 }
 
+// The centre panel is built ONCE and re-attached after each render rather than
+// rebuilt with the cells. It holds a live canvas, and innerHTML on the board
+// would throw that away sixty times a second and restart the animation with it.
+let midEl = null, galaxy = null;
+function ensureMid() {
+  if (midEl) return midEl;
+  midEl = document.createElement('div');
+  midEl.className = 'mid';
+  midEl.innerHTML = `<canvas class="galaxyCanvas"></canvas>
+    <div class="midInner">
+      <div class="who"></div>
+      <div class="dice"><div class="die">–</div><div class="die">–</div></div>
+      <div class="sq"></div>
+      <div class="msg"></div>
+      <div class="meta"></div>
+      <button class="sndBtn"></button>
+    </div>`;
+  midEl.querySelector('.sndBtn').onclick = ev => {
+    ev.stopPropagation();
+    Score.resume();
+    Score.toggle();
+    paintMid();
+  };
+  return midEl;
+}
+
+// What actually just happened, mechanically. The Leader's asides and the
+// opponents' lines already have the log underneath; repeating the top log entry
+// here put the same sentence on screen twice and wasted the biggest panel.
+function lastEvent() {
+  const entry = G.log.find(l => l.kind === 'note');
+  return entry ? entry.text : '';
+}
+
+let diceRolling = false;
+function paintMid() {
+  if (!midEl) return;
+  const p = E.current(G);
+  const set = (sel, text) => { const el = midEl.querySelector(sel); if (el) el.textContent = text; };
+  set('.who', p.name + (p.lord !== null ? ' · vassal' : ''));
+  set('.sq', BOARD[posOf(p)].n);
+  set('.msg', lastEvent());
+  set('.meta', `CIRCUIT ${G.circuit}/${G.circuits} · GARRISONS ${G.garrisonPool} · CITADELS ${G.citadelPool}`);
+  if (!diceRolling) {
+    const dice = midEl.querySelectorAll('.die');
+    dice[0].textContent = G.dice[0] || '–';
+    dice[1].textContent = G.dice[1] || '–';
+  }
+  const snd = midEl.querySelector('.sndBtn');
+  snd.textContent = Score.on ? '♪ SCORE ON' : '♪ SCORE OFF';
+  snd.style.color = Score.on ? 'var(--gold)' : 'var(--dim)';
+}
+
+// A roll that simply appears is a number changing. A roll that tumbles for a
+// third of a second is a roll.
+function tumbleDice(final, done) {
+  if (!midEl) { done(); return; }
+  const dice = midEl.querySelectorAll('.die');
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    dice[0].textContent = final[0]; dice[1].textContent = final[1];
+    done(); return;
+  }
+  diceRolling = true;
+  midEl.classList.add('rolling');
+  let n = 0;
+  const spin = setInterval(() => {
+    dice[0].textContent = 1 + Math.floor(Math.random() * 6);
+    dice[1].textContent = 1 + Math.floor(Math.random() * 6);
+    if (++n >= 7) {
+      clearInterval(spin);
+      diceRolling = false;
+      midEl.classList.remove('rolling');
+      dice[0].textContent = final[0];
+      dice[1].textContent = final[1];
+      done();
+    }
+  }, 48);
+}
+
 function renderBoard() {
   const cur = E.current(G);
   let h = '';
@@ -182,26 +262,17 @@ function renderBoard() {
       <div class="toks">${toks}</div></div>`;
   });
 
-  const p = E.current(G);
-  const standingOn = BOARD[posOf(p)];
-  h += `<div class="mid">
-    <div class="who">${esc(p.name)}${p.lord !== null ? ' · vassal' : ''}</div>
-    <div class="dice"><div class="die">${G.dice[0] || '–'}</div><div class="die">${G.dice[1] || '–'}</div></div>
-    <div class="sq">${esc(standingOn.n)}</div>
-    <div class="msg">${esc(G.log[0] ? G.log[0].text : '')}</div>
-    <div class="meta">CIRCUIT ${G.circuit}/${G.circuits} · GARRISONS ${G.garrisonPool} · CITADELS ${G.citadelPool}</div>
-    <button class="sndBtn" id="sndBtn" style="color:${Score.on ? 'var(--gold)' : 'var(--dim)'}">
-      ${Score.on ? '♪ SCORE ON' : '♪ SCORE OFF'}</button>
-  </div>`;
-  $('board').innerHTML = h;
-  $('board').querySelectorAll('[data-i]').forEach(el =>
+  const board = $('board');
+  board.innerHTML = h;
+  board.appendChild(ensureMid());          // survives the innerHTML above
+  paintMid();
+  if (!galaxy) {
+    galaxy = startGalaxy(midEl.querySelector('.galaxyCanvas'), () => moodFor(G));
+  } else {
+    galaxy.resize();
+  }
+  board.querySelectorAll('[data-i]').forEach(el =>
     el.onclick = () => { selected = +el.dataset.i; renderBoard(); showSquare(+el.dataset.i); });
-  $('sndBtn').onclick = ev => {
-    ev.stopPropagation();
-    Score.resume();
-    Score.toggle();
-    renderBoard();
-  };
 }
 
 function renderActions() {
@@ -378,13 +449,14 @@ function act_roll() {
   const p = E.current(G);
   const r = E.roll(G);
   if (!r) return;
-  render();
-  if (r.held) { busy = false; tick(); return; }
   busy = true; render();
-  walk(r.path, () => {
-    busy = false;
-    if (p.kind === 'ai') { E.resolveLanding(G); tick(); }
-    else tick();
+  tumbleDice(G.dice, () => {
+    if (r.held) { busy = false; tick(); return; }
+    walk(r.path, () => {
+      busy = false;
+      if (p.kind === 'ai') { E.resolveLanding(G); tick(); }
+      else tick();
+    });
   });
 }
 
@@ -831,6 +903,7 @@ function copyResult() {
 /* ============================================================ boot */
 // A handle for the browser probe in test/. Not used by the game itself.
 window.__G = () => G;
+window.__render = () => render();
 
 // A background tab can be reaped without warning on iOS, so the save is
 // refreshed whenever the page is hidden as well as after every move.

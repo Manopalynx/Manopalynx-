@@ -7,7 +7,7 @@
 // signal" is worth more than fifty milliseconds.
 //
 // Swap the order if this ever stops changing weekly.
-const CACHE = 'grandiose-v2';
+const CACHE = 'grandiose-v3';
 const FILES = [
   './',
   './index.html',
@@ -15,6 +15,7 @@ const FILES = [
   './engine.js',
   './data.js',
   './score.js',
+  './galaxy.js',
   './manifest.webmanifest',
   './icon-180.png'
 ];

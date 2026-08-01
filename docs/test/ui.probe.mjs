@@ -13,7 +13,7 @@
 
 import { chromium } from 'playwright';
 
-const URL = process.env.URL || 'http://127.0.0.1:877/grandiose/index.html';
+const URL = process.env.URL || 'http://127.0.0.1:877/docs/index.html';
 const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 
 const DEVICES = [
@@ -144,6 +144,41 @@ for (const device of DEVICES) {
     if (after > 10) pass('the game resumed with its log intact');
     else fail('resume produced an empty game');
   } else fail('no resume offered after reload');
+
+  // ---- the galaxy, and the re-render trap it sits in ----
+  // The board is rebuilt with innerHTML on every render. If the centre panel is
+  // rebuilt with it, the canvas is destroyed and the animation restarts many
+  // times a second. Assert the element survives, and that it is actually drawing.
+  const galaxy = await page.evaluate(async () => {
+    const before = document.querySelector('.galaxyCanvas');
+    if (!before) return 'no canvas in the centre panel';
+    const w = before.width, h = before.height;
+    if (!w || !h) return `canvas has no backing store (${w}x${h})`;
+    const sample = () => {
+      const c = document.querySelector('.galaxyCanvas');
+      return c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    };
+    const first = sample();
+    let lit = 0;
+    for (let i = 3; i < first.length; i += 4) if (first[i] > 8) lit++;
+    // force several renders, the exact thing that used to wipe it
+    for (let k = 0; k < 5; k++) window.__render();
+    const after = document.querySelector('.galaxyCanvas');
+    await new Promise(r => setTimeout(r, 260));
+    const second = sample();
+    let moved = 0;
+    for (let i = 3; i < first.length; i += 4) if (first[i] !== second[i]) moved++;
+    return { same: before === after, litPixels: lit, changedPixels: moved, w, h };
+  });
+  if (typeof galaxy === 'string') fail(galaxy);
+  else {
+    if (galaxy.same) pass('the canvas survives board re-renders');
+    else fail('the canvas is destroyed on re-render — the animation would restart constantly');
+    if (galaxy.litPixels > 500) pass(`the galaxy is drawing (${galaxy.litPixels} lit pixels)`);
+    else fail(`the galaxy drew almost nothing (${galaxy.litPixels} lit pixels)`);
+    if (galaxy.changedPixels > 200) pass('the galaxy is animating');
+    else fail(`the galaxy is static (${galaxy.changedPixels} pixels changed in 260ms)`);
+  }
 
   // ---- building, which the blind prober above never reaches by luck ----
   // Hand the current player a completed set and check the Manage sheet offers
