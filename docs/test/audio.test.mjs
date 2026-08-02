@@ -364,3 +364,37 @@ test('the swell is set from the quietest mood, not the loudest', () => {
   assert.ok(swing < 7,
     `the LFO alone swings the bed ${swing.toFixed(1)}dB in the quietest mood`);
 });
+
+// The drone, which is the score's floor.
+//
+// Reported from play as "a constant techno sounding hum that my attention keeps
+// focusing on rather than the music" — and it was not the noise bed, and it was
+// not a throb. Measured, the amplitude fluctuation of every layer in this file
+// is 1-5% of its own level, which is nothing. It was steady TONES: partials at
+// 4x and 6x the root, added as pure sines so the drone would carry on a small
+// speaker, which it did by putting 294Hz and 440Hz under the whole game and
+// never moving them. A phone reproduces almost none of the 73Hz fundamental
+// that does the actual work, so those two sines and the sawtooth ladder above
+// them were the entire drone as far as the player was concerned.
+//
+// Both halves of the fix are asserted here, because either alone comes undone:
+// a partial put back would sail past the filter if it sat below the cutoff, and
+// a cutoff raised into the phone's band would let the ladder back through.
+test('the drone has no partial standing up in the band a phone throws', () => {
+  for (const [m, g] of Score.DRONE_PARTIALS) {
+    const hz = Score.R0 * m;
+    assert.ok(hz < Score.DRONE_LP,
+      `a partial at ${hz.toFixed(0)}Hz is above the ${Score.DRONE_LP}Hz cut, so it is a tone, not a floor`);
+    assert.ok(g > 0, 'a silent partial is not a partial');
+  }
+});
+
+test('and it is cut below where a phone speaker starts to carry', () => {
+  // Small speakers roll off hard under roughly 500Hz; everything the drone was
+  // heard AS sat between there and 1300Hz.
+  assert.ok(Score.DRONE_LP < 500,
+    `a ${Score.DRONE_LP}Hz cut leaves the drone audible as pitch rather than weight`);
+  // And not so low that the fundamental itself is being filtered away.
+  assert.ok(Score.DRONE_LP > Score.R0 * 2,
+    `${Score.DRONE_LP}Hz cuts into the root at ${Score.R0.toFixed(0)}Hz`);
+});

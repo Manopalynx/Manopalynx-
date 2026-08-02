@@ -179,17 +179,62 @@ export const Score = {
     }
   },
 
+  // The floor under the score — and on a phone, the floor was not what reached
+  // the player.
+  //
+  // Reported from play as "a constant techno sounding hum that my attention
+  // keeps focusing on rather than the music". It was not the noise bed and it
+  // was not a throb: measured, the amplitude fluctuation of every layer in this
+  // file is 1-5% of its own level, which is nothing. It was steady TONES.
+  //
+  // The drone used to carry partials at 4x and 6x the root as pure sines — 294
+  // and 440Hz, added so it would be audible on a small speaker. They were. A
+  // phone reproduces almost none of the 73Hz fundamental that does the actual
+  // work, so what arrived was those two sines plus the sawtooth harmonic ladder
+  // above them, measured as steady peaks at 444, 660, 812, 1100 and 1256Hz. A
+  // fixed chord of pure tones, unchanged from the first second of a game to the
+  // last, sitting 7.5dB under a score whose every chord moves. A pure steady
+  // tone is the easiest thing there is for an ear to pick out of a mix, and the
+  // ear settles on whatever does not move.
+  //
+  // So the two sine partials are gone, and what remains is filtered to below
+  // the band a phone can throw. Two poles, because one leaves the ladder
+  // audible: the drone is meant to be felt rather than heard.
+  //
+  // 420 was the first attempt and was measured to do almost nothing — the
+  // loudest tone in the drone is at 440Hz, which sits ON that cutoff and came
+  // through 1dB down. Swept properly, and the reason 240 is affordable is that
+  // the drone's full-range level barely moves across the whole range:
+  //
+  //   cutoff   loudest tone a phone gets   drone vs music, phone   full range
+  //     420        440Hz at 8.0                  -15.3dB            -1.2dB
+  //     300        220Hz at 3.4                  -23.5dB            -1.0dB
+  //     240        220Hz at 3.1                  -29.9dB            -1.0dB
+  //     180        220Hz at 1.5                  -38.6dB            -0.9dB
+  //
+  // The floor is made of 73Hz, and 73Hz is not what is being cut. What is being
+  // cut is only ever the part that reached the player as a tone.
+  DRONE_LP: 240,
+  DRONE_PARTIALS: [[1, .085], [1.5, .05]],
+
   drone() {
-    [[1, .085], [1.5, .05], [4, .022], [6, .014]].forEach(([m, g], i) => {
+    const cut = () => {
+      const f = this.ctx.createBiquadFilter();
+      f.type = 'lowpass'; f.frequency.value = this.DRONE_LP; f.Q.value = .5;
+      return f;
+    };
+    const a = cut(), b = cut();
+    a.connect(b).connect(this.lp);
+    this.DRONE_PARTIALS.forEach(([m, g], i) => {
       for (const det of [-6, 6]) {
         const o = this.ctx.createOscillator();
-        o.type = i > 1 ? 'sine' : 'sawtooth';
+        o.type = 'sawtooth';
         o.frequency.value = this.R * m; o.detune.value = det;
         const l = this.ctx.createOscillator(); l.type = 'sine'; l.frequency.value = .03 + i * .017;
         const la = this.ctx.createGain(); la.gain.value = 5 + i * 4;
         l.connect(la).connect(o.detune); l.start();
         const gn = this.ctx.createGain(); gn.gain.value = g / 2;
-        o.connect(gn).connect(this.lp); o.start();
+        o.connect(gn).connect(a); o.start();
       }
     });
   },
