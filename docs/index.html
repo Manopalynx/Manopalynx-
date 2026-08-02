@@ -194,7 +194,17 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
   flex-wrap:wrap-reverse;max-width:72%;justify-content:flex-end}
 .tok{width:7px;height:7px;border-radius:50%;border:1px solid rgba(0,0,0,.6)}
 .tok.me{width:9px;height:9px;box-shadow:0 0 0 1.5px var(--void),0 0 8px 1px currentColor}
-.cell .grr{position:absolute;top:6px;right:1px;font-family:var(--m);font-size:8px;color:var(--gold)}
+/* The development mark — garrisons, a citadel, or the pledged ring.
+   z-index above the colour bar, and moved clear of it on the left edge. The bar
+   sits on the INWARD side of each cell, which on a left-edge cell is the right,
+   which is exactly where this mark was: measured at 83% covered on every one of
+   indices 11-19, with the bar at z-index 1 and this at auto. A whole column of
+   the board showed no citadels, no garrisons and no pledges at all, and nothing
+   about that failed — the state was simply invisible on a ninth of the squares.
+   Reported from play as "I have a citadel on Ortox Transit and cannot see it". */
+.cell .grr{position:absolute;top:6px;right:1px;font-family:var(--m);font-size:8px;
+  color:var(--gold);z-index:2}
+.cell.e-left .grr{right:7px}
 /* The moving piece's own colour, set inline per cell — not a fixed accent.
    This was var(--gold), which is #D9A441, which is byte-identical to PIPS[0],
    which is the first seat's pip. So whoever was moving, the square they stepped

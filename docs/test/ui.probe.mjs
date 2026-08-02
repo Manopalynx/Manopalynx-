@@ -1146,6 +1146,46 @@ for (const device of DEVICES) {
     else fail(`the galaxy is static (${galaxy.changedPixels} pixels changed in 260ms)`);
   }
 
+  // ---- what you have built must be visible on every edge ----
+  // The colour bar sits on the INWARD side of each cell, which on a left-edge
+  // cell is the right — exactly where the development mark was placed. Measured
+  // at 83% covered on all of indices 11-19, with the bar at z-index 1 and the
+  // mark at auto, so a whole column of the board showed no citadels, no
+  // garrisons and no pledges. Nothing failed; the state was simply invisible on
+  // a ninth of the squares. Checked on every buyable square, not a sample,
+  // because it was edge-specific and a sample would have missed it.
+  const marks2 = await page.evaluate(() => {
+    const G = window.__G(), B = window.__BOARD();
+    const buyable = [];
+    B.forEach((b, i) => { if (b.t === 'p' || b.t === 'f' || b.t === 'u') buyable.push(i); });
+    const before = G.players[0].holdings.slice();
+    G.players[0].holdings = buyable.map(sq => ({ sq, garrisons: 0, citadel: 1, mortgaged: 0 }));
+    window.__render();
+    const hidden = [];
+    let checked = 0;
+    for (const sq of buyable) {
+      const cell = document.querySelector(`.cell[data-i="${sq}"]`);
+      const grr = cell && cell.querySelector('.grr');
+      const bar = cell && cell.querySelector('.cbar');
+      if (!grr) { hidden.push({ sq, name: B[sq].n, why: 'no mark drawn at all' }); continue; }
+      if (!bar) { checked++; continue; }
+      checked++;
+      const g = grr.getBoundingClientRect(), r = bar.getBoundingClientRect();
+      const ow = Math.min(g.right, r.right) - Math.max(g.left, r.left);
+      const oh = Math.min(g.bottom, r.bottom) - Math.max(g.top, r.top);
+      const cover = (ow > 0 && oh > 0) ? (100 * ow * oh) / (g.width * g.height) : 0;
+      if (cover > 1) hidden.push({ sq, name: B[sq].n, why: `${cover.toFixed(0)}% under the colour bar` });
+    }
+    G.players[0].holdings = before;
+    window.__render();
+    return { checked, hidden };
+  });
+  if (marks2.checked < 20) fail(`only ${marks2.checked} squares were checked for development marks`);
+  else if (!marks2.hidden.length)
+    pass(`a citadel is visible on every buyable square (${marks2.checked})`);
+  else fail('development is hidden on: ' +
+    marks2.hidden.map(h => `${h.name} (${h.why})`).join(', '));
+
   // ---- the moving piece is highlighted in its OWN colour ----
   // This has now been the same defect twice. The selection ring was var(--tx),
   // which is Spector's pip; the movement highlight was var(--gold), which is

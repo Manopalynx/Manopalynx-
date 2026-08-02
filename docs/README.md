@@ -134,6 +134,28 @@ faction you can trade with. They do not hold prisoners and they do not take paym
 are equipped to influence."* They appear three times: as the clock, as the voice on the
 Absorbed corner, and as one Contingency card that costs you money for looking at them.
 
+## A whole column showed nothing it had built
+
+The colour bar sits on the **inward** side of each cell, as on a real board — which on a
+left-edge cell is the right-hand side. That is exactly where the development mark was
+placed, and the bar carries `z-index: 1` against the mark's `auto`. Measured: **83% covered
+on every one of indices 11-19**, so a ninth of the board showed no citadels, no garrisons
+and no pledges at all.
+
+Nothing failed. No figure was wrong, nothing crashed, and the state was simply invisible on
+nine squares — reported from play as *"I have a citadel on Ortox Transit and can't see
+it"*. The mark now clears the bar on that edge and sits above it everywhere, and the probe
+checks **every buyable square** rather than a sample, because the defect was edge-specific
+and a sample would have missed it.
+
+### The Holdings sheet is in board order, which is not a fault
+
+Ortox Transit is square 11, The Deep Array is 12, Varan's Audit House is 13, The Tribute
+Ships 14 — so a utility genuinely sits between those three on the board, and the sheet
+lists them in the order you walk them. The **player sheet** reached from a chip groups by
+colour set instead; `showManage` does not. That inconsistency is real, but the ordering
+itself is correct.
+
 ## Two things a fixed colour and a fixed viewport got wrong
 
 **The moving piece was ringed in the first seat's colour.** `.cell.here` was
