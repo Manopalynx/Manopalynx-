@@ -325,3 +325,42 @@ test('the swarm has more than one size of mandible', () => {
   assert.ok(Math.abs(weights.reduce((a, b) => a + b, 0) - 1) < 0.001,
     `the sizes must be a distribution — they sum to ${weights.reduce((a, b) => a + b, 0)}`);
 });
+
+// The noise bed.
+//
+// `wind` is a band of filtered noise running continuously under everything, and
+// every mood had it set too high. It was balanced against the drone, which sits
+// at 73Hz and its harmonics — frequencies a phone speaker barely reproduces —
+// so it was mixed against something the player cannot hear. Rendered offline
+// and measured layer by layer, it came out LOUDER than every pad, arpeggio and
+// pluck combined: +1 to +2.3dB in the ledger mood and up to +7.2dB in the
+// takeover, where it was 82% of everything audible.
+//
+// Nothing failed. The score played exactly as written, for the whole game, and
+// the report from play was "a constant noise that gets distracting".
+test('the noise bed never sits louder than the music it sits under', () => {
+  for (const [st, T] of Object.entries(Score.TONE)) {
+    assert.ok(T.wind < T.g,
+      `${st} has wind ${T.wind} against a musical layer of ${T.g} — the bed is the loudest thing in it`);
+  }
+});
+
+// A steady bed disappears into the background. One that keeps swelling does
+// not, because the ear follows it. The LFO was .09 against a base of .16, and
+// the rendered bed rose and fell 15.4dB on a 71-second cycle for the whole game.
+//
+// This covers the LFO only, which is one of three things moving the bed — the
+// hush bar multiplies it by 1.6 every sixteenth bar and the bandpass sweep
+// changes how much of it survives the lowpass. Rendered, those together still
+// come to 10.8dB, so this test does NOT say the bed is steady. It says the one
+// term that was set from the loudest mood is now set from the quietest, because
+// the depth is an absolute gain and its worst relative effect is where the bed
+// is thinnest — the same trap the original number fell into from the other end.
+test('the swell is set from the quietest mood, not the loudest', () => {
+  const quietest = Math.min(...Object.values(Score.TONE).map(T => T.wind));
+  const d = Score.WIND_SWELL;
+  assert.ok(d < quietest, `a swell of ${d} silences or inverts a bed set at ${quietest}`);
+  const swing = 20 * Math.log10((quietest + d) / (quietest - d));
+  assert.ok(swing < 7,
+    `the LFO alone swings the bed ${swing.toFixed(1)}dB in the quietest mood`);
+});

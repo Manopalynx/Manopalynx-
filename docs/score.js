@@ -18,6 +18,10 @@ export const Score = {
   state: 'ledger', bar: 0, timer: null, nextT: 0,
   R: 73.416,                                        // D2
   R0: 73.416,                                       // the tuning to come home to
+  // How far the noise bed swells above and below its setting, in gain. Named
+  // and hung here so a test can reach it — as a literal inside init() the one
+  // number that made the bed distracting was not addressable by anything.
+  WIND_SWELL: .015,
 
   // `neurex` is the score after conversion, not a different piece playing over
   // it. The book is specific about what they do — "It was not destruction;
@@ -62,12 +66,25 @@ export const Score = {
     neurex:  [[0, 5, 1, 8, 3, 10, 2, 7], [8, 1, 5, 2, 10, 0, 7, 3],
               [0, 7, 2, 9, 1, 6, 3, 11], [5, 0, 8, 2, 7, 1, 10, 4]]
   },
+  // `wind` is the noise bed, and every one of these was set too high.
+  //
+  // It was balanced against the drone, which sits at 73Hz and its harmonics —
+  // frequencies a phone speaker barely reproduces. So it was mixed against
+  // something the player cannot hear. Rendered offline and measured layer by
+  // layer through three speaker models, the old settings put the noise LOUDER
+  // than every pad, arpeggio and pluck combined: +1 to +2.3dB in the ledger
+  // mood, 39-58% of everything audible, and +4.6 to +7.2dB in the takeover,
+  // where it reached 82%. Reported from play as "a constant noise that gets
+  // distracting", which is precisely what it was.
+  //
+  // Held now by a test: the bed may never be set above `g`, the musical layer
+  // it is supposed to sit under. Every line below would have failed that.
   TONE: {
-    ledger:   { lp: 3600, g: .15, arp: .62, shim: .55, sub: .22, div: 2, wind: .16 },
-    auction:  { lp: 4600, g: .18, arp: .95, shim: .34, sub: .55, div: 4, wind: .10 },
-    facility: { lp: 2400, g: .12, arp: .22, shim: .85, sub: .06, div: 1, wind: .30 },
-    vassal:   { lp: 2700, g: .15, arp: .48, shim: .30, sub: .45, div: 2, wind: .18 },
-    ascend:   { lp: 5400, g: .19, arp: .88, shim: .80, sub: .35, div: 4, wind: .12 },
+    ledger:   { lp: 3600, g: .15, arp: .62, shim: .55, sub: .22, div: 2, wind: .06 },
+    auction:  { lp: 4600, g: .18, arp: .95, shim: .34, sub: .55, div: 4, wind: .04 },
+    facility: { lp: 2400, g: .12, arp: .22, shim: .85, sub: .06, div: 1, wind: .11 },
+    vassal:   { lp: 2700, g: .15, arp: .48, shim: .30, sub: .45, div: 2, wind: .07 },
+    ascend:   { lp: 5400, g: .19, arp: .88, shim: .80, sub: .35, div: 4, wind: .05 },
     // BUSY AND INCOHERENT, not sparse and still. The first version read "alien"
     // as "motionless" — arp .16, shim .18, div 1 — which made the takeover the
     // least varied mood in the game at 1.54 moving parts a bar against the
@@ -76,7 +93,11 @@ export const Score = {
     // bodies", "no formation the eye could parse". Many things moving as one.
     // lp is 1800 rather than 1500 because that motion has to survive a phone
     // speaker, and it is the harmonics that carry it.
-    neurex:   { lp: 1800, g: .16, arp: .72, shim: .55, sub: .55, div: 2, wind: .40 }
+    //
+    // wind was .40 — the loudest bed in the game, over the longest unbroken
+    // stretch of it. That was set here to make the takeover feel like weather,
+    // and it made it hiss instead.
+    neurex:   { lp: 1800, g: .16, arp: .72, shim: .55, sub: .55, div: 2, wind: .12 }
   },
 
   init() {
@@ -184,9 +205,16 @@ export const Score = {
     const lf = t.createOscillator(); lf.type = 'sine'; lf.frequency.value = .021;
     const la = t.createGain(); la.gain.value = 520;
     lf.connect(la).connect(bp.frequency); lf.start();
-    this.windG = t.createGain(); this.windG.gain.value = .16;
+    this.windG = t.createGain(); this.windG.gain.value = .06;
+    // The swell, and the reason the bed was distracting rather than merely
+    // present. This was .09 against a base of .16, which measured as a 15.4dB
+    // rise and fall on a 71-second cycle, running for the whole game — a steady
+    // bed disappears, one that keeps swelling does not, because the ear tracks
+    // it. The depth is absolute rather than proportional, so it is set from the
+    // QUIETEST mood (auction, .04) and not the loudest: at .015 the worst-case
+    // swing anywhere is 6.8dB, and a test holds that.
     const sw = t.createOscillator(); sw.type = 'sine'; sw.frequency.value = .014;
-    const sa = t.createGain(); sa.gain.value = .09;
+    const sa = t.createGain(); sa.gain.value = this.WIND_SWELL;
     sw.connect(sa).connect(this.windG.gain); sw.start();
     src.connect(bp).connect(this.windG).connect(this.lp); src.start();
   },
