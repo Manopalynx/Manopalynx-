@@ -1142,6 +1142,58 @@ for (const device of DEVICES) {
     else fail(`the galaxy is static (${galaxy.changedPixels} pixels changed in 260ms)`);
   }
 
+  // ---- the universe the galaxy sits in ----
+  // The panel outside the disc was a black rectangle, and it is the largest
+  // single area on the screen. The corners are sampled specifically because
+  // they are the part the disc never reaches: if the background field ever
+  // stopped being built, nothing would fail — the middle would still look busy
+  // and the corners would quietly go back to being a void.
+  const sky = await page.evaluate(async () => {
+    const c = document.querySelector('.galaxyCanvas');
+    if (!c) return 'no canvas';
+    const g = c.getContext('2d');
+    const W = c.width, H = c.height, q = Math.floor(Math.min(W, H) * 0.22);
+    const corners = () => {
+      const d = g.getImageData(0, 0, W, H).data;
+      const out = [];
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        if ((x < q || x > W - q) && (y < q || y > H - q)) out.push(d[(y * W + x) * 4 + 3]);
+      }
+      return out;
+    };
+    const first = corners();
+    // Longer than the shortest twinkle period (2600ms). At 1400ms this sampled
+    // part of a cycle and the count swung between 23 and 286 across viewports
+    // on one build — close enough to the threshold to fail on phase alone.
+    await new Promise(r => setTimeout(r, 2800));
+    const second = corners();
+    let lit = 0, changed = 0, peak = 0;
+    for (let i = 0; i < first.length; i++) {
+      if (first[i] > 8) lit++;
+      const d = Math.abs(first[i] - second[i]);
+      if (d > 3) changed++;
+      if (d > peak) peak = d;
+    }
+    return { sampled: first.length, lit, changed, peak,
+             pct: +(100 * changed / Math.max(1, lit)).toFixed(1) };
+  });
+  if (typeof sky === 'string') fail(sky);
+  else {
+    if (sky.lit > 150) pass(`the corners are not a void (${sky.lit} lit pixels)`);
+    else fail(`the corners are still empty (${sky.lit} lit pixels) — the background field is not drawing`);
+    if (sky.changed > 20 && sky.peak > 30)
+      pass(`stars out there twinkle (${sky.changed} pixels, peak ${sky.peak}/255)`);
+    else fail(`nothing twinkled in the background (${sky.changed} pixels, peak ${sky.peak})`);
+    // "Some occasionally, not a shimmering field" is asserted in galaxy.test.mjs
+    // against the star counts themselves. It was tried here as a share of lit
+    // corner pixels and measured between 9.5% and 70.2% across the five
+    // viewports on the same build — the denominator is whatever happened to be
+    // bright at the sampling instant, so it moved with twinkle phase and not
+    // with anything real. A guard that reports a different answer every run is
+    // worse than none.
+    console.log(`        corners: ${sky.lit} lit, ${sky.changed} moved, peak ${sky.peak}/255`);
+  }
+
   // ---- building, which the blind prober above never reaches by luck ----
   // Hand the current player a completed set and check the Manage sheet offers
   // the build, that it takes the money, and that it comes out of the pool.

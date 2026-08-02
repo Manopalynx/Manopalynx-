@@ -134,6 +134,45 @@ faction you can trade with. They do not hold prisoners and they do not take paym
 are equipped to influence."* They appear three times: as the clock, as the voice on the
 Absorbed corner, and as one Contingency card that costs you money for looking at them.
 
+## The universe the galaxy is in
+
+Outside the disc the centre panel was a black rectangle, and it is the largest single area
+on the screen. It now carries a faint field of ~230 background stars and five distant
+galaxies, with sixteen of the stars twinkling on long individual periods so that one or two
+are brightening at any moment rather than the whole sky shimmering.
+
+**It is pre-rendered.** The field never rotates and never drifts — it is at infinity, and
+the disc spins in place, so parallax would read as the board moving rather than as depth.
+Being static, it is drawn once into an offscreen canvas at each resize and blitted every
+frame. Measured at the real panel size with a forced GPU flush: 250 stars drawn live cost
+0.45ms a frame against 0.30ms for the disc alone — 2.7% of a 60fps frame, affordable
+either way. Pre-rendering is not about the frame. It is about not paying for it 216,000
+times in the hour this file's budget is written around.
+
+**It thins toward the centre**, on the same ellipse the core glow uses. The glow washes out
+anything near the middle regardless, and the panel carries the turn name, the dice, the
+square name and the circuit line — stars behind text would cost legibility for nothing.
+The corners get the most, which is where the dead space was.
+
+**It is never tinted with the mood.** Practically, tinting means rebuilding the offscreen
+on every mood change, which is a cache to keep in step — this codebase's entire failure
+history. Thematically the universe is indifferent to the game, and a neutral field makes
+the disc's mood shifts read harder against it, the Neurex red-green most of all.
+
+Two things measurement caught that reading would not have:
+
+- **The twinklers were mostly invisible.** They were the first sixteen background stars,
+  placed uniformly, so several landed inside the disc where the fade takes them to a few
+  percent alpha. A sixteen-star budget was delivering about ten, and on the smallest phone
+  almost none reached the corners. They are now drawn from stars beyond 0.40 of the panel
+  from centre — `clearOfDisc` begins fading at roughly 0.29 across and 0.23 down, so 0.30
+  had put them exactly on the edge of the fade.
+- **A probe assertion that reported a different answer every run.** "Most of the sky holds
+  still" was written as a share of lit corner pixels and measured between 9.5% and 70.2%
+  across five viewports on one build — the denominator was whatever happened to be bright
+  at the sampling instant. It moved with twinkle phase and nothing else. Replaced with a
+  count in `galaxy.test.mjs` against the star totals themselves, which cannot drift.
+
 ## Sound
 
 `score.js` is a generative score — lydian and whole-tone harmony, quartal voicings, a

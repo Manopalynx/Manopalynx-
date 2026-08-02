@@ -10,6 +10,30 @@
 
 const ARMS = 2;
 const STARS = 320;
+
+// ---- the universe the galaxy is in --------------------------------------
+// Outside the disc the panel was a black rectangle, and it is the largest
+// single area on the screen. These are NOT part of the galaxy: they never
+// rotate, never drift, and are drawn once into an offscreen canvas that is
+// blitted each frame, because the file's budget is "a phone, on battery, for
+// an hour at a time" and an hour is roughly 216,000 frames.
+//
+// Measured at the real panel size with a forced GPU flush: 250 of these drawn
+// live every frame costs 0.45ms against 0.30ms today, which is 2.7% of a 60fps
+// frame and affordable either way. Pre-rendering is not about the frame — it is
+// about not paying for it 216,000 times.
+const BG_STARS = 230;
+const TWINKLERS = 16;           // drawn live on top; the rest are baked
+const BG_GALAXIES = 5;
+
+// Real starfields are not one grey. Weighted toward white, because a field of
+// obviously coloured dots reads as confetti.
+const BG_TINTS = [
+  [198, 214, 255], [198, 214, 255],           // blue-white
+  [226, 231, 242], [226, 231, 242], [226, 231, 242], [226, 231, 242],
+  [255, 232, 202],                            // warm white
+  [232, 202, 166]                             // faint amber
+];
 const TWIST = 2.9;              // radians of sweep per unit radius
 const TILT = 0.52;              // vertical squash — the disc seen at an angle
 const SPIN = 0.000045;          // radians per millisecond, i.e. very slow
@@ -57,6 +81,120 @@ export function startGalaxy(canvas, getMood) {
       twinkle: rand(0.0006, 0.0022),
       phase: rand(0, Math.PI * 2)
     });
+  }
+
+  // ---- the background -----------------------------------------------------
+  // Held in normalised coordinates and rendered at resize, so rotating the
+  // phone moves the field with the panel instead of dealing a new sky.
+  const bg = [];
+  for (let i = 0; i < BG_STARS; i++) {
+    bg.push({
+      nx: Math.random(), ny: Math.random(),
+      r: rand(0.35, 1.15),
+      // Most are barely there. The brightest few are what makes it read as
+      // depth rather than as noise.
+      a: Math.pow(Math.random(), 2.1) * 0.34 + 0.045,
+      c: BG_TINTS[Math.floor(Math.random() * BG_TINTS.length)],
+      period: rand(2600, 9000),
+      phase: rand(0, Math.PI * 2)
+    });
+  }
+  // The twinklers are bg[0..TWINKLERS-1], and they have to be stars that are
+  // actually visible. Taken uniformly, several land inside the disc where
+  // clearOfDisc fades them to nothing, so a sixteen-star budget was delivering
+  // ten — and on the smallest phone almost none reached the corners, which is
+  // where the whole point of this is. Anything past a third of the way out is a
+  // candidate; the rest of the order is left alone so they stay scattered
+  // rather than ringing the edge.
+  //
+  // 0.40, not 0.30. clearOfDisc starts fading in at 0.62 of the disc's own
+  // ellipse, and on a square panel that lands at a normalised distance of about
+  // 0.29 across and 0.23 down — so a 0.30 threshold was putting twinklers right
+  // on the edge of the fade, where they render at a few percent alpha and are
+  // effectively invisible. Beyond 0.40 they are in genuinely dark sky. Roughly
+  // half the panel qualifies, so there is no shortage of candidates.
+  {
+    const far = [], near = [];
+    for (const s of bg) {
+      (Math.hypot(s.nx - 0.5, s.ny - 0.5) > 0.40 ? far : near).push(s);
+    }
+    for (let i = far.length - 1; i > 0; i--) {      // shuffle, so they scatter
+      const j = Math.floor(Math.random() * (i + 1));
+      [far[i], far[j]] = [far[j], far[i]];
+    }
+    bg.length = 0;
+    bg.push(...far, ...near);
+  }
+
+  const bgGalaxies = [];
+  for (let i = 0; i < BG_GALAXIES; i++) {
+    bgGalaxies.push({
+      nx: Math.random(), ny: Math.random(),
+      size: rand(0.05, 0.115),          // of the panel's short side
+      squash: rand(0.22, 0.55),
+      rot: rand(0, Math.PI),
+      a: rand(0.05, 0.115),
+      c: BG_TINTS[Math.floor(Math.random() * BG_TINTS.length)]
+    });
+  }
+
+  // How much of the background survives at this point on the panel. The disc's
+  // glow washes out anything near the middle anyway — and the centre carries
+  // the turn name, the dice, the square name and the circuit line, so stars
+  // behind text would cost legibility for nothing. Fades on the same ellipse
+  // the glow uses, so the field thins around the disc rather than in a circle.
+  function clearOfDisc(px, py) {
+    if (!radius) return 1;
+    const ry = radius * TILT + radius * 0.28;
+    const d = Math.hypot((px - cx) / radius, (py - cy) / ry);
+    return Math.max(0, Math.min(1, (d - 0.62) / 0.55));
+  }
+
+  const field = document.createElement('canvas');
+  const fctx = field.getContext('2d');
+
+  function buildField() {
+    if (!fctx || !w || !h) return;
+    field.width = Math.round(w * dpr);
+    field.height = Math.round(h * dpr);
+    fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fctx.clearRect(0, 0, w, h);
+
+    // Distant galaxies first, so stars sit in front of them.
+    for (const g of bgGalaxies) {
+      const px = g.nx * w, py = g.ny * h;
+      const fade = clearOfDisc(px, py);
+      if (fade <= 0.02) continue;
+      const rr = g.size * Math.min(w, h);
+      fctx.save();
+      fctx.translate(px, py);
+      fctx.rotate(g.rot);
+      fctx.scale(1, g.squash);
+      const grd = fctx.createRadialGradient(0, 0, 0, 0, 0, rr);
+      grd.addColorStop(0, `rgba(${g.c.join(',')},${(g.a * fade).toFixed(3)})`);
+      grd.addColorStop(0.45, `rgba(${g.c.join(',')},${(g.a * fade * 0.35).toFixed(3)})`);
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      fctx.fillStyle = grd;
+      fctx.beginPath();
+      fctx.arc(0, 0, rr, 0, Math.PI * 2);
+      fctx.fill();
+      fctx.restore();
+    }
+
+    // The twinklers are drawn live in draw() instead, so their brightness is
+    // theirs alone rather than a live dot added on top of a baked one.
+    for (let i = TWINKLERS; i < bg.length; i++) {
+      const s = bg[i];
+      const px = s.nx * w, py = s.ny * h;
+      const fade = clearOfDisc(px, py);
+      if (fade <= 0.02) continue;
+      fctx.globalAlpha = s.a * fade;
+      fctx.fillStyle = `rgb(${s.c[0]},${s.c[1]},${s.c[2]})`;
+      fctx.beginPath();
+      fctx.arc(px, py, s.r, 0, Math.PI * 2);
+      fctx.fill();
+    }
+    fctx.globalAlpha = 1;
   }
 
   // ---- drifting rock ------------------------------------------------------
@@ -114,6 +252,8 @@ export function startGalaxy(canvas, getMood) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     cx = w / 2; cy = h / 2;
     radius = Math.min(w, h) * 0.46;
+    // After cx/cy/radius, because the field fades against the disc's ellipse.
+    buildField();
     // Always redraw, not just when stopped. Setting canvas.width blanks the
     // buffer, so waiting for the next frame leaves the middle of the board
     // empty for however long that takes — visible as a flicker on rotate, and
@@ -128,6 +268,33 @@ export function startGalaxy(canvas, getMood) {
 
     ctx.clearRect(0, 0, w, h);
 
+    // The universe outside, behind everything. One blit, whatever the star
+    // count. Neutral by design and never tinted with the mood: the offscreen
+    // would have to be rebuilt on every mood change — a cache to keep in step,
+    // which is this codebase's entire failure history — and a field that does
+    // not care makes the disc's mood read harder against it.
+    const now = performance.now();
+    if (field.width) ctx.drawImage(field, 0, 0, w, h);
+
+    // The few that twinkle. Long individual periods, so at any moment one or
+    // two are brightening rather than the whole sky shimmering.
+    for (let i = 0; i < TWINKLERS && i < bg.length; i++) {
+      const s = bg[i];
+      const px = s.nx * w, py = s.ny * h;
+      const fade = clearOfDisc(px, py);
+      if (fade <= 0.02) continue;
+      // Mostly near the floor, rising to a peak briefly — sin shaped by a power
+      // so the bright moment is short and the rest of the cycle is quiet.
+      const wave = (Math.sin((now / s.period) * Math.PI * 2 + s.phase) + 1) / 2;
+      const lift = 0.45 + 1.55 * Math.pow(wave, 3.2);
+      ctx.globalAlpha = Math.min(1, s.a * fade * lift);
+      ctx.fillStyle = `rgb(${s.c[0]},${s.c[1]},${s.c[2]})`;
+      ctx.beginPath();
+      ctx.arc(px, py, s.r * (0.9 + 0.35 * Math.pow(wave, 3.2)), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
     // core glow
     const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.95);
     glow.addColorStop(0, `rgba(${tint.core.join(',')},0.42)`);
@@ -138,8 +305,7 @@ export function startGalaxy(canvas, getMood) {
     ctx.ellipse(cx, cy, radius, radius * TILT + radius * 0.28, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // stars
-    const now = performance.now();
+    // stars — `now` is taken once at the top of the frame, above
     for (const s of stars) {
       const a = s.angle + spin * (1.6 - s.t);       // inner arms sweep faster
       const r = s.t * radius;
