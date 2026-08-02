@@ -37,16 +37,43 @@ import { Score } from './score.js';
 // Web Audio to run. Escalation is monotonic on purpose: the text goes filed →
 // resolved → agreed → past patience, and if the sound did not rise with it the
 // game would say the situation was worsening while sounding unchanged.
+// PITCHED FOR A PHONE SPEAKER, which is the whole reason these numbers changed.
+// The first version sat at 34-58Hz behind a lowpass sweeping 320 to 120Hz —
+// "low and wrong", and correct for headphones. An iPhone speaker rolls off hard
+// below about 500Hz, and rendering the old cue offline through a 500Hz highpass
+// left 22% of its energy: four fifths of it could not physically reach the
+// player, and the remainder was under a full generative score. Two complete
+// games were played without either cue being heard once.
+//
+// So the fundamentals now sit between 98 and 186Hz on a sawtooth, whose
+// harmonics a small speaker does reproduce, and the cue's own filter opens far
+// enough to let them through. It still reads as low, because it is low relative
+// to everything else in the mix — but it is low in a band that exists.
 export const STAGE_PLAN = [
-  { clacks: 2,  gain: 0.16, hz: 58, dur: 1.5, wash: 0.00 },
-  { clacks: 4,  gain: 0.22, hz: 52, dur: 2.0, wash: 0.04 },
-  { clacks: 7,  gain: 0.30, hz: 46, dur: 2.6, wash: 0.09 },
-  { clacks: 12, gain: 0.40, hz: 39, dur: 3.2, wash: 0.16 }
+  { clacks: 4,  gain: 0.10, hz: 186, dur: 2.2, wash: 0.010, open: 1500 },
+  { clacks: 7,  gain: 0.14, hz: 156, dur: 2.7, wash: 0.020, open: 1350 },
+  { clacks: 12, gain: 0.19, hz: 124, dur: 3.2, wash: 0.035, open: 1200 },
+  { clacks: 18, gain: 0.25, hz:  98, dur: 3.7, wash: 0.055, open: 1050 }
 ];
 
 // Absorption is its own shape: fuller, longer and lower than any report,
 // because it is the one event in a game that cannot be undone.
-export const ABSORB_PLAN = { clacks: 14, gain: 0.44, hz: 34, dur: 3.4, wash: 0.13 };
+export const ABSORB_PLAN = { clacks: 22, gain: 0.30, hz: 82, dur: 4.0, wash: 0.050, open: 950 };
+
+// The four reports are moments. On their own they were also too sparse to
+// register: four events of three seconds across seventy-two circuits, which is
+// why "no difference as we went on" was the correct report even once they could
+// be heard. This is the part that is always there once the array has spoken —
+// a thin detuned presence and an occasional clack, thickening at every stage.
+// SWARM_STAGES says the intent out loud: the tone should change while the table
+// is still arguing about colour sets. A sting cannot do that; a bed can.
+export const PRESENCE = [
+  null,                                                                   // nothing yet
+  { gain: 0.016, hz: 150, every: 9.0, clack: 0.045, wash: 0.004 },
+  { gain: 0.028, hz: 132, every: 5.5, clack: 0.070, wash: 0.009 },
+  { gain: 0.045, hz: 112, every: 3.2, clack: 0.100, wash: 0.016 },
+  { gain: 0.066, hz:  96, every: 1.8, clack: 0.135, wash: 0.026 }
+];
 
 // `mark` is G.swarmMark — how many reports the deep array has made, 0 to 4.
 // Returns the plan for the report just crossed, or null when nothing is due.
@@ -110,33 +137,47 @@ function clack(t, at, level, dest, buf) {
 
 let noiseBuf = null;
 
+// Where a cue lands in the score. Dry into Score.master, past the mood's
+// lowpass, because routing into Score.lp put the cue *inside* the music: at the
+// facility mood that filter is at 2400Hz, so the clacks came back attenuated and
+// mixed level with the pads. A send into Score.verb keeps it in the same room.
+// Both sit behind Score.master, so the one off switch still silences everything.
+const dryDest = () => Score.master;
+const wetDest = () => Score.verb;
+
+function ensureNoise(t) {
+  if (!noiseBuf) {
+    const n = Math.floor(t.sampleRate * 0.4);
+    noiseBuf = t.createBuffer(1, n, t.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  }
+  return noiseBuf;
+}
+
+const live = () => !!(Score.on && Score.ready && Score.ctx && Score.master && Score.verb);
+
 function play(plan) {
   // Score.ready is false until init() has run from a real gesture. Nothing here
   // may throw: a cue is never worth taking the interface down with it.
-  if (!plan || !Score.on || !Score.ready || !Score.ctx || !Score.lp) return false;
+  if (!plan || !live()) return false;
   try {
     const t = Score.ctx;
-    const dest = Score.lp;                    // into the score's own room
+    const dest = dryDest();
     const at = t.currentTime + 0.02;
-
-    if (!noiseBuf) {
-      const n = Math.floor(t.sampleRate * 0.4);
-      noiseBuf = t.createBuffer(1, n, t.sampleRate);
-      const d = noiseBuf.getChannelData(0);
-      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
-    }
+    ensureNoise(t);
 
     // A detuned pair a few cents apart beats slowly against itself, which is
     // what makes it sit wrong rather than sound like a test tone.
     const lp = t.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(320, at);
-    lp.frequency.exponentialRampToValueAtTime(120, at + plan.dur);
+    lp.frequency.setValueAtTime(plan.open, at);
+    lp.frequency.exponentialRampToValueAtTime(plan.open * 0.42, at + plan.dur);
     const sg = t.createGain();
     sg.gain.setValueAtTime(0.0001, at);
     sg.gain.exponentialRampToValueAtTime(plan.gain, at + plan.dur * 0.35);
     sg.gain.exponentialRampToValueAtTime(0.0001, at + plan.dur);
-    lp.connect(sg); sg.connect(dest);
+    lp.connect(sg); sg.connect(dest); sg.connect(wetDest());
     for (const cents of [-7, 7]) {
       const o = t.createOscillator();
       o.type = 'sawtooth';
@@ -174,6 +215,107 @@ function play(plan) {
 export const stage = mark => play(planFor(mark));
 export const absorbed = () => play(ABSORB_PLAN);
 
+/* ------------------------------------------------------------- the presence */
+// Built once and then left running for the rest of the game, its level moved by
+// setPresence(). Oscillators are not restarted per stage: an AudioContext will
+// happily accumulate them, and a 72-circuit game restarting a drone four times
+// leaks four. One set, four gain ramps.
+let bed = null;      // { gain, wash, osc:[], filt, timer, mark }
+
+function buildBed(t) {
+  const g = t.createGain();       g.gain.value = 0;
+  const w = t.createGain();       w.gain.value = 0;
+  const f = t.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900; f.Q.value = 0.7;
+  f.connect(g); g.connect(dryDest()); g.connect(wetDest());
+
+  const osc = [];
+  for (const cents of [-9, 9]) {
+    const o = t.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.value = PRESENCE[1].hz * Math.pow(2, cents / 1200);
+    o.connect(f); o.start();
+    osc.push(o);
+  }
+  const src = t.createBufferSource();
+  src.buffer = ensureNoise(t); src.loop = true;
+  const hp = t.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1100;
+  src.connect(hp); hp.connect(w); w.connect(dryDest());
+  src.start();
+
+  return { gain: g, wash: w, osc, filt: f, timer: null, mark: 0 };
+}
+
+// One distant clack, scheduled by the bed's own timer rather than the score's,
+// so its rate is free to be a property of the swarm rather than of the tempo.
+function bedClack() {
+  if (!bed || !live() || !bed.mark) return;
+  const p = PRESENCE[bed.mark];
+  if (!p) return;
+  try {
+    const t = Score.ctx;
+    clack(t, t.currentTime + 0.03, p.clack * (0.6 + Math.random() * 0.7), dryDest(), ensureNoise(t));
+    if (Math.random() < 0.35) {
+      clack(t, t.currentTime + 0.09 + Math.random() * 0.1, p.clack * 0.7, wetDest(), ensureNoise(t));
+    }
+  } catch { /* a clack is never worth an exception */ }
+}
+
+function armBed() {
+  if (!bed) return;
+  if (bed.timer) { clearTimeout(bed.timer); bed.timer = null; }
+  const p = PRESENCE[bed.mark];
+  if (!p) return;
+  // Jittered rather than metronomic — an even pulse reads as a machine, and the
+  // one thing the Neurex are not is a machine keeping time.
+  const wait = p.every * (0.55 + Math.random() * 0.9) * 1000;
+  bed.timer = setTimeout(() => { bedClack(); armBed(); }, wait);
+}
+
+// mark is G.swarmMark, 0 to 4. Idempotent: called on every render, acts only
+// when the stage has actually moved.
+export function setPresence(mark) {
+  const m = Number.isInteger(mark) ? Math.max(0, Math.min(PRESENCE.length - 1, mark)) : 0;
+  if (!live()) return false;
+  try {
+    const t = Score.ctx;
+    if (!bed) bed = buildBed(t);
+    if (bed.mark === m) return true;
+    bed.mark = m;
+    const p = PRESENCE[m];
+    const now = t.currentTime;
+    // Six seconds, so the swarm thickens rather than switches on.
+    bed.gain.gain.linearRampToValueAtTime(p ? p.gain : 0, now + 6);
+    bed.wash.gain.linearRampToValueAtTime(p ? p.wash : 0, now + 6);
+    if (p) {
+      bed.filt.frequency.linearRampToValueAtTime(620 + p.gain * 4200, now + 6);
+      for (let i = 0; i < bed.osc.length; i++) {
+        const cents = i === 0 ? -9 : 9;
+        bed.osc[i].frequency.linearRampToValueAtTime(p.hz * Math.pow(2, cents / 1200), now + 6);
+      }
+    }
+    armBed();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// A new game starts from silence again.
+export function clearPresence() {
+  if (!bed) return;
+  if (bed.timer) { clearTimeout(bed.timer); bed.timer = null; }
+  bed.mark = 0;
+  try {
+    const now = Score.ctx.currentTime;
+    bed.gain.gain.linearRampToValueAtTime(0, now + 1.2);
+    bed.wash.gain.linearRampToValueAtTime(0, now + 1.2);
+  } catch { /* ignore */ }
+}
+
 // Testing seam — the probe swaps the context underneath and needs the cached
-// noise buffer, which belongs to the old one, forgotten with it.
-export function _reset() { noiseBuf = null; }
+// noise buffer and the bed, which belong to the old one, forgotten with it.
+export function _reset() {
+  if (bed && bed.timer) clearTimeout(bed.timer);
+  noiseBuf = null;
+  bed = null;
+}

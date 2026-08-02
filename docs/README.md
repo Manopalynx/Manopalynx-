@@ -149,14 +149,38 @@ the same delay and reverb and sound like part of the piece rather than a notific
 it. That also puts them behind `Score.master`, so one switch silences everything and the
 two cannot drift apart.
 
-- **Absorption.** Low and wrong rather than startling: mandibles coming up underneath a
-  detuned sub. Absorption is the book's thesis and the game's win condition, and a
-  jump-scare would cheapen the quietest serious moment in the game.
+- **Absorption**, on two triggers: a player entering vassalage, and a piece landing on the
+  Absorbed corner. The second was missing at first and is the one you actually see —
+  Absorbed is the go-to square, so the piece is moved straight on to Detention and is only
+  on square 30 for the single render between the walk finishing and the landing resolving.
+  That render is the edge to catch. Low and wrong rather than startling: absorption is the
+  book's thesis and the game's win condition, and a jump-scare would cheapen it.
 - **The deep array's four reports**, on the existing `SWARM_STAGES` beats at 25/50/75/95%.
   Tied to those rather than a second clock, so the sound escalates exactly where the text
-  does. `audio.test.mjs` asserts the escalation is monotonic in every dimension that
-  carries weight — more clacks, louder, longer, lower — because otherwise the game can
-  say the situation is worsening while sounding unchanged.
+  does. Escalation is asserted monotonic in every dimension that carries weight.
+- **A presence that is always there** once the array has spoken, thickening at every stage:
+  a thin detuned drone and an occasional clack, at four levels. Four stings of three
+  seconds across seventy-two circuits is not a change in tone, and two full games were
+  played reporting exactly that. `SWARM_STAGES` says the intent out loud — the tone should
+  change while the table is still arguing about colour sets. A sting cannot do that.
+
+### Pitched for a phone speaker
+
+The first version sat at 34–58Hz behind a filter sweeping 320 down to 120Hz. That is
+correct for headphones and inaudible on the device the game is played on. Rendered offline
+through a 500Hz highpass approximating an iPhone speaker, **22% of the cue's energy
+survived** — four fifths of it could not physically reach the player, and the remainder was
+under a full generative score. Two entire games were played without either cue being heard.
+
+Fundamentals now sit between 82 and 186Hz on a sawtooth, whose harmonics a small speaker
+does reproduce, and each cue's filter opens far enough to pass them. The same measurement
+now gives 51% at stage one and 37% at stage four — in absolute terms **1.7× and 3.7× the
+old cue** through the same speaker. `audio.test.mjs` fails anything below 80Hz or any
+filter set below four times its own fundamental.
+
+Cues also route dry into `Score.master` rather than `Score.lp`. Going through `lp` put them
+*inside* the music: at the facility mood that filter is at 2400Hz, so the clacks came back
+attenuated and mixed level with the pads. A send into `Score.verb` keeps them in the room.
 
 The switch is on the setup screen as well as in the menu, and is now remembered between
 launches. It is on the setup screen because in a Home Screen PWA the iPhone's ringer

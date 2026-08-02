@@ -426,7 +426,28 @@ for (const device of DEVICES) {
       absorbRepeat = count(() => window.__render());
       victim.lord = null; window.__render();
     }
-    return { unlocked, direct, louder, silenced, silencedAbsorb, onCross, onRepeat, onAbsorb, absorbRepeat };
+    // Landing on the Absorbed corner. This is the cue that was missing entirely:
+    // it is the go-to square, so the piece is moved straight on to Detention and
+    // is only ever on square 30 for the one render between the walk finishing
+    // and the landing resolving.
+    const GOTO = 30;
+    const walker = G.players[G.cur];
+    const wasAt = walker.pos;
+    G.players.forEach(q => { if (q !== walker && q.pos === GOTO) q.pos = 0; });
+    window.__render();
+    walker.pos = GOTO;
+    const onGoto = count(() => window.__render());
+    const gotoRepeat = count(() => window.__render());
+    walker.pos = wasAt; window.__render();
+
+    // The bed is a level, not an event. Moving the stage must move it, and
+    // holding the stage must not rebuild it.
+    const bedBefore = count(() => S.setPresence(2));
+    const bedSame = count(() => S.setPresence(2));
+    const bedMoved = S.setPresence(4);
+
+    return { unlocked, direct, louder, silenced, silencedAbsorb, onCross, onRepeat,
+             onAbsorb, absorbRepeat, onGoto, gotoRepeat, bedBefore, bedSame, bedMoved };
   });
   if (cues.unlocked) pass('the audio context unlocks on a gesture');
   else fail('unlock() refused a context it should have taken');
@@ -444,6 +465,14 @@ for (const device of DEVICES) {
   else fail('a player was absorbed in silence');
   if (cues.absorbRepeat === 0) pass('absorption does not retrigger while the state stands');
   else fail(`absorption fired again on re-render (${cues.absorbRepeat} nodes)`);
+  if (cues.onGoto > 0) pass('landing on Absorbed fires the cue');
+  else fail('a piece landed on Absorbed in silence — the reported bug');
+  if (cues.gotoRepeat === 0) pass('and does not fire again while the piece stands there');
+  else fail(`Absorbed retriggered on re-render (${cues.gotoRepeat} nodes)`);
+  if (cues.bedMoved) pass('the swarm bed follows the stage');
+  else fail('setPresence refused to move the bed');
+  if (cues.bedSame === 0) pass('holding a stage does not rebuild the bed');
+  else fail(`re-setting the same stage created ${cues.bedSame} more nodes — they would accumulate all game`);
 
   // ---- no two marks may look alike ----
   // data.js already forbids two codes of the same length differing by a single

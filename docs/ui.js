@@ -4,7 +4,7 @@
 // file animates it.
 
 import {
-  SETS, BOARD, N, JAIL, TRAFFIC, FLEET_RENT, PERSONAS, RULES, EPIGRAPH, CONTINGENCY, COLUMN,
+  SETS, BOARD, N, JAIL, GOTO, TRAFFIC, FLEET_RENT, PERSONAS, RULES, EPIGRAPH, CONTINGENCY, COLUMN,
   BUILD
 } from './data.js';
 import * as E from './engine.js';
@@ -263,27 +263,40 @@ function render() {
 // Only transitions fire. render() runs on every animation frame of a walking
 // piece, so anything keyed on a level rather than an edge would retrigger for
 // the length of a move.
-let heard = { mark: -1, lords: '' };
+let heard = { mark: -1, lords: '', onGoto: '' };
 
 function soundWatch() {
   if (!G) return;
   const lords = G.players.map(p => (p.lord === null || p.lord === undefined ? '-' : p.lord)).join(',');
   const mark = G.swarmMark ?? 0;
+  // Landing on Absorbed. This was the missing cue: the square is the go-to
+  // corner, so resolveLanding sends the piece straight on to Detention and it is
+  // never sitting there when anyone looks. But tick() renders between the walk
+  // finishing and the landing resolving, with phase 'landed', and at that one
+  // moment the piece IS on square 30. That is the edge to catch.
+  const onGoto = G.players.filter(p => p.pos === GOTO).map(p => p.i).join(',');
   const first = heard.mark === -1;
   // A resumed save must not replay every report the last session already heard,
   // so the first render after loading only takes the reading.
   if (!first) {
-    if (lords !== heard.lords && lords.replace(/-/g, '').length > heard.lords.replace(/-/g, '').length) {
-      Sound.absorbed();
-    } else if (mark > heard.mark) {
-      Sound.stage(mark);
-    }
+    const newlyAbsorbed =
+      lords !== heard.lords &&
+      lords.replace(/-/g, '').length > heard.lords.replace(/-/g, '').length;
+    const arrived = onGoto && onGoto !== heard.onGoto;
+    if (newlyAbsorbed || arrived) Sound.absorbed();
+    else if (mark > heard.mark) Sound.stage(mark);
   }
-  heard = { mark, lords };
+  // The bed is a level, not an event, so it is set every render and does its own
+  // nothing when the stage has not moved.
+  Sound.setPresence(mark);
+  heard = { mark, lords, onGoto };
 }
 
-// Starting a new game re-arms both, so a second game reports from the top.
-function resetSoundWatch() { heard = { mark: -1, lords: '' }; }
+// Starting a new game re-arms all three, so a second game reports from the top.
+function resetSoundWatch() {
+  heard = { mark: -1, lords: '', onGoto: '' };
+  Sound.clearPresence();
+}
 
 // Four chips have to fit 393pt without the last one sliding off the edge, and
 // "High Commander Varan" will never fit whole. Opponents go by the name you

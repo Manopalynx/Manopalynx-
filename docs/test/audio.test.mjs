@@ -15,7 +15,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 
-import { STAGE_PLAN, ABSORB_PLAN, planFor, supported, isOn, setOn, stage, absorbed, _reset }
+import { STAGE_PLAN, ABSORB_PLAN, PRESENCE, planFor, supported, isOn, setOn, stage, absorbed,
+         setPresence, clearPresence, _reset }
   from '../audio.js';
 import { Score } from '../score.js';
 import { SWARM_STAGES } from '../data.js';
@@ -64,7 +65,45 @@ test('nothing is loud enough to be a jump-scare', () => {
   for (const p of [...STAGE_PLAN, ABSORB_PLAN]) {
     assert.ok(p.gain <= 0.5, `a plan at gain ${p.gain} is too hot for a phone at a table`);
     assert.ok(p.dur >= 1.2, 'a short sharp hit is the startle this was written to avoid');
-    assert.ok(p.hz <= 60, `${p.hz}Hz is not the low end this is meant to sit in`);
+  }
+});
+
+// The bug that cost two entire games. The first plans sat at 34-58Hz, which is
+// correct for headphones and inaudible on the phone this is played on: rendered
+// offline through a 500Hz highpass, 22% of the cue's energy survived. Anything
+// below about 80Hz is being written for a speaker the player does not have.
+test('every cue sits where a phone speaker can reproduce it', () => {
+  for (const p of [...STAGE_PLAN, ABSORB_PLAN]) {
+    assert.ok(p.hz >= 80, `${p.hz}Hz is below what an iPhone speaker reproduces`);
+    assert.ok(p.hz <= 220, `${p.hz}Hz has stopped being the low end this should sit in`);
+    assert.ok(p.open >= p.hz * 4,
+      `a filter at ${p.open}Hz strangles the harmonics of a ${p.hz}Hz saw, which is all a small speaker has to work with`);
+  }
+  for (const p of PRESENCE.filter(Boolean)) {
+    assert.ok(p.hz >= 80 && p.hz <= 220, `the bed at ${p.hz}Hz is outside a phone's range`);
+  }
+});
+
+// Four events of three seconds across seventy-two circuits is not a change in
+// tone, which is why "no difference as we went on" was an accurate report even
+// once the cues were audible. The bed is what actually escalates.
+test('the presence thickens at every stage', () => {
+  assert.equal(PRESENCE.length, STAGE_PLAN.length + 1, 'one level per report, plus silence at 0');
+  assert.equal(PRESENCE[0], null, 'nothing is heard before the array has spoken');
+  const live = PRESENCE.filter(Boolean);
+  for (let i = 1; i < live.length; i++) {
+    assert.ok(live[i].gain > live[i - 1].gain, `bed level ${i + 1} is no louder than ${i}`);
+    assert.ok(live[i].every < live[i - 1].every, `bed level ${i + 1} clacks no more often than ${i}`);
+    assert.ok(live[i].clack > live[i - 1].clack, `bed level ${i + 1} clacks no harder than ${i}`);
+    assert.ok(live[i].hz < live[i - 1].hz, `bed level ${i + 1} does not sit lower than ${i}`);
+  }
+});
+
+test('the bed is quieter than the reports that punctuate it', () => {
+  const quietestStage = Math.min(...STAGE_PLAN.map(p => p.gain));
+  for (const p of PRESENCE.filter(Boolean)) {
+    assert.ok(p.gain < quietestStage,
+      `a bed at ${p.gain} would swamp a report at ${quietestStage} — it is meant to be under the game, not on top of it`);
   }
 });
 
@@ -113,8 +152,10 @@ test('the setting is the score\'s own switch, not a second one beside it', () =>
 
 test('a cue routes into the score rather than straight at the speakers', () => {
   const src = readFileSync(fileURLToPath(new URL('../audio.js', import.meta.url)), 'utf8');
-  assert.match(src, /const dest = Score\.lp/,
-    'cues must share the score\'s filter, delay and reverb or they sound bolted on');
+  assert.match(src, /const dryDest = \(\) => Score\.master/,
+    'the dry cue must land past the mood lowpass or it comes back attenuated and level with the pads');
+  assert.match(src, /const wetDest = \(\) => Score\.verb/,
+    'and needs a reverb send, or it sits outside the room the music is in');
   assert.equal(/\.connect\(\s*t\.destination\s*\)/.test(src), false,
     'connecting to destination would bypass Score.master and ignore the off switch');
 });
