@@ -415,7 +415,7 @@ function renderBoard() {
     const dev = held ? (held.citadel ? '◆' : held.garrisons ? '▪'.repeat(held.garrisons) : held.mortgaged ? '⌀' : '') : '';
     const ownStyle = owner ? `color:${pipOf(owner)};box-shadow:inset 0 0 0 2px ${pipOf(owner)}` : '';
     const ico = iconFor(b);
-    h += `<div class="cell e-${edge}${posOf(cur) === i ? ' here' : ''}${selected === i ? ' sel' : ''}${ico ? ' marked' : ''}"
+    h += `<div class="cell e-${edge}${posOf(cur) === i ? ' here' : ''}${selected === i ? ' sel' : ''}${ico ? ' marked' : ''}${held && held.mortgaged ? ' pledged' : ''}"
         style="grid-row:${r};grid-column:${c};--here:${pipOf(cur)};${ownStyle}" data-i="${i}">
       ${colour ? `<div class="cbar" style="background:${colour}"></div>` : ''}
       ${ico ? `<svg class="cico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ico}</svg>` : ''}

@@ -190,7 +190,23 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
   border-color:#31374A}
 .cell.corner .code{color:var(--gold);letter-spacing:.06em}
 .cell.owned{box-shadow:inset 0 0 0 2px currentColor}
-.cell .toks{position:absolute;bottom:2px;right:2px;display:flex;gap:2px;
+/* A pledged square is dead. It earns no rent, it cannot be built on, and it
+   does not count toward its set — but on the board it was a working square with
+   a ⌀ eight pixels across in one corner, which is the same amount of ink a
+   single garrison gets and says nothing about what it means.
+   Hatched in the owner's own colour, so it still reads as theirs while reading
+   as encumbered. At z-index 1 it paints over the colour bar and the mark but
+   UNDER the code, which stays at 2 — the square must still be identifiable at
+   a glance, and legibility of the four-character code is the whole reason the
+   cell is laid out the way it is. */
+.cell.pledged::after{content:'';position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:repeating-linear-gradient(135deg,
+    transparent 0 3.5px,currentColor 3.5px 4.6px);opacity:.26}
+.cell.pledged .code{color:var(--dim)}
+.cell.pledged .cpr{text-decoration:line-through;text-decoration-thickness:1px}
+/* Above the hatch. The pieces are the one thing on a cell that must never be
+   ambiguous — a player has to see which square they are standing on. */
+.cell .toks{position:absolute;bottom:2px;right:2px;display:flex;gap:2px;z-index:3;
   flex-wrap:wrap-reverse;max-width:72%;justify-content:flex-end}
 .tok{width:7px;height:7px;border-radius:50%;border:1px solid rgba(0,0,0,.6)}
 .tok.me{width:9px;height:9px;box-shadow:0 0 0 1.5px var(--void),0 0 8px 1px currentColor}
