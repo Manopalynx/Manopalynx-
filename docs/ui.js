@@ -4,7 +4,7 @@
 // file animates it.
 
 import {
-  SETS, BOARD, N, JAIL, GOTO, TRAFFIC, FLEET_RENT, PERSONAS, RULES, EPIGRAPH, CONTINGENCY, COLUMN,
+  SETS, BOARD, N, JAIL, GOTO, FLEETS, UTILS, TRAFFIC, FLEET_RENT, PERSONAS, RULES, EPIGRAPH, CONTINGENCY, COLUMN,
   BUILD
 } from './data.js';
 import * as E from './engine.js';
@@ -309,13 +309,18 @@ function renderBar() {
     const rel = p.lord !== null
       ? `<div class="vs">vassal · ${esc(chipName(G.players[p.lord]))}</div>`
       : p.vassals.length ? `<div class="vs">overlord ×${p.vassals.length}</div>` : '';
-    return `<div class="pchip${i === G.cur ? ' act' : ''}">
+    const held = p.holdings.length;
+    return `<button class="pchip${i === G.cur ? ' act' : ''}" data-who="${i}"
+        aria-label="${esc(p.name)} — ${held} holding${held === 1 ? '' : 's'}">
       <div class="nm"><span class="pip" style="background:${pipOf(p)}"></span><span class="who">${esc(chipName(p))}</span></div>
       <div class="cash">${money(p.cash)}</div>
-      ${p.debt ? `<div class="vs" style="color:var(--warn)">debt ${money(p.debt)}</div>` : ''}${rel}</div>`;
+      ${p.debt ? `<div class="vs" style="color:var(--warn)">debt ${money(p.debt)}</div>` : ''}${rel}
+      <span class="chipMore" aria-hidden="true">${held}<span class="chev">›</span></span></button>`;
   }).join('');
   $('bar').innerHTML = chips + `<button class="menuBtn" id="menuBtn" aria-label="Menu">☰</button>`;
   $('menuBtn').onclick = () => { Score.resume(); showMenu(); };
+  $('bar').querySelectorAll('[data-who]').forEach(el =>
+    el.onclick = () => { Score.resume(); showPlayer(+el.dataset.who); });
 }
 
 // The centre panel is built ONCE and re-attached after each render rather than
@@ -698,7 +703,7 @@ function walk(path, done) {
 const ACTIONS = {
   act_roll, act_resolve, act_amend, act_end,
   showSquare, showManage, showTrade, showTithe, showRevolt, showFinal, showLedger, showDecks,
-  closeSheet, newGame, copyResult, toggleLog, act_payFee, act_pardon, showMenu, toggleScore,
+  closeSheet, newGame, copyResult, toggleLog, act_payFee, act_pardon, showMenu, toggleScore, showPlayer,
   showSettle, settlePledge, settleSellG, settleBreak, settleAuto, settleDone,
   buyNow, declineToAuction, takeCard, sealBid, sealClaim, endAuction, endContest,
   answerContract, build, raiseCitadel, sellDev, toggleMortgage, repay,
@@ -1132,6 +1137,77 @@ function manageControls(p, h) {
     c += `<button data-fn="toggleMortgage|${h.sq}">${h.mortgaged ? 'Redeem' : 'Pledge'}</button>`;
   }
   return c;
+}
+
+// What another player holds. Ownership is already public — the board draws an
+// owner's ring and the garrison marks on every square — so this aggregates what
+// you could already get by squinting at forty cells, and reveals nothing.
+// Checked before building it: there is no hidden state to leak. `strength` and
+// `tithe` are the only per-player extras and neither is secret.
+//
+// Rent is the figure that actually decides a trade, so it is the one shown
+// against each square, at its current development.
+function showPlayer(i) {
+  const p = G.players[i];
+  if (!p) return;
+  const worth = E.netWorth(G, p);
+  const gar = p.holdings.reduce((n, h) => n + h.garrisons, 0);
+  const cit = p.holdings.filter(h => h.citadel).length;
+
+  let s = `<h3>${esc(p.name)}</h3>
+    <div class="sub">${p.kind === 'ai' ? esc(PERSONAS[p.persona].d) : 'At the table'}</div>
+    <div class="stat"><span>Cash</span><span>${money(p.cash)}</span></div>
+    <div class="stat"><span>Worth</span><span>${money(worth)}</span></div>`;
+  if (p.debt) s += `<div class="stat"><span style="color:var(--warn)">Debt</span><span style="color:var(--warn)">${money(p.debt)}</span></div>`;
+  s += `<div class="stat"><span>Holdings</span><span>${p.holdings.length} · ${gar} garrison${gar === 1 ? '' : 's'} · ${cit} citadel${cit === 1 ? '' : 's'}</span></div>`;
+  if (p.lord !== null && p.lord !== undefined) {
+    s += `<div class="stat"><span>Vassal of</span><span>${esc(G.players[p.lord].name)} · ${G.players[p.lord].tithe}% tithe</span></div>`;
+  }
+  if (p.vassals.length) {
+    s += `<div class="stat"><span>Overlord of</span><span>${p.vassals.map(v => esc(chipName(G.players[v]))).join(', ')} · ${p.tithe}% tithe</span></div>`;
+  }
+
+  if (!p.holdings.length) {
+    s += `<p style="color:var(--dim);font-size:15px;margin-top:14px">Holds nothing yet.</p>`;
+  } else {
+    // Grouped by colour set, because a set is the unit that changes rent, and
+    // "2 of 3" is the thing you are actually reading for.
+    const groups = new Map();
+    for (const h of p.holdings) {
+      const b = BOARD[h.sq];
+      const key = b.s || (b.t === 'f' ? '_fleet' : b.t === 'u' ? '_util' : '_other');
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(h);
+    }
+    const label = key => key === '_fleet' ? 'Fleets' : key === '_util' ? 'Utilities'
+      : key === '_other' ? 'Other' : SETS[key].n;
+    const colour = key => key === '_fleet' ? 'var(--fleet)' : key === '_util' ? 'var(--util)'
+      : key === '_other' ? 'var(--dim)' : SETS[key].c;
+    const order = [...groups.keys()].sort((a, b) =>
+      (a.startsWith('_') ? 1 : 0) - (b.startsWith('_') ? 1 : 0) || a.localeCompare(b));
+
+    for (const key of order) {
+      const hs = groups.get(key).sort((a, b) => a.sq - b.sq);
+      const total = key === '_fleet' ? FLEETS.length : key === '_util' ? UTILS.length
+        : key.startsWith('_') ? hs.length : SETS[key].sq.length;
+      const complete = hs.length >= total;
+      s += `<div class="pgHead" style="color:${colour(key)}">${esc(label(key))}
+        <span class="pgCount">${hs.length} of ${total}${complete ? ' · complete' : ''}</span></div>`;
+      for (const h of hs) {
+        const b = BOARD[h.sq];
+        const rent = E.rentOf(G, h.sq);
+        const dev = h.citadel ? 'citadel' : h.garrisons ? `${h.garrisons} garrison${h.garrisons === 1 ? '' : 's'}` : 'bare';
+        s += `<div class="pgRow">
+          <div class="pgName">${esc(b.n)}</div>
+          <div class="pgState">${h.mortgaged ? 'pledged' : dev}</div>
+          <div class="pgRent">${h.mortgaged ? '—' : money(rent)}</div></div>`;
+      }
+    }
+    s += `<p class="note" style="margin-top:12px">Rent shown is what you would owe landing there
+      now, at a roll of seven where the roll matters.</p>`;
+  }
+  s += btns([['Close', 'closeSheet', 'pri wide']]);
+  sheet(s);
 }
 
 function showManage() {

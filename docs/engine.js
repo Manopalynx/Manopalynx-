@@ -47,6 +47,10 @@ export function createGame({ seats, seed = 1, circuits = 72 } = {}) {
     circuit: 1,
     turn: 0,
     phase: 'roll',
+    // Refused contracts, so an opponent learns from being told no. See RULES
+    // for the measurements that made this necessary.
+    refusals: [],
+    humanAsked: -1,               // circuit an opponent last interrupted a human
     dice: [0, 0],
     garrisonPool: RULES.garrisonPool,
     citadelPool: RULES.citadelPool,
@@ -1202,6 +1206,10 @@ export function seekContract(G, p, lens = p.persona || 'spector') {
     targets = setBuildingTargets(G, p);
     targets.sort((a, b) => (PAYBACK[BOARD[a.sq].s] ?? 99) - (PAYBACK[BOARD[b.sq].s] ?? 99));
   }
+  // Drop anything already refused and still binding. Done after the sort, so
+  // the second choice is genuinely the second best rather than whatever
+  // happened to survive the filter first.
+  targets = targets.filter(t => !refusalBlocks(G, p.i, t.owner.i, t.sq));
   if (!targets.length) return null;
   const target = targets[0];
   const them = G.players[target.owner.i];
@@ -1232,7 +1240,80 @@ export function seekContract(G, p, lens = p.persona || 'spector') {
       - (give !== null ? aiValue(G, them, give) : 0) + bar + 40;
     cash = Math.min(ceiling, Math.max(0, Math.round(needed)));
   }
+  // If this was refused before and the cooldown has passed, it may only come
+  // back better. An opponent that returns with the same figure has not
+  // negotiated, it has repeated itself.
+  const prior = refusalFor(G, p.i, them.i, target.sq);
+  if (prior && cash < Math.ceil(prior.paid * RULES.refusalRaise)) {
+    const raised = Math.ceil(prior.paid * RULES.refusalRaise);
+    if (raised > ceiling) return null;            // cannot afford to improve
+    cash = raised;
+  }
   return { from: p.i, to: them.i, get: target.sq, give, cash: Math.max(0, cash), direction: 1 };
+}
+
+/* ---------------------------------------------------- learning from a refusal */
+// An opponent used to be told no and carry on as though it had not happened.
+// seekContract re-derives the same best target every turn — the square that
+// closes its set, which has not changed — so it asked for it again, identically.
+// Measured over 30 games against a seat that always refuses: 71 proposals a
+// game, 95% of them exact repeats, one contract re-proposed 96 times.
+//
+// What is remembered is (proposer, holder, square), because that is the ask.
+// What makes the memory lapse is the board moving underneath it.
+
+// The state that made the ask what it was. If this changes, the refusal was
+// about a different proposition and should not bind — picking up another square
+// in the set genuinely alters the deal, and an opponent that could not see that
+// would be stubborn rather than principled.
+function refusalSig(G, holderIdx, proposerIdx, sq) {
+  const b = BOARD[sq];
+  const held = idx => new Set(G.players[idx].holdings.map(h => h.sq));
+  const a = held(holderIdx), c = held(proposerIdx);
+  if (b.s) {
+    const mine = SETS[b.s].sq.filter(x => a.has(x)).join('.');
+    const theirs = SETS[b.s].sq.filter(x => c.has(x)).join('.');
+    return `${mine}/${theirs}`;
+  }
+  const kind = x => BOARD[x].t === b.t;
+  return `${[...a].filter(kind).length}/${[...c].filter(kind).length}`;
+}
+
+export function recordRefusal(G, c) {
+  if (!c) return;
+  if (!Array.isArray(G.refusals)) G.refusals = [];
+  // Only cash the proposer offered counts as the price already tried.
+  const paid = c.direction === 1 ? Math.max(0, Math.floor(c.cash || 0)) : 0;
+  for (const sq of sqList(c.get)) {
+    const sig = refusalSig(G, c.to, c.from, sq);
+    const rec = G.refusals.find(r => r.from === c.from && r.to === c.to && r.sq === sq);
+    if (rec) {
+      rec.count++; rec.circuit = G.circuit; rec.sig = sig;
+      rec.paid = Math.max(rec.paid, paid);
+    } else {
+      G.refusals.push({ from: c.from, to: c.to, sq, circuit: G.circuit, count: 1, paid, sig });
+    }
+  }
+  // Bounded, like the log. A long game must not accumulate these forever.
+  if (G.refusals.length > 80) G.refusals.splice(0, G.refusals.length - 80);
+}
+
+// The live refusal for this ask, or null if there is none or it has lapsed.
+export function refusalFor(G, from, to, sq) {
+  if (!Array.isArray(G.refusals)) return null;
+  const rec = G.refusals.find(r => r.from === from && r.to === to && r.sq === sq);
+  if (!rec) return null;
+  if (rec.sig !== refusalSig(G, to, from, sq)) return null;   // the board moved on
+  return rec;
+}
+
+// Whether the ask may be made at all. Cash is checked separately, once the
+// offer has been built and there is a figure to compare.
+export function refusalBlocks(G, from, to, sq) {
+  const rec = refusalFor(G, from, to, sq);
+  if (!rec) return false;
+  if (rec.count >= RULES.refusalCap) return true;              // asked and answered
+  return (G.circuit - rec.circuit) < RULES.refusalCooldown;    // not yet
 }
 
 // Validates a proposal against the board before anyone is asked to agree to it.
@@ -1272,6 +1353,7 @@ export function proposeContract(G, c) {
   trim(G);
   if (accepted) { settleContract(G, c); return { ok: true, pending: false, accepted: true }; }
 
+  recordRefusal(G, c);
   note(G, `${them.name} refuses the contract.`);
   const counter = aiCounter(G, them, proposer, c);
   if (counter) {
@@ -1291,7 +1373,11 @@ export function respondToContract(G, accept) {
   if (!c) return false;
   G.contract = null;
   G.phase = c.resumePhase || 'end';
-  if (!accept) { note(G, `${G.players[c.to].name} refuses the contract.`); return false; }
+  if (!accept) {
+    recordRefusal(G, c);
+    note(G, `${G.players[c.to].name} refuses the contract.`);
+    return false;
+  }
   if (!contractIsLegal(G, c)) { note(G, 'The contract lapsed before it could be signed.'); return false; }
   settleContract(G, c);
   return true;
@@ -1541,7 +1627,18 @@ export function aiDevelop(G, p) {
   // an answer, so callers must check the phase before ending the turn.
   if (!G.over && random(G) < 0.5) {
     const c = seekContract(G, p);
-    if (c) proposeContract(G, c);
+    // Backstop, independent of any one opponent's memory: a proposal to a human
+    // parks the game in the 'contract' phase waiting for an answer, so with
+    // three opponents each rolling this independently the interruptions scale
+    // with the seat count. They share one a circuit between them.
+    if (c) {
+      const them = G.players[c.to];
+      if (them.kind !== 'human') proposeContract(G, c);
+      else if ((G.humanAsked ?? -1) !== G.circuit) {
+        G.humanAsked = G.circuit;
+        proposeContract(G, c);
+      }
+    }
   }
 }
 

@@ -19,7 +19,7 @@
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-export const BUILD = 'grandiose-v33';
+export const BUILD = 'grandiose-v34';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -318,6 +318,15 @@ export const RULES = {
   // deal — two lesser worlds for the one that closes a set, with cash on top —
   // and keeps the sheet readable on a phone.
   tradeMax: 3,
+  // A refusal used to be written to the log and forgotten, so an opponent
+  // re-derived the same best target every turn and asked for it again,
+  // identically. Measured over 30 full games with a human seat that always
+  // refuses: 71 proposals a game, one every circuit, 95% of them an exact
+  // repeat, and one contract re-proposed 96 times in a single game.
+  refusalCooldown: 3,            // circuits before the same ask may return
+  refusalCap: 3,                 // refusals of one square before it is dropped for good
+  refusalRaise: 1.15,            // and it may only return with an offer this much better
+  humanAsksPerCircuit: 1,        // backstop: opponents share one interruption a circuit
   revoltBase: 1400,              // strength needed for a first declaration
   revoltStep: 300,               // added per previous declaration
   revoltCost: 500,

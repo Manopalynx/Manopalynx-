@@ -1142,6 +1142,74 @@ for (const device of DEVICES) {
     else fail(`the galaxy is static (${galaxy.changedPixels} pixels changed in 260ms)`);
   }
 
+  // ---- a player chip opens what that player holds ----
+  // The chips were inert panels for the whole life of the game, so the
+  // affordance matters as much as the sheet: a tap target nobody knows is a tap
+  // target is not one. The count badge is checked because it is the affordance.
+  const who = await page.evaluate(async () => {
+    const chips = [...document.querySelectorAll('.pchip')];
+    if (!chips.length) return 'no player chips in the bar';
+    const G = window.__G();
+    // Give the second seat something worth listing.
+    const p = G.players[1];
+    for (const [sq, g, c, m] of [[6, 2, 0, 0], [8, 1, 0, 0], [9, 0, 0, 1], [5, 0, 0, 0], [31, 0, 1, 0]]) {
+      if (!G.players.some(q => q.holdings.some(h => h.sq === sq))) {
+        p.holdings.push({ sq, garrisons: g, citadel: c, mortgaged: m });
+      }
+    }
+    window.__render();
+    const chip = document.querySelector('.pchip[data-who="1"]');
+    if (!chip) return 'no chip for seat 1';
+    const badge = chip.querySelector('.chipMore');
+    const box = chip.getBoundingClientRect();
+    // The .who span, not its .nm row: the row is full width by construction, so
+    // its right edge always sits past the badge however much padding it carries.
+    // What must not collide is the text.
+    const nm = chip.querySelector('.nm .who').getBoundingClientRect();
+    const bd = badge ? badge.getBoundingClientRect() : null;
+    chip.click();
+    await new Promise(r => setTimeout(r, 60));
+    const sh = document.querySelector('.sheet');
+    if (!sh) return 'tapping a chip opened nothing';
+    const rows = [...sh.querySelectorAll('.pgRow')];
+    const out = {
+      tag: chip.tagName,
+      tap: [Math.round(box.width), Math.round(box.height)],
+      hasBadge: !!badge,
+      badgeText: badge ? badge.textContent.trim() : '',
+      // The name must ellipsise before it reaches the badge, or a long one runs under it.
+      nameClear: bd ? nm.right <= bd.left + 0.5 : false,
+      heading: sh.querySelector('h3') ? sh.querySelector('h3').textContent : '',
+      name: p.name,
+      groups: sh.querySelectorAll('.pgHead').length,
+      rows: rows.length,
+      rents: rows.filter(r => /₡|—/.test(r.querySelector('.pgRent').textContent)).length,
+      sideways: sh.scrollWidth > sh.clientWidth + 1
+    };
+    const close = sh.querySelector('[data-fn="closeSheet"]');
+    if (close) close.click();
+    return out;
+  });
+  if (typeof who === 'string') fail(who);
+  else {
+    if (who.tag === 'BUTTON') pass('a player chip is a real button');
+    else fail(`a chip is a <${who.tag}> — it will not take a tap or read as one`);
+    if (who.tap[1] >= 44) pass(`the chip is a hittable target (${who.tap.join('x')})`);
+    else fail(`chip is ${who.tap.join('x')} — under the 44px a thumb needs`);
+    if (who.hasBadge && who.badgeText) pass(`the chip shows its holding count (${who.badgeText})`);
+    else fail('no affordance on the chip — nobody will know it can be tapped');
+    if (who.nameClear) pass('the name clears the count badge');
+    else fail('the player name runs under the count badge');
+    if (who.heading === who.name) pass(`tapping a chip opens that player (${who.heading})`);
+    else fail(`tapped seat 1 (${who.name}) and got "${who.heading}"`);
+    if (who.groups > 0 && who.rows > 0) pass(`holdings are grouped by set (${who.groups} groups, ${who.rows} squares)`);
+    else fail(`the sheet listed ${who.groups} groups and ${who.rows} squares`);
+    if (who.rents === who.rows) pass('every holding states the rent it charges');
+    else fail(`${who.rows - who.rents} holdings show no rent — the figure that decides a trade`);
+    if (!who.sideways) pass('the player sheet does not scroll sideways');
+    else fail('the player sheet scrolls sideways');
+  }
+
   // ---- the universe the galaxy sits in ----
   // The panel outside the disc was a black rectangle, and it is the largest
   // single area on the screen. The corners are sampled specifically because

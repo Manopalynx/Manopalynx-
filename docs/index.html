@@ -78,17 +78,41 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
    money is off the edge of the screen may as well not be at the table. */
 .bar{flex:0 0 auto;display:flex;gap:5px;padding:7px 8px;
   border-bottom:1px solid var(--rule)}
+/* A button now, not a div: tapping one opens what that player holds. The chips
+   read as inert panels, so the affordance is the holdings count and a chevron
+   in the corner — a number you want anyway, which happens to say "there is more
+   here". text-align:left because a button centres its content by default and
+   would have re-laid out the whole bar. */
 .pchip{flex:1 1 0;min-width:0;background:var(--panel);border:1px solid var(--rule);
-  border-radius:6px;padding:6px 8px;font-family:var(--m);overflow:hidden}
+  border-radius:6px;padding:6px 8px;font-family:var(--m);overflow:hidden;
+  position:relative;text-align:left;display:block;color:inherit;
+  -webkit-tap-highlight-color:transparent}
+.pchip:active{background:rgba(255,255,255,.05)}
+.pchip .chipMore{position:absolute;top:5px;right:5px;font-size:9.5px;color:var(--dim);
+  display:flex;align-items:center;gap:1px;line-height:1;pointer-events:none}
+.pchip .chipMore .chev{font-size:12px;position:relative;top:-.5px}
+.pchip.act .chipMore{color:var(--gold)}
 .pchip.act{border-color:var(--gold);background:rgba(217,164,65,.10)}
 .pchip .nm{color:var(--bright);font-size:12px;display:flex;align-items:center;gap:5px;
-  white-space:nowrap;min-width:0}
+  white-space:nowrap;min-width:0;padding-right:22px}   /* clearance for the count badge */
 .pchip .nm .who{overflow:hidden;text-overflow:ellipsis}
 .pchip .cash{color:var(--tx);font-size:13.5px;margin-top:1px;white-space:nowrap}
 .pip{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
 .menuBtn{flex:0 0 auto;width:34px;min-height:46px;font-size:15px;color:var(--dim);
   background:var(--panel);display:flex;align-items:center;justify-content:center}
 .vs{color:var(--vio);font-size:10px;letter-spacing:.03em;white-space:nowrap}
+
+/* Holdings grouped by set in the player sheet. */
+.pgHead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  font-family:var(--m);font-size:12px;letter-spacing:.04em;text-transform:uppercase;
+  margin:14px 0 4px;padding-bottom:3px;border-bottom:1px solid var(--rule)}
+.pgHead .pgCount{color:var(--dim);font-size:11px;letter-spacing:.02em;text-transform:none}
+.pgRow{display:flex;align-items:baseline;gap:8px;padding:4px 0;font-size:14px}
+.pgRow .pgName{flex:1 1 auto;color:var(--body);min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.pgRow .pgState{flex:0 0 auto;color:var(--dim);font-size:11px;font-family:var(--m)}
+.pgRow .pgRent{flex:0 0 auto;color:var(--tx);font-family:var(--m);font-size:13px;
+  min-width:56px;text-align:right;font-variant-numeric:tabular-nums}
 
 /* ---------------------------------------------------------------- board */
 /* 11 tracks: a deep corner, nine shallow squares, a deep corner — so the edge

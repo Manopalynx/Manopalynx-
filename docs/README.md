@@ -134,6 +134,61 @@ faction you can trade with. They do not hold prisoners and they do not take paym
 are equipped to influence."* They appear three times: as the clock, as the voice on the
 Absorbed corner, and as one Contingency card that costs you money for looking at them.
 
+## Being told no
+
+An opponent used to be refused and carry on as though it had not happened.
+`seekContract` re-derives its best target every turn — the square that closes its set,
+which has not changed — so it asked for that square again, identically, forever. Measured
+over 30 full games against a seat that always refuses:
+
+| | before | after |
+|---|---|---|
+| proposals the human must answer | **71 per game** | 6.0 |
+| per circuit | 1.02 | **0.09** |
+| identical repeats | **95%** | 29% |
+| worst single ask | **96 times in one game** | 3 (the cap) |
+
+Nothing about this failed. No figure was wrong and nothing crashed — the game was simply
+exhausting to play, and every one of those parks it in the `contract` phase waiting for an
+answer.
+
+What is remembered is **(proposer, holder, square)**, because that is the ask. It is
+dropped for good after `refusalCap` refusals, held for `refusalCooldown` circuits in
+between, and **may only return with an offer `refusalRaise` better** — an opponent that
+comes back with the same figure has repeated itself, not negotiated. In the same 30 games,
+repeat asks came back **higher 65 times, identical 0, lower once**, median raise ₡163.
+
+The memory lapses when the board moves under it: `refusalSig` records the holdings on both
+sides of the relevant set, so picking up another square in it genuinely reopens the deal.
+Keyed on a timer alone the opponent would be stubborn rather than principled.
+
+There is also a backstop independent of any one opponent: they share **one interruption of
+a human per circuit** between them. Each rolls for a proposal separately, so without it the
+interruptions scale with the seat count.
+
+Note that against a human an opponent offers its **whole ceiling at once**, so in a fixed
+position it correctly never returns — it has already bid its maximum. It comes back only
+when its valuation or its purse has genuinely risen. Two test fixtures were written before
+that was understood and had to be rebuilt around it.
+
+## What another player holds
+
+Tapping a chip in the top bar opens that player: cash, worth, debt, holdings grouped by
+colour set with set completion, garrisons and citadels, vassal and overlord relations with
+the tithe rate — and **the rent each square would charge you**, which is the figure that
+actually decides a trade.
+
+This reveals nothing. Ownership is already public — the board draws the owner's ring and
+the development marks on every square — so the sheet aggregates what you could get by
+squinting at forty cells. Checked before building it: there is no hidden per-player state
+to leak, `strength` and `tithe` being the only extras and neither secret.
+
+The chips were inert panels for the whole life of the game, so the affordance matters as
+much as the sheet — a tap target nobody knows about is not one. Each chip carries its
+holdings count and a chevron: a number worth having anyway, which happens to say there is
+more here. The probe asserts the chip is a real `<button>`, is at least 44px tall, carries
+the badge, and that the name ellipsises before it reaches it.
+
 ## The universe the galaxy is in
 
 Outside the disc the centre panel was a black rectangle, and it is the largest single area
