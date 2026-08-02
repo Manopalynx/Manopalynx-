@@ -20,7 +20,12 @@ const TINTS = {
   auction:  { core: [255, 214, 150], arm: [224, 160, 120], hot: [224, 119, 106] },
   facility: { core: [190, 220, 235], arm: [120, 150, 190], hot: [ 94, 207, 200] },
   vassal:   { core: [222, 200, 240], arm: [150, 130, 200], hot: [139, 125, 216] },
-  ascend:   { core: [255, 240, 205], arm: [180, 205, 240], hot: [255, 205, 110] }
+  ascend:   { core: [255, 240, 205], arm: [180, 205, 240], hot: [255, 205, 110] },
+  // The red tide, and the green their shields answer with — "Green light
+  // answered. Shields - layered, organic, shimmering like membranes." Reached
+  // inside ten circuits, when the score is being converted too; the sky staying
+  // gold through that would read as a fault rather than as restraint.
+  neurex:   { core: [235, 110,  90], arm: [128, 175, 130], hot: [150, 230, 130] }
 };
 
 const rand = (a, b) => a + Math.random() * (b - a);

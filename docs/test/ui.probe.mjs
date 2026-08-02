@@ -376,8 +376,12 @@ for (const device of DEVICES) {
   // a cue happens at all, happens once, and does not happen when silenced.
   const cues = await page.evaluate(() => {
     const noop = () => {};
-    const param = () => ({ value: 0, setValueAtTime: noop, linearRampToValueAtTime: noop,
-                           exponentialRampToValueAtTime: noop, cancelScheduledValues: noop });
+    // Ramp targets are recorded, not discarded: the endgame duck is only
+    // observable as "what did the music gain get asked to become".
+    const param = () => { const o = { value: 0, _t: null,
+      setValueAtTime: v => { o.value = v; }, cancelScheduledValues: noop,
+      linearRampToValueAtTime: v => { o._t = v; o.value = v; },
+      exponentialRampToValueAtTime: v => { o._t = v; o.value = v; } }; return o; };
     // connect() must hand back its destination: score.js chains
     // dly.connect(dtone).connect(dfb).connect(dly) and l.connect(la).connect(o.detune).
     const link = o => Object.assign(o, { connect: d => d, disconnect: noop });
@@ -446,8 +450,30 @@ for (const device of DEVICES) {
     const bedSame = count(() => S.setPresence(2));
     const bedMoved = S.setPresence(4);
 
+    // The approach: the last fifteen circuits taking the score over.
+    const R0 = Score.R0;
+    S.setApproach(72);
+    const farMusic = Score.music.gain._t;
+    const farR = Score.R;
+    S.setApproach(12);
+    const midMusic = Score.music.gain._t;
+    const midR = Score.R;
+    S.setApproach(1);
+    const endMusic = Score.music.gain._t;
+    const endR = Score.R;
+    S.clearPresence();
+    const backMusic = Score.music.gain._t;
+    const backR = Score.R;
+
+    // Conversion: the mood the board reports inside ten circuits.
+    const moodFar = window.__moodFor(G, 40);
+    const moodNear = window.__moodFor(G, 8);
+
     return { unlocked, direct, louder, silenced, silencedAbsorb, onCross, onRepeat,
-             onAbsorb, absorbRepeat, onGoto, gotoRepeat, bedBefore, bedSame, bedMoved };
+             onAbsorb, absorbRepeat, onGoto, gotoRepeat, bedBefore, bedSame, bedMoved,
+             farMusic, midMusic, endMusic, backMusic,
+             drifted: +(midR < R0 && endR < midR), backInTune: Math.abs(backR - R0) < 0.001,
+             farR: +farR.toFixed(3), R0: +R0.toFixed(3), moodFar, moodNear };
   });
   if (cues.unlocked) pass('the audio context unlocks on a gesture');
   else fail('unlock() refused a context it should have taken');
@@ -473,6 +499,21 @@ for (const device of DEVICES) {
   else fail('setPresence refused to move the bed');
   if (cues.bedSame === 0) pass('holding a stage does not rebuild the bed');
   else fail(`re-setting the same stage created ${cues.bedSame} more nodes — they would accumulate all game`);
+  if (cues.farMusic === null || cues.farMusic === 1) pass('the score plays untouched while the swarm is far off');
+  else fail(`the music was ducked to ${cues.farMusic} at 72 circuits out`);
+  if (cues.midMusic < 1 && cues.midMusic > cues.endMusic)
+    pass(`the score ducks as the swarm closes (${cues.midMusic.toFixed(2)} at 12, ${cues.endMusic.toFixed(2)} at 1)`);
+  else fail(`the duck did not deepen: ${cues.midMusic} at 12 circuits, ${cues.endMusic} at 1`);
+  if (cues.endMusic > 0 && cues.endMusic < 0.12)
+    pass('at the end the score is drowned rather than switched off');
+  else fail(`the score ends at ${cues.endMusic} — 0 reads as a fault, loud reads as no takeover`);
+  if (cues.drifted) pass('the score is pulled out of tune as it is converted');
+  else fail('the tuning never drifted, so the score is being buried rather than digested');
+  if (cues.backInTune && cues.backMusic === 1) pass('a new game restores the tuning and the level');
+  else fail(`a new game left R at ${cues.R0}->${cues.farR} and music at ${cues.backMusic}`);
+  if (cues.moodFar !== 'neurex' && cues.moodNear === 'neurex')
+    pass('inside ten circuits the score is converted, outside it is not');
+  else fail(`mood was ${cues.moodFar} at 40 circuits and ${cues.moodNear} at 8`);
 
   // ---- no two marks may look alike ----
   // data.js already forbids two codes of the same length differing by a single

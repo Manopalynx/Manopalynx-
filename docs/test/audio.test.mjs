@@ -15,10 +15,10 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 
-import { STAGE_PLAN, ABSORB_PLAN, PRESENCE, planFor, supported, isOn, setOn, stage, absorbed,
-         setPresence, clearPresence, _reset }
+import { STAGE_PLAN, ABSORB_PLAN, PRESENCE, APPROACH, MUSIC_FLOOR, planFor, approachFor,
+         supported, isOn, setOn, stage, absorbed, setPresence, setApproach, clearPresence, _reset }
   from '../audio.js';
-import { Score } from '../score.js';
+import { Score, moodFor } from '../score.js';
 import { SWARM_STAGES } from '../data.js';
 
 test('there is a plan for each of the deep array\'s reports', () => {
@@ -158,4 +158,93 @@ test('a cue routes into the score rather than straight at the speakers', () => {
     'and needs a reverb send, or it sits outside the room the music is in');
   assert.equal(/\.connect\(\s*t\.destination\s*\)/.test(src), false,
     'connecting to destination would bypass Score.master and ignore the off switch');
+});
+
+/* ---------------------------------------------------------- the approach */
+// The last fifteen circuits. Absolute rather than fractional on purpose: the
+// swarm is a fixed distance away and does not care how long the game was set to
+// run, so at 48 circuits this is the last third and at 120 the last eighth.
+
+test('the approach does nothing until the swarm is inside fifteen circuits', () => {
+  assert.equal(approachFor(72), null);
+  assert.equal(approachFor(16), null);
+  assert.ok(approachFor(15), 'fifteen circuits out is where it begins');
+});
+
+test('the approach refuses a distance that is not one', () => {
+  for (const bad of [null, undefined, NaN, Infinity, '5', {}]) {
+    assert.equal(approachFor(bad), null, `approachFor(${String(bad)}) should be null`);
+  }
+});
+
+test('every circuit closer is heavier than the one before', () => {
+  let prev = null;
+  for (let d = 15; d >= 0; d--) {
+    const a = approachFor(d);
+    assert.ok(a, `nothing at ${d} circuits out`);
+    if (prev) {
+      assert.ok(a.music <= prev.music, `the score got louder between ${d + 1} and ${d}`);
+      assert.ok(a.bed >= prev.bed, `the swarm got quieter between ${d + 1} and ${d}`);
+      assert.ok(a.rain <= prev.rain, `the rain slowed between ${d + 1} and ${d}`);
+      assert.ok(a.breath >= prev.breath, `the breathing eased between ${d + 1} and ${d}`);
+      assert.ok(a.drift <= prev.drift, `the score came back into tune between ${d + 1} and ${d}`);
+    }
+    prev = a;
+  }
+});
+
+test('it is a slope, not three steps a player could count', () => {
+  // Between the named rows the values must actually move, or the swarm arrives
+  // in three jumps and the writing above it is a lie.
+  const a = approachFor(13), b = approachFor(12);
+  assert.notEqual(a.music, b.music, 'nothing changes between 13 and 12 circuits');
+  assert.ok(a.music > b.music);
+});
+
+test('at the end the score is drowned, not switched off', () => {
+  const end = approachFor(0);
+  assert.equal(end.music, MUSIC_FLOOR);
+  assert.ok(end.music > 0, 'silence reads as a fault; drowned reads as drowned');
+  assert.ok(end.music < 0.12, 'the swarm is supposed to be all you can hear');
+});
+
+test('arriving early cannot push it past the last row', () => {
+  // swarmDistance clamps at 0, but a game extended past its limit must not
+  // produce a negative distance that walks off the end of the table.
+  assert.deepEqual(approachFor(-4), approachFor(0));
+});
+
+/* ------------------------------------------------- conversion, not replacement */
+// The book is specific: "It was not destruction; destruction he had a decade of
+// grammar for. This was conversion." The endgame must be the score playing
+// itself wrong, not a different piece playing instead of it.
+
+test('the neurex mood reuses the score\'s own structure', () => {
+  assert.ok(Score.MODE.neurex, 'no converted scale');
+  assert.ok(Score.PROG.neurex, 'no converted progression');
+  assert.ok(Score.TONE.neurex, 'no converted tone');
+  assert.equal(Score.PROG.neurex[0].length, Score.PROG.ledger[0].length,
+    'a different bar length would make it a different piece, not the same one digested');
+});
+
+test('the converted scale is not one anybody would have chosen', () => {
+  const m = Score.MODE.neurex;
+  assert.ok(m.includes(1), 'a semitone against the root is the whole point');
+  assert.ok(m.includes(6), 'and a tritone');
+  assert.equal(m.some(d => d === 4 || d === 3), false,
+    'a major or minor third would let it resolve into something consoling');
+});
+
+test('inside ten circuits nothing else is the subject', () => {
+  const G = { phase: 'auction', cur: 0, players: [{ inFacility: true, lord: null, vassals: [] }] };
+  assert.equal(moodFor(G, 40), 'auction', 'far out, an auction is still an auction');
+  assert.equal(moodFor(G, 10), 'neurex', 'inside ten, it is not');
+  assert.equal(moodFor(G, 1), 'neurex');
+});
+
+test('the mood needs no distance to keep working', () => {
+  // galaxy.js and any older call site pass one argument. That must not silently
+  // become the swarm mood, nor throw.
+  const G = { phase: 'roll', cur: 0, players: [{ inFacility: false, lord: null, vassals: [] }] };
+  assert.equal(moodFor(G), 'ledger');
 });

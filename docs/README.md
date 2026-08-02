@@ -164,6 +164,53 @@ two cannot drift apart.
   played reporting exactly that. `SWARM_STAGES` says the intent out loud — the tone should
   change while the table is still arguing about colour sets. A sting cannot do that.
 
+### The last fifteen circuits
+
+Keyed to `swarmDistance(G)` — circuits remaining — which is **absolute, not fractional**.
+At 48 circuits this is the last third of the game; at 120, the last eighth. That is
+deliberate: the swarm is a fixed distance away and does not care how long the game was set
+to run, so it really is closer, relative to everything else, in a short game. If 48-circuit
+games start to feel oppressive, this is the number to look at first.
+
+Values interpolate between the rows of `APPROACH`, so the swarm arrives continuously rather
+than in three steps a player could count.
+
+| circuits left | what happens |
+|---|---|
+| **15 → 10** | The swarm enters. Rain starts. The score's tuning begins to drift flat. |
+| **10 → 5** | The breathing pulse arrives, the mode is replaced, the music starts ducking. |
+| **5 → 0** | Music at 7%, drowned rather than switched off. Doubled voice, dense rain. |
+
+**Conversion, not replacement.** The book is specific — *"It was not destruction;
+destruction he had a decade of grammar for. This was conversion."* — so `neurex` is not a
+different piece playing over the score. It is the score's own progressions, voicings and
+bar structure with the scale underneath them replaced: two chromatic clusters a tritone
+apart, where quartal voicing lands root / tritone / minor sixth / major ninth. The same
+music, resolving exactly where the progression says it should, into somewhere nobody would
+have chosen to go. `Score.R` is pulled 38 cents flat across the same stretch, so the score
+goes out of tune as it is digested rather than simply being buried.
+
+Three other details are the author's rather than invented:
+
+- **The doubled voice** — *"the translator's flat doubled voice"*. The detuned unison was
+  already there by accident; it is now canon.
+- **The rain** — *"resolving out of the intergalactic night like rain beginning on a
+  window"*. Sparse, then everywhere, never on a beat you could count.
+- **The breathing** — *"vast hexagonal masses, less built than grown, their surfaces pocked
+  with irregular openings that breathed"*. The score has **no drums** by design, so a pulse
+  is a violation of its own language. That is the point of it.
+
+The galaxy takes the same mood: red tide and the green their shields answer with. The sky
+staying gold while the score was being converted would have read as a fault.
+
+`Score.music` exists only for this — a gain node carrying the score and nothing else, so
+the endgame can duck the music without ducking the cues, which arrive downstream of it at
+`Score.master`. Ducking `master` would have taken the swarm down with the score.
+
+Measured on a 78-second render of the whole stretch: overall level swells **3.5×** from
+fifteen circuits out to one, with the band below 1kHz growing fastest as the music gives
+way under it.
+
 ### Pitched for a phone speaker
 
 The first version sat at 34–58Hz behind a filter sweeping 320 down to 120Hz. That is

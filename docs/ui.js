@@ -286,9 +286,10 @@ function soundWatch() {
     if (newlyAbsorbed || arrived) Sound.absorbed();
     else if (mark > heard.mark) Sound.stage(mark);
   }
-  // The bed is a level, not an event, so it is set every render and does its own
-  // nothing when the stage has not moved.
+  // Both are levels rather than events, so they are set every render and do
+  // their own nothing when neither has moved.
   Sound.setPresence(mark);
+  Sound.setApproach(E.swarmDistance(G));
   heard = { mark, lords, onGoto };
 }
 
@@ -424,7 +425,11 @@ function renderBoard() {
   board.appendChild(ensureMid());          // survives the innerHTML above
   paintMid();
   if (!galaxy) {
-    galaxy = startGalaxy(midEl.querySelector('.galaxyCanvas'), () => moodFor(G));
+    // The canvas keeps animating after New game sets G to null, so the distance
+      // has to be guarded here — moodFor tolerates a null G, but swarmDistance
+      // reads G.circuits and does not.
+      galaxy = startGalaxy(midEl.querySelector('.galaxyCanvas'),
+        () => moodFor(G, G ? E.swarmDistance(G) : undefined));
   } else {
     galaxy.resize();
   }
@@ -595,7 +600,9 @@ const btns = list => `<div class="mbtns">${list.map(([label, fn, cls = '', confi
 function tick() {
   if (!G) return;
   save();
-  Score.set(moodFor(G));
+  // The distance is passed in rather than recomputed inside score.js, so the
+  // formula for it lives in exactly one place.
+  Score.set(moodFor(G, E.swarmDistance(G)));
   render();
 
   if (G.over) { busy = false; render(); showFinal(); return; }
@@ -1709,6 +1716,7 @@ window.__G = () => G;
 // installs a recording AudioContext and drives state past a cue with these.
 window.__Sound = Sound;
 window.__Score = Score;
+window.__moodFor = (g, d) => moodFor(g, d);
 window.__render = () => render();
 window.__render = () => render();
 window.__SETS = () => SETS;

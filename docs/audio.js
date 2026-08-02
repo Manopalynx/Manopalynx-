@@ -82,6 +82,61 @@ export function planFor(mark) {
   return STAGE_PLAN[mark - 1];
 }
 
+/* ------------------------------------------------------------ the approach */
+// The last fifteen circuits, keyed to swarmDistance(G) — circuits remaining, an
+// absolute count rather than a fraction, because the swarm is a fixed distance
+// away and does not care how long the game was set to run. At 48 circuits this
+// is the last third; at 120 it is the last eighth. That is correct: the swarm
+// really is closer, relative to everything else, in a short game.
+//
+// Read from the book rather than invented:
+//   the doubled voice   "the translator's flat doubled voice" — the detuned
+//                       unison was already there by accident and is now canon.
+//   the rain            "resolving out of the intergalactic night like rain
+//                       beginning on a window" — sparse, then everywhere, and
+//                       never on a beat you could count.
+//   the breathing       "vast hexagonal masses, less built than grown, their
+//                       surfaces pocked with irregular openings that breathed".
+//                       The score has no drums by design, so a pulse is a
+//                       violation of its own language. That is the point.
+//   the drift           conversion, not destruction. The score is pulled flat
+//                       as it is digested — it does not stop, it goes wrong.
+//
+// `at` is circuits remaining, and values are interpolated between rows, so the
+// swarm arrives continuously instead of in three steps a player could count.
+export const APPROACH = [
+  { at: 15, music: 1.00, bed: 0.030, rain: 5.00, breath: 0.00, drift:   0 },
+  { at: 10, music: 0.72, bed: 0.075, rain: 2.40, breath: 0.35, drift: -12 },
+  { at:  5, music: 0.30, bed: 0.130, rain: 1.10, breath: 0.70, drift: -24 },
+  { at:  0, music: 0.07, bed: 0.200, rain: 0.45, breath: 1.00, drift: -38 }
+];
+
+// 0.07 rather than 0: drowned reads as drowned, and silence reads as a fault.
+export const MUSIC_FLOOR = APPROACH[APPROACH.length - 1].music;
+
+// Returns null while the swarm is further off than the first row.
+export function approachFor(dist) {
+  if (typeof dist !== 'number' || !Number.isFinite(dist)) return null;
+  const d = Math.max(0, dist);
+  if (d > APPROACH[0].at) return null;
+  for (let i = 0; i < APPROACH.length - 1; i++) {
+    const a = APPROACH[i], b = APPROACH[i + 1];
+    if (d <= a.at && d >= b.at) {
+      const span = a.at - b.at;
+      const k = span === 0 ? 0 : (a.at - d) / span;      // 0 at a, 1 at b
+      const mix = (x, y) => x + (y - x) * k;
+      return {
+        music:  mix(a.music,  b.music),
+        bed:    mix(a.bed,    b.bed),
+        rain:   mix(a.rain,   b.rain),
+        breath: mix(a.breath, b.breath),
+        drift:  mix(a.drift,  b.drift)
+      };
+    }
+  }
+  return { ...APPROACH[APPROACH.length - 1] };
+}
+
 /* ------------------------------------------------------------- the setting */
 // Score.on is the single source of truth for whether this game makes any sound.
 // It was not persisted, so every launch came up with the score on regardless of
@@ -228,6 +283,13 @@ function buildBed(t) {
   const f = t.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900; f.Q.value = 0.7;
   f.connect(g); g.connect(dryDest()); g.connect(wetDest());
 
+  // The breathing. An LFO summed onto the bed's own gain, so the automation
+  // below still sets the level and this rides on top of it. Depth is 0 until
+  // the approach opens it, which is why it can be started once and left alone.
+  const lfo = t.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.35;
+  const depth = t.createGain(); depth.gain.value = 0;
+  lfo.connect(depth); depth.connect(g.gain); lfo.start();
+
   const osc = [];
   for (const cents of [-9, 9]) {
     const o = t.createOscillator();
@@ -242,20 +304,47 @@ function buildBed(t) {
   src.connect(hp); hp.connect(w); w.connect(dryDest());
   src.start();
 
-  return { gain: g, wash: w, osc, filt: f, timer: null, mark: 0 };
+  return { gain: g, wash: w, osc, filt: f, lfo, depth,
+           timer: null, mark: 0, appr: null, rate: null, level: 0 };
 }
 
-// One distant clack, scheduled by the bed's own timer rather than the score's,
-// so its rate is free to be a property of the swarm rather than of the tempo.
+// What the bed should currently be, given both the stage it has reached and how
+// close the swarm is. The two are independent — the stage bed is the early
+// game, the approach is the last fifteen circuits — and they overlap, so the
+// heavier of the two wins rather than one replacing the other.
+function resolveBed() {
+  const p = bed && bed.mark ? PRESENCE[bed.mark] : null;
+  const a = bed ? bed.appr : null;
+  if (!p && !a) return { level: 0, wash: 0, hz: PRESENCE[1].hz, rate: null, clack: 0, breath: 0 };
+  return {
+    level:  Math.max(p ? p.gain  : 0, a ? a.bed : 0),
+    wash:   Math.max(p ? p.wash  : 0, a ? a.bed * 0.35 : 0),
+    hz:     Math.min(p ? p.hz    : 999, a ? 96 - a.bed * 40 : 999),
+    rate:   Math.min(p ? p.every : Infinity, a ? a.rain : Infinity),
+    clack:  Math.max(p ? p.clack : 0, a ? 0.09 + a.bed * 0.9 : 0),
+    breath: a ? a.breath : 0
+  };
+}
+
+// One clack. Rate and weight come from resolveBed, so the same routine is both
+// the occasional distant report of mid-game and the rain of the last circuits.
 function bedClack() {
-  if (!bed || !live() || !bed.mark) return;
-  const p = PRESENCE[bed.mark];
-  if (!p) return;
+  if (!bed || !live()) return;
+  const r = resolveBed();
+  if (!r.clack) return;
   try {
     const t = Score.ctx;
-    clack(t, t.currentTime + 0.03, p.clack * (0.6 + Math.random() * 0.7), dryDest(), ensureNoise(t));
+    clack(t, t.currentTime + 0.03, r.clack * (0.6 + Math.random() * 0.7), dryDest(), ensureNoise(t));
     if (Math.random() < 0.35) {
-      clack(t, t.currentTime + 0.09 + Math.random() * 0.1, p.clack * 0.7, wetDest(), ensureNoise(t));
+      clack(t, t.currentTime + 0.09 + Math.random() * 0.1, r.clack * 0.7, wetDest(), ensureNoise(t));
+    }
+    // Close in, it stops being single taps. "Like rain beginning on a window."
+    if (r.breath > 0.5 && Math.random() < r.breath) {
+      const extra = 1 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < extra; i++) {
+        clack(t, t.currentTime + 0.05 + Math.random() * 0.45, r.clack * (0.4 + Math.random() * 0.6),
+              dryDest(), ensureNoise(t));
+      }
     }
   } catch { /* a clack is never worth an exception */ }
 }
@@ -263,12 +352,32 @@ function bedClack() {
 function armBed() {
   if (!bed) return;
   if (bed.timer) { clearTimeout(bed.timer); bed.timer = null; }
-  const p = PRESENCE[bed.mark];
-  if (!p) return;
+  const r = resolveBed();
+  if (!r.rate || !Number.isFinite(r.rate)) return;
   // Jittered rather than metronomic — an even pulse reads as a machine, and the
   // one thing the Neurex are not is a machine keeping time.
-  const wait = p.every * (0.55 + Math.random() * 0.9) * 1000;
+  const wait = Math.max(120, r.rate * (0.55 + Math.random() * 0.9) * 1000);
   bed.timer = setTimeout(() => { bedClack(); armBed(); }, wait);
+}
+
+// Ramps the bed to whatever resolveBed now says, over `secs`.
+function applyBed(secs) {
+  if (!bed || !live()) return false;
+  const t = Score.ctx, now = t.currentTime, r = resolveBed();
+  bed.level = r.level;
+  bed.gain.gain.linearRampToValueAtTime(r.level, now + secs);
+  bed.wash.gain.linearRampToValueAtTime(r.wash, now + secs);
+  bed.filt.frequency.linearRampToValueAtTime(620 + r.level * 4200, now + secs);
+  for (let i = 0; i < bed.osc.length; i++) {
+    const cents = i === 0 ? -9 : 9;
+    bed.osc[i].frequency.linearRampToValueAtTime(r.hz * Math.pow(2, cents / 1200), now + secs);
+  }
+  // Breathing rides on the level, so its depth is a fraction of it — otherwise
+  // it would pump hardest when the bed is quietest.
+  bed.depth.gain.linearRampToValueAtTime(r.level * r.breath * 0.75, now + secs);
+  bed.lfo.frequency.linearRampToValueAtTime(0.35 + r.breath * 0.5, now + secs);
+  armBed();
+  return true;
 }
 
 // mark is G.swarmMark, 0 to 4. Idempotent: called on every render, acts only
@@ -277,38 +386,69 @@ export function setPresence(mark) {
   const m = Number.isInteger(mark) ? Math.max(0, Math.min(PRESENCE.length - 1, mark)) : 0;
   if (!live()) return false;
   try {
-    const t = Score.ctx;
-    if (!bed) bed = buildBed(t);
+    if (!bed) bed = buildBed(Score.ctx);
     if (bed.mark === m) return true;
     bed.mark = m;
-    const p = PRESENCE[m];
-    const now = t.currentTime;
-    // Six seconds, so the swarm thickens rather than switches on.
-    bed.gain.gain.linearRampToValueAtTime(p ? p.gain : 0, now + 6);
-    bed.wash.gain.linearRampToValueAtTime(p ? p.wash : 0, now + 6);
-    if (p) {
-      bed.filt.frequency.linearRampToValueAtTime(620 + p.gain * 4200, now + 6);
-      for (let i = 0; i < bed.osc.length; i++) {
-        const cents = i === 0 ? -9 : 9;
-        bed.osc[i].frequency.linearRampToValueAtTime(p.hz * Math.pow(2, cents / 1200), now + 6);
-      }
-    }
-    armBed();
-    return true;
+    return applyBed(6);            // thickens rather than switches on
   } catch {
     return false;
   }
 }
 
-// A new game starts from silence again.
+// The last fifteen circuits. Called every render with swarmDistance(G); does
+// nothing until the swarm is inside range, and nothing again once it has
+// settled at a level.
+export function setApproach(dist) {
+  if (!live()) return false;
+  try {
+    if (!bed) bed = buildBed(Score.ctx);
+    const a = approachFor(dist);
+    const was = bed.appr;
+    // Quantised to a hundredth before comparing, or floating point makes every
+    // render a change and the ramps restart continuously.
+    const same = (!a && !was) ||
+      (a && was && Math.abs(a.music - was.music) < 0.005 && Math.abs(a.bed - was.bed) < 0.002);
+    if (same) return true;
+    bed.appr = a;
+
+    const t = Score.ctx, now = t.currentTime;
+    // The duck. Long ramps: the swarm closes over the score rather than cutting
+    // it — "the swarm closed over the walls like water over a stone".
+    if (Score.music) {
+      Score.music.gain.cancelScheduledValues(now);
+      Score.music.gain.setValueAtTime(Score.music.gain.value, now);
+      Score.music.gain.linearRampToValueAtTime(a ? a.music : 1, now + 8);
+    }
+    // Conversion, not destruction: the score is pulled flat as it is digested.
+    // R is read when a bar is scheduled, so this reaches the music within a bar
+    // or two without touching anything already sounding.
+    Score.R = (Score.R0 || Score.R) * Math.pow(2, (a ? a.drift : 0) / 1200);
+    return applyBed(8);
+  } catch {
+    return false;
+  }
+}
+
+// A new game starts from silence again, and in tune.
 export function clearPresence() {
-  if (!bed) return;
+  if (!bed) {
+    if (Score.R0) Score.R = Score.R0;
+    return;
+  }
   if (bed.timer) { clearTimeout(bed.timer); bed.timer = null; }
   bed.mark = 0;
+  bed.appr = null;
   try {
     const now = Score.ctx.currentTime;
+    bed.gain.gain.cancelScheduledValues(now);
     bed.gain.gain.linearRampToValueAtTime(0, now + 1.2);
     bed.wash.gain.linearRampToValueAtTime(0, now + 1.2);
+    bed.depth.gain.linearRampToValueAtTime(0, now + 1.2);
+    if (Score.music) {
+      Score.music.gain.cancelScheduledValues(now);
+      Score.music.gain.linearRampToValueAtTime(1, now + 1.2);
+    }
+    Score.R = Score.R0 || Score.R;
   } catch { /* ignore */ }
 }
 

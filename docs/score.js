@@ -11,29 +11,48 @@
 export const Score = {
   ctx: null, on: true, ready: false, master: null, lp: null, verb: null,
   dly: null, dfb: null, windG: null,
+  // Everything the score itself makes passes through `music`, and nothing else
+  // does. audio.js ducks this to bring the swarm over the top in the closing
+  // circuits; if it ducked `master` instead it would duck the swarm with it.
+  music: null,
   state: 'ledger', bar: 0, timer: null, nextT: 0,
   R: 73.416,                                        // D2
+  R0: 73.416,                                       // the tuning to come home to
 
+  // `neurex` is the score after conversion, not a different piece playing over
+  // it. The book is specific about what they do — "It was not destruction;
+  // destruction he had a decade of grammar for. This was conversion." — so the
+  // progressions, the voicings and the bar structure are untouched and only the
+  // scale underneath them is replaced. The same music, playing itself wrong.
+  //
+  // Two chromatic clusters a tritone apart. Quartal voicing on a six-note scale
+  // lands root / tritone / minor sixth / major ninth, which is alien without
+  // being random — it still resolves the way the progression says it should,
+  // into somewhere nobody would have chosen to go.
   MODE: {
     ledger:   [0, 2, 4, 6, 7, 9, 11],               // lydian — wonder
     auction:  [0, 2, 4, 5, 7, 9, 10],               // mixolydian — drive
     facility: [0, 2, 4, 6, 8, 10],                  // whole tone — weightless, alien
     vassal:   [0, 2, 3, 5, 7, 9, 10],               // dorian — shadowed, not sad
-    ascend:   [0, 2, 4, 6, 7, 9, 11]
+    ascend:   [0, 2, 4, 6, 7, 9, 11],
+    neurex:   [0, 1, 2, 6, 7, 8]                    // clusters, a tritone apart
   },
   PROG: {
     ledger:   [[0, 4, 5, 3], [0, 3, 6, 4], [0, 5, 3, 4], [4, 0, 3, 5]],
     auction:  [[0, 6, 4, 5], [0, 4, 6, 3], [5, 3, 6, 0]],
     facility: [[0, 2, 4, 2], [0, 3, 1, 4], [2, 0, 4, 1]],
     vassal:   [[0, 5, 3, 6], [3, 0, 5, 4]],
-    ascend:   [[0, 4, 3, 5], [0, 5, 4, 0], [3, 0, 4, 5]]
+    ascend:   [[0, 4, 3, 5], [0, 5, 4, 0], [3, 0, 4, 5]],
+    neurex:   [[0, 5, 4, 3], [0, 4, 2, 1], [3, 2, 1, 0]]   // every shape descends
   },
   TONE: {
     ledger:   { lp: 3600, g: .15, arp: .62, shim: .55, sub: .22, div: 2, wind: .16 },
     auction:  { lp: 4600, g: .18, arp: .95, shim: .34, sub: .55, div: 4, wind: .10 },
     facility: { lp: 2400, g: .12, arp: .22, shim: .85, sub: .06, div: 1, wind: .30 },
     vassal:   { lp: 2700, g: .15, arp: .48, shim: .30, sub: .45, div: 2, wind: .18 },
-    ascend:   { lp: 5400, g: .19, arp: .88, shim: .80, sub: .35, div: 4, wind: .12 }
+    ascend:   { lp: 5400, g: .19, arp: .88, shim: .80, sub: .35, div: 4, wind: .12 },
+    // Dark, heavy and nearly motionless — the arpeggios stop, the wind comes up.
+    neurex:   { lp: 1500, g: .17, arp: .16, shim: .18, sub: .72, div: 1, wind: .44 }
   },
 
   init() {
@@ -64,8 +83,12 @@ export const Score = {
     this.verb = t.createConvolver(); this.verb.buffer = b;
     const wet = t.createGain(); wet.gain.value = .40;
     const dry = t.createGain(); dry.gain.value = .66;   // was an implicit global
-    this.lp.connect(dry).connect(this.master);
-    this.lp.connect(this.verb).connect(wet).connect(this.master);
+    // One node carrying the whole score and nothing else, so it can be pulled
+    // down without touching the cues that come in downstream of it.
+    this.music = t.createGain(); this.music.gain.value = 1;
+    this.lp.connect(this.music);
+    this.music.connect(dry).connect(this.master);
+    this.music.connect(this.verb).connect(wet).connect(this.master);
     this.master.connect(t.destination);
 
     this.drone(); this.wind();
@@ -186,7 +209,9 @@ export const Score = {
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(gain, t + .05);
     g.gain.exponentialRampToValueAtTime(.0001, t + 1.1);
-    o.connect(g).connect(this.master); o.start(t); o.stop(t + 1.2);
+    // Through `music`, not straight at the master: the sub is part of the score
+    // and must duck with the rest of it when the swarm takes over.
+    o.connect(g).connect(this.music); o.start(t); o.stop(t + 1.2);
   },
 
   sched() {
@@ -254,8 +279,14 @@ export const Score = {
 };
 
 // Which mood the board is in, given whose turn it is.
-export function moodFor(G) {
+//
+// `dist` is swarmDistance(G) — circuits remaining — passed in rather than
+// recomputed here, because `circuits - circuit + 1` written twice is two things
+// that will disagree eventually. Inside ten circuits nothing else matters: whose
+// turn it is, who is detained and who holds an oath all stop being the subject.
+export function moodFor(G, dist) {
   if (!G) return 'ledger';
+  if (typeof dist === 'number' && dist <= 10) return 'neurex';
   if (G.phase === 'auction' || G.phase === 'contest') return 'auction';
   const p = G.players[G.cur];
   if (!p) return 'ledger';
