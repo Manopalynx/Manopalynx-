@@ -104,14 +104,28 @@ export function planFor(mark) {
 //
 // `at` is circuits remaining, and values are interpolated between rows, so the
 // swarm arrives continuously instead of in three steps a player could count.
+// THE MUSIC DOES NOT GO AWAY. The first version took it to 0.07 and brought a
+// drone up over the top, which is the destruction reading, not the conversion
+// one — and it had a second cost that only showed up on measurement: the neurex
+// mood was made busier and more varied at exactly the point it was being ducked
+// to seven percent, so none of that variety could be heard and the last
+// circuits were carried by a drone and some clacks. That is what "it repeats the
+// same sound over and over" was.
+//
+// The brief was "the Neurex music is all you can hear", and the Neurex music is
+// this score after conversion. So it plays on, down about nine decibels and
+// wholly digested — cluster harmony, thirty-eight cents flat, dark and slow —
+// with the bed and the rain as the thing on top of it rather than instead of it.
+// What makes it a takeover is that everything you can hear has become theirs,
+// not that the volume went down.
 export const APPROACH = [
   { at: 15, music: 1.00, bed: 0.030, rain: 5.00, breath: 0.00, drift:   0 },
-  { at: 10, music: 0.72, bed: 0.075, rain: 2.40, breath: 0.35, drift: -12 },
-  { at:  5, music: 0.30, bed: 0.130, rain: 1.10, breath: 0.70, drift: -24 },
-  { at:  0, music: 0.07, bed: 0.200, rain: 0.45, breath: 1.00, drift: -38 }
+  { at: 10, music: 0.84, bed: 0.058, rain: 2.40, breath: 0.35, drift: -12 },
+  { at:  5, music: 0.55, bed: 0.092, rain: 1.10, breath: 0.70, drift: -24 },
+  { at:  0, music: 0.34, bed: 0.128, rain: 0.45, breath: 1.00, drift: -38 }
 ];
 
-// 0.07 rather than 0: drowned reads as drowned, and silence reads as a fault.
+// The floor the score settles to, not silence: the converted music is the point.
 export const MUSIC_FLOOR = APPROACH[APPROACH.length - 1].music;
 
 // Returns null while the swarm is further off than the first row.
@@ -172,22 +186,54 @@ export const supported = () =>
   typeof window !== 'undefined' && !!(window.AudioContext || window.webkitAudioContext);
 
 /* --------------------------------------------------------------- the sound */
-// One mandible: a short noise burst through a tight bandpass. Irregular in pitch
-// and spacing, because evenly spaced identical clicks read as a machine rather
-// than as something alive.
+// Mandibles come in sizes. One recipe repeated is a tick track however much its
+// centre frequency is jittered, so there are three: a small tap, a heavier
+// shell-knock well below it, and a tiny dry tick above. Weighted so the taps
+// carry the rhythm and the knocks land rarely enough to still register.
+const CLACK_KINDS = [
+  { w: 0.60, lo: 1400, hi: 3500, q: [6, 14], decay: [0.012, 0.032], gain: 1.00 },  // tap
+  { w: 0.22, lo:  520, hi: 1050, q: [3,  7], decay: [0.040, 0.110], gain: 1.35 },  // shell
+  { w: 0.18, lo: 3600, hi: 6200, q: [9, 20], decay: [0.006, 0.014], gain: 0.70 }   // tick
+];
+
+function pickKind() {
+  let r = Math.random();
+  for (const k of CLACK_KINDS) { if ((r -= k.w) <= 0) return k; }
+  return CLACK_KINDS[0];
+}
+
+// Width. The score is mono throughout, so a swarm spread across the stereo
+// field is the one thing here that cannot be mistaken for part of it — "no
+// formation the eye could parse". Mostly a headphone gain: the iPhone's two
+// speakers are close enough that this reads as texture rather than position.
+// Feature-detected, because a browser without it must still get the sound.
+function panned(t, dest) {
+  if (!t.createStereoPanner) return dest;
+  try {
+    const p = t.createStereoPanner();
+    p.pan.value = Math.random() * 1.6 - 0.8;
+    p.connect(dest);
+    return p;
+  } catch { return dest; }
+}
+
+// One mandible. Irregular in pitch, size and spacing, because evenly spaced
+// identical clicks read as a machine rather than as something alive.
 function clack(t, at, level, dest, buf) {
+  const k = pickKind();
   const src = t.createBufferSource();
   src.buffer = buf;
   const bp = t.createBiquadFilter();
   bp.type = 'bandpass';
-  bp.frequency.value = 1400 + Math.random() * 2100;
-  bp.Q.value = 6 + Math.random() * 8;
+  bp.frequency.value = k.lo + Math.random() * (k.hi - k.lo);
+  bp.Q.value = k.q[0] + Math.random() * (k.q[1] - k.q[0]);
+  const decay = k.decay[0] + Math.random() * (k.decay[1] - k.decay[0]);
   const g = t.createGain();
   g.gain.setValueAtTime(0, at);
-  g.gain.linearRampToValueAtTime(level, at + 0.002);
-  g.gain.exponentialRampToValueAtTime(0.0001, at + 0.012 + Math.random() * 0.02);
-  src.connect(bp); bp.connect(g); g.connect(dest);
-  src.start(at); src.stop(at + 0.09);
+  g.gain.linearRampToValueAtTime(level * k.gain, at + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + decay);
+  src.connect(bp); bp.connect(g); g.connect(panned(t, dest));
+  src.start(at); src.stop(at + decay + 0.08);
 }
 
 let noiseBuf = null;
@@ -290,21 +336,37 @@ function buildBed(t) {
   const depth = t.createGain(); depth.gain.value = 0;
   lfo.connect(depth); depth.connect(g.gain); lfo.start();
 
+  // Two saws at a fixed pitch is a constant, and by the last five circuits the
+  // bed is the loudest thing in the game — so the climax was carried by
+  // something that never changed. Each voice now wanders in its own time:
+  // independent slow LFOs on detune, at rates that share no common multiple, so
+  // the beating between them never lands in the same place twice.
   const osc = [];
-  for (const cents of [-9, 9]) {
+  const drift = [];
+  const rates = [0.021, 0.034];
+  for (let i = 0; i < 2; i++) {
+    const cents = i === 0 ? -9 : 9;
     const o = t.createOscillator();
     o.type = 'sawtooth';
     o.frequency.value = PRESENCE[1].hz * Math.pow(2, cents / 1200);
+    const dl = t.createOscillator(); dl.type = 'sine'; dl.frequency.value = rates[i];
+    const da = t.createGain(); da.gain.value = 0;          // opened by applyBed
+    dl.connect(da); da.connect(o.detune); dl.start();
     o.connect(f); o.start();
-    osc.push(o);
+    osc.push(o); drift.push(da);
   }
+  // And the filter itself breathes on a third incommensurable period, so the
+  // timbre moves even while the level is holding still.
+  const swp = t.createOscillator(); swp.type = 'sine'; swp.frequency.value = 0.013;
+  const swa = t.createGain(); swa.gain.value = 0;
+  swp.connect(swa); swa.connect(f.frequency); swp.start();
   const src = t.createBufferSource();
   src.buffer = ensureNoise(t); src.loop = true;
   const hp = t.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1100;
   src.connect(hp); hp.connect(w); w.connect(dryDest());
   src.start();
 
-  return { gain: g, wash: w, osc, filt: f, lfo, depth,
+  return { gain: g, wash: w, osc, filt: f, lfo, depth, drift, sweep: swa,
            timer: null, mark: 0, appr: null, rate: null, level: 0 };
 }
 
@@ -376,6 +438,11 @@ function applyBed(secs) {
   // it would pump hardest when the bed is quietest.
   bed.depth.gain.linearRampToValueAtTime(r.level * r.breath * 0.75, now + secs);
   bed.lfo.frequency.linearRampToValueAtTime(0.35 + r.breath * 0.5, now + secs);
+  // Detune wander in cents, and filter sweep in Hz. Both scale with how present
+  // the bed is, so a barely-there drone stays still and a dominant one crawls.
+  const wander = 4 + r.level * 90;
+  for (const d of bed.drift) d.gain.linearRampToValueAtTime(wander, now + secs);
+  bed.sweep.gain.linearRampToValueAtTime(120 + r.level * 900, now + secs);
   armBed();
   return true;
 }
@@ -444,6 +511,8 @@ export function clearPresence() {
     bed.gain.gain.linearRampToValueAtTime(0, now + 1.2);
     bed.wash.gain.linearRampToValueAtTime(0, now + 1.2);
     bed.depth.gain.linearRampToValueAtTime(0, now + 1.2);
+    for (const d of bed.drift) d.gain.linearRampToValueAtTime(0, now + 1.2);
+    bed.sweep.gain.linearRampToValueAtTime(0, now + 1.2);
     if (Score.music) {
       Score.music.gain.cancelScheduledValues(now);
       Score.music.gain.linearRampToValueAtTime(1, now + 1.2);

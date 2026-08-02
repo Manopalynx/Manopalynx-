@@ -201,11 +201,27 @@ test('it is a slope, not three steps a player could count', () => {
   assert.ok(a.music > b.music);
 });
 
-test('at the end the score is drowned, not switched off', () => {
+// This bound was once "below 0.12", which was the destruction reading. Ducking
+// that far made the converted score inaudible, so the last circuits were carried
+// by a drone and some clacks — and every bit of variety added to the neurex mood
+// was spent under a duck that hid it. The takeover is the music having become
+// theirs, not the music having gone.
+test('at the end the converted score is still what you are listening to', () => {
   const end = approachFor(0);
   assert.equal(end.music, MUSIC_FLOOR);
-  assert.ok(end.music > 0, 'silence reads as a fault; drowned reads as drowned');
-  assert.ok(end.music < 0.12, 'the swarm is supposed to be all you can hear');
+  assert.ok(end.music >= 0.25,
+    `at ${end.music} the digested score cannot be heard, so the swarm is a drone rather than a piece of music`);
+  assert.ok(end.music <= 0.45, 'and it must still be clearly taken over');
+  assert.ok(end.music < approachFor(15).music, 'the score has to give way as the swarm closes');
+});
+
+// The bed sits on top of the music, not in place of it.
+test('the swarm bed never outweighs the score it has converted', () => {
+  for (const row of APPROACH) {
+    assert.ok(row.bed < row.music,
+      `at ${row.at} circuits the bed is ${row.bed} against music at ${row.music} — ` +
+      'the drone would be the piece and the music the texture, which is backwards');
+  }
 });
 
 test('arriving early cannot push it past the last row', () => {
@@ -247,4 +263,65 @@ test('the mood needs no distance to keep working', () => {
   // become the swarm mood, nor throw.
   const G = { phase: 'roll', cur: 0, players: [{ inFacility: false, lord: null, vassals: [] }] };
   assert.equal(moodFor(G), 'ledger');
+});
+
+/* ------------------------------------------------- the takeover must move */
+// The first neurex mood was built on reading "alien" as "motionless": arp .16,
+// shim .18, div 1, three progressions. That made the takeover the least varied
+// thing in the score — 1.54 moving parts a bar against the ledger's 5.73 — and
+// it plays over the longest unbroken stretch of a game, so it read as one sound
+// repeating. The book says the opposite of static: "a single thing wearing
+// billions of bodies", "no formation the eye could parse".
+
+const moving = st => {
+  const T = Score.TONE[st];
+  return T.arp * (4 * T.div) + T.shim + T.sub;
+};
+
+test('the swarm moves at least as much as the music it takes over from', () => {
+  assert.ok(moving('neurex') >= moving('ledger'),
+    `neurex has ${moving('neurex').toFixed(2)} moving parts a bar against ledger's ` +
+    `${moving('ledger').toFixed(2)} — it is the thing you listen to longest`);
+});
+
+test('it is not the most static mood in the game', () => {
+  const others = Object.keys(Score.TONE).filter(s => s !== 'neurex');
+  const quietest = Math.min(...others.map(moving));
+  assert.ok(moving('neurex') > quietest,
+    'the takeover cannot be less alive than every mood it replaces');
+});
+
+test('the swarm takes longer to come round than the ledger does', () => {
+  const bars = st => Score.PROG[st].length * 4;
+  assert.ok(bars('neurex') > bars('ledger'),
+    `neurex repeats after ${bars('neurex')} bars and ledger after ${bars('ledger')} — ` +
+    'a takeover that loops sooner than what it replaced sounds like less, not more');
+});
+
+test('its arpeggio figures do not repeat inside a bar', () => {
+  const T = Score.TONE.neurex, notes = 4 * T.div;
+  for (const shape of Score.SHAPES.neurex) {
+    assert.ok(shape.length >= notes,
+      `a ${shape.length}-note figure across ${notes} steps is one pattern played ` +
+      `${(notes / shape.length).toFixed(1)} times`);
+  }
+});
+
+test('every mood still has figures to draw on', () => {
+  for (const st of Object.keys(Score.MODE)) {
+    const figures = Score.SHAPES[st] || Score.SHAPES.default;
+    assert.ok(Array.isArray(figures) && figures.length, `${st} has no arpeggio figures`);
+    for (const f of figures) assert.ok(f.length > 0, `${st} has an empty figure`);
+  }
+});
+
+test('the swarm has more than one size of mandible', () => {
+  const src = readFileSync(fileURLToPath(new URL('../audio.js', import.meta.url)), 'utf8');
+  const kinds = src.match(/const CLACK_KINDS = \[([\s\S]*?)\];/);
+  assert.ok(kinds, 'CLACK_KINDS not found');
+  const rows = kinds[1].match(/\{ w:/g) || [];
+  assert.ok(rows.length >= 3, 'one clack recipe is a tick track however much it is jittered');
+  const weights = [...kinds[1].matchAll(/w:\s*([\d.]+)/g)].map(m => +m[1]);
+  assert.ok(Math.abs(weights.reduce((a, b) => a + b, 0) - 1) < 0.001,
+    `the sizes must be a distribution — they sum to ${weights.reduce((a, b) => a + b, 0)}`);
 });

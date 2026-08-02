@@ -179,7 +179,7 @@ than in three steps a player could count.
 |---|---|
 | **15 → 10** | The swarm enters. Rain starts. The score's tuning begins to drift flat. |
 | **10 → 5** | The breathing pulse arrives, the mode is replaced, the music starts ducking. |
-| **5 → 0** | Music at 7%, drowned rather than switched off. Doubled voice, dense rain. |
+| **5 → 0** | Music at 34% and wholly converted. Doubled voice, dense rain, breathing. |
 
 **Conversion, not replacement.** The book is specific — *"It was not destruction;
 destruction he had a decade of grammar for. This was conversion."* — so `neurex` is not a
@@ -207,9 +207,51 @@ staying gold while the score was being converted would have read as a fault.
 the endgame can duck the music without ducking the cues, which arrive downstream of it at
 `Score.master`. Ducking `master` would have taken the swarm down with the score.
 
-Measured on a 78-second render of the whole stretch: overall level swells **3.5×** from
-fifteen circuits out to one, with the band below 1kHz growing fastest as the music gives
-way under it.
+**The music does not go away.** An earlier version took it to 7% and brought a drone up
+over the top, which is the destruction reading rather than the conversion one — and it had
+a second cost that only showed up on measurement. The `neurex` mood had been made busier
+and more varied at exactly the point it was being ducked to seven percent, so none of that
+variety could be heard, and the last circuits were carried by a drone and some clacks. The
+report was "it repeats the same sound over and over", and it was correct.
+
+The score now settles at **34%** — about nine decibels down — and stays there, wholly
+digested. What makes it a takeover is that everything audible has become theirs, not that
+the volume went down. `APPROACH` asserts the bed never outweighs the music at any row: the
+swarm is the thing on top of the score, not the thing instead of it.
+
+Measured on a 78-second render of the whole stretch: overall level swells **2×** from
+fifteen circuits out to one, with the band below 1kHz growing fastest.
+
+### Why the takeover was repetitive
+
+The first `neurex` mood read "alien" as "motionless" — `arp` 16%, `shim` 18%, `div` 1,
+three progressions. Counting expected moving elements per bar, that made it **1.54** against
+the ledger's **5.73**: the least varied mood in the game, below even `facility`, and it
+plays over the longest unbroken stretch of a game. It also came round every **41 seconds**
+against the ledger's 55, so the takeover repeated *faster* than the music it took over from.
+
+The book says the opposite of static — *"a single thing wearing billions of bodies"*, *"no
+formation the eye could parse"*. Unparseable, not simple. Now:
+
+- `arp` 72%, `shim` 55%, `div` 2 — **6.86** moving parts a bar, above the ledger's 5.73.
+  Counted by instrumenting the scheduler over 4,000 bars: **8.7× the arpeggio notes** and
+  **73% more notes per second** than before.
+- **Five progressions**, so it repeats after 69 seconds rather than 41 — longer than the
+  ledger, and beating against the 16-bar hush for a combined period of eighty bars.
+- **Eight-note arpeggio figures** in `SHAPES.neurex`, which do not repeat inside a bar. The
+  default four-note figures play four times per bar at `div` 2, which is a loop when it is
+  the only thing moving.
+- **The bed drifts.** Two saws at a fixed pitch is a constant, and by the last five circuits
+  the bed is the loudest thing in the game. Each voice now wanders on its own slow LFO at
+  rates sharing no common multiple, with a third period on the filter.
+- **Three sizes of mandible** — a tap, a heavier shell-knock, a dry tick — because one
+  recipe is a tick track however much its centre frequency is jittered.
+- **The rain is panned.** The score is mono throughout, so a swarm spread across the stereo
+  field cannot be mistaken for part of it. Mostly a headphone gain; the iPhone's speakers
+  are close enough that it reads as texture rather than position.
+
+Tests fail if `neurex` is ever again less active than the ledger, or the most static mood in
+the game, or loops sooner than what it replaces.
 
 ### Pitched for a phone speaker
 

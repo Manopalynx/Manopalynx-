@@ -43,7 +43,24 @@ export const Score = {
     facility: [[0, 2, 4, 2], [0, 3, 1, 4], [2, 0, 4, 1]],
     vassal:   [[0, 5, 3, 6], [3, 0, 5, 4]],
     ascend:   [[0, 4, 3, 5], [0, 5, 4, 0], [3, 0, 4, 5]],
-    neurex:   [[0, 5, 4, 3], [0, 4, 2, 1], [3, 2, 1, 0]]   // every shape descends
+    // Five, not three. Three progressions is twelve bars, which comes round
+    // every 41 seconds — sooner than the 55 of the ledger mood it replaces, so
+    // the takeover repeated faster than the music it took over from. Five is
+    // twenty bars, 69 seconds, and beats against the 16-bar hush to give a
+    // combined period of eighty bars before anything is heard twice.
+    neurex:   [[0, 5, 4, 3], [0, 4, 2, 1], [3, 2, 1, 0],
+               [5, 1, 4, 0], [2, 5, 0, 3]]                  // every shape descends
+  },
+
+  // Arpeggio figures. The default four are four notes long, so at div 4 a bar
+  // is one small pattern played four times — fine under a tune, and a loop when
+  // it is the only thing moving. The swarm gets eight-note figures that do not
+  // repeat inside a bar and do not sit in any key: "They had no formation the
+  // eye could parse."
+  SHAPES: {
+    default: [[0, 3, 5, 8], [0, 5, 3, 8], [0, 2, 5, 7], [8, 5, 3, 0]],
+    neurex:  [[0, 5, 1, 8, 3, 10, 2, 7], [8, 1, 5, 2, 10, 0, 7, 3],
+              [0, 7, 2, 9, 1, 6, 3, 11], [5, 0, 8, 2, 7, 1, 10, 4]]
   },
   TONE: {
     ledger:   { lp: 3600, g: .15, arp: .62, shim: .55, sub: .22, div: 2, wind: .16 },
@@ -51,8 +68,15 @@ export const Score = {
     facility: { lp: 2400, g: .12, arp: .22, shim: .85, sub: .06, div: 1, wind: .30 },
     vassal:   { lp: 2700, g: .15, arp: .48, shim: .30, sub: .45, div: 2, wind: .18 },
     ascend:   { lp: 5400, g: .19, arp: .88, shim: .80, sub: .35, div: 4, wind: .12 },
-    // Dark, heavy and nearly motionless — the arpeggios stop, the wind comes up.
-    neurex:   { lp: 1500, g: .17, arp: .16, shim: .18, sub: .72, div: 1, wind: .44 }
+    // BUSY AND INCOHERENT, not sparse and still. The first version read "alien"
+    // as "motionless" — arp .16, shim .18, div 1 — which made the takeover the
+    // least varied mood in the game at 1.54 moving parts a bar against the
+    // ledger's 5.73, and it plays over the longest unbroken stretch of a game.
+    // The book says the opposite of static: "a single thing wearing billions of
+    // bodies", "no formation the eye could parse". Many things moving as one.
+    // lp is 1800 rather than 1500 because that motion has to survive a phone
+    // speaker, and it is the harmonics that carry it.
+    neurex:   { lp: 1800, g: .16, arp: .72, shim: .55, sub: .55, div: 2, wind: .40 }
   },
 
   init() {
@@ -247,10 +271,11 @@ export const Score = {
 
     if (!hush && Math.random() < T.arp) {
       const n = 4 * T.div, stepT = barLen / n;
-      const shape = [[0, 3, 5, 8], [0, 5, 3, 8], [0, 2, 5, 7], [8, 5, 3, 0]][Math.floor(Math.random() * 4)];
+      const figures = this.SHAPES[st] || this.SHAPES.default;
+      const shape = figures[Math.floor(Math.random() * figures.length)];
       for (let k = 0; k < n; k++) {
         if (Math.random() < .16) continue;
-        const f = sd(deg + shape[k % 4] + L * (3 + (k % (2 * T.div) >= T.div ? 1 : 0)));
+        const f = sd(deg + shape[k % shape.length] + L * (3 + (k % (2 * T.div) >= T.div ? 1 : 0)));
         this.pluck(f, t + k * stepT, stepT * 2.2, amp * .30, true);
       }
     }

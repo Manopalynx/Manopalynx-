@@ -504,9 +504,10 @@ for (const device of DEVICES) {
   if (cues.midMusic < 1 && cues.midMusic > cues.endMusic)
     pass(`the score ducks as the swarm closes (${cues.midMusic.toFixed(2)} at 12, ${cues.endMusic.toFixed(2)} at 1)`);
   else fail(`the duck did not deepen: ${cues.midMusic} at 12 circuits, ${cues.endMusic} at 1`);
-  if (cues.endMusic > 0 && cues.endMusic < 0.12)
-    pass('at the end the score is drowned rather than switched off');
-  else fail(`the score ends at ${cues.endMusic} — 0 reads as a fault, loud reads as no takeover`);
+  if (cues.endMusic >= 0.25 && cues.endMusic <= 0.45)
+    pass(`the converted score is still audible at the end (${cues.endMusic.toFixed(2)})`);
+  else fail(`the score ends at ${cues.endMusic} — below 0.25 the digested music cannot be heard ` +
+            'and the swarm is a drone; above 0.45 it has not been taken over');
   if (cues.drifted) pass('the score is pulled out of tune as it is converted');
   else fail('the tuning never drifted, so the score is being buried rather than digested');
   if (cues.backInTune && cues.backMusic === 1) pass('a new game restores the tuning and the level');
