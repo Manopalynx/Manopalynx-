@@ -19,7 +19,7 @@
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-export const BUILD = 'grandiose-v42';
+export const BUILD = 'grandiose-v43';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -385,6 +385,32 @@ export const RULES = {
   // closed 39% of his sales, more than Spector.
   sellDiscount: { spector: 0.8, varan: 1, vale: 0.45 },
   sellFloorFraction: 0.5,        // never below half list price, whatever the buyer thinks
+
+  // ---- settling with the Overseer -------------------------------------
+  // payFacilityFee was another human-only button: an opponent sat all three
+  // attempts unless it rolled doubles or held a favour, and 371 of 924 detained
+  // turns it had the fee several times over.
+  //
+  // Whether walking out is worth ₡150 depends on what a lap is still worth, so
+  // the test is how much of the board is still unbought. Early, a lap buys
+  // squares; late, a lap is a tour of everyone else's citadels and the cell is
+  // the safest address on the board. Each of them draws that line differently:
+  // Varan will not sit in an improperly documented facility and pays almost to
+  // the end; Vale is perfectly happy to address the crowd from where he is.
+  facilityPayUntil: { spector: 0.30, varan: 0.10, vale: 0.55 },
+  facilityFeeReserve: 350,       // and not if paying it would empty the purse
+
+  // ---- amending the manifest -------------------------------------------
+  // Also human-only. A nudge of one square costs ₡500 and there are three a
+  // game, so this is not a routine dodge — it is worth it for a citadel and
+  // almost nothing else. An opponent takes it when the square it is standing on
+  // costs this multiple of the fee more than the next one along.
+  //
+  // Varan's 0.75 is him reaching for paperwork first; Vale's 1.5 is a man who
+  // would rather pay the rent than make a fuss about it.
+  amendMargin: { spector: 1.0, varan: 0.75, vale: 1.5 },
+  amendReserve: 400,             // cash kept back after the fee
+  amendDetentionCost: 400,       // what an opponent reckons being filed is worth avoiding
   refusalCooldown: 3,            // circuits before the same ask may return
   refusalCap: 3,                 // refusals of one square before it is dropped for good
   refusalRaise: 1.15,            // and it may only return with an offer this much better

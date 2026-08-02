@@ -641,7 +641,7 @@ function tick() {
       break;
 
     case 'landed':
-      if (p.kind === 'ai') { busy = true; setTimeout(() => { E.resolveLanding(G); tick(); }, 320); }
+      if (p.kind === 'ai') { busy = true; setTimeout(aiResolve, 320); }
       else busy = false;
       break;
 
@@ -744,7 +744,7 @@ function act_roll() {
     if (r.held) { busy = false; tick(); return; }
     walk(r.path, () => {
       busy = false;
-      if (p.kind === 'ai') { E.resolveLanding(G); tick(); }
+      if (p.kind === 'ai') aiResolve();
       else tick();
     });
   });
@@ -754,6 +754,24 @@ function act_resolve() {
   if (G.phase !== 'landed') return;
   E.resolveLanding(G);
   tick();
+}
+
+// An opponent settling on the square it has landed on. It may amend the
+// manifest first — the same nudge the human gets a button for — and if it does,
+// the step is walked rather than teleported, exactly as act_amend walks it.
+//
+// Every AI path into resolveLanding goes through here. That is the point: the
+// defects this file keeps producing are all capability reachable from one route
+// and not another, so the amend hangs off the resolve rather than off each
+// caller that happens to remember it.
+function aiResolve() {
+  const p = E.current(G);
+  const from = p.pos;
+  const r = E.aiAmend(G, p);
+  if (!r) { E.resolveLanding(G); tick(); return; }
+  hold(p, from);
+  busy = true; render();
+  walk(r.path, () => { busy = false; E.resolveLanding(G); tick(); });
 }
 
 function act_amend() {

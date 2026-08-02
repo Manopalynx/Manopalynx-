@@ -615,9 +615,15 @@ export function cardEffect(G, card, who = current(G)) {
 export function roll(G, d1, d2) {
   if (G.phase !== 'roll' || G.over) return null;
   const p = current(G);
-  // An opponent holding a favour spends it rather than sitting there. A human
-  // is offered the button instead, and may prefer to keep it.
-  if (p.inFacility && p.kind === 'ai' && p.pardons > 0) usePardon(G, p);
+  // An opponent holding a favour spends it rather than sitting there, and
+  // settles with the Overseer if it would rather be out than not. A human is
+  // offered both buttons instead, and may prefer to keep the favour or the
+  // cell. Both here, before the dice, which is exactly where the human's own
+  // two buttons sit.
+  if (p.inFacility && p.kind === 'ai') {
+    if (p.pardons > 0) usePardon(G, p);
+    else aiPayFacilityFee(G, p);
+  }
   const a = d1 ?? 1 + Math.floor(random(G) * 6);
   const b = d2 ?? 1 + Math.floor(random(G) * 6);
   G.dice = [a, b];
@@ -1756,6 +1762,81 @@ export function seekSale(G, p) {
   }
 
   return { from: p.i, to: best.them.i, get: null, give: best.sq, cash, direction: 2 };
+}
+
+// Settling with the Overseer rather than sitting there.
+//
+// payFacilityFee had one call site: the human's button. An opponent served all
+// three attempts unless it rolled doubles or held a favour, and in 371 of 924
+// detained turns it was holding the fee several times over.
+//
+// Whether the fee is worth paying is not a fixed answer. Early, a lap of the
+// board buys squares and the cell is dead time. Late, a lap is a tour of
+// everyone else's citadels and the cell is the cheapest address in the sector.
+// So the test is how much of the board is still there to be bought.
+export function openBoardFraction(G) {
+  let total = 0, free = 0;
+  for (let i = 0; i < BOARD.length; i++) {
+    if (!BOARD[i].pr) continue;
+    total++;
+    if (!ownerOf(G, i)) free++;
+  }
+  return total ? free / total : 0;
+}
+
+export function aiPayFacilityFee(G, p) {
+  if (!p || !p.inFacility || p.pardons > 0) return false;
+  // Paying it into a settlement is not walking out, it is a second problem.
+  if (p.cash < RULES.facilityFee + RULES.facilityFeeReserve) return false;
+  const until = RULES.facilityPayUntil[p.persona] ?? RULES.facilityPayUntil.spector;
+  if (openBoardFraction(G) < until) return false;
+  return payFacilityFee(G);
+}
+
+// What it costs this player to be standing on a square. Used to decide whether
+// nudging one square along is worth the fee — so it is a comparison between two
+// squares, and anything unknowable to both (a card) is worth nothing to either.
+export function landingCost(G, p, sq) {
+  const at = previewAt(G, p, sq);
+  switch (at.kind) {
+    case 'rent': return at.amount;
+    case 'tax': return at.amount;
+    case 'detention': return RULES.amendDetentionCost;
+    case 'unowned':
+      // A square it wants is a reason to move ONTO one, so it counts as a
+      // negative cost — but only the part it is actually getting for free.
+      return p.kind === 'ai' && aiWantsToBuy(G, p, sq)
+        ? -Math.max(0, aiValue(G, p, sq) - BOARD[sq].pr)
+        : 0;
+    default: return 0;            // own, pledged, a card, a corner
+  }
+}
+
+// Amending the manifest — the nudge of one square, human-only until now.
+//
+// At ₡500 rising to ₡900, three a game, this is not a routine dodge: it is
+// worth it in front of a citadel and almost nowhere else. Measured before this,
+// 10.5% of landings had a cheaper square one step along, but that counted every
+// saving including ones far smaller than the fee.
+//
+// Returns the walked path so the interface can animate it, exactly as the
+// human's own button does, or null if it did not move.
+export function aiAmend(G, p) {
+  if (G.phase !== 'landed' || p.kind !== 'ai') return null;
+  const margin = RULES.amendMargin[p.persona] ?? RULES.amendMargin.spector;
+  const path = [];
+  let guard = 0;
+  while (p.amends > 0 && guard++ < RULES.amendsPerGame) {
+    const fee = amendCost(p);
+    if (p.cash < fee + RULES.amendReserve) break;
+    const here = landingCost(G, p, p.pos);
+    const next = landingCost(G, p, (p.pos + 1) % BOARD.length);
+    if (here - next < fee * margin) break;
+    const r = amendManifest(G);
+    if (!r) break;
+    path.push(...r.path);
+  }
+  return path.length ? { path } : null;
 }
 
 export function aiDevelop(G, p) {
