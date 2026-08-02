@@ -186,8 +186,23 @@ to leak, `strength` and `tithe` being the only extras and neither secret.
 The chips were inert panels for the whole life of the game, so the affordance matters as
 much as the sheet — a tap target nobody knows about is not one. Each chip carries its
 holdings count and a chevron: a number worth having anyway, which happens to say there is
-more here. The probe asserts the chip is a real `<button>`, is at least 44px tall, carries
-the badge, and that the name ellipsises before it reaches it.
+more here.
+
+**It goes on the cash line, not the name line**, and that was a correction. The badge began
+in the top-right corner with 22px reserved on the name row to clear it, which took the name
+from 51.8px of room to 29.8px and truncated **"Varan"** — a name that had always fitted.
+Reported from play, and correctly: the names are identity and the count is decoration.
+
+The cash line has room it will never use. Measured over 25 full games and 31,536 readings,
+the largest balance seen was **₡6,085** and not one reading reached five figures, against a
+cash line 68px wide holding a 49px figure. The cash does not shrink, so if a balance ever
+did get that large the badge is what gets clipped rather than the money.
+
+Two pixels came back from the chip's side padding (8 → 6) and one from the gap beside the
+pip (5 → 4), because *"Spector"* is 50.6px at 12px in this monospace and missed by 0.3px on
+a 375pt screen. All four names now fit whole at 375, 393 and 440 — including on the iPhone
+SE, where "Spector" had been truncated since long before any of this. The probe asserts no
+opponent's name is cut off, and that the badge is on the cash row.
 
 ## The universe the galaxy is in
 

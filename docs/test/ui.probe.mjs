@@ -1162,10 +1162,14 @@ for (const device of DEVICES) {
     if (!chip) return 'no chip for seat 1';
     const badge = chip.querySelector('.chipMore');
     const box = chip.getBoundingClientRect();
-    // The .who span, not its .nm row: the row is full width by construction, so
-    // its right edge always sits past the badge however much padding it carries.
-    // What must not collide is the text.
-    const nm = chip.querySelector('.nm .who').getBoundingClientRect();
+    // Every opponent's chip name, and whether it fits. The names come from
+    // PERSONAS and are fixed content, so a truncated one is a layout fault
+    // rather than somebody typing too much into the name box.
+    const cut = [...document.querySelectorAll('.pchip')].map((c, k) => {
+      const sp = c.querySelector('.who');
+      return { seat: k, ai: G.players[k].kind === 'ai', text: sp.textContent,
+               over: sp.scrollWidth > sp.clientWidth + 0.5 };
+    });
     const bd = badge ? badge.getBoundingClientRect() : null;
     chip.click();
     await new Promise(r => setTimeout(r, 60));
@@ -1177,8 +1181,8 @@ for (const device of DEVICES) {
       tap: [Math.round(box.width), Math.round(box.height)],
       hasBadge: !!badge,
       badgeText: badge ? badge.textContent.trim() : '',
-      // The name must ellipsise before it reaches the badge, or a long one runs under it.
-      nameClear: bd ? nm.right <= bd.left + 0.5 : false,
+      cutNames: cut.filter(c => c.ai && c.over).map(c => c.text),
+      badgeOnCashRow: !!(bd && chip.querySelector('.cashRow .chipMore')),
       heading: sh.querySelector('h3') ? sh.querySelector('h3').textContent : '',
       name: p.name,
       groups: sh.querySelectorAll('.pgHead').length,
@@ -1198,8 +1202,14 @@ for (const device of DEVICES) {
     else fail(`chip is ${who.tap.join('x')} — under the 44px a thumb needs`);
     if (who.hasBadge && who.badgeText) pass(`the chip shows its holding count (${who.badgeText})`);
     else fail('no affordance on the chip — nobody will know it can be tapped');
-    if (who.nameClear) pass('the name clears the count badge');
-    else fail('the player name runs under the count badge');
+    // The badge began in the top-right corner, with 22px reserved on the name
+    // row to clear it — which took the name from 51.8px to 29.8px and truncated
+    // "Varan", a name that had always fitted. It lives on the cash line now,
+    // where there is room that will never be used.
+    if (who.badgeOnCashRow) pass('the count sits on the cash line, not in the name\'s width');
+    else fail('the count is back on the name row — that is where it ate two characters');
+    if (!who.cutNames.length) pass('every opponent name fits whole');
+    else fail(`these names are cut off: ${who.cutNames.join(', ')}`);
     if (who.heading === who.name) pass(`tapping a chip opens that player (${who.heading})`);
     else fail(`tapped seat 1 (${who.name}) and got "${who.heading}"`);
     if (who.groups > 0 && who.rows > 0) pass(`holdings are grouped by set (${who.groups} groups, ${who.rows} squares)`);

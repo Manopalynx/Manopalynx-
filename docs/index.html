@@ -83,20 +83,30 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
    in the corner — a number you want anyway, which happens to say "there is more
    here". text-align:left because a button centres its content by default and
    would have re-laid out the whole bar. */
+/* 6px of side padding, not 8. Four chips share 393pt with a menu button, which
+   leaves about 69px inside each one — and "Spector" is 50.6px at 12px in this
+   monospace. Every pixel here is a character of somebody's name. */
 .pchip{flex:1 1 0;min-width:0;background:var(--panel);border:1px solid var(--rule);
-  border-radius:6px;padding:6px 8px;font-family:var(--m);overflow:hidden;
-  position:relative;text-align:left;display:block;color:inherit;
-  -webkit-tap-highlight-color:transparent}
+  border-radius:6px;padding:6px 6px;font-family:var(--m);overflow:hidden;
+  text-align:left;display:block;color:inherit;-webkit-tap-highlight-color:transparent}
 .pchip:active{background:rgba(255,255,255,.05)}
-.pchip .chipMore{position:absolute;top:5px;right:5px;font-size:9.5px;color:var(--dim);
+/* The count sits on the CASH line, not the name line. It began in the top-right
+   corner with 22px of padding reserved on the name row to clear it, which took
+   the name from 51.8px to 29.8px and truncated "Varan" — a name that had always
+   fitted. The cash line has room it will never use: measured over 25 full games,
+   31,536 readings, the largest balance seen was ₡6,085 and not one reading
+   reached five figures. The cash does not shrink, so if one ever did the badge
+   is what gets clipped rather than the money. */
+.pchip .cashRow{display:flex;align-items:baseline;gap:3px;min-width:0}
+.pchip .chipMore{flex:0 0 auto;margin-left:auto;font-size:9px;color:var(--dim);
   display:flex;align-items:center;gap:1px;line-height:1;pointer-events:none}
-.pchip .chipMore .chev{font-size:12px;position:relative;top:-.5px}
+.pchip .chipMore .chev{font-size:11px;position:relative;top:-.5px}
 .pchip.act .chipMore{color:var(--gold)}
 .pchip.act{border-color:var(--gold);background:rgba(217,164,65,.10)}
-.pchip .nm{color:var(--bright);font-size:12px;display:flex;align-items:center;gap:5px;
-  white-space:nowrap;min-width:0;padding-right:22px}   /* clearance for the count badge */
+.pchip .nm{color:var(--bright);font-size:12px;display:flex;align-items:center;gap:4px;
+  white-space:nowrap;min-width:0}   /* 4px, not 5: "Spector" missed by 0.3px on a 375pt screen */
 .pchip .nm .who{overflow:hidden;text-overflow:ellipsis}
-.pchip .cash{color:var(--tx);font-size:13.5px;margin-top:1px;white-space:nowrap}
+.pchip .cash{flex:0 0 auto;color:var(--tx);font-size:13.5px;margin-top:1px;white-space:nowrap}
 .pip{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
 .menuBtn{flex:0 0 auto;width:34px;min-height:46px;font-size:15px;color:var(--dim);
   background:var(--panel);display:flex;align-items:center;justify-content:center}

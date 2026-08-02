@@ -313,9 +313,9 @@ function renderBar() {
     return `<button class="pchip${i === G.cur ? ' act' : ''}" data-who="${i}"
         aria-label="${esc(p.name)} — ${held} holding${held === 1 ? '' : 's'}">
       <div class="nm"><span class="pip" style="background:${pipOf(p)}"></span><span class="who">${esc(chipName(p))}</span></div>
-      <div class="cash">${money(p.cash)}</div>
-      ${p.debt ? `<div class="vs" style="color:var(--warn)">debt ${money(p.debt)}</div>` : ''}${rel}
-      <span class="chipMore" aria-hidden="true">${held}<span class="chev">›</span></span></button>`;
+      <div class="cashRow"><span class="cash">${money(p.cash)}</span>
+        <span class="chipMore" aria-hidden="true">${held}<span class="chev">›</span></span></div>
+      ${p.debt ? `<div class="vs" style="color:var(--warn)">debt ${money(p.debt)}</div>` : ''}${rel}</button>`;
   }).join('');
   $('bar').innerHTML = chips + `<button class="menuBtn" id="menuBtn" aria-label="Menu">☰</button>`;
   $('menuBtn').onclick = () => { Score.resume(); showMenu(); };
