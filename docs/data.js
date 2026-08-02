@@ -19,7 +19,7 @@
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-export const BUILD = 'grandiose-v41';
+export const BUILD = 'grandiose-v42';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -341,6 +341,50 @@ export const RULES = {
   // are unchanged across the range (8.3–9.7, inside the noise at 40 games), so
   // this is not being paid for out of development.
   redeemReserve: 500,
+  // Cash an opponent keeps back while a debt marker stands.
+  //
+  // repayDebt() had one call site — the human's Repay button — so an opponent
+  // that took a marker never cleared it. Measured over 40 games: 49 markers
+  // taken, none ever repaid, and a marker locks its holder out of buying,
+  // bidding, building, citadels, contracts and redeeming while compounding
+  // every turn. The worst reached ₡8,837 on a seat still sitting at the table.
+  //
+  // Clearing it comes before everything, because everything is what it blocks.
+  // How fast is a matter of character: Varan audits, and an outstanding marker
+  // is an irregularity he will not leave standing. Spector prices the interest
+  // against what else the cash could do and clears it. Vale means it when he
+  // says money is only money, and would rather hold enough to buy an address.
+  debtKeep: { spector: 100, varan: 0, vale: 200 },
+  // A marker at least this large and they will RAISE money to clear it —
+  // pledging and selling down the way they would for any other payment they
+  // cannot cover — rather than only spending what happens to be lying around.
+  //
+  // That distinction is the whole fix. Spending loose cash never catches a
+  // marker that compounds every turn: measured that way Vale cleared 0 of 16
+  // and one of his markers reached ₡21,072, which is not character, it is the
+  // same defect wearing a hat. Varan's 1 means any marker at all.
+  debtUrgent: { spector: 250, varan: 1, vale: 700 },
+  // Cash below which an opponent will consider SELLING a square rather than
+  // only ever offering to buy one. seekContract has always returned direction 1,
+  // so in 13.7% of opponent turns it was short of cash while holding a square
+  // another player needed, and had no way to say so.
+  //
+  // Vale sells most readily — the provincial ones were never the point. Spector
+  // sells when it is short and prices it. Varan barely sells at all.
+  sellNeed: { spector: 600, varan: 400, vale: 900 },
+  // ...and asks this multiple of what the square is worth to the BUYER, which
+  // is the only valuation that matters when you are the one selling.
+  // Varan's 2.2 is meant to be refused most of the time. He is not in the
+  // business of improving your position, and if he does it will cost you.
+  sellPremium: { spector: 1.25, varan: 1.8, vale: 1.0 },
+  // How far below its own asking price each will go when the buyer cannot cover
+  // it. Varan's 1 means he will not go below it at all — he withdraws instead,
+  // which is the only thing that makes his premium mean anything. Capping every
+  // ask at what the buyer could afford was measured to erase the difference
+  // between the three of them entirely: Varan's 2.2 was discounted away and he
+  // closed 39% of his sales, more than Spector.
+  sellDiscount: { spector: 0.8, varan: 1, vale: 0.45 },
+  sellFloorFraction: 0.5,        // never below half list price, whatever the buyer thinks
   refusalCooldown: 3,            // circuits before the same ask may return
   refusalCap: 3,                 // refusals of one square before it is dropped for good
   refusalRaise: 1.15,            // and it may only return with an offer this much better

@@ -1063,10 +1063,16 @@ export function redeem(G, p, sq) {
   note(G, `${p.name} redeems ${BOARD[sq].n} for ${money(cost)}.`);
   return true;
 }
-export function repayDebt(G, p) {
-  const a = Math.min(p.cash, p.debt);
+// `amount` defaults to everything on hand, which is what the human's Repay
+// button has always done. An opponent names a smaller figure because it keeps a
+// working reserve — clearing a marker only to be unable to cover the next rent
+// puts the marker straight back, larger.
+export function repayDebt(G, p, amount = p.cash) {
+  const a = Math.max(0, Math.min(Math.floor(amount), p.cash, p.debt));
+  if (!a) return 0;
   p.cash -= a; p.debt -= a;
   if (!p.debt) note(G, `${p.name} clears the debt marker and may trade again.`);
+  else note(G, `${p.name} pays ${money(a)} against the debt marker — ${money(p.debt)} outstanding.`);
   return a;
 }
 
@@ -1268,6 +1274,15 @@ export function seekContract(G, p, lens = p.persona || 'spector') {
 // would be stubborn rather than principled.
 function refusalSig(G, holderIdx, proposerIdx, sq) {
   const b = BOARD[sq];
+  // Ordered by who actually holds the square, taken from the board rather than
+  // from the caller. On a purchase the holder is the party being asked; on a
+  // sale it is the party asking, and a signature that assumed the first would
+  // never match the second — the refusal would be stored and then never found,
+  // which is silently no memory at all.
+  const own = ownerOf(G, sq);
+  if (own && own.i !== holderIdx && own.i === proposerIdx) {
+    [holderIdx, proposerIdx] = [proposerIdx, holderIdx];
+  }
   const held = idx => new Set(G.players[idx].holdings.map(h => h.sq));
   const a = held(holderIdx), c = held(proposerIdx);
   if (b.s) {
@@ -1284,7 +1299,12 @@ export function recordRefusal(G, c) {
   if (!Array.isArray(G.refusals)) G.refusals = [];
   // Only cash the proposer offered counts as the price already tried.
   const paid = c.direction === 1 ? Math.max(0, Math.floor(c.cash || 0)) : 0;
-  for (const sq of sqList(c.get)) {
+  // What the ask was ABOUT. Buying, that is the square being asked for; selling,
+  // it is the square being pushed. Recording the get-side of a sale records
+  // nothing at all, and an opponent with no memory of a refused sale would
+  // re-propose it every turn — the exact defect the refusal memory exists to
+  // stop, arriving again through a new door.
+  for (const sq of (c.direction === 2 ? sqList(c.give) : sqList(c.get))) {
     const sig = refusalSig(G, c.to, c.from, sq);
     const rec = G.refusals.find(r => r.from === c.from && r.to === c.to && r.sq === sq);
     if (rec) {
@@ -1330,6 +1350,16 @@ export function contractIsLegal(G, c) {
   for (const sq of gets) if (!holding(b, sq) || !tradable(G, b, sq)) return false;
   for (const sq of gives) if (!holding(a, sq) || !tradable(G, a, sq)) return false;
   if (!gets.length && !gives.length && !c.cash) return false;
+  // The payer must actually hold the money. settleContract clamps to what they
+  // have, which was harmless while every contract was an opponent offering cash
+  // it had already counted — but an opponent can now ask a HUMAN to pay, and a
+  // human who accepts "pay ₡5,000" holding ₡300 would have taken the square for
+  // ₡300 and the log would have called it settled.
+  const amount = Math.max(0, Math.floor(c.cash || 0));
+  if (amount) {
+    const payer = c.direction === 1 ? a : b;
+    if (payer.cash < amount) return false;
+  }
   return true;
 }
 
@@ -1632,7 +1662,104 @@ export function aiRedeem(G, p) {
   return any;
 }
 
+// Clearing a debt marker.
+//
+// repayDebt() had one call site, the human's Repay button, so for every
+// opponent a marker was permanent. Over 40 games: 49 taken, 0 cleared. The
+// marker compounds every turn and blocks buying, bidding, building, citadels,
+// contracts and redeeming — a seat that takes one is out of the game while
+// still sitting at the table, and nothing about that failed or was reported.
+//
+// First in aiDevelop, ahead of redeeming, because a marker blocks redeeming too.
+export function aiRepay(G, p) {
+  if (!p.debt) return 0;
+  const keep = RULES.debtKeep[p.persona] ?? RULES.debtKeep.spector;
+  const urgent = RULES.debtUrgent[p.persona] ?? RULES.debtUrgent.spector;
+  const spare = Math.max(0, p.cash - keep);
+  // Spending only what is already on hand never catches a marker that compounds
+  // every turn — it grows faster than the loose change does. Raise for it, the
+  // same way an unaffordable rent is raised for. Nothing is being given up that
+  // earns more than this marker costs.
+  //
+  // The reserve applies to money it ALREADY HAD. What it raises for the marker
+  // goes to the marker: withholding the reserve out of that means selling down
+  // and then declining to spend the proceeds, which is the worst of both and
+  // was measured repaying exactly nothing.
+  if (p.debt >= urgent && spare < p.debt) {
+    const had = p.cash;
+    liquidate(G, p, keep + p.debt);
+    return repayDebt(G, p, spare + (p.cash - had));
+  }
+  return repayDebt(G, p, spare);
+}
+
+// Asking another player for money instead of only ever offering it.
+//
+// seekContract has always returned direction 1. An opponent could offer to buy
+// a square; it had no way to sell one, so it could never turn a holding another
+// player needed into the cash it was short of. Measured at 13.7% of opponent
+// turns: short of money, holding exactly the square somebody else needed to
+// close a set, and nothing to say.
+//
+// Priced against what the square is worth to the BUYER, because that is the
+// only valuation that matters when you are the one selling. Each of them wants
+// a different multiple of it, and needs a different amount of pressure to ask
+// at all — see RULES.sellNeed and RULES.sellPremium.
+export function seekSale(G, p) {
+  if (p.debt) return null;                       // cannot contract at all
+  const need = RULES.sellNeed[p.persona] ?? RULES.sellNeed.spector;
+  if (p.cash >= need) return null;
+  // Varan will not sell to be helpful, only to repair his own books. Being
+  // short of cash is not enough — he keeps a thin purse by design and would
+  // otherwise be the most willing seller at the table, which is backwards. He
+  // needs something actually broken: a square of his own sitting pledged.
+  if (p.persona === 'varan' && !p.holdings.some(h => h.mortgaged)) return null;
+
+  // Whoever is one square short of a set, where the square is ours. This is the
+  // only holding anyone reliably overpays for, and the only one worth pushing.
+  const offers = [];
+  for (const q of G.players) {
+    if (q.i === p.i || q.debt) continue;
+    for (const t of setCompletingTargets(G, q)) {
+      if (t.owner.i !== p.i) continue;
+      if (!tradable(G, p, t.sq)) continue;
+      if (refusalBlocks(G, p.i, q.i, t.sq)) continue;
+      offers.push({ them: q, sq: t.sq });
+    }
+  }
+  if (!offers.length) return null;
+
+  // A human has no persona to value with, so price against a neutral lens
+  // rather than reading a field that is not there.
+  const lensFor = q => q.persona ? q : { ...q, persona: 'spector' };
+  const worth = o => aiValue(G, lensFor(o.them), o.sq);
+  offers.sort((a, b) => worth(b) - worth(a));
+  const best = offers[0];
+
+  const premium = RULES.sellPremium[p.persona] ?? RULES.sellPremium.spector;
+  const floor = Math.floor(BOARD[best.sq].pr * RULES.sellFloorFraction);
+  const ask = Math.max(floor, Math.round(worth(best) * premium));
+  // Naming a figure they cannot cover is not a negotiation, and contractIsLegal
+  // would reject it anyway. Leave them something to play with afterwards.
+  const ceiling = best.them.cash - 200;
+  if (ceiling < floor) return null;
+
+  let cash = ask;
+  if (ask > ceiling) {
+    // They cannot cover it. Simply dropping to what they can afford is what an
+    // earlier version did, and it quietly deleted the premium — every ask
+    // became "whatever you happen to be holding" and the three of them sold
+    // identically. How far each will come down is the character.
+    const floorOfAsk = ask * (RULES.sellDiscount[p.persona] ?? RULES.sellDiscount.spector);
+    if (ceiling < floorOfAsk) return null;
+    cash = Math.floor(ceiling);
+  }
+
+  return { from: p.i, to: best.them.i, get: null, give: best.sq, cash, direction: 2 };
+}
+
 export function aiDevelop(G, p) {
+  aiRepay(G, p);
   aiRedeem(G, p);
   let guard = 0;
   while (guard++ < 12) {
@@ -1662,7 +1789,10 @@ export function aiDevelop(G, p) {
   // immediately; against a human it parks the game in the 'contract' phase for
   // an answer, so callers must check the phase before ending the turn.
   if (!G.over && random(G) < 0.5) {
-    const c = seekContract(G, p);
+    // One attempt, either direction. Short of cash it tries to sell first —
+    // that is the whole point of being able to — and falls back to buying if
+    // nobody wants anything it holds.
+    const c = seekSale(G, p) || seekContract(G, p);
     // Backstop, independent of any one opponent's memory: a proposal to a human
     // parks the game in the 'contract' phase waiting for an answer, so with
     // three opponents each rolling this independently the interruptions scale

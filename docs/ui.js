@@ -1571,8 +1571,9 @@ function sendTrade() {
   const r = E.proposeContract(G, proposal);
   if (!r.ok) {
     sheet(`<h3>Not a legal contract</h3><div class="sub">nothing was exchanged</div>
-      <p style="font-size:15px;line-height:1.5">Both sides must be free of debt, and anything
-      changing hands must be unmortgaged and unbuilt.</p>${btns([['Close', 'closeSheet', 'pri wide']])}`);
+      <p style="font-size:15px;line-height:1.5">Both sides must be free of debt, anything
+      changing hands must be unmortgaged and unbuilt, and whoever is paying must
+      hold the money.</p>${btns([['Close', 'closeSheet', 'pri wide']])}`);
     return;
   }
   if (r.pending) { tick(); return; }              // a human must answer
