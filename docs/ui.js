@@ -416,7 +416,7 @@ function renderBoard() {
     const ownStyle = owner ? `color:${pipOf(owner)};box-shadow:inset 0 0 0 2px ${pipOf(owner)}` : '';
     const ico = iconFor(b);
     h += `<div class="cell e-${edge}${posOf(cur) === i ? ' here' : ''}${selected === i ? ' sel' : ''}${ico ? ' marked' : ''}"
-        style="grid-row:${r};grid-column:${c};${ownStyle}" data-i="${i}">
+        style="grid-row:${r};grid-column:${c};--here:${pipOf(cur)};${ownStyle}" data-i="${i}">
       ${colour ? `<div class="cbar" style="background:${colour}"></div>` : ''}
       ${ico ? `<svg class="cico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ico}</svg>` : ''}
       <div class="code">${esc(b.a)}</div>
@@ -579,12 +579,30 @@ function bindSheet(scope) {
         return;
       }
       disarmAll(document);
+      dropKeyboard();
       const [name, ...args] = b.dataset.fn.split('|');
       ACTIONS[name](...args);
     };
   });
 }
+// Anything focused is blurred before the swap. On iOS a sheet with a number
+// input raises the software keyboard, and .scrim is position:fixed against the
+// LAYOUT viewport, which does not shrink for it — so the next sheet is laid out
+// against a viewport that no longer matches the screen. Reported from play as
+// the Continue button on the revealed-bids sheet refusing to respond until the
+// background had been touched, which is what resynchronises it. Destroying the
+// focused input by replacing innerHTML does not reliably dismiss the keyboard;
+// blurring it first does.
+//
+// Not verifiable here: headless Chromium has no software keyboard, so this
+// removes the precondition rather than being proven against the symptom.
+function dropKeyboard() {
+  const el = document.activeElement;
+  if (el && el !== document.body && typeof el.blur === 'function') el.blur();
+}
+
 function sheet(inner) {
+  dropKeyboard();
   $('sheetRoot').innerHTML = `<div class="scrim"><div class="sheet"><div class="grab"></div>${inner}</div></div>`;
   bindSheet($('sheetRoot'));
 }
@@ -1794,7 +1812,6 @@ window.__Sound = Sound;
 window.__Score = Score;
 window.__moodFor = (g, d) => moodFor(g, d);
 window.__render = () => render();
-window.__render = () => render();
 window.__SETS = () => SETS;
 window.__BOARD = () => BOARD;
 window.__TR = () => TR;
@@ -1818,6 +1835,19 @@ window.addEventListener('pagehide', save);
 // canvas both need re-measuring afterwards.
 window.addEventListener('orientationchange', () => setTimeout(() => { if (G) render(); }, 220));
 window.addEventListener('resize', () => { if (G) renderLog(); });
+// iOS leaves position:fixed layers offset from where taps actually land after a
+// software keyboard opens or closes, until something scrolls. A sheet is a fixed
+// bottom panel, so that shows up as a button you can see and cannot press. This
+// nudges the page back to the top whenever the visual viewport changes with a
+// sheet open, which is what touching the background was doing by hand.
+if (window.visualViewport) {
+  const resync = () => {
+    if (!$('sheetRoot').firstChild) return;
+    if (window.scrollY !== 0 || window.scrollX !== 0) window.scrollTo(0, 0);
+  };
+  window.visualViewport.addEventListener('resize', resync);
+  window.visualViewport.addEventListener('scroll', resync);
+}
 
 // The preference has to be read before the setup screen draws, because the
 // switch shows its own state.

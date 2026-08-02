@@ -134,6 +134,35 @@ faction you can trade with. They do not hold prisoners and they do not take paym
 are equipped to influence."* They appear three times: as the clock, as the voice on the
 Absorbed corner, and as one Contingency card that costs you money for looking at them.
 
+## Two things a fixed colour and a fixed viewport got wrong
+
+**The moving piece was ringed in the first seat's colour.** `.cell.here` was
+`var(--gold)`, which is `#D9A441`, which is byte-identical to `PIPS[0]`. So whoever was
+moving — and the highlight steps through every square a piece passes, on purpose, so you
+can follow it — the ring was Sam's. All four pips **are** the four theme accents, so any
+fixed colour here belongs to somebody. It now takes the moving player's own colour, which
+makes it right by construction rather than by finding a shade nobody is using.
+
+This is the second time. The README already records the selection ring being `var(--tx)`,
+which is Spector's pip. The probe now checks the ring against **every** seat's pip, because
+a single-seat check passes on the bug.
+
+**A sheet could open on top of a raised keyboard.** `.scrim` is `position: fixed`, which on
+iOS is laid out against the *layout* viewport — and that does not shrink when the software
+keyboard appears. The sealed-bid sheet auto-focuses its number input, so anything that
+replaced it was positioned against a viewport that no longer matched the screen, and its
+buttons stopped taking taps where they appeared to be. Reported from play as the Continue
+button on the revealed-bids sheet doing nothing until the background had been touched —
+touching it is what resynchronises iOS's fixed layer.
+
+Replacing `innerHTML` destroys the focused input but does not reliably dismiss the
+keyboard. `sheet()` now blurs first, every sheet action blurs before it runs, and a
+`visualViewport` listener resets the scroll when the viewport changes with a sheet open.
+
+**Not verified here.** Headless Chromium has no software keyboard, so none of that can be
+reproduced in the probe — it removes the precondition rather than being proven against the
+symptom. What the probe does assert is that nothing is left focused when a sheet opens.
+
 ## Being told no
 
 An opponent used to be refused and carry on as though it had not happened.

@@ -195,7 +195,14 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
 .tok{width:7px;height:7px;border-radius:50%;border:1px solid rgba(0,0,0,.6)}
 .tok.me{width:9px;height:9px;box-shadow:0 0 0 1.5px var(--void),0 0 8px 1px currentColor}
 .cell .grr{position:absolute;top:6px;right:1px;font-family:var(--m);font-size:8px;color:var(--gold)}
-.cell.here{outline:2px solid var(--gold);outline-offset:-2px;z-index:4}
+/* The moving piece's own colour, set inline per cell — not a fixed accent.
+   This was var(--gold), which is #D9A441, which is byte-identical to PIPS[0],
+   which is the first seat's pip. So whoever was moving, the square they stepped
+   through and the one they landed on was outlined in player one's colour. All
+   four pips ARE the four theme accents, so any fixed colour here collides with
+   somebody; taking it from the player makes it right by construction. Same
+   defect the README records for the selection ring, which was Spector's teal. */
+.cell.here{outline:2px solid var(--here,var(--gold));outline-offset:-2px;z-index:4}
 /* Dashed and in a colour NO player can be dealt. It used to be var(--tx), which
    is exactly Spector's #5ECFC8, so the square you last tapped was indis-
    tinguishable from a square Spector owned — ownership draws a 2px inset ring

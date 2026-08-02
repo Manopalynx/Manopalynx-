@@ -437,7 +437,11 @@ for (const device of DEVICES) {
     const GOTO = 30;
     const walker = G.players[G.cur];
     const wasAt = walker.pos;
-    G.players.forEach(q => { if (q !== walker && q.pos === GOTO) q.pos = 0; });
+    // Everyone off the corner and a render taken FIRST, so the next render is a
+    // genuine arrival. Without moving the walker off it too, a turn that happened
+    // to leave it standing on square 30 made the "arrival" no change at all, and
+    // the check failed at random — roughly one run in five.
+    G.players.forEach(q => { if (q.pos === GOTO) q.pos = 1; });
     window.__render();
     walker.pos = GOTO;
     const onGoto = count(() => window.__render());
@@ -1142,6 +1146,70 @@ for (const device of DEVICES) {
     else fail(`the galaxy is static (${galaxy.changedPixels} pixels changed in 260ms)`);
   }
 
+  // ---- the moving piece is highlighted in its OWN colour ----
+  // This has now been the same defect twice. The selection ring was var(--tx),
+  // which is Spector's pip; the movement highlight was var(--gold), which is
+  // byte-identical to the first seat's. All four pips ARE the four theme
+  // accents, so any fixed colour here belongs to somebody. Checked against every
+  // seat rather than one, because a single-seat check passes on the bug.
+  const trail = await page.evaluate(() => {
+    const G = window.__G();
+    const hex = c => { const m = c.match(/\d+/g);
+      return m ? '#' + m.slice(0, 3).map(n => (+n).toString(16).padStart(2, '0')).join('').toUpperCase() : c; };
+    const was = { cur: G.cur, pos: G.players.map(q => q.pos) };
+    const out = [];
+    for (let i = 0; i < G.players.length; i++) {
+      G.cur = i; G.players[i].pos = 6 + i;
+      window.__render();
+      const cell = document.querySelector('.cell.here');
+      const pip = document.querySelectorAll('.pchip .pip')[i];
+      if (!cell || !pip) { out.push({ seat: i, bad: 'no highlight or pip' }); continue; }
+      out.push({ seat: i, name: G.players[i].name,
+                 outline: hex(getComputedStyle(cell).outlineColor),
+                 pip: hex(getComputedStyle(pip).backgroundColor) });
+    }
+    G.cur = was.cur; G.players.forEach((q, i) => { q.pos = was.pos[i]; });
+    window.__render();
+    return out;
+  });
+  {
+    const wrong = trail.filter(t => t.bad || t.outline !== t.pip);
+    if (!wrong.length) pass(`the moving piece is ringed in its own colour (${trail.length} seats)`);
+    else fail('the movement highlight is not the moving player\'s colour: ' +
+      wrong.map(w => w.bad || `${w.name} moves but the ring is ${w.outline}, their pip is ${w.pip}`).join('; '));
+    const distinct = new Set(trail.map(t => t.outline));
+    if (distinct.size === trail.length) pass('and every seat rings differently');
+    else fail(`only ${distinct.size} distinct ring colours across ${trail.length} seats`);
+  }
+
+  // ---- a sheet never opens on top of a raised keyboard ----
+  // .scrim is position:fixed against the layout viewport, which on iOS does not
+  // shrink for the software keyboard — so a sheet opened while an input is
+  // focused is laid out against a viewport that no longer matches the screen,
+  // and its buttons stop taking taps until something resynchronises it. Headless
+  // has no keyboard, so what is checked is the precondition: nothing is left
+  // focused when a sheet appears.
+  const focusLeft = await page.evaluate(async () => {
+    const G = window.__G(), E = window.__E();
+    E.openAuction(G, 6);
+    window.__tick();
+    await new Promise(r => setTimeout(r, 250));
+    const focusedBefore = document.activeElement ? document.activeElement.id : null;
+    // Whatever the bid sheet does next, the sheet that replaces it must not
+    // inherit a focused input.
+    window.__showCard ? null : null;
+    const btn = document.querySelector('.sheet [data-fn]');
+    const had = !!document.querySelector('#bidIn');
+    if (btn) btn.click();
+    await new Promise(r => setTimeout(r, 120));
+    return { had, focusedBefore, focusedAfter: document.activeElement ? document.activeElement.tagName : null };
+  });
+  if (!focusLeft.had) fail('no bid input on the sealed-bid sheet — this check is looking at the wrong screen');
+  else if (focusLeft.focusedBefore === 'bidIn') {
+    if (focusLeft.focusedAfter === 'BODY') pass('the keyboard is dropped before the next sheet opens');
+    else fail(`an input was still focused (${focusLeft.focusedAfter}) when the next sheet opened`);
+  } else fail(`the bid input did not take focus (${focusLeft.focusedBefore}) — the check proves nothing`);
+
   // ---- a player chip opens what that player holds ----
   // The chips were inert panels for the whole life of the game, so the
   // affordance matters as much as the sheet: a tap target nobody knows is a tap
@@ -1259,9 +1327,16 @@ for (const device of DEVICES) {
   else {
     if (sky.lit > 150) pass(`the corners are not a void (${sky.lit} lit pixels)`);
     else fail(`the corners are still empty (${sky.lit} lit pixels) — the background field is not drawing`);
-    if (sky.changed > 20 && sky.peak > 30)
-      pass(`stars out there twinkle (${sky.changed} pixels, peak ${sky.peak}/255)`);
-    else fail(`nothing twinkled in the background (${sky.changed} pixels, peak ${sky.peak})`);
+    // A LIVENESS check, not a measurement, and the threshold is set where it
+    // cannot false-fail. The sample is the four corners; the sky is generated
+    // with Math.random on every load, so how many of the sixteen twinklers land
+    // in that region changes run to run. It has come in at 930, at 88 and at
+    // exactly 20 on the same build. The real guarantee — that some stars twinkle
+    // and most do not — is asserted against the star counts in galaxy.test.mjs,
+    // where nothing is sampled and nothing can drift.
+    if (sky.changed > 4 && sky.peak > 20)
+      pass(`the background is alive (${sky.changed} pixels moved, peak ${sky.peak}/255)`);
+    else fail(`nothing at all moved in the background (${sky.changed} pixels, peak ${sky.peak})`);
     // "Some occasionally, not a shimmering field" is asserted in galaxy.test.mjs
     // against the star counts themselves. It was tried here as a share of lit
     // corner pixels and measured between 9.5% and 70.2% across the five
