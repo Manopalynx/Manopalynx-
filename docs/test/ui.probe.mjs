@@ -1288,6 +1288,61 @@ for (const device of DEVICES) {
     else fail('the player sheet scrolls sideways');
   }
 
+  // ---- the swarm arrives in the sky, not only in the score ----
+  // Inside ten circuits the disc already took the Neurex mood, but 89.7% of its
+  // stars are the arm and hot tints and both are GREEN — which in the book is
+  // their shields, the thing that answers your fire once they are here. The
+  // approach is red: the tide, the stain across a quadrant, the blips arriving.
+  // Counted with a discriminant that excludes gold, because #D9A441 is itself
+  // red-dominant and a naive test scored the ordinary ledger sky at 74% red.
+  const arrival = await page.evaluate(async () => {
+    const G = window.__G();
+    const read = async dist => {
+      G.circuits = 72; G.circuit = 72 - dist + 1;
+      window.__render();
+      await new Promise(r => setTimeout(r, 900));
+      const c = document.querySelector('.galaxyCanvas'), g = c.getContext('2d');
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      let lit = 0, red = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] <= 10) continue;
+        lit++;
+        // Strongly red-dominant with the green actually low: separates the
+        // swarm's #E84A3E from the ledger's gold, whose green sits at 164.
+        if (d[i] > 120 && d[i + 1] < 120 && d[i] - d[i + 1] > 80) red++;
+      }
+      return { dist, lit, red, share: +(100 * red / Math.max(1, lit)).toFixed(2) };
+    };
+    // Two thresholds overlap here and confound a naive sweep: the MOOD flips to
+    // neurex at ten circuits, which turns the disc green and drops the red share
+    // BELOW its ordinary-sky baseline, while the GRIP starts at fifteen and
+    // reddens it. Measured across both, red goes 18.7% → 9.1% → 29.9% and looks
+    // broken. So the arrival is measured inside a constant mood — ten, five and
+    // one are all neurex — and only the grip varies.
+    const far = await read(30);
+    const edge = await read(15);         // grip 0, mood still ledger
+    const ten = await read(10);          // grip 0.33, neurex
+    const five = await read(5);          // grip 0.67, neurex
+    const near = await read(1);          // grip 1, neurex
+    G.circuit = 1; window.__render();
+    return { far, edge, ten, five, near };
+  });
+  {
+    const { far, edge, ten, five, near } = arrival;
+    console.log(`        red share — 30 out ${far.share}% · 15 ${edge.share}% · ` +
+                `10 ${ten.share}% · 5 ${five.share}% · 1 ${near.share}%`);
+    if (Math.abs(edge.share - far.share) <= 0.6)
+      pass(`nothing has arrived yet at fifteen circuits (${edge.share}% against ${far.share}%)`);
+    else fail(`the sky already differs at fifteen out (${edge.share}% against ${far.share}%)`);
+    if (near.share > five.share && five.share > ten.share)
+      pass(`the sky reddens as it closes (${ten.share}% → ${five.share}% → ${near.share}%)`);
+    else fail(`the reddening is not monotonic within the neurex mood: ` +
+              `${ten.share}% → ${five.share}% → ${near.share}%`);
+    if (near.share > ten.share * 2)
+      pass(`and it is unmistakable by the last circuit (${near.share}% against ${ten.share}%)`);
+    else fail(`the last circuit is ${near.share}% red against ${ten.share}% at ten — too little to read`);
+  }
+
   // ---- the universe the galaxy sits in ----
   // The panel outside the disc was a black rectangle, and it is the largest
   // single area on the screen. The corners are sampled specifically because

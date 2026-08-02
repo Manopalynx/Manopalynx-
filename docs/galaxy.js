@@ -53,8 +53,28 @@ const TINTS = {
 };
 
 const rand = (a, b) => a + Math.random() * (b - a);
+const mixRGB = (x, y, k) => [
+  Math.round(x[0] + (y[0] - x[0]) * k),
+  Math.round(x[1] + (y[1] - x[1]) * k),
+  Math.round(x[2] + (y[2] - x[2]) * k)
+];
 
-export function startGalaxy(canvas, getMood) {
+// ---- the swarm arriving ------------------------------------------------
+// Driven by approachFor()'s `grip`, 0 at fifteen circuits out and 1 at one,
+// which is the same number the score's duck and drift are read from. One clock
+// for the sky and the music, so they cannot disagree about how close it is.
+//
+// The red is the point. Inside ten circuits the disc already takes the Neurex
+// mood, but 89.7% of its stars are the arm and hot tints, which are green —
+// and in the book green is their SHIELDS, the thing that answers your fire once
+// they are here. The approach is red: "the red tide", "a deep red stain spread
+// across a full quadrant of the display", "watched the red blips arrive".
+const BLIP_MAX = 46;              // "One. Then ten. Then a hundred"
+const HEX_MAX = 3;
+const BLIP_RED = [232, 74, 62];
+const HEX_RIM = [214, 88, 74];
+
+export function startGalaxy(canvas, getMood, getApproach) {
   const ctx = canvas.getContext('2d', { alpha: true });
   if (!ctx) return { stop() {}, resize() {} };
 
@@ -239,6 +259,40 @@ export function startGalaxy(canvas, getMood) {
     });
   }
 
+  // ---- the swarm ----------------------------------------------------------
+  // Pools allocated once and reused; the loop never allocates. A blip enters at
+  // the rim and creeps inward, and is returned to the rim when it reaches the
+  // disc — so the field migrates continuously rather than piling up over the
+  // middle, where the panel carries the turn name and the square name.
+  const blips = [];
+  for (let i = 0; i < BLIP_MAX; i++) blips.push(newBlip(true));
+  function newBlip(anywhere) {
+    const a = Math.random() * Math.PI * 2;
+    const start = anywhere ? rand(0.55, 1.35) : rand(1.05, 1.35);
+    return {
+      a, d: start,                        // polar, in units of the disc radius
+      v: rand(0.0000085, 0.000031),       // unhurried, the book's word
+      size: rand(0.9, 2.1),
+      phase: rand(0, Math.PI * 2),
+      pulse: rand(0.0009, 0.0026)
+    };
+  }
+
+  const hexes = [];
+  for (let i = 0; i < HEX_MAX; i++) hexes.push(newHex(true));
+  function newHex(anywhere) {
+    const a = Math.random() * Math.PI * 2;
+    return {
+      a, d: anywhere ? rand(0.9, 1.6) : rand(1.3, 1.7),
+      v: rand(0.0000035, 0.0000095),      // slower than anything else out there
+      size: rand(7, 15),
+      rot: rand(0, Math.PI * 2),
+      spin: rand(-0.00007, 0.00007),
+      phase: rand(0, Math.PI * 2),
+      breath: rand(0.00035, 0.00075)      // the openings that breathed
+    };
+  }
+
   // ---- sizing -------------------------------------------------------------
   function resize() {
     const rect = canvas.getBoundingClientRect();
@@ -263,7 +317,14 @@ export function startGalaxy(canvas, getMood) {
 
   // ---- drawing ------------------------------------------------------------
   function draw(dt) {
-    const tint = TINTS[getMood()] || TINTS.ledger;
+    const base = TINTS[getMood()] || TINTS.ledger;
+    const ap = getApproach ? getApproach() : null;
+    const grip = ap && typeof ap.grip === 'number' ? Math.max(0, Math.min(1, ap.grip)) : 0;
+    // The arms turn from their shields toward the tide as it closes, so the
+    // whole disc tips red at the end instead of staying nine-tenths green.
+    const tint = grip > 0
+      ? { core: base.core, hot: base.hot, arm: mixRGB(base.arm, [196, 92, 80], grip * 0.8) }
+      : base;
     spin += dt * SPIN;
 
     ctx.clearRect(0, 0, w, h);
@@ -294,6 +355,19 @@ export function startGalaxy(canvas, getMood) {
       ctx.fill();
     }
     ctx.globalAlpha = 1;
+
+    // The tide. "In the lower right, where every eye in the room went and
+    // stopped, a deep red stain spread across a full quadrant of the display."
+    // One gradient, so it can never invalidate the pre-rendered field the way
+    // tinting the background stars would have.
+    if (grip > 0.02) {
+      const tide = ctx.createRadialGradient(w * 1.02, h * 1.02, 0, w * 1.02, h * 1.02, Math.hypot(w, h) * 0.92);
+      tide.addColorStop(0, `rgba(${BLIP_RED.join(',')},${(grip * 0.115).toFixed(4)})`);
+      tide.addColorStop(0.45, `rgba(${BLIP_RED.join(',')},${(grip * 0.045).toFixed(4)})`);
+      tide.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = tide;
+      ctx.fillRect(0, 0, w, h);
+    }
 
     // core glow
     const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.95);
@@ -341,6 +415,64 @@ export function startGalaxy(canvas, getMood) {
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
+
+    // The blips, arriving out of the intergalactic night. Count scales with the
+    // grip, so they multiply as it closes — one, then ten, then a great many.
+    // They creep inward and are returned to the rim on reaching the disc, which
+    // keeps them off the middle where the panel carries its text.
+    if (grip > 0) {
+      const live = Math.round(grip * BLIP_MAX);
+      const ry = radius * TILT + radius * 0.28;
+      for (let i = 0; i < live; i++) {
+        const bl = blips[i];
+        bl.d -= bl.v * dt;
+        if (bl.d < 0.55) Object.assign(bl, newBlip(false));
+        const px = cx + Math.cos(bl.a) * bl.d * radius;
+        const py = cy + Math.sin(bl.a) * bl.d * ry;
+        if (px < -8 || px > w + 8 || py < -8 || py > h + 8) continue;
+        // Unhurried and total: a slow swell rather than a blink.
+        const puls = 0.62 + 0.38 * Math.sin(now * bl.pulse + bl.phase);
+        ctx.globalAlpha = Math.min(1, (0.30 + 0.55 * grip) * puls);
+        ctx.fillStyle = `rgb(${BLIP_RED[0]},${BLIP_RED[1]},${BLIP_RED[2]})`;
+        ctx.beginPath();
+        ctx.arc(px, py, bl.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // The masses themselves, once it is close. "Vast hexagonal masses, less
+    // built than grown, their surfaces pocked with irregular openings that
+    // breathed" — so they breathe, on the same idea as the score's pulse, and
+    // they drift far slower than anything else in the panel.
+    if (grip > 0.5) {
+      const show = Math.min(HEX_MAX, Math.round((grip - 0.5) * 2 * HEX_MAX));
+      const ry = radius * TILT + radius * 0.28;
+      for (let i = 0; i < show; i++) {
+        const hx = hexes[i];
+        hx.d -= hx.v * dt; hx.rot += hx.spin * dt;
+        if (hx.d < 0.85) Object.assign(hx, newHex(false));
+        const px = cx + Math.cos(hx.a) * hx.d * radius;
+        const py = cy + Math.sin(hx.a) * hx.d * ry;
+        if (px < -40 || px > w + 40 || py < -40 || py > h + 40) continue;
+        const breathe = 1 + 0.09 * Math.sin(now * hx.breath + hx.phase);
+        const rr = hx.size * breathe;
+        ctx.beginPath();
+        for (let k = 0; k < 6; k++) {
+          const a = hx.rot + (k / 6) * Math.PI * 2;
+          const ax = px + Math.cos(a) * rr, ay = py + Math.sin(a) * rr * 0.82;
+          if (k === 0) ctx.moveTo(ax, ay); else ctx.lineTo(ax, ay);
+        }
+        ctx.closePath();
+        ctx.globalAlpha = 0.30 + 0.34 * (grip - 0.5) * 2;
+        ctx.fillStyle = 'rgba(26,10,12,0.86)';
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = `rgb(${HEX_RIM[0]},${HEX_RIM[1]},${HEX_RIM[2]})`;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
 
     // ships
     nextShip -= dt;

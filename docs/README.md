@@ -233,6 +233,59 @@ a 375pt screen. All four names now fit whole at 375, 393 and 440 — including o
 SE, where "Spector" had been truncated since long before any of this. The probe asserts no
 opponent's name is cut off, and that the badge is on the cash row.
 
+## The swarm arrives in the sky as well
+
+The galaxy already took the Neurex mood inside ten circuits, but it read **green** — and
+89.7% of disc stars are the arm and hot tints, both of which are green in that mood.
+Measured from the distribution: `t = √random`, so 10.3% land in the core tint, 50.6% in
+the arm and 39.1% in the hot. Green in the book is their **shields**, *"layered, organic,
+shimmering like membranes"* — what answers your fire once they are already here. The
+approach is red, three times over: *"the red tide"*, *"a deep red stain spread across a
+full quadrant of the display"*, and *"watched the red blips arrive. One. Then ten. Then a
+hundred, in a line that did not end."*
+
+Four things now run off `approachFor()`'s `grip` — 0 at fifteen circuits out and 1 at one,
+the same number the score's duck and drift are read from, so the sky and the music share
+one clock and cannot drift apart:
+
+- **The blips**, up to 46, arriving at the rim and creeping inward. They are *unhurried*,
+  the book's own word, and are returned to the rim on reaching the disc so they never pile
+  up over the panel's text.
+- **The tide**, one radial gradient anchored in the lower right — the quadrant the book
+  puts it in — which cannot invalidate the pre-rendered background field the way tinting
+  its stars would have.
+- **Hexagons** past halfway, drifting slower than anything else out there and breathing on
+  the same idea as the score's pulse: *"vast hexagonal masses, less built than grown, their
+  surfaces pocked with irregular openings that breathed."*
+- **The arms turning red**, so the disc tips toward the tide at the end instead of staying
+  nine-tenths green.
+
+### The last row was a state nobody was ever in
+
+`APPROACH` used to end at `at: 0`. `swarmDistance` is `circuits - circuit + 1` and the game
+ends at `circuit > circuits`, which is the exact moment it reaches zero — so the bottom row
+was unreachable during play. Measured over 20 full games: **235 readings at a distance of
+one, and none at all at zero.** The endgame had been topping out at the interpolated value
+for one — music at 0.382 against the 0.34 the table claimed, about a decibel short of its
+own design. It ends at `at: 1` now, so the last circuit delivers the extreme rather than
+80% of it. Spotted by the author, who asked whether the last row was reachable at all.
+
+The last row is also returned **whole** rather than interpolated to: landing on it through
+the mix gave `rain` as `0.44999999999999996` against the `0.45` written down — the same
+float artefact the README records for `180 * 0.7`, at the one distance every game ends on.
+
+### Measuring this needed care
+
+A naive red count scores the **ordinary** sky at 74% red, because gold is `#D9A441` and
+that is red-dominant. The probe uses a discriminant that also requires green to be low,
+which separates the swarm's `#E84A3E` from gold's green of 164.
+
+Two thresholds also overlap and confound a straight sweep: the **mood** flips at ten
+circuits and turns the disc green, dropping red *below* its ordinary baseline, while the
+**grip** starts at fifteen and reddens it. Across both, red goes 18.7% → 9.1% → 29.9% and
+looks broken. Measured inside a constant mood it is clean: **1.2% at ten circuits, 23.4% at
+five, 29.2% at one** — a twenty-four-fold rise, and the probe asserts that ordering.
+
 ## The universe the galaxy is in
 
 Outside the disc the centre panel was a black rectangle, and it is the largest single area

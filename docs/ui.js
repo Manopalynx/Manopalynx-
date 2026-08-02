@@ -434,7 +434,10 @@ function renderBoard() {
       // has to be guarded here — moodFor tolerates a null G, but swarmDistance
       // reads G.circuits and does not.
       galaxy = startGalaxy(midEl.querySelector('.galaxyCanvas'),
-        () => moodFor(G, G ? E.swarmDistance(G) : undefined));
+        () => moodFor(G, G ? E.swarmDistance(G) : undefined),
+        // The same approach the score reads, so the sky and the music share one
+        // clock rather than two tables that would disagree eventually.
+        () => (G ? Sound.approachFor(E.swarmDistance(G)) : null));
   } else {
     galaxy.resize();
   }

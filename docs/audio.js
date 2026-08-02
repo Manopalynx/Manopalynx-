@@ -122,7 +122,14 @@ export const APPROACH = [
   { at: 15, music: 1.00, bed: 0.030, rain: 5.00, breath: 0.00, drift:   0 },
   { at: 10, music: 0.84, bed: 0.058, rain: 2.40, breath: 0.35, drift: -12 },
   { at:  5, music: 0.55, bed: 0.092, rain: 1.10, breath: 0.70, drift: -24 },
-  { at:  0, music: 0.34, bed: 0.128, rain: 0.45, breath: 1.00, drift: -38 }
+  // ONE, not zero. swarmDistance is `circuits - circuit + 1` and the game ends
+  // at `circuit > circuits`, which is the exact moment it reaches zero — so a
+  // bottom row at 0 was a state no player was ever in. Measured over 20 full
+  // games: 235 readings at a distance of one, and none at all at zero. The
+  // endgame had been topping out at the interpolated value for one — music at
+  // 0.382 against the 0.34 written here, about a decibel short of its own
+  // design. Spotted by Sam, who asked whether the last row was reachable.
+  { at:  1, music: 0.34, bed: 0.128, rain: 0.45, breath: 1.00, drift: -38 }
 ];
 
 // The floor the score settles to, not silence: the converted music is the point.
@@ -133,6 +140,12 @@ export function approachFor(dist) {
   if (typeof dist !== 'number' || !Number.isFinite(dist)) return null;
   const d = Math.max(0, dist);
   if (d > APPROACH[0].at) return null;
+  // The last row is returned whole rather than interpolated to. Landing on it
+  // through the mix gave rain 0.44999999999999996 against the 0.45 written in
+  // the table — the same float artefact the README records for `180 * 0.7`, and
+  // at the one distance every game actually ends on.
+  const last = APPROACH[APPROACH.length - 1];
+  if (d <= last.at) return { ...last, grip: 1 };
   for (let i = 0; i < APPROACH.length - 1; i++) {
     const a = APPROACH[i], b = APPROACH[i + 1];
     if (d <= a.at && d >= b.at) {
@@ -144,11 +157,16 @@ export function approachFor(dist) {
         bed:    mix(a.bed,    b.bed),
         rain:   mix(a.rain,   b.rain),
         breath: mix(a.breath, b.breath),
-        drift:  mix(a.drift,  b.drift)
+        drift:  mix(a.drift,  b.drift),
+        // How far into the approach this is, 0 at the first row and 1 at the
+        // last. Derived from the position in the table rather than stored on
+        // each row, so the sky and the score cannot disagree about how close
+        // the swarm is — galaxy.js reads this and nothing else.
+        grip:   (i + k) / (APPROACH.length - 1)
       };
     }
   }
-  return { ...APPROACH[APPROACH.length - 1] };
+  return { ...APPROACH[APPROACH.length - 1], grip: 1 };
 }
 
 /* ------------------------------------------------------------- the setting */
