@@ -19,7 +19,7 @@
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-export const BUILD = 'grandiose-v39';
+export const BUILD = 'grandiose-v40';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -323,6 +323,24 @@ export const RULES = {
   // identically. Measured over 30 full games with a human seat that always
   // refuses: 71 proposals a game, one every circuit, 95% of them an exact
   // repeat, and one contract re-proposed 96 times in a single game.
+  // Cash an opponent keeps back before buying a square out of pledge. High
+  // enough that redeeming does not simply force the next liquidation — the
+  // failure mode here is a pledge/redeem oscillation, not slowness.
+  //
+  // Swept over 40 games at each of 400/500/600/700, counting redemptions, the
+  // squares that were pledged straight back again (the oscillation), and how
+  // many of the owner's own turns the median pledge survives:
+  //
+  //   400  40% redeemed  29% re-pledged  median 11 turns
+  //   500  34% redeemed  21% re-pledged  median 14 turns
+  //   600  27% redeemed  14% re-pledged  median 18 turns
+  //   700  22% redeemed  16% re-pledged  median 21 turns
+  //
+  // 500 halves the median against the 23 turns measured with no redemption at
+  // all, at a fifth of pledges bouncing. Garrisons and citadels built per game
+  // are unchanged across the range (8.3–9.7, inside the noise at 40 games), so
+  // this is not being paid for out of development.
+  redeemReserve: 500,
   refusalCooldown: 3,            // circuits before the same ask may return
   refusalCap: 3,                 // refusals of one square before it is dropped for good
   refusalRaise: 1.15,            // and it may only return with an offer this much better
