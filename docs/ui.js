@@ -10,6 +10,7 @@ import {
 import * as E from './engine.js';
 import { Score, moodFor } from './score.js';
 import { startGalaxy } from './galaxy.js';
+import * as Sound from './audio.js';
 
 const $ = id => document.getElementById(id);
 const SAVE_KEY = 'grandiose-ledger-v1';
@@ -68,6 +69,15 @@ function drawSetup() {
       it does not negotiate. This is how long you have before it gets here — and whoever holds
       the most when it does, held the most. The deep array will keep you posted.</p>
     </div>
+    <div class="fld"><label>Sound</label>
+      <div class="opts">${[['1', 'On'], ['0', 'Off']].map(([v, n]) =>
+        `<button class="opt${(Sound.isOn() ? '1' : '0') === v ? ' on' : ''}" data-snd="${v}">${n}</button>`).join('')}</div>
+      <p class="note" style="margin-top:10px">${Sound.supported()
+        ? `The score, and the deep array heard as well as read. On a phone added to the
+           Home Screen the ringer switch does not reliably silence a web page, so the
+           switch is here rather than only in the menu — set it before you start.`
+        : `This browser has no audio, so there is nothing to turn on. Everything else works.`}</p>
+    </div>
     <button class="big" id="begin">Open the ledger${seatsUsed < 2 ? ' — add an opponent' : ''}</button>
     <p class="note">Sealed-bid auctions are mandatory and the phone gets passed.
     Garrisons are finite. Neutral Anchorage pays nothing. Doubles roll again — three in a row and an Overseer files you.<br><br>
@@ -81,6 +91,16 @@ function drawSetup() {
   $('nameWrap').innerHTML = nw;
   $('nameWrap').querySelectorAll('[data-n]').forEach(inp =>
     inp.oninput = () => { setup.names[+inp.dataset.n] = inp.value.slice(0, 14); });
+
+  // The same Score.on the menu toggles — one setting, two places to reach it,
+  // rather than a second switch that could disagree with the first. Tapping is
+  // itself a gesture, which is the only moment iOS will start a context, so an
+  // "On" here starts the score straight away instead of waiting for Begin.
+  $('setup').querySelectorAll('[data-snd]').forEach(b => b.onclick = () => {
+    Sound.setOn(b.dataset.snd === '1');
+    if (Sound.isOn()) Score.init();
+    drawSetup();
+  });
 
   $('setup').querySelectorAll('[data-h]').forEach(b => b.onclick = () => {
     setup.humans = +b.dataset.h;
@@ -112,6 +132,7 @@ function begin() {
     seats.push({ name: (setup.names[i] || `Player ${i + 1}`).trim() || `Player ${i + 1}`, kind: 'human' });
   }
   setup.ais.forEach(k => seats.push({ name: PERSONAS[k].n, kind: 'ai', persona: k }));
+  resetSoundWatch();
   G = E.createGame({ seats, seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0, circuits: setup.circuits });
   G.log.unshift({ kind: 'leader', circuit: 1, text: 'Nine systems are burning their drives to readiness. Begin.' });
   clearSave();
@@ -228,7 +249,41 @@ function render() {
   renderBoard();
   renderActions();
   renderLog();
+  soundWatch();
 }
+
+/* ------------------------------------------------------------ sound cues */
+// The engine has no DOM, no timers and no audio, and it stays that way. Both
+// cues are therefore read off state the interface can already see, by comparing
+// against the last render rather than by the engine calling out:
+//
+//   G.swarmMark   how many of the four deep-array reports have been made
+//   p.lord        null until that player is absorbed
+//
+// Only transitions fire. render() runs on every animation frame of a walking
+// piece, so anything keyed on a level rather than an edge would retrigger for
+// the length of a move.
+let heard = { mark: -1, lords: '' };
+
+function soundWatch() {
+  if (!G) return;
+  const lords = G.players.map(p => (p.lord === null || p.lord === undefined ? '-' : p.lord)).join(',');
+  const mark = G.swarmMark ?? 0;
+  const first = heard.mark === -1;
+  // A resumed save must not replay every report the last session already heard,
+  // so the first render after loading only takes the reading.
+  if (!first) {
+    if (lords !== heard.lords && lords.replace(/-/g, '').length > heard.lords.replace(/-/g, '').length) {
+      Sound.absorbed();
+    } else if (mark > heard.mark) {
+      Sound.stage(mark);
+    }
+  }
+  heard = { mark, lords };
+}
+
+// Starting a new game re-arms both, so a second game reports from the top.
+function resetSoundWatch() { heard = { mark: -1, lords: '' }; }
 
 // Four chips have to fit 393pt without the last one sliding off the edge, and
 // "High Commander Varan" will never fit whole. Opponents go by the name you
@@ -719,7 +774,9 @@ function showMenu() {
     Quote both of these in a bug report — the build says whether you are on the
     current version, and the seed replays the same dice and the same opponents.</p>`);
 }
-function toggleScore() { Score.resume(); Score.toggle(); render(); showMenu(); }
+// Through Sound.setOn rather than Score.toggle, so the choice is written down
+// and the setup screen comes back up agreeing with it next launch.
+function toggleScore() { Score.resume(); Sound.setOn(!Score.on); render(); showMenu(); }
 
 /* ---------------------------------------------------------- square detail */
 function showSquare(i) {
@@ -1635,6 +1692,11 @@ function copyResult() {
 /* ============================================================ boot */
 // A handle for the browser probe in test/. Not used by the game itself.
 window.__G = () => G;
+// Sound cannot be judged by a machine, but WHETHER one fires can be. The probe
+// installs a recording AudioContext and drives state past a cue with these.
+window.__Sound = Sound;
+window.__Score = Score;
+window.__render = () => render();
 window.__render = () => render();
 window.__SETS = () => SETS;
 window.__BOARD = () => BOARD;
@@ -1660,4 +1722,7 @@ window.addEventListener('pagehide', save);
 window.addEventListener('orientationchange', () => setTimeout(() => { if (G) render(); }, 220));
 window.addEventListener('resize', () => { if (G) renderLog(); });
 
+// The preference has to be read before the setup screen draws, because the
+// switch shows its own state.
+Sound.restore();
 drawSetup();

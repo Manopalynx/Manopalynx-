@@ -369,6 +369,82 @@ for (const device of DEVICES) {
     else fail(`expected 22 unmarked properties, found ${marks.props}`);
   }
 
+  // ---- the sound cues must fire on the right edges, and only then ----
+  // A recording AudioContext is installed in place of the one deleted at the top
+  // of this file. What it plays cannot be judged here — that needs ears, and it
+  // is the one part of the feature left to the author. What is asserted is that
+  // a cue happens at all, happens once, and does not happen when silenced.
+  const cues = await page.evaluate(() => {
+    const noop = () => {};
+    const param = () => ({ value: 0, setValueAtTime: noop, linearRampToValueAtTime: noop,
+                           exponentialRampToValueAtTime: noop, cancelScheduledValues: noop });
+    // connect() must hand back its destination: score.js chains
+    // dly.connect(dtone).connect(dfb).connect(dly) and l.connect(la).connect(o.detune).
+    const link = o => Object.assign(o, { connect: d => d, disconnect: noop });
+    window.__nodes = 0;
+    window.AudioContext = class {
+      constructor() { this.currentTime = 0; this.sampleRate = 44100; this.state = 'running'; this.destination = {}; }
+      resume() { this.state = 'running'; return { then: f => (f(), { catch: noop }) }; }
+      addEventListener() {}
+      createGain() { return link({ gain: param() }); }
+      createBiquadFilter() { return link({ type: '', frequency: param(), Q: param() }); }
+      createDelay() { return link({ delayTime: param() }); }
+      createConvolver() { return link({ buffer: null }); }
+      createBufferSource() { window.__nodes++; return link({ buffer: null, loop: false, start: noop, stop: noop }); }
+      createOscillator() { window.__nodes++; return link({ type: '', frequency: param(), detune: param(), start: noop, stop: noop }); }
+      createBuffer(c, n) { return { getChannelData: () => new Float32Array(n) }; }
+    };
+    const S = window.__Sound, Score = window.__Score, G = window.__G();
+    // The cues borrow the score's context, so the score has to be started on the
+    // stub before anything can sound. Score.init() is what a real tap calls.
+    Score.ctx = null; Score.ready = false;
+    S._reset(); S.setOn(true);
+    Score.init();
+    const unlocked = !!(Score.ready && Score.ctx && Score.lp);
+
+    const count = fn => { window.__nodes = 0; fn(); return window.__nodes; };
+    const direct  = count(() => S.stage(1));
+    const louder  = count(() => S.stage(4));
+    S.setOn(false);
+    const silenced = count(() => S.stage(4));
+    const silencedAbsorb = count(() => S.absorbed());
+    S.setOn(true);
+
+    // Now through the watcher, which is what actually runs in a game.
+    G.swarmMark = 0; window.__render();
+    G.swarmMark = 1;
+    const onCross = count(() => window.__render());
+    const onRepeat = count(() => window.__render());   // same state, must be silent
+
+    // Absorption: a player acquiring an overlord.
+    const victim = G.players.find(p => p.lord === null || p.lord === undefined);
+    const other = G.players.find(p => p !== victim);
+    let onAbsorb = 0, absorbRepeat = 0;
+    if (victim && other) {
+      victim.lord = other.i;
+      onAbsorb = count(() => window.__render());
+      absorbRepeat = count(() => window.__render());
+      victim.lord = null; window.__render();
+    }
+    return { unlocked, direct, louder, silenced, silencedAbsorb, onCross, onRepeat, onAbsorb, absorbRepeat };
+  });
+  if (cues.unlocked) pass('the audio context unlocks on a gesture');
+  else fail('unlock() refused a context it should have taken');
+  if (cues.direct > 0) pass(`a stage report schedules sound (${cues.direct} nodes)`);
+  else fail('a stage report scheduled nothing');
+  if (cues.louder > cues.direct) pass(`stage 4 is fuller than stage 1 (${cues.louder} vs ${cues.direct})`);
+  else fail(`stage 4 scheduled ${cues.louder} nodes against stage 1's ${cues.direct}`);
+  if (cues.silenced === 0 && cues.silencedAbsorb === 0) pass('sound off means nothing is scheduled at all');
+  else fail(`silenced but still scheduled ${cues.silenced}/${cues.silencedAbsorb} nodes`);
+  if (cues.onCross > 0) pass('crossing a swarm stage fires the cue');
+  else fail('the swarm stage advanced and nothing sounded');
+  if (cues.onRepeat === 0) pass('the cue is edge-triggered, not repeated every render');
+  else fail(`re-rendering the same state fired again (${cues.onRepeat} nodes) — it would drone through every move`);
+  if (cues.onAbsorb > 0) pass('absorption fires its own cue');
+  else fail('a player was absorbed in silence');
+  if (cues.absorbRepeat === 0) pass('absorption does not retrigger while the state stands');
+  else fail(`absorption fired again on re-render (${cues.absorbRepeat} nodes)`);
+
   // ---- no two marks may look alike ----
   // data.js already forbids two codes of the same length differing by a single
   // character, because COL/CON — the two decks — were exactly that. A mark is

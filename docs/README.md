@@ -134,6 +134,42 @@ faction you can trade with. They do not hold prisoners and they do not take paym
 are equipped to influence."* They appear three times: as the clock, as the voice on the
 Absorbed corner, and as one Contingency card that costs you money for looking at them.
 
+## Sound
+
+`score.js` is a generative score — lydian and whole-tone harmony, quartal voicings, a
+half-second delay and a convolution reverb, no drums, never repeating. It carries five
+moods and `moodFor()` picks one from the board: `auction` while a bid is open, `facility`
+while you are detained, `vassal` once you have an overlord, `ascend` once you hold
+somebody else's oath, `ledger` otherwise. **This was undocumented until now, which is how
+a later session came to build a second AudioContext beside it before noticing.**
+
+The Neurex are two cues on top, in `audio.js`, and they own no context of their own —
+they route into `Score.lp`, the node the pads and plucks already use, so they arrive with
+the same delay and reverb and sound like part of the piece rather than a notification over
+it. That also puts them behind `Score.master`, so one switch silences everything and the
+two cannot drift apart.
+
+- **Absorption.** Low and wrong rather than startling: mandibles coming up underneath a
+  detuned sub. Absorption is the book's thesis and the game's win condition, and a
+  jump-scare would cheapen the quietest serious moment in the game.
+- **The deep array's four reports**, on the existing `SWARM_STAGES` beats at 25/50/75/95%.
+  Tied to those rather than a second clock, so the sound escalates exactly where the text
+  does. `audio.test.mjs` asserts the escalation is monotonic in every dimension that
+  carries weight — more clacks, louder, longer, lower — because otherwise the game can
+  say the situation is worsening while sounding unchanged.
+
+The switch is on the setup screen as well as in the menu, and is now remembered between
+launches. It is on the setup screen because in a Home Screen PWA the iPhone's ringer
+switch does **not** reliably silence a web page, so the choice needs making before a game
+starts rather than after the first sound.
+
+**What is not verified: what any of it sounds like.** The probe installs a recording
+AudioContext and asserts that a cue fires, fires once rather than on every render, is
+fuller at stage 4 than at stage 1, and schedules nothing at all when sound is off. It
+cannot tell you whether the result is frightening or annoying. That judgement is the
+author's, and the plans are plain numbers at the top of `audio.js` so acting on it is a
+one-line change.
+
 ## The two decks
 
 Sixteen cards each, mirroring Monopoly's Chance/Community Chest split. **Contingency** is
