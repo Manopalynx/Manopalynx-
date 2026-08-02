@@ -1146,6 +1146,82 @@ for (const device of DEVICES) {
     else fail(`the galaxy is static (${galaxy.changedPixels} pixels changed in 260ms)`);
   }
 
+  // ---- a contract can ask THEM to pay ----
+  // tradeSet handled the counterparty and then assumed every other key was a
+  // list, so tapping the direction toggle ran `list.indexOf` on the number 1 and
+  // threw. The tap did nothing, direction never left its default of 1, and a
+  // human could not draw a contract where the other side pays them — the engine
+  // had always supported it and only the interface could not ask. The existing
+  // contract checks all built bundles and never touched this toggle, which is
+  // exactly how it shipped.
+  const dir = await page.evaluate(async () => {
+    const G = window.__G();
+    G.players[0].holdings.push({ sq: 14, garrisons: 0, citadel: 0, mortgaged: 0 });
+    G.players[1].holdings.push({ sq: 13, garrisons: 0, citadel: 0, mortgaged: 0 });
+    window.__render();
+    const open = [...document.querySelectorAll('#acts [data-fn]')].find(x => /Propose/i.test(x.textContent));
+    if (!open) return 'no Propose button';
+    open.click();
+    await new Promise(r => setTimeout(r, 160));
+    const pick = re => [...document.querySelectorAll('.sheet [data-fn^="tradeSet|direction|"]')]
+      .find(x => re.test(x.textContent));
+    const them = pick(/They pay/i), you = pick(/You pay/i);
+    if (!them || !you) return 'no direction toggle on the contract sheet';
+
+    const cashBox = document.querySelector('.sheet input[type="number"]');
+    if (!cashBox) return 'no credits box on the contract sheet';
+    cashBox.value = '100';
+    cashBox.dispatchEvent(new Event('input', { bubbles: true }));
+
+    // The totals line specifically. "You receive" appears three times on this
+    // sheet — as a bundle header ("You receive - 3 of 3"), as a bare label, and
+    // on the totals row, which is the only one that ends "at list". Two earlier
+    // selectors here picked the wrong one and failed for reasons that had
+    // nothing to do with the code under test.
+    const receiveTotal = () => {
+      const el = [...document.querySelectorAll('.sheet *')]
+        .filter(e => e.children.length < 3 && /You receive/i.test(e.textContent) && /at list/i.test(e.textContent))
+        .shift();
+      if (!el) return null;
+      const m = el.textContent.replace(/[^0-9]/g, '');
+      return m ? +m : null;
+    };
+
+    // Compared as a DIFFERENCE, not against a literal: whatever squares are in
+    // the bundle when this runs contributes to the same total, and an earlier
+    // version of this check asserted "100" against a line reading ₡420.
+    you.click();
+    await new Promise(r => setTimeout(r, 140));
+    const payTotal = receiveTotal();
+    them.click();
+    await new Promise(r => setTimeout(r, 140));
+    const afterThem = { on: them.classList.contains('on'),
+                        dir: window.__TR ? window.__TR().direction : null,
+                        cash: window.__TR ? window.__TR().cash : null,
+                        gain: receiveTotal() === null || payTotal === null ? null : receiveTotal() - payTotal };
+    you.click();
+    await new Promise(r => setTimeout(r, 140));
+    const afterYou = { on: you.classList.contains('on'), dir: window.__TR ? window.__TR().direction : null };
+    const cancel = [...document.querySelectorAll('.sheet [data-fn]')].find(x => /cancel|close/i.test(x.dataset.fn));
+    if (cancel) cancel.click();
+    return { afterThem, afterYou };
+  });
+  if (typeof dir === 'string') fail(dir);
+  else {
+    if (dir.afterThem.on && dir.afterThem.dir === -1)
+      pass('a contract can ask the other side to pay');
+    else fail(`tapping "They pay" left direction at ${dir.afterThem.dir} — the toggle does nothing`);
+    if (dir.afterYou.on && dir.afterYou.dir === 1) pass('and the choice goes back the other way');
+    else fail(`tapping "You pay" left direction at ${dir.afterYou.dir}`);
+    // With credits on the table the totals must follow the direction, or the
+    // sheet would agree to something different from what it displays.
+    if (dir.afterThem.cash !== 100)
+      fail(`the credits box did not register (cash is ${dir.afterThem.cash}) — the totals check proves nothing`);
+    else if (dir.afterThem.gain === 100)
+      pass('and what you receive rises by exactly the credits when they pay');
+    else fail(`switching to "They pay" moved what you receive by ${dir.afterThem.gain}, not the 100 on the table`);
+  }
+
   // ---- what you have built must be visible on every edge ----
   // The colour bar sits on the INWARD side of each cell, which on a left-edge
   // cell is the right — exactly where the development mark was placed. Measured

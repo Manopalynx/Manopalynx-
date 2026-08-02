@@ -134,6 +134,25 @@ faction you can trade with. They do not hold prisoners and they do not take paym
 are equipped to influence."* They appear three times: as the clock, as the voice on the
 Absorbed corner, and as one Contingency card that costs you money for looking at them.
 
+## You could never ask them to pay
+
+`tradeSet` handled the counterparty and then assumed every other key was a list, so tapping
+the credits direction ran `list.indexOf` on the number `1` and threw. The tap did nothing
+at all, `direction` never left its default — and since the default is "You pay", **a human
+could not draw a contract where the other side pays them.** The engine had always supported
+it; only the interface could not ask.
+
+The probe built bundles both ways and settled them, and never once touched that toggle,
+which is exactly how it shipped. It now flips the direction both ways and checks that what
+you receive rises by **exactly** the credits on the table.
+
+That last assertion took three attempts, all of them my fault rather than the code's. "You
+receive" appears three times on the sheet — a bundle header, a bare label, and the totals
+row — and the first two selectors picked the wrong element. Then the check compared against
+a literal `100` on a line reading `₡420`, because whatever squares are in the bundle when
+the probe runs contribute to the same total. It compares the **difference** between the two
+directions now, which is the thing that actually has to be true.
+
 ## A whole column showed nothing it had built
 
 The colour bar sits on the **inward** side of each cell, as on a real board — which on a

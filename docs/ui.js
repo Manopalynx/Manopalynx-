@@ -1473,6 +1473,16 @@ function tradeSet(key, value) {
     drawTrade();
     return;
   }
+  // Which way the credits move is a scalar, not a list. Without this branch it
+  // fell through to the toggle below and threw `list.indexOf is not a function`
+  // on a number, so the tap did nothing at all — and since direction starts at
+  // 1, a human could never draw a contract where the other side pays THEM. The
+  // engine had always supported it; only the interface could not ask.
+  if (key === 'direction') {
+    TR.direction = v === -1 ? -1 : 1;
+    refreshTrade();
+    return;
+  }
   // Toggle. Tapping a chosen square takes it back out, which is the only way to
   // change your mind without starting the contract again.
   const list = TR[key];
