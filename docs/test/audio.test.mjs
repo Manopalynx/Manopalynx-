@@ -398,3 +398,34 @@ test('and it is cut below where a phone speaker starts to carry', () => {
   assert.ok(Score.DRONE_LP > Score.R0 * 2,
     `${Score.DRONE_LP}Hz cuts into the root at ${Score.R0.toFixed(0)}Hz`);
 });
+
+// Reported as "a constant and almost faint alarm in the background going up and
+// down", starting "around 5-10ish rounds in the smallest circuit option".
+//
+// The smallest game is 48 circuits and the first report fires at a quarter
+// elapsed. Nothing else in this codebase switches on partway through a game and
+// then never stops, which is what identified it — the bed is two detuned
+// sawtooths under a filter sweeping on a 77-second cycle, and it used to arrive
+// at the first report and hold for the remaining three quarters.
+//
+// The reports are still too sparse to carry the swarm alone, so the bed stays.
+// What it may not do is start the moment the array first speaks.
+test('the first report does not switch on a tone that never stops', () => {
+  assert.equal(PRESENCE[1].gain, 0,
+    'a quarter of the way into a game is too early for a drone that never rests again');
+  assert.equal(PRESENCE[1].wash, 0, 'and the same goes for its noise');
+  assert.ok(PRESENCE[1].clack > 0,
+    'the report is not silent though — it still carries the occasional distant clack');
+  assert.ok(PRESENCE[2].gain > 0, 'the bed does open, at the halfway report');
+});
+
+// The ending is driven by APPROACH, not by the stage bed — resolveBed takes the
+// heavier of the two. So the stage levels can come down without touching the
+// climax, and this is what says so.
+test('the approach still outweighs the stage bed by the end', () => {
+  const lastStage = PRESENCE[PRESENCE.length - 1].gain;
+  const closest = APPROACH[APPROACH.length - 1].bed;
+  assert.ok(closest > lastStage,
+    `an approach topping out at ${closest} under a stage bed of ${lastStage} means the last ` +
+    `circuits are carried by the wrong table, and quietening a stage would flatten the ending`);
+});

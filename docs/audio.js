@@ -67,12 +67,34 @@ export const ABSORB_PLAN = { clacks: 22, gain: 0.30, hz: 82, dur: 4.0, wash: 0.0
 // a thin detuned presence and an occasional clack, thickening at every stage.
 // SWARM_STAGES says the intent out loud: the tone should change while the table
 // is still arguing about colour sets. A sting cannot do that; a bed can.
+// The tone that was reported as "a constant and almost faint alarm in the
+// background going up and down", which "doesn't start until around 5-10ish
+// rounds in the smallest circuit option". That timing is what identified it:
+// the smallest game is 48 circuits, the first report fires at a quarter
+// elapsed, and nothing else in this codebase switches on partway through a game
+// and then never stops. It is two detuned sawtooths under a filter that sweeps
+// on a 77-second cycle — a faint tone, slowly moving, for the last three
+// quarters of every game.
+//
+// The bed itself is not the mistake; the reports really are too sparse to carry
+// the swarm on their own. Where it goes wrong is the DRONE arriving at the very
+// first report, a quarter of the way in, at a level that never rests again.
+// So the first report now brings its cue and its occasional clack and no tone
+// at all, and the tone opens at the second — half elapsed — from much lower.
+//
+// The climax is untouched. resolveBed takes the heavier of the stage bed and
+// the approach bed, and the last fifteen circuits are driven by APPROACH, which
+// is a separate table and unchanged. Measured, the bed's timbre swings 2.4
+// semitones at the first report against 12 at the last, so it already scales
+// with the stage — an earlier theory that it swept disproportionately when
+// quiet was wrong, and cutting the sweep would have flattened the ending for
+// nothing.
 export const PRESENCE = [
   null,                                                                   // nothing yet
-  { gain: 0.016, hz: 150, every: 9.0, clack: 0.045, wash: 0.004 },
-  { gain: 0.028, hz: 132, every: 5.5, clack: 0.070, wash: 0.009 },
-  { gain: 0.045, hz: 112, every: 3.2, clack: 0.100, wash: 0.016 },
-  { gain: 0.066, hz:  96, every: 1.8, clack: 0.135, wash: 0.026 }
+  { gain: 0.000, hz: 150, every: 9.0, clack: 0.045, wash: 0.000 },
+  { gain: 0.010, hz: 132, every: 5.5, clack: 0.070, wash: 0.004 },
+  { gain: 0.026, hz: 112, every: 3.2, clack: 0.100, wash: 0.011 },
+  { gain: 0.050, hz:  96, every: 1.8, clack: 0.135, wash: 0.020 }
 ];
 
 // `mark` is G.swarmMark — how many reports the deep array has made, 0 to 4.
