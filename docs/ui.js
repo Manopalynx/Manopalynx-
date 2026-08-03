@@ -43,20 +43,29 @@ function clearSave() {
 // one phone against the opponents — and a default of two meant changing it every
 // single time.
 //
-// The names are the book's, and which ones is not arbitrary. Samuel is the
-// narrator's subject and the obvious first seat. The second is NOT another Union
-// name: Spector is the Leader's own instrument, so a Union second seat would put
-// three Union characters at a four-seat table. Marcus Hale is Eden, the largest
-// presence in the novel after Samuel himself, and reads as a rival rather than a
-// comrade — "Samuel had by now seen Hale amused at an execution".
+// The names are the book's, and which ones is not arbitrary: four seats should
+// be four allegiances, or the table is one side of a war arguing with itself.
+// Spector is the Leader's own instrument, so Samuel already brings the Union.
 //
-// Rourke holds Horizon for the resistance and Harlow runs what the Dominion
-// permits the Union to call a defence force, so the four seats are two powers
-// and two loyalties rather than one side of a war. All four are one word, which
-// is what the player chips show.
+//   Samuel  the Union
+//   Vex     nobody's. A pirate captain of the Raven's Claw, "a vessel assembled
+//           from the corpses of at least nine other vessels", hired by the Union
+//           and then found "taking the very freighters whose cargoes had paid
+//           them". Bought, and not owned — which is the whole game.
+//   Rourke  the resistance, holding Horizon
+//   Ondh    Basileia. Doctor Sera Ondh, who brings up a map of Basileian space
+//           with three systems ringed in amber.
+//
+// The first attempt here was Samuel, Hale, Rourke, Harlow, and it was wrong:
+// Hale commands Samuel and Harlow leads the Union's military, so three of the
+// four seats were Union. Corrected by the author. The mistake was mine and it
+// was a specific one — I read the line "Eden," Hale said as an allegiance when
+// it is a man naming a destination, and built a faction out of two words.
+//
+// All four are one word, which is what the player chips show.
 const setup = {
   humans: 1,
-  names: ['Samuel', 'Hale', 'Rourke', 'Harlow'],
+  names: ['Samuel', 'Vex', 'Rourke', 'Ondh'],
   ais: [],
   circuits: 72
 };
@@ -153,7 +162,7 @@ function begin() {
   if (setup.humans + setup.ais.length < 2) {
     sheet(`<h3>A ledger needs two columns</h3><div class="sub">nobody to play against</div>
       <p style="font-size:15px;line-height:1.5">Add a second player or an opponent.</p>
-      ${btns([['Close', 'closeSheet()', 'pri wide']])}`);
+      ${btns([['Close', 'closeSheet', 'pri wide']])}`);
     return;
   }
   const seats = [];
@@ -414,6 +423,14 @@ function tumbleDice(final, done) {
   diceRolling = true;
   midEl.classList.add('rolling');
   let n = 0;
+  // The dice are the one animation on a raw interval rather than through
+  // later(), and its completion continues the turn — walk() dereferences whose
+  // turn it is. Abandoning a game during the third of a second the dice tumble
+  // therefore threw, which is the same defect the scheduler was written for,
+  // reached through setInterval instead of setTimeout. The tumble itself is
+  // only text in two boxes and can finish harmlessly; what must not happen is
+  // handing the turn on to a game that is over.
+  const mine = era;
   const spin = setInterval(() => {
     dice[0].textContent = 1 + Math.floor(Math.random() * 6);
     dice[1].textContent = 1 + Math.floor(Math.random() * 6);
@@ -423,7 +440,7 @@ function tumbleDice(final, done) {
       midEl.classList.remove('rolling');
       dice[0].textContent = final[0];
       dice[1].textContent = final[1];
-      done();
+      if (era === mine && G) done();
     }
   }, 48);
 }

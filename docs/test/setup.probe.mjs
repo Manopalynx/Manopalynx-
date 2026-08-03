@@ -84,6 +84,11 @@ for (const device of DEVICES) {
   if (four.names.length === 4) pass(`four name fields (${four.names.join(', ')})`);
   else fail(`${four.names.length} name fields at four humans`);
 
+  // Four seats should be four allegiances. The first attempt put Samuel, Hale
+  // and Harlow at the same table, and all three are Union.
+  if (four.names.join() === 'Samuel,Vex,Rourke,Ondh') pass('and they are four different powers');
+  else fail(`the default names are now ${four.names.join(', ')}`);
+
   if (new Set(four.names).size === 4) pass('and no two seats share a name');
   else fail(`duplicate default names: ${four.names.join(', ')}`);
 
@@ -106,8 +111,32 @@ for (const device of DEVICES) {
   if (stillFour === 0) pass('a full table takes no opponent');
   else fail(`${stillFour} opponents joined a full table`);
 
-  // ---- the sound, when a game ends ----
+  // ---- the sheet that meets a player before their first game ----
+  // One seat and no opponents is refused, correctly. Its Close button was
+  // written data-fn="closeSheet()" against forty-odd written without the
+  // parentheses, so the lookup missed and the call threw inside an onclick.
+  // The sheet is modal and has one button, so this trapped a player on the
+  // setup screen entirely — reported from play as "it didn't let me press
+  // close". It rendered right, sized right and did nothing.
   await page.click('[data-h="1"]');
+  await page.click('#begin');
+  await page.waitForSelector('#sheetRoot .mbtn');
+  const stuck = await page.evaluate(() => ({
+    text: document.querySelector('#sheetRoot').innerText,
+    buttons: [...document.querySelectorAll('#sheetRoot .mbtn')].map(b => b.textContent.trim()),
+    inGame: !document.getElementById('game').classList.contains('hidden')
+  }));
+  if (/two columns/i.test(stuck.text) && !stuck.inGame) pass('a lone player is refused a game');
+  else fail(`a game began with one seat, or the wrong sheet appeared: ${stuck.buttons.join('/')}`);
+
+  await page.click('#sheetRoot .mbtn');
+  await page.waitForTimeout(120);
+  const closed = await page.evaluate(() =>
+    document.getElementById('sheetRoot').innerHTML.trim() === '');
+  if (closed) pass('and Close closes it');
+  else fail('the only button on a modal sheet does nothing — the player is trapped here');
+
+  // ---- the sound, when a game ends ----
   await page.click('[data-a="spector"]');
   await page.click('#begin');
   await page.waitForSelector('#game:not(.hidden)');
