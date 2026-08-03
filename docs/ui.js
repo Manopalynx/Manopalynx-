@@ -39,24 +39,53 @@ function clearSave() {
 }
 
 /* ============================================================ setup */
-const setup = { humans: 2, names: ['Sam', 'Meelah'], ais: [], circuits: 72 };
+// One seat by default, because the ordinary way this is played is one person on
+// one phone against the opponents — and a default of two meant changing it every
+// single time.
+//
+// The names are the book's, and which ones is not arbitrary. Samuel is the
+// narrator's subject and the obvious first seat. The second is NOT another Union
+// name: Spector is the Leader's own instrument, so a Union second seat would put
+// three Union characters at a four-seat table. Marcus Hale is Eden, the largest
+// presence in the novel after Samuel himself, and reads as a rival rather than a
+// comrade — "Samuel had by now seen Hale amused at an execution".
+//
+// Rourke holds Horizon for the resistance and Harlow runs what the Dominion
+// permits the Union to call a defence force, so the four seats are two powers
+// and two loyalties rather than one side of a war. All four are one word, which
+// is what the player chips show.
+const setup = {
+  humans: 1,
+  names: ['Samuel', 'Hale', 'Rourke', 'Harlow'],
+  ais: [],
+  circuits: 72
+};
 
 function drawSetup() {
   const saved = loadSaved();
   const seatsUsed = setup.humans + setup.ais.length;
+  const free = 4 - seatsUsed;
   $('setup').innerHTML = `
     <h1>Grandiose<em>THE LEDGER</em></h1>
     <div class="quote">${esc(EPIGRAPH.text)}<b>— ${esc(EPIGRAPH.cite)}</b></div>
     ${saved ? `<button class="big" id="resume">Resume the game in progress</button>` : ''}
-    <div class="fld"><label>Players at the table</label>
-      <div class="opts">${[1, 2].map(k =>
-        `<button class="opt${setup.humans === k ? ' on' : ''}" data-h="${k}">${k} human${k > 1 ? 's' : ''}</button>`).join('')}</div>
+    <div class="fld"><label>Humans at the table</label>
+      <div class="opts">${[1, 2, 3, 4].map(k =>
+        `<button class="opt${setup.humans === k ? ' on' : ''}" data-h="${k}">${k}</button>`).join('')}</div>
+      <p class="note" style="margin-top:10px">Four seats in all, however they are shared out.
+      The phone gets passed: sealed bids and contracts are one player's eyes only.</p>
     </div>
     <div class="fld" id="nameWrap"></div>
-    <div class="fld"><label>Opponents — ${4 - setup.humans} seats free</label>
+    <div class="fld"><label>Opponents — ${free === 0 ? 'the table is full'
+        : `${free} seat${free > 1 ? 's' : ''} free`}</label>
       ${Object.entries(PERSONAS).map(([k, a]) => {
         const on = setup.ais.includes(k);
-        return `<div class="aiCard" data-a="${k}" style="border-left-color:${a.c};opacity:${on ? 1 : .45}">
+        // Greyed at 0.45 when simply not chosen, and further when there is no
+        // room left — an unselected card and an unselectable one looked alike,
+        // so a full table read as three opponents refusing to be tapped.
+        const shut = !on && free === 0;
+        return `<div class="aiCard" data-a="${k}" style="border-left-color:${a.c};
+            opacity:${on ? 1 : shut ? .2 : .45}">
           <div class="pip" style="background:${a.c};margin-top:6px"></div>
           <div><div class="n">${esc(a.n)}${on ? ' ✓' : ''}</div><div class="d">${esc(a.d)}</div></div>
         </div>`;
@@ -623,6 +652,26 @@ const btns = list => `<div class="mbtns">${list.map(([label, fn, cls = '', confi
 
 /* ============================================================ the flow */
 // One place decides what happens next. Every action ends by calling tick().
+// A game can be abandoned while an opponent is mid-turn. New game sets G to
+// null, and every timer already scheduled for that opponent then lands in a
+// world with no game in it. tick() has always guarded for that; the callbacks
+// that run BEFORE tick did not — reading whose turn it is, or walking a piece,
+// both touch G first and both threw.
+//
+// Latent for as long as the table defaulted to two humans and one opponent,
+// where an opponent held a third of the turns. Defaulting to one human made it
+// half of them, and the probe started catching it on the way out of a game.
+//
+// One scheduler with one guard, rather than a check at each site — which is the
+// shape of every other defect this file has had. `era` also covers the case the
+// null check alone would miss: abandoning a game and immediately starting
+// another, where G is not null but is a different game entirely.
+let era = 0;
+function later(fn, ms) {
+  const mine = era;
+  return setTimeout(() => { if (era === mine && G) fn(); }, ms);
+}
+
 function tick() {
   if (!G) return;
   save();
@@ -636,24 +685,24 @@ function tick() {
 
   switch (G.phase) {
     case 'roll':
-      if (p.kind === 'ai') { busy = true; render(); setTimeout(act_roll, 750); }
+      if (p.kind === 'ai') { busy = true; render(); later(act_roll, 750); }
       else busy = false;
       break;
 
     case 'landed':
-      if (p.kind === 'ai') { busy = true; setTimeout(aiResolve, 320); }
+      if (p.kind === 'ai') { busy = true; later(aiResolve, 320); }
       else busy = false;
       break;
 
     case 'card':
-      if (p.kind === 'ai') { busy = true; setTimeout(runCard, 520); }
+      if (p.kind === 'ai') { busy = true; later(runCard, 520); }
       else { busy = false; showCard(); }
       break;
 
     case 'offer':
       if (p.kind === 'ai') {
         busy = true;
-        setTimeout(() => {
+        later(() => {
           if (E.aiWantsToBuy(G, p, p.pos)) E.buy(G, p);
           else E.openAuction(G, p.pos);
           tick();
@@ -684,7 +733,7 @@ function tick() {
     case 'end':
       if (p.kind === 'ai') {
         busy = true;
-        setTimeout(() => {
+        later(() => {
           E.aiDevelop(G, p);
           if (G.phase === 'contract' || G.over) { tick(); return; }
           E.endTurn(G);
@@ -715,9 +764,9 @@ function walk(path, done) {
     if (k >= path.length) { anim = null; renderBoard(); done(); return; }
     anim.pos = path[k];
     renderBoard();
-    setTimeout(step, 105);
+    later(step, 105);
   };
-  setTimeout(step, 105);
+  later(step, 105);
 }
 
 /* ============================================================ actions */
@@ -1814,6 +1863,21 @@ function newGame() {
   clearSave();
   G = null;
   closeSheet();
+  // The swarm does not follow you back to the menu.
+  //
+  // This is the only route from a game to the setup screen, and it used to leave
+  // every piece of the sound exactly where the game had left it: the bed still
+  // droning and clacking, the score still ducked under it, and the tuning still
+  // thirty-eight cents flat from the takeover. Nothing anywhere told the sound a
+  // game had ended — resetSoundWatch was called on the way IN to a game, so it
+  // came right only once the next one started.
+  //
+  // The score itself plays on, because the setup screen has always had it and
+  // its own Sound switch starts it. What stops is everything that belonged to
+  // the game that just finished.
+  resetSoundWatch();
+  Score.set(moodFor(null));
+  era++;                            // nothing still in flight belongs to anything now
   $('game').classList.add('hidden');
   $('setup').classList.remove('hidden');
   drawSetup();
