@@ -18,7 +18,8 @@ import assert from 'node:assert/strict';
 import { BOARD, SETS, RULES } from '../data.js';
 import {
   createGame, aiRepay, seekSale, repayDebt, contractIsLegal, settleContract,
-  recordRefusal, refusalBlocks, holding, aiValue
+  recordRefusal, refusalBlocks, holding, aiValue, redeemCost, ownsSet, rentOf,
+  contractValue, netValue, aiCounter, aiAcceptsContract
 } from '../engine.js';
 
 const hold = (p, sq, extra = {}) =>
@@ -223,4 +224,176 @@ test('a refused sale is remembered, so it is not proposed again next turn', () =
   assert.ok(refusalBlocks(G, seller.i, buyer.i, sq),
     'recording only the get-side of a sale records nothing at all, and the ask returns every turn');
   assert.equal(seekSale(G, seller), null, 'and seekSale drops it');
+});
+
+/* ------------------------------------------------- trading a pledged square */
+
+// A pledged square may now change hands. It is the only exit its owner has:
+// measured over 40 games, a pledged square is one short of somebody else's set
+// on 40% of all turns while its owner can afford to redeem it only 6.6% of the
+// time, and the buyer's value net of the redemption was positive in all 13,254
+// cases. Both sides wanted the deal and the rules forbade it.
+//
+// What makes it a deal rather than a giveaway is that the price knows about the
+// redemption, and that the pledge travels with the square.
+
+test('a pledged square is worth the redemption less than a live one', () => {
+  const { G, seller, buyer, sq } = shortOfASet();
+  const live = seekSale(G, seller).cash;
+
+  holding(seller, sq).mortgaged = 1;
+  const pledged = seekSale(G, seller).cash;
+
+  assert.ok(pledged < live, `pledged ${pledged} is not below live ${live}`);
+  assert.ok(live - pledged >= redeemCost(sq) * 0.5,
+    `only ${live - pledged} came off for a redemption costing ${redeemCost(sq)}`);
+});
+
+test('the buyer is not charged twice — the price is net, not on top', () => {
+  const { G, seller, buyer, sq } = shortOfASet();
+  holding(seller, sq).mortgaged = 1;
+  const c = seekSale(G, seller);
+  assert.ok(c.cash + redeemCost(sq) <= buyer.cash,
+    'the asking price plus the redemption is more than the buyer holds');
+});
+
+// The uplift is the whole reason one of these is worth buying, and the whole
+// reason selling one is dangerous. It counts as owned, so it closes the set.
+test('taking a pledged square still closes the set it belongs to', () => {
+  const G = table();
+  const [a, b] = G.players;
+  const set = SETS.eni.sq;
+  hold(a, set[0], { mortgaged: 1 });
+  hold(b, set[1]); hold(b, set[2]);
+
+  assert.equal(ownsSet(G, b, 'eni'), false);
+  settleContract(G, { from: a.i, to: b.i, give: set[0], get: null, cash: 100, direction: 2 });
+  assert.ok(ownsSet(G, b, 'eni'), 'a pledged square counts as owned');
+  assert.equal(holding(b, set[0]).mortgaged, 1, 'and is still pledged');
+  assert.ok(rentOf(G, set[1], 7) > BOARD[set[1]].r[0],
+    'so the rent on its siblings doubled the moment it changed hands');
+  assert.equal(rentOf(G, set[0], 7), 0, 'while it earns nothing itself');
+});
+
+test('an opponent values it as a dead square, not a live one', () => {
+  const G = table();
+  const [ai, them] = G.players;
+  const set = SETS.eni.sq;
+  hold(them, set[0]);
+  hold(ai, set[1]); hold(ai, set[2]);
+
+  const live = contractValue(G, ai, set[0], null, 0, them.i);
+  holding(them, set[0]).mortgaged = 1;
+  const dead = contractValue(G, ai, set[0], null, 0, them.i);
+
+  assert.ok(dead < live, `a pledged square valued at ${dead} against a live ${live}`);
+  assert.ok(live - dead >= redeemCost(set[0]) * 0.5,
+    'the redemption barely registered in the valuation');
+});
+
+test('Varan will not make a monopoly a bargain', () => {
+  const { G, seller } = shortOfASet('varan');
+  hold(seller, SETS.dom.sq[0], { mortgaged: 1 });      // his distress gate
+  const sq = SETS.eni.sq[0];
+
+  assert.ok(seekSale(G, seller), 'he will sell the live one, at his own price');
+  holding(seller, sq).mortgaged = 1;
+  const offer = seekSale(G, seller);
+  assert.ok(!offer || offer.give !== sq,
+    'a pledged set-closer is the cheap version of the thing he refuses to do');
+});
+
+test('the others will sell one', () => {
+  for (const persona of ['spector', 'vale']) {
+    const { G, seller } = shortOfASet(persona);
+    holding(seller, SETS.eni.sq[0]).mortgaged = 1;
+    const c = seekSale(G, seller);
+    assert.ok(c && c.give === SETS.eni.sq[0], `${persona} would not sell a pledged square`);
+  }
+});
+
+/* -------------------------------------------------- countering a sale */
+
+// aiCounter returned null for anything but an offer of cash, so a player trying
+// to SELL was told no and given no figure. That direction only became reachable
+// with seekSale, and it is the one a pledged square is nearly always disposed of
+// through — so the half of the negotiation that names a price did not exist for
+// exactly the half of the game this feature is about.
+//
+// The buyer here is an OPPONENT, not a human. proposeContract parks anything
+// aimed at a human for them to answer themselves, so aiAcceptsContract is never
+// asked to speak for one — a first draft of these tests put a human in that seat
+// and failed against an engine that was behaving correctly.
+function aiWantsTheSet(persona = 'spector') {
+  const G = table([persona, 'human']);
+  const [buyer, seller] = G.players;
+  const set = SETS.eni.sq;
+  hold(seller, set[0]);
+  hold(buyer, set[1]);
+  hold(buyer, set[2]);
+  buyer.cash = 4000;
+  return { G, buyer, seller, sq: set[0] };
+}
+
+test('refusing a sale names what they would pay', () => {
+  const { G, buyer, seller, sq } = aiWantsTheSet();
+  const c = { from: seller.i, to: buyer.i, give: sq, get: null,
+              cash: 9000, direction: 2 };            // far too much
+  assert.equal(aiAcceptsContract(G, buyer, seller, c), false, 'fixture must be refused');
+
+  const counter = aiCounter(G, buyer, seller, c);
+  assert.ok(counter, 'a refusal with no figure is a coin flip, not a negotiation');
+  assert.equal(counter.direction, 2, 'still a sale');
+  assert.equal(counter.give, sq);
+  assert.ok(counter.cash < c.cash, 'they came down from what was asked');
+  assert.ok(counter.cash <= buyer.cash, 'and named a figure they actually hold');
+  assert.ok(aiAcceptsContract(G, buyer, seller, counter),
+    'they named a figure they would then refuse, which is worse than saying nothing');
+});
+
+test('no counter when the price was already good enough', () => {
+  const { G, buyer, seller, sq } = aiWantsTheSet();
+  const c = { from: seller.i, to: buyer.i, give: sq, get: null, cash: 1, direction: 2 };
+  assert.ok(aiAcceptsContract(G, buyer, seller, c), 'fixture must be accepted');
+  assert.equal(aiCounter(G, buyer, seller, c), null, 'they would have taken it');
+});
+
+// "Opens below his ceiling" is testable directly: a figure one credit above the
+// one they named is either still acceptable to them or it is not.
+//
+// Varan buys to DENY. A set he would be completing is one he prices at nothing,
+// and a square that blocks a rival is one Spector prices at nothing — his branch
+// discounts a set he has no foothold in to 0.55. So each is asked about the
+// purchase his own character actually wants, and the assertion is about how he
+// opens rather than about what he would pay.
+function opensBelowCeiling(G, buyer, seller, sq) {
+  const c = { from: seller.i, to: buyer.i, give: sq, get: null, cash: 9000, direction: 2 };
+  const k = aiCounter(G, buyer, seller, c);
+  assert.ok(k, 'no figure was named at all');
+  assert.ok(aiAcceptsContract(G, buyer, seller, k), 'they would refuse their own figure');
+  return aiAcceptsContract(G, buyer, seller, { ...k, cash: k.cash + 1 });
+}
+
+test('Spector names the true figure; Varan opens under his', () => {
+  const forSpector = aiWantsTheSet('spector');
+  assert.equal(
+    opensBelowCeiling(forSpector.G, forSpector.buyer, forSpector.seller, forSpector.sq),
+    false, 'Spector states the figure, so a credit more is a figure he refuses');
+
+  // Varan is asked about the purchase his character actually wants: breaking a
+  // set somebody else has closed. aiValue only pays its denial multiple when ONE
+  // rival holds the whole group — including the square being sold — so the
+  // seller here holds all three. Asked instead about a set he would be
+  // completing, he prices it under his own acceptance bar and declines at any
+  // price, which is in character and not a defect.
+  const G = createGame({
+    seats: [{ name: 'varan', kind: 'ai', persona: 'varan' }, { name: 'H', kind: 'human' }],
+    seed: 5, circuits: 72
+  });
+  const [varan, seller] = G.players;
+  const set = SETS.bas.sq;                    // dear enough to clear his bar
+  set.forEach(sq => hold(seller, sq));
+  varan.cash = 4000;
+  assert.ok(opensBelowCeiling(G, varan, seller, set[0]),
+    'Varan named his ceiling rather than opening under it');
 });

@@ -1083,9 +1083,15 @@ export function repayDebt(G, p, amount = p.cash) {
 }
 
 /* ============================================================ contracts */
+// A pledged square MAY be traded. It is the only exit its owner has: measured
+// over 40 games, a pledged square is one short of somebody else's set on 40% of
+// all turns, and its owner could afford to redeem it themselves only 6.6% of
+// the time. Both sides want the deal and the rules used to forbid it.
+//
+// What does not move is anything built. That rule stands.
 export function tradable(G, p, sq) {
   const h = holding(p, sq);
-  if (!h || h.mortgaged || h.garrisons > 0 || h.citadel) return false;
+  if (!h || h.garrisons > 0 || h.citadel) return false;
   const b = BOARD[sq];
   if (!b.s) return true;
   // Nothing in a set may move while anything in that set is built up.
@@ -1097,17 +1103,32 @@ export function tradable(G, p, sq) {
   });
 }
 
+// A square changes hands as it stands. Nothing built can move — tradable()
+// refuses that — but a PLEDGE moves with the square and must, or the buyer is
+// handed a redemption worth 55% of list for nothing and the ledger calls it a
+// sale. Both places that rebuild a holding used to hard-code mortgaged: 0,
+// which was harmless for exactly as long as a pledged square could not be
+// traded, which is why it sat there unnoticed.
+//
+// Read before either side is filtered: the square is still on the seller's
+// sheet at that point and nowhere else.
+const moved = (p, sq) => {
+  const h = holding(p, sq);
+  return { sq, garrisons: 0, citadel: 0, mortgaged: h && h.mortgaged ? 1 : 0 };
+};
+
 export function settleContract(G, { from, to, give, get, cash, direction }) {
   const a = G.players[from], b = G.players[to];
   const gets = sqList(get), gives = sqList(give);
-  const fresh = sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 });
+  const outgoing = gives.map(sq => moved(a, sq));
+  const incoming = gets.map(sq => moved(b, sq));
   if (gives.length) {
     a.holdings = a.holdings.filter(h => !gives.includes(h.sq));
-    for (const sq of gives) b.holdings.push(fresh(sq));
+    b.holdings.push(...outgoing);
   }
   if (gets.length) {
     b.holdings = b.holdings.filter(h => !gets.includes(h.sq));
-    for (const sq of gets) a.holdings.push(fresh(sq));
+    a.holdings.push(...incoming);
   }
   const amount = Math.max(0, Math.floor(cash || 0));
   if (amount) {
@@ -1233,7 +1254,10 @@ export function seekContract(G, p, lens = p.persona || 'spector') {
   const eagerness = target.denies !== undefined ? 1.6
     : setCompletingTargets(G, p).length ? 1.4
     : 0.95;
-  const ceiling = Math.min(Math.round(aiValue(G, asLens, target.sq) * eagerness), p.cash - reserve);
+  // netValue, not aiValue: a pledged square costs its buyer the redemption on
+  // top of whatever is agreed, and an opponent that did not know would offer
+  // the live price for a dead square.
+  const ceiling = Math.min(Math.round(netValue(G, asLens, target.sq) * eagerness), p.cash - reserve);
   if (ceiling < Math.floor(BOARD[target.sq].pr * 0.5)) return null;
 
   // A sweetener, if we hold something spare that does not break a set of ours.
@@ -1248,8 +1272,8 @@ export function seekContract(G, p, lens = p.persona || 'spector') {
   if (them.kind === 'ai') {
     // Pay just enough to clear their bar rather than the whole ceiling.
     const bar = { spector: 60, varan: 240, vale: -40 }[them.persona] ?? 0;
-    const needed = aiValue(G, them, target.sq)
-      - (give !== null ? aiValue(G, them, give) : 0) + bar + 40;
+    const needed = netValue(G, them, target.sq)
+      - (give !== null ? netValue(G, them, give) : 0) + bar + 40;
     cash = Math.min(ceiling, Math.max(0, Math.round(needed)));
   }
   // If this was refused before and the cooldown has passed, it may only come
@@ -1435,6 +1459,16 @@ const CONTRACT_LINES = {
 };
 
 /* ============================================================ opponents */
+// What a square is worth to `p` once buying it out of pledge is allowed for.
+// seekContract and seekSale price one square at a time rather than through
+// positionValue, so they need this; everything that goes through contractValue
+// already has it.
+export function netValue(G, p, sq) {
+  const o = ownerOf(G, sq);
+  const h = o ? holding(o, sq) : null;
+  return aiValue(G, p, sq) - (h && h.mortgaged ? redeemCost(sq) : 0);
+}
+
 export function aiValue(G, p, sq, ignore = null) {
   const b = BOARD[sq];
   if (!b.pr) return 0;
@@ -1536,11 +1570,15 @@ export const sqList = v =>
 // somebody hand over three squares that complete nothing and have the total
 // come out ahead of the one square that completes a set.
 function boardAfter(G, whoIdx, otherIdx, gets, gives) {
-  const fresh = sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 });
   const players = G.players.slice();
   const a = { ...players[whoIdx] }, b = { ...players[otherIdx] };
-  a.holdings = players[whoIdx].holdings.filter(h => !gives.includes(h.sq)).concat(gets.map(fresh));
-  b.holdings = players[otherIdx].holdings.filter(h => !gets.includes(h.sq)).concat(gives.map(fresh));
+  // The same rule as settleContract: a pledge travels with its square. Pricing
+  // a trade against a board where the pledge had evaporated valued a dead
+  // square as a live one on both sides at once.
+  const taking = gets.map(sq => moved(players[otherIdx], sq));
+  const parting = gives.map(sq => moved(players[whoIdx], sq));
+  a.holdings = players[whoIdx].holdings.filter(h => !gives.includes(h.sq)).concat(taking);
+  b.holdings = players[otherIdx].holdings.filter(h => !gets.includes(h.sq)).concat(parting);
   players[whoIdx] = a; players[otherIdx] = b;
   return { ...G, players };
 }
@@ -1549,8 +1587,21 @@ function boardAfter(G, whoIdx, otherIdx, gets, gives) {
 // difference between two of these is the only figure a bundle can be priced by:
 // a square that completes a set lifts the value of the ones already held, and
 // a square that completes nothing lifts nothing.
+// A pledged holding is worth what it will be worth MINUS what it costs to make
+// it worth that. This is the one place the whole contract layer needs to learn
+// it: contractValue is a difference of two positionValues, so subtracting the
+// redemption here prices a pledged square correctly for buyer and seller at
+// once, and does it without touching aiValue — which also drives bidding and
+// buying, and would move auction behaviour if it changed underneath them.
+//
+// Note what is deliberately NOT subtracted: the uplift a pledged square gives
+// the rest of its set. It counts as owned for ownsSet, so acquiring it doubles
+// the rent on its siblings and unlocks building on them straight away, pledged
+// or not. aiValue reads ownership, so that arrives here for free — which is
+// exactly why one of these is worth having and worth disclosing.
 const positionValue = (G, p) =>
-  p.holdings.reduce((n, h) => n + aiValue(G, p, h.sq, h.sq), 0);
+  p.holdings.reduce((n, h) =>
+    n + aiValue(G, p, h.sq, h.sq) - (h.mortgaged ? redeemCost(h.sq) : 0), 0);
 
 // Handing over squares can put a rival one short of a set, or finish it. Charged
 // once per SET on the resulting board — charging per square counted a two-square
@@ -1611,10 +1662,30 @@ export function aiAcceptsContract(G, them, proposer, { give, get, cash, directio
 // that number. A refusal that just says no is a coin flip; a refusal that names
 // a price is a negotiation, which is what this game is supposed to be about.
 export function aiCounter(G, them, proposer, c) {
-  if (c.direction !== 1) return null;              // only counter offers of cash
-  // Solve the acceptance test for cash rather than searching for it.
+  // Solve the acceptance test for cash rather than searching for it. The test
+  // is contractValue(them, ..., cashToThem) > bar, and cashToThem is +cash when
+  // the proposer pays and -cash when they do.
   const withoutCash = contractValue(G, them, c.give, c.get, 0, proposer.i);
-  const needed = Math.ceil(acceptanceBar(G, them, proposer) - withoutCash) + 1;
+  const bar = acceptanceBar(G, them, proposer);
+
+  // THEY are the ones paying. Until now this returned null, so a player trying
+  // to SELL — the direction that only became reachable with seekSale, and the
+  // one a pledged square is nearly always disposed of through — was told no and
+  // given no figure. A refusal that names a price is a negotiation; one that
+  // does not is a coin flip, which is the whole reason this function exists.
+  if (c.direction === 2) {
+    const most = Math.floor(withoutCash - bar) - 1;   // the most it is worth to them
+    if (most >= c.cash) return null;                  // they would have taken it
+    let offer;
+    if (them.persona === 'spector') offer = most;     // the true figure, stated
+    else if (them.persona === 'vale') offer = most;   // he does not haggle downward
+    else offer = Math.round(most * 0.7);              // Varan opens below his own ceiling
+    if (offer <= 0) return null;                      // no price would carry it
+    if (offer > them.cash) offer = them.cash;         // and it has to be money he holds
+    return offer > 0 ? { ...c, cash: offer } : null;
+  }
+
+  const needed = Math.ceil(bar - withoutCash) + 1;
   if (needed <= c.cash) return null;               // they would have taken it
 
   let ask;
@@ -1730,6 +1801,12 @@ export function seekSale(G, p) {
       if (t.owner.i !== p.i) continue;
       if (!tradable(G, p, t.sq)) continue;
       if (refusalBlocks(G, p.i, q.i, t.sq)) continue;
+      // Varan will not sell a PLEDGED square that closes somebody's set. A
+      // pledged one still counts for the set, so it hands over the doubled rent
+      // and the right to build at a discount — the cheap version of exactly the
+      // thing he refuses to do. He will still sell them the live one at his own
+      // price; he will not make a monopoly a bargain.
+      if (p.persona === 'varan' && holding(p, t.sq).mortgaged) continue;
       offers.push({ them: q, sq: t.sq });
     }
   }
@@ -1738,7 +1815,7 @@ export function seekSale(G, p) {
   // A human has no persona to value with, so price against a neutral lens
   // rather than reading a field that is not there.
   const lensFor = q => q.persona ? q : { ...q, persona: 'spector' };
-  const worth = o => aiValue(G, lensFor(o.them), o.sq);
+  const worth = o => netValue(G, lensFor(o.them), o.sq);
   offers.sort((a, b) => worth(b) - worth(a));
   const best = offers[0];
 

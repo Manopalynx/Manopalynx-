@@ -802,11 +802,30 @@ test('a built set is frozen — nothing in it can be traded', () => {
   assert.equal(tradable(G, a, 16), false);
 });
 
-test('a mortgaged holding cannot be traded', () => {
+// This used to assert the opposite. A pledged square is now tradable on
+// purpose: it is the only exit its owner has, and measured over 40 games one is
+// a square short of somebody else's set on 40% of all turns while its owner can
+// afford to redeem it only 6.6% of the time. Both sides want the deal.
+test('a pledged holding can be traded', () => {
   const G = game();
   const [a] = G.players;
   own(G, a, 16, { mortgaged: 1 });
-  assert.equal(tradable(G, a, 16), false);
+  assert.equal(tradable(G, a, 16), true);
+});
+
+// The rule that makes the above safe rather than a giveaway. Both places that
+// rebuild a holding hard-coded mortgaged: 0, which was harmless for exactly as
+// long as a pledged square could not move.
+test('and the pledge travels with it', () => {
+  const G = game();
+  const [a, b] = G.players;
+  own(G, a, 16, { mortgaged: 1 });
+  settleContract(G, { from: a.i, to: b.i, give: 16, get: null, cash: 100, direction: 2 });
+  const h = holding(b, 16);
+  assert.ok(h, 'the square changed hands');
+  assert.equal(h.mortgaged, 1,
+    'the buyer was handed a free redemption worth 55% of list and the log called it a sale');
+  assert.equal(rentOf(G, 16, 7), 0, 'and it is still dead until somebody pays for it');
 });
 
 test('settling a contract moves both squares and the cash', () => {

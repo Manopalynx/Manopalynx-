@@ -1494,7 +1494,6 @@ function drawTrade() {
 
   const why = (owner, sq) => {
     const h = E.holding(owner, sq), b = BOARD[sq];
-    if (h.mortgaged) return 'pledged — redeem it first';
     if (h.garrisons > 0 || h.citadel) return 'garrisoned — sell buildings first';
     if (b.s && SETS[b.s].sq.some(j => {
       const o = E.ownerOf(G, j); if (!o) return false;
@@ -1504,10 +1503,16 @@ function drawTrade() {
   };
   const row = (owner, sq, sel, fn) => {
     const b = BOARD[sq], blocked = why(owner, sq);
+    // A pledged square may be traded now, so the line that used to refuse it is
+    // a price instead: whoever ends up holding it owes this to make it earn.
+    const h = E.holding(owner, sq);
+    const pledged = h && h.mortgaged;
     return `<button class="pick${sel ? ' on' : ''}" ${blocked ? 'disabled' : `data-fn="${fn}"`}>
       <span style="display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:8px;
         background:${b.s ? SETS[b.s].c : 'var(--fleet)'}"></span>${esc(b.n)}
-      <span class="sub2">${money(b.pr)} · rent ${money(E.rentOf(G, sq, 7))}</span>
+      <span class="sub2">${money(b.pr)} · ${pledged
+        ? `pledged — ${money(E.redeemCost(sq))} to redeem`
+        : `rent ${money(E.rentOf(G, sq, 7))}`}</span>
       ${blocked ? `<span class="why">${blocked}</span>` : ''}</button>`;
   };
 
@@ -1667,18 +1672,30 @@ function sendTrade() {
     if (r.counter) {
       COUNTER = r.counter;
       const me = G.players[proposal.from];
+      // Which way the money runs decides every line on this sheet. A counter to
+      // a SALE — the direction a pledged square is nearly always disposed of
+      // through — is them naming what they will pay, not what they want, and
+      // the affordability check belongs on their purse rather than yours.
+      const selling = proposal.direction === 2;
       sheet(`<h3>Refused — but they name a price</h3><div class="sub">${esc(them.name)}</div>
         <div class="card">“${esc(line ? line.text : '')}”</div>
-        <div class="stat"><span>You offered</span><span>${money(proposal.cash)}</span></div>
-        <div class="stat"><span>They want</span><span>${money(r.counter.cash)}</span></div>
-        <div class="stat"><span>You hold</span><span>${money(me.cash)}</span></div>
+        <div class="stat"><span>You asked</span><span>${money(proposal.cash)}</span></div>
+        <div class="stat"><span>${selling ? 'They will pay' : 'They want'}</span>
+          <span>${money(r.counter.cash)}</span></div>
+        <div class="stat"><span>${selling ? 'They hold' : 'You hold'}</span>
+          <span>${money(selling ? them.cash : me.cash)}</span></div>
         ${btns([
-          [`Pay ${money(r.counter.cash)}`, 'takeCounter', 'pri', `Confirm — ${money(r.counter.cash)}`],
+          [selling ? `Take ${money(r.counter.cash)}` : `Pay ${money(r.counter.cash)}`,
+           'takeCounter', 'pri', `Confirm — ${money(r.counter.cash)}`],
           ['Walk away', 'closeSheet', '']
         ])}`);
-      if (me.cash < r.counter.cash) {
+      const payer = selling ? them : me;
+      if (payer.cash < r.counter.cash) {
         const el = $('sheetRoot').querySelector('.mbtn.pri');
-        if (el) { el.disabled = true; el.textContent = 'You cannot cover it'; }
+        if (el) {
+          el.disabled = true;
+          el.textContent = selling ? 'They cannot cover it' : 'You cannot cover it';
+        }
       }
     } else {
       sheet(`<h3>Refused</h3><div class="sub">${esc(them.name)}</div>
@@ -1695,8 +1712,10 @@ function takeCounter() {
   COUNTER = null;
   closeSheet();
   if (!E.contractIsLegal(G, c)) { tick(); return; }
-  const me = G.players[c.from];
-  if (me.cash < c.cash) { tick(); return; }
+  // The payer is whoever the direction says it is. Checking the proposer's
+  // purse on a sale checked the wrong person entirely.
+  const payer = G.players[c.direction === 2 ? c.to : c.from];
+  if (payer.cash < c.cash) { tick(); return; }
   E.settleContract(G, c);
   save();
   tick();
@@ -1773,6 +1792,22 @@ function showContract() {
           kind === 'u' ? ' <small>on a 7</small>' : ''}</span></div>`;
     }
 
+    // A pledged square is the one thing on this sheet that does not say what it
+    // is. It earns nothing, so "Rent now ₡0" reads as a worthless square — and
+    // it is not: it counts as owned, so taking it doubles the rent across the
+    // rest of the set and unlocks building on those straight away, while itself
+    // staying dead until somebody pays to redeem it.
+    //
+    // Both halves have to be said, and to whichever side is receiving it. A
+    // seller who thinks they are handing over a dead asset is handing over a
+    // monopoly; a buyer who does not see the redemption is reading the price
+    // wrong by more than half the list.
+    const held = E.holding(gaining ? from : to, sq);
+    if (held && held.mortgaged) {
+      s += `<div class="warnbox"><b>${esc(b.n)} is pledged.</b> It earns nothing until
+        ${money(E.redeemCost(sq))} is paid to redeem it — but it still counts toward
+        ${b.s ? esc(SETS[b.s].n) : 'its group'} for whoever holds it.</div>`;
+    }
     s += `<div class="stat"><span>Rent now</span><span>${money(E.rentOf(G, sq, 7))}</span></div>
       <div class="stat"><span>Landing frequency</span><span>${TRAFFIC[sq].toFixed(2)}%</span></div>`;
     return s;

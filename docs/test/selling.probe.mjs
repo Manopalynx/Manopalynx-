@@ -48,7 +48,7 @@ for (const device of DEVICES) {
   // Each scenario gets its OWN page. Seeding a second game into a tab that is
   // already playing does not work: the running game saves over the fixture
   // before the reload picks it up, and the sheet under test never appears.
-  const open = async cash => {
+  const open = async (cash, pledged = false) => {
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push('threw: ' + e.message));
     page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
@@ -56,7 +56,7 @@ for (const device of DEVICES) {
       delete window.AudioContext; delete window.webkitAudioContext;
     });
     await page.goto(URL, { waitUntil: 'networkidle' });
-    await page.evaluate(async ([key, price, humanCash]) => {
+    await page.evaluate(async ([key, price, humanCash, isPledged]) => {
       const E = await import('./engine.js');
       const { SETS } = await import('./data.js');
       const G = E.createGame({
@@ -66,16 +66,16 @@ for (const device of DEVICES) {
       });
       const [human, ai] = G.players;
       const set = SETS.eni.sq;
-      const hold = (p, sq) => p.holdings.push({ sq, garrisons: 0, citadel: 0, mortgaged: 0 });
+      const hold = (p, sq, m = 0) => p.holdings.push({ sq, garrisons: 0, citadel: 0, mortgaged: m });
       hold(human, set[1]); hold(human, set[2]);
-      hold(ai, set[0]);
+      hold(ai, set[0], isPledged ? 1 : 0);
       human.cash = humanCash;
       ai.cash = 120;
       G.contract = { from: ai.i, to: human.i, give: set[0], get: null,
                      cash: price, direction: 2, resumePhase: 'end' };
       G.phase = 'contract';
       localStorage.setItem(key, E.serialize(G));
-    }, [SAVE_KEY, PRICE, cash]);
+    }, [SAVE_KEY, PRICE, cash, pledged]);
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('#begin');
     await page.click('#resume');
@@ -163,6 +163,48 @@ for (const device of DEVICES) {
   } else {
     fail(`unaffordable sale: got the square=${broke.humanHas}, cash ${broke.humanCash}`);
   }
+
+  // ---- and the same deal with the square pledged ----
+  // A pledged square may now be traded, and it is the one thing on this sheet
+  // that does not say what it is: "Rent now 0" reads as worthless, when in fact
+  // it closes the set the moment it changes hands and doubles the rent on the
+  // rest. Both halves have to be on the sheet or this is a trap rather than a
+  // decision — a seller thinking they are shedding a dead asset is handing over
+  // a monopoly.
+  const dead = await open(3000, true);
+  const shown = await dead.evaluate(async () => {
+    const E = await import('./engine.js');
+    const { SETS } = await import('./data.js');
+    return { text: document.getElementById('sheetRoot').innerText,
+             redeem: E.redeemCost(SETS.eni.sq[0]) };
+  });
+
+  if (/is pledged/i.test(shown.text)) pass('the sheet says the square is pledged');
+  else fail('a pledged square is offered with nothing to say it is pledged');
+
+  if (shown.text.includes(String(shown.redeem))) pass(`and names the redemption (${shown.redeem})`);
+  else fail('the redemption cost is not stated anywhere on the sheet');
+
+  if (/still counts toward/i.test(shown.text)) pass('and that it still closes the set');
+  else fail('the sheet lets a seller believe they are shedding a dead square');
+
+  if (/completes Enigma for you/i.test(shown.text)) pass('the set arithmetic still shows');
+  else fail('the set-completion warning went missing on a pledged square');
+
+  await dead.click('#sheetRoot .mbtn.pri');
+  await dead.waitForTimeout(400);
+  const kept = await dead.evaluate(async () => {
+    const E = await import('./engine.js');
+    const { SETS } = await import('./data.js');
+    const G = E.deserialize(localStorage.getItem('grandiose-ledger-v1'));
+    const h = G.players[0].holdings.find(x => x.sq === SETS.eni.sq[0]);
+    return { has: !!h, mortgaged: h ? h.mortgaged : null,
+             rent: E.rentOf(G, SETS.eni.sq[1], 7), bare: 6 };
+  });
+  if (kept.has && kept.mortgaged === 1) pass('and the pledge travels with the square');
+  else fail(`the buyer was handed a free redemption: mortgaged=${kept.mortgaged}`);
+  if (kept.rent > kept.bare) pass('while the rest of the set doubled, as promised');
+  else fail(`rent on a sibling is ${kept.rent}, so the set did not close`);
 
   if (!errors.length) pass('nothing threw');
   else errors.forEach(fail);
