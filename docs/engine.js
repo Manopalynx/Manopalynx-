@@ -480,9 +480,19 @@ export function releaseVassal(G, lord, vassalIndex) {
   return true;
 }
 
+// The one way the rate changes, for anybody.
+//
+// An opponent used to assign p.tithe directly, which skipped the line below —
+// so a human could raise their own tithe and have it entered in the ledger,
+// while Varan swung from 10% to 55% in silence. A vassal could look the current
+// figure up on their own sheet but was never told it had moved, and the rate is
+// the clock on their freedom.
 export function setTithe(G, p, rate) {
-  p.tithe = rate;
-  note(G, `${p.name} sets the tithe at ${rate}%.`);
+  const r = RULES.titheRates.includes(rate) ? rate : RULES.titheRates[0];
+  if (p.tithe === r) return false;
+  p.tithe = r;
+  note(G, `${p.name} sets the tithe at ${r}%.`);
+  return true;
 }
 
 export function declareIndependence(G, p) {
@@ -824,6 +834,21 @@ export function endTurn(G) {
 // Everything after upkeep is settled: interest, then the next player.
 function finishTurn(G) {
   const p = current(G);
+  // Every turn under the arrangement is a turn counted.
+  //
+  // Strength used to come only from the overlord's cut of rent the VASSAL
+  // collected — and a vassal is by definition somebody who ran out of money, so
+  // almost nobody lands on their squares and there is almost nothing to take a
+  // share of. Measured over 80 games: a median of 0, a maximum of 87 against
+  // the 1400 then needed, and not one declaration in 128 arrangements. The
+  // whole second half of vassalage was unreachable.
+  //
+  // It accrues at the tithe rate now, so the rate an overlord sets is the clock
+  // on how long they keep them. Here rather than in endTurn because a human who
+  // cannot cover their upkeep parks in the settle phase and finishes the turn
+  // through settleNow instead — both routes come through this function, and
+  // exactly once.
+  for (const vi of p.vassals) G.players[vi].strength += p.tithe;
   if (p.debt) p.debt += Math.ceil(p.debt * RULES.debtInterest);
   if (G.phase === 'contest' || G.over) return;
 
@@ -1916,6 +1941,41 @@ export function aiAmend(G, p) {
   return path.length ? { path } : null;
 }
 
+// What each of them takes from the people sworn to them.
+//
+// This was one line — a 30% chance a turn of picking from a shared table — so
+// all three set the same rate. Measured over 60 games they landed at 30.3%,
+// 33.0% and 30.7%, which is the same number three times.
+//
+// The rate is not about income. A tithe returns ₡0.3 a turn against ₡108 of
+// upkeep, so holding a vassal is a loss either way; what it buys is the
+// conquest victory and the share of their holdings that counts toward your
+// total. So the rate decides what they are worth to you at the end, and — since
+// strength now accrues at the rate every turn — how long you keep them at all.
+export function aiTithe(G, p) {
+  if (p.kind !== 'ai' || !p.vassals.length) return false;
+  const fixed = RULES.tithePolicy[p.persona];
+  if (fixed != null) return setTithe(G, p, fixed);
+
+  // Spector solves it. Strength accrues at `tithe` a turn and breaks the
+  // arrangement at the threshold, so a rate under threshold/turns-remaining
+  // never gets there — and the highest such rate is worth the most at the end.
+  // As the swarm closes, turns-remaining falls and the answer rises: by the
+  // last circuits he can take everything, because nothing has time to happen.
+  //
+  // Note what he does NOT read: the vassal's accumulated strength. The tithe
+  // sheet promises a human that their overlord cannot see how close they are,
+  // and an opponent that peeked would be playing a different game from the one
+  // the interface describes. Circuits remaining and a vassal's declarations are
+  // both public; that is all this uses, which makes him a little cautious late
+  // rather than a little omniscient.
+  const left = Math.max(1, G.circuits - G.circuit + 1);
+  const threshold = Math.min(...p.vassals.map(vi => revoltThreshold(G.players[vi])));
+  const cap = threshold / left;
+  const safe = RULES.titheRates.filter(r => r < cap);
+  return setTithe(G, p, safe.length ? safe[safe.length - 1] : RULES.titheRates[0]);
+}
+
 export function aiDevelop(G, p) {
   aiRepay(G, p);
   aiRedeem(G, p);
@@ -1936,11 +1996,12 @@ export function aiDevelop(G, p) {
       && p.cash >= SETS[BOARD[h.sq].s].gc + 600);
     if (c) raiseCitadel(G, p, c.sq);
   }
-  if (p.lord !== null && p.strength >= revoltThreshold(p) && p.cash >= RULES.revoltCost + 400) {
+  if (p.lord !== null && p.strength >= revoltThreshold(p)
+      && p.cash >= RULES.revoltCost) {
     declareIndependence(G, p);
     if (p.kind === 'ai') persona(G, p, 'fell');
   }
-  if (p.vassals.length && random(G) < 0.3) p.tithe = pick(G, [10, 25, 25, 40, 40, 55]);
+  aiTithe(G, p);
 
   // One contract attempt per turn, and not every turn — an opponent that
   // proposes constantly is noise. Against another opponent this settles

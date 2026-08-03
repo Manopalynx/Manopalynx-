@@ -19,7 +19,7 @@
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-export const BUILD = 'grandiose-v49';
+export const BUILD = 'grandiose-v50';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -415,9 +415,60 @@ export const RULES = {
   refusalCap: 3,                 // refusals of one square before it is dropped for good
   refusalRaise: 1.15,            // and it may only return with an offer this much better
   humanAsksPerCircuit: 1,        // backstop: opponents share one interruption a circuit
-  revoltBase: 1400,              // strength needed for a first declaration
+  // ---- vassalage and the tithe ------------------------------------------
+  // Strength is what a vassal buries against their overlord, and it used to
+  // come only from the overlord's cut of rent the VASSAL collected. A vassal is
+  // by definition somebody who ran out of money, so almost nobody lands on
+  // their squares and there is almost nothing to take a share of: measured over
+  // 80 games, strength reached a median of 0 and a maximum of 87 against the
+  // 1400 needed, and not one vassal in 128 arrangements ever declared.
+  //
+  // It now also accrues at the tithe rate every turn the arrangement stands, so
+  // the rate is the clock on how long an overlord keeps them.
+  //
+  // 250 rather than the 550 the arithmetic first suggested, because the
+  // arithmetic left out the contests. A vassal who falls again to a different
+  // creditor is fought over, and resolving that either wipes their buried
+  // strength or halves it — measured, 82 contests across 60 games, roughly one
+  // per arrangement. So the clock is reset about as often as it runs, and a
+  // threshold set from the raw accrual rate is one a vassal never reaches: at a
+  // pinned 55% the median peak was 275 against 550.
+  //
+  // Swept at 45 games a cell, the share of arrangements ending in a declaration:
+  //
+  //     base |  10%   25%   40%   55%
+  //      150 |  18%   35%   42%   52%
+  //      250 |   8%   25%   37%   46%
+  //      400 |   3%   18%   26%   39%
+  //
+  // 250 is the spread worth having: take a tenth and you keep them almost
+  // always, take the lot and you lose them about half the time.
+  revoltBase: 250,               // strength needed for a first declaration
   revoltStep: 300,               // added per previous declaration
-  revoltCost: 500,
+  // And the second lock. Declaring cost 500 against a vassal's median cash of
+  // 186 — the most one ever held while sworn was 1012 — so even an armed vassal
+  // usually could not afford to move. An OPPONENT also kept back a further 400
+  // on top, which alone was the difference between 16% of vassals ever being
+  // able to declare and 2%: a buffer larger than the thing it buffered. It is
+  // gone, and opponents now face exactly the bar the interface quotes a human.
+  revoltCost: 150,
+  // The rates an overlord may set, and what each of them picks.
+  //
+  // The tithe used to be one line — `random(G) < 0.3` and a pick from a shared
+  // table — so all three set the same rate. Measured over 60 games they landed
+  // at 30.3%, 33.0% and 30.7%: the auditor whose terms are meant to be punitive
+  // and the reformer who insists you keep your flag taxed identically.
+  //
+  // What the rate actually decides is NOT income. Measured, a tithe returns
+  // ₡0.3 a turn against ₡108 of upkeep — holding a vassal is a loss, paid for
+  // by the conquest victory and by the share of their holdings that counts
+  // toward your total. So the rate scales what they are worth to you at the
+  // end, and how fast they build toward being free of you.
+  titheRates: [10, 25, 40, 55],
+  //   varan  the top of the range, and content to be revolted against
+  //   vale   the bottom: long quiet arrangements, and you may keep your flag
+  //   spector null — he computes it, being the only one who would
+  tithePolicy: { varan: 55, vale: 10, spector: null },
   doublesToDetention: 3,         // three doubles in a row and you are filed
   facilityAttempts: 3,           // doubles, or pay the fee, or three attempts
   facilityFee: 150               // an Overseer is an official, and officials have a price

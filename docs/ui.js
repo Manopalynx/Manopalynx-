@@ -1397,10 +1397,12 @@ function showTithe() {
   const p = E.current(G);
   sheet(`<h3>Tithe rate</h3>
     <div class="sub">${p.vassals.length} vassal${p.vassals.length > 1 ? 's' : ''} · upkeep ${money(E.upkeep(p))}/turn</div>
-    <p style="font-size:14.5px;color:var(--dim);line-height:1.5">You take this share of every rent your
-    vassals collect. Squeeze harder and you earn more now — and arm whatever they are building faster.
-    You cannot see how close they are.</p>
-    <div class="opts" style="margin-top:14px">${[10, 25, 40, 55].map(r =>
+    <p style="font-size:14.5px;color:var(--dim);line-height:1.5">This share of everything your vassals
+    hold counts toward your total — and every turn under it arms them. Squeeze harder and they are
+    worth more to you, for less long. You cannot see how close they are.</p>
+    <p style="font-size:13px;color:var(--dim);line-height:1.5;margin-top:-4px">The cash a tithe brings
+    in is small beside the upkeep. You hold them to be holding them.</p>
+    <div class="opts" style="margin-top:14px">${RULES.titheRates.map(r =>
       `<button class="opt${p.tithe === r ? ' on' : ''}" data-fn="setTithe|${r}">${r}%</button>`).join('')}</div>
     <div class="sub" style="margin:20px 0 6px">Let them go</div>
     <p style="font-size:13.5px;color:var(--dim);line-height:1.5;margin:0 0 8px">
@@ -1451,7 +1453,7 @@ function showRevolt() {
            [`Declare — ${money(RULES.revoltCost)}`, 'declare', 'pri',
             `Confirm — ${money(RULES.revoltCost)}, and the arrangement ends for good`],
            ['Not yet', 'closeSheet', '']])}`
-      : `<p style="font-size:14px;color:var(--dim);margin-top:14px">Keep paying. Every credit tithed is a credit counted.</p>
+      : `<p style="font-size:14px;color:var(--dim);margin-top:14px">Wait. Every turn under the arrangement is a turn counted, and the harder they squeeze the faster it counts.</p>
          ${btns([['Close', 'closeSheet', 'pri wide']])}`}`);
   if (ready && p.cash < RULES.revoltCost) {
     const el = $('sheetRoot').querySelector('.mbtn.pri');
