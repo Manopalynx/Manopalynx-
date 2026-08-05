@@ -194,12 +194,13 @@ re-derive it. What follows is only what the repo can't say.
 - Branch `claude/grandiose-monopoly-game-y93uw8`. GitHub Pages serves `/docs`, so the root
   `upliftledger.html` stays unpublished. That is why the folder is called `docs`.
 - He plays on an **iPhone 16**, installed to the Home Screen as a PWA. **Bump `CACHE` in
-  `docs/sw.js` on every change** or he gets a stale build. Currently `grandiose-v26`.
+  `docs/sw.js` on every change** or he gets a stale build. `build.test.mjs` asserts it
+  matches `BUILD` in `data.js`; that pair is the only place the current version lives.
 - He is **phone-only — no computer.** He cannot run tests or read a diff. Screenshots are
   his bug reports and they are good ones. Everything must be verified before he sees it.
-- 180 tests plus a five-viewport Playwright probe (`docs/test/ui.probe.mjs`, run by hand
-  against a local server). The probe catches what unit tests can't: things that move under
-  a thumb, text that doesn't render, figures on screen that disagree with the engine.
+- Unit tests plus Playwright probes run by hand against a local server. The probes catch
+  what unit tests can't: things that move under a thumb, text that doesn't render, figures
+  on screen that disagree with the engine.
 
 ### How he works — additions to Instance 1
 
@@ -271,3 +272,137 @@ Open:
   **auctions**, not the contracts — he bids to 72% of cash and rates a square that completes
   a rival's set at 2.6x.
 - Nothing else outstanding.
+
+---
+
+## Instance 3 — 5 August 2026
+
+Claude Code, cloud session, same repo and branch, same game. A dozen or so batches over a
+long span. `docs/README.md` still carries the design detail; this is only what it can't.
+
+### Setup changes since Instance 2
+
+- **`docs/grandiose.html`** — the whole game as one self-contained file, built by
+  `docs/test/bundle.mjs`. For handing it to a chat that can read one file but cannot clone
+  a repo: fetching `index.html` gets the shell and none of the six modules. It is a
+  snapshot, not a copy — rebuild it whenever `BUILD` moves, or he shares a stale game.
+- **The default table is one human named Samuel**, and the seats go up to four. The other
+  three default names are Vex, Rourke and Ondh — see below for why not Hale.
+- Five probe files now, not one. **Never run two into the same log**, per Instance 2.
+
+### How he works — additions to Instances 1 and 2
+
+Everything above held. New:
+
+**His bug reports are instruments. Read them literally.** *"A constant techno sounding hum
+that my attention keeps focusing on rather than the music"*, later *"almost faint alarm
+going up and down"*, and *"doesn't start until around 5-10ish rounds in the smallest
+circuit option"*. Every clause was a diagnostic: *hum* meant a steady pitch, not a
+fluctuation; *up and down* meant a slow sweep; *doesn't start until* meant a trigger
+partway through a game, which in the whole codebase is one thing. I spent three builds
+instrumenting my own theories instead, and each of the three found something genuinely
+wrong that was not his complaint. His last clue identified it in one step.
+
+**He redesigns, not just reports.** He proposed that playing on should add nothing after a
+conquest and 20 circuits after the swarm, "otherwise you'd be immediately in the middle of
+the Neurex invasion". The arithmetic was exactly right — the approach opens at 15 circuits
+out, so +12 landed inside it — and he had also spotted that the buildup would resume
+mid-scale, which I had not. When he proposes a mechanic, check the numbers; they hold.
+
+**"Do all of them in one go if you can" is real authorisation.** So is "go for it" after a
+measurement. Don't re-ask.
+
+### The defect class to sweep for — the most valuable thing here
+
+**An engine function whose only caller is a human button.** Five in this codebase:
+`redeem`, `repayDebt`, `payFacilityFee`, `amendManifest`, and `seekContract` never
+producing the "they pay" direction. Each meant an opponent literally could not do
+something the player could, for the entire life of the game, with nothing failing and
+nothing to see. Over 40 games: 353 pledges and none redeemed; 49 debt markers and none
+cleared, one compounding to ₡8,837 on a seat still at the table.
+
+He asked for the sweep himself — *"can the AI do everything the player can?"* — and it is
+worth repeating whenever the action surface grows. Enumerate `ACTIONS` in `ui.js`, check
+each has an AI path. It took an hour.
+
+**Its cousin: a rule that exists but never fires.** Vassal revolts had two independent
+locks — strength that reached a median of 0 against the 1400 needed, and a price no vassal
+could ever afford — for 0 declarations in 128 arrangements. **Measure whether a mechanic
+fires at all before tuning it**, and check for a second lock after removing the first: my
+fix for the threshold alone would have moved it from 0% to 2%.
+
+### What I got wrong
+
+Same pattern as both instances before. Measurement caught all of it; most of it was my
+measurement that was broken.
+
+1. **The sound, three times.** I diagnosed the noise bed (louder than the music on a
+   phone), then the drone's pure tones (a fixed chord under every game) — both real, both
+   fixed, neither his complaint. Then a throb theory that died when four different
+   interventions all failed to move the number. *That is the tell*: when several fixes
+   change nothing, the metric is wrong, not the code.
+2. **"Hale is Eden."** I built a faction out of `"Eden," Hale said` — a man naming a
+   destination. He commands Samuel and is Union, and Sam corrected me. **Do not infer
+   canon from a fragment.** If an allegiance matters, find it stated.
+3. **My harnesses were wrong more often than the game was.** I pinned the tithe rate
+   *before* `aiDevelop` — which now sets it — so a sweep measured the personas while
+   claiming to vary the rate, and reported a flat line at every threshold. I classified
+   pledges by game phase and concluded three quarters were chosen freely; every one is
+   forced. I predicted a 15.4 dB swell would fall to about 4; it measured 10.8, because
+   the LFO was one of three things moving it.
+4. **Derived a threshold without the thing that resets it.** 550 from the raw accrual
+   rate; contests wipe or halve a vassal's buried strength about once per arrangement, so
+   the answer was 250. The clock is reset about as often as it runs.
+5. **A probe selector reported on the wrong element.** Positional, it grabbed a name label
+   instead of the one under test — and because that returned a truthy string, the fallback
+   beside it never ran. Find things by their text. A probe reporting on the wrong element
+   is worse than one reporting nothing.
+
+### Things that keep being true — additions
+
+- **Defensive code in one half of a pair hides a bug in the other.** One button was written
+  `data-fn="closeSheet()"` against forty-odd without the parens. The action-bar binder
+  strips a trailing `()`; the sheet binder does not — so it worked in one half of the
+  interface and was dead in the other, on a modal sheet with one button, in front of a new
+  player. `actions.test.mjs` now reads `ui.js` and checks every button names a real action.
+- **When you make something newly possible, grep for code that assumed it wasn't.**
+  Allowing pledged squares to be traded turned two hard-coded `mortgaged: 0` lines into a
+  free redemption worth 55% of list, with the ledger calling it a sale.
+- **Changing a default can expose a latent race.** Defaulting to one human doubled how
+  often opponents take a turn, and turned "abandon a game while an opponent is thinking"
+  from a rare crash into a reliable one. It had always been there.
+- **A number that is also a sort key.** `holdingsValue` went NaN on a damaged holding —
+  and that total is both what the final sheet prints and what the winner is sorted by. NaN
+  compares false both ways, so the game would have named a champion out of a hat.
+- **Interface copy goes stale like data does.** The tithe sheet promised "squeeze harder
+  and you earn more now"; measured, a tithe returns ₡0.3 a turn against ₡108 of upkeep.
+  Assert what a screen claims, or check it when you touch the mechanic underneath.
+
+### State of the work
+
+v52. 315 tests across 13 files, five probes green on every viewport, pushed, tree clean.
+
+Open:
+- **Varan's denial rate** — carried from Instance 2, untouched.
+- **Player chips clip the vassal status** at four seats: "vassal · Val". Cosmetic, flagged,
+  not fixed.
+- **Spector's tithe caution may be too conservative.** He sets the highest rate that cannot
+  arm a vassal before the end, which is right for retention — but holding vassals is also
+  the conquest victory, and I could not price that. If vassalage feels toothless, this is
+  the knob.
+- **The vassal economy is a loss by design**: ₡108/turn of upkeep against ₡0.3 of tithe.
+  You hold them for the conquest win and the share of their holdings that counts toward
+  your total. Worth revisiting if it ever reads as pointless rather than as a price.
+
+### Message to future instances
+
+His words are data. When he describes a symptom, each clause is narrowing it — I had the
+answer in his first sentence and spent three builds proving my own theories instead.
+
+Measure your measurements. Four of my errors this session were in the harness, not the
+game, and every one of them would have shipped a confident wrong answer.
+
+And the pattern across all three instances now: the thing that is broken is usually the
+thing nothing complains about. Nine defects, then seven, then five capabilities an
+opponent never had and a rule that never once fired — none of them threw, warned, or
+looked wrong on screen.
