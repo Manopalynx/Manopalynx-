@@ -851,7 +851,8 @@ const roEl = document.getElementById('ro');
 const hintEl = document.getElementById('hint');
 let drawn = false;                                 // has anything been drawn yet?
 
-const toolName = () => tool==='match' ? 'Flame' : tool==='erase' ? 'Erase' : M[tool].n;
+const toolName = () => tool==='match' ? (matchLit > 0 ? 'Flame' : 'Match out')
+                     : tool==='erase' ? 'Erase' : M[tool].n;
 function say(msg){ roEl.textContent = msg; }
 function sayTool(){ say(`${toolName()}  ·  brush ${brush}`); }
 
