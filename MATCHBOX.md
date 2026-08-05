@@ -13,6 +13,21 @@ Open `matchbox.html` in a browser.
 It fetches one webfont from Google Fonts. Offline it falls back to whatever monospace
 the machine has and everything else works.
 
+### On a phone
+
+**https://manopalynx.github.io/Manopalynx-/matchbox.html** — open it, then Share → Add
+to Home Screen if you want it as an icon.
+
+GitHub Pages serves `/docs` from `claude/grandiose-monopoly-game-y93uw8`, so that is
+the only place in this repository a file can be given a URL. The published copy is
+exactly that — a copy. The file is developed at the root of
+`claude/matchbox-improvement-z6pfx3`, and **`test/published.mjs` asserts the two are
+byte-identical**, because a copy nothing compares is a copy that goes stale. It prints
+the three commands to republish when it fails.
+
+There is no service worker of its own. The game's is network-first, so the page is
+fetched fresh whenever there is a signal — no stale-build trap, and nothing to bump.
+
 ## What is in the box
 
 Fourteen materials in the tray, and five more the simulation makes for itself: fire,
@@ -135,6 +150,7 @@ the glass.
 npm i playwright
 node test/matchbox-sim.mjs     # 18 checks — the simulation
 node test/matchbox-ui.mjs      # 10 checks — the hand
+node test/published.mjs        #  1 check  — the copy with the URL still matches
 ```
 
 Chromium only. Neither needs a server; the page is loaded over `file://`.
