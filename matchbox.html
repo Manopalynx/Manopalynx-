@@ -166,15 +166,26 @@ M[PAPER]  = {n:'Paper',    ph:3, col:[214,201,172], ig:210, fuel:70,  out:2.6, c
 M[STRAW]  = {n:'Straw',    ph:2, col:[186,150, 72], ig:170, fuel:55,  out:2.4, cond:.14, cap:.55, ash:ASH};
 M[OIL]    = {n:'Oil',      ph:1, col:[ 46, 38, 30], ig:190, fuel:180, out:3.4, cond:.12, cap:.9,  ash:E};
 M[WAX]    = {n:'Wax',      ph:3, col:[226,218,198], ig:9e9, fuel:0,   out:0,   cond:.09, cap:1.1, melt:62, into:MELT};
-M[MELT]   = {n:'Wax',      ph:1, col:[214,198,160], ig:250, fuel:220, out:2.1, cond:.11, cap:1.1, ash:E};
+// Molten wax does not light. Hold a match to a puddle of it and nothing happens —
+// that is the entire reason a candle has a wick, and it is what makes wax different
+// from oil rather than a slower version of it. It burns only where something with
+// `wick` is standing in it, which is the rule drawFuel() implements.
+//
+// It was ignitable at 250 and the pool lit itself: 158 wax cells and a wick became a
+// 126-cell fire that ate the whole candle in thirteen seconds. Raising the figure to
+// 420 only moved the problem — a wick burns at 1150, so the wax right beside it still
+// caught, and burned off the fuel the wick was supposed to be drinking.
+M[MELT]   = {n:'Wax',      ph:1, col:[214,198,160], ig:9e9, fuel:220, out:2.1, cond:.11, cap:1.1, ash:E};
 M[POWDER] = {n:'Powder',   ph:2, col:[ 58, 56, 58], ig:150, fuel:14,  out:9.0, cond:.30, cap:.4,  ash:SMOKE};
-M[FUSE]   = {n:'Fuse',     ph:3, col:[142,116, 78], ig:230, fuel:150, out:1.5, cond:.07, cap:.7,  ash:ASH};
+// A fuse has to carry a front along itself for its whole length or it is a stick.
+// `out` at 1.5 was the lowest in the table and the front died about eight cells in.
+M[FUSE]   = {n:'Fuse',     ph:3, col:[142,116, 78], ig:200, fuel:150, out:3.2, cond:.10, cap:.7,  ash:ASH, wick:1};
 M[COAL]   = {n:'Coal',     ph:2, col:[ 34, 32, 34], ig:520, fuel:1500,out:3.0, cond:.13, cap:1.4, ash:ASH};
 M[GREEN]  = {n:'Green',    ph:3, col:[ 74,104, 54], ig:470, fuel:600, out:1.1, cond:.11, cap:1.9, ash:EMBER, smoky:3.2};
 M[STONE]  = {n:'Stone',    ph:3, col:[104,100, 94], ig:9e9, cond:.20, cap:2.2};
 M[STEEL]  = {n:'Steel',    ph:3, col:[142,146,152], ig:9e9, cond:.92, cap:1.6};
-M[WATER]  = {n:'Water',    ph:1, col:[ 44, 92,132], ig:9e9, cond:.30, cap:6.0, boil:100, into:STEAM};
-M[ICE]    = {n:'Ice',      ph:3, col:[168,204,222], ig:9e9, cond:.28, cap:3.0, melt:2,   into:WATER};
+M[WATER]  = {n:'Water',    ph:1, col:[ 44, 92,132], ig:9e9, cond:.42, cap:6.0, boil:100, into:STEAM, t0:12};
+M[ICE]    = {n:'Ice',      ph:3, col:[168,204,222], ig:9e9, cond:.28, cap:3.0, melt:0,   into:WATER, t0:-14};
 M[SAND]   = {n:'Sand',     ph:2, col:[190,166,116], ig:9e9, cond:.16, cap:1.5};
 M[FIRE]   = {n:'Fire',     ph:0, col:[232,100, 26]};
 M[SMOKE]  = {n:'Smoke',    ph:0, col:[ 58, 54, 50]};
@@ -184,10 +195,37 @@ M[ASH]    = {n:'Ash',      ph:2, col:[ 96, 92, 88], ig:9e9, cond:.10, cap:.9};
 
 const TRAY = [WOOD, PAPER, STRAW, OIL, WAX, POWDER, FUSE, COAL, GREEN, WATER, ICE, STONE, STEEL, SAND];
 
-/* ============================================================ grid */
+/* ============================================================ grid
 
-const AMBIENT = 20;
-const CELL = 4;
+   Temperatures are °C. Energy is temperature × capacity, and that distinction is
+   the spine of the whole model: the same energy poured into water and into paper
+   must not move them by the same amount. Every place heat changes hands below, it
+   is moved as energy and divided by the capacity of whatever receives it. */
+
+const AMBIENT    = 20;    // the room
+const CELL       = 4;     // pixels per cell
+/* Air is a poor conductor — better than nothing and worse than wood — and it moves
+   heat by rising, not by conducting. The table had it at .55, better than everything
+   except steel, which is backwards and was quietly fatal: every burning cell dumped
+   its heat into the air beside it faster than it could push it into the log it was
+   touching. Measured on the old figure, a lit wood cell settled at 320°C against an
+   ignition point of 300 and held its neighbour at 200 — permanently 100° short. That
+   is why nothing spread sideways, and why a fuse, a candle and an oil trail all
+   failed at once. Convection, below, is what actually carries heat through air. */
+const AIR_COND   = .06;
+const AIR_CAP    = .35;
+const FLOW       = .12;   // conduction rate — see conduct() for why it cannot go higher
+const ROOM_LOSS  = .004;  // air handing heat back to the room, per tick
+const BURN       = 6.0;   // energy per unit of a material's `out`, per tick alight
+const KEEP       = .5;    // ...of which this much stays put; the rest goes to neighbours
+const MATCH_HEAT = 780;   // what the match puts into whatever you touch with it
+const FIRE_HEAT  = 780;   // a flame, newly lit
+const FIRE_DIES  = 360;   // below this a flame is not a flame any more
+const WICK_DRAW  = .34;   // fuel a burning wick takes from the liquid it stands in
+const WICK_REACH = 3;     // ...and how far into the pool it can reach for it
+const LATENT_MELT= 140;   // energy a cell has to soak up before it can melt
+const LATENT_BOIL= 1800;  // ...and before it can boil, taken out of whatever is
+                          // touching it. This is the number that puts a fire out.
 
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d', {alpha:false});
@@ -215,13 +253,42 @@ function build(){
 const idx = (x,y) => y*W + x;
 const inb = (x,y) => x>=0 && x<W && y>=0 && y<H;
 
+// Empty space is air: it carries heat, it rises, and it is what gives heat back to
+// the room. The table marks it solid so that anything at all can displace it, so the
+// question "is this cell air" has to be asked here rather than read off `ph`.
+const gassy = t => t===E || M[t].ph===0;
+const capOf = t => { const c = M[t].cap; return c !== undefined ? c : AIR_CAP; };
+
+/* There are two ways for a cell to change, and telling them apart was worth four
+   defects on its own.
+
+   `put` introduces new material — your finger, the rain, the opening scene — and it
+   arrives at its own temperature. `become` converts what is already there — wax
+   melting, wood spending its last fuel, a flame going out — and the heat that was in
+   the cell stays in the cell.
+
+   One function did both jobs before, and got each of them the wrong way round. New
+   material inherited the temperature of the hole it landed in, so ice arrived at room
+   temperature and was water before your finger left the glass, and a splash on a fire
+   arrived at 600°C and flashed to steam without cooling anything. Converting in place
+   reset the cell to ambient, so a burning oil trail deleted its own heat as it went
+   and could not light the log it was running into. */
+
 function put(x,y,t){
   if(!inb(x,y)) return;
   const i = idx(x,y);
   type[i] = t;
   fuel[i] = M[t] && M[t].fuel ? M[t].fuel : 0;
   life[i] = 0;
-  if (t===E) temp[i] = AMBIENT;
+  temp[i] = M[t] && M[t].t0 !== undefined ? M[t].t0 : AMBIENT;
+}
+
+function become(x,y,t){
+  if(!inb(x,y)) return;
+  const i = idx(x,y);
+  type[i] = t;
+  fuel[i] = M[t] && M[t].fuel ? M[t].fuel : 0;
+  life[i] = 0;
 }
 
 /* ============================================================ movement
@@ -261,8 +328,15 @@ function moveFalling(){
         const dg = idx(x+dx, y+1);
         if (denser(t, type[dg])) { swap(i,dg); break; }
       }
-      // liquids also creep sideways, which is what makes oil a sheet
-      if (ph===1 && type[idx(x,y)]===t){
+      // Liquids creep sideways, which is what makes oil a sheet rather than a column.
+      // Only when there is something on top of them, though: a puddle already one
+      // cell deep has nothing pushing it, and a film that keeps spreading is a film
+      // that runs away from where you poured it. Measured with the old rule, a lit
+      // oil trail retreated toward the flame as it burned — the far end drained back
+      // into the cells the fire had just emptied — so the fire consumed 38 of 40
+      // cells and the burning front never travelled past a third of the trail. The
+      // wood at the end of it stayed at 53°C.
+      if (ph===1 && type[idx(x,y)]===t && y>0 && type[idx(x,y-1)]===t){
         for (const dx of [s,-s]){
           if (!inb(x+dx,y)) continue;
           const sd = idx(x+dx,y);
@@ -291,39 +365,175 @@ function moveRising(){
 }
 
 /* ============================================================ heat
-   One diffusion pass over the temperature field, weighted by each
-   material's conductivity and divided by its capacity. Steel carries heat
-   across a gap; water swallows it. Nothing else in here knows what fire is. */
+   Conduction, as a trade between neighbours rather than an average.
 
-let scratch = null;
+   Each pair of touching cells is visited exactly once — every cell trades with the
+   one to its right and the one below, which covers every pair on the grid — and the
+   energy that leaves one is precisely the energy that arrives in the other. That is
+   the whole reason for the shape of this loop, and `test/matchbox-sim.mjs` asserts
+   it: 300 ticks of diffusion over a lumpy field of wood, steel, water and stone must
+   not change the total heat in the box.
 
-function diffuse(){
-  if (!scratch || scratch.length !== temp.length) scratch = new Float32Array(temp.length);
-  scratch.set(temp);
+   The model this replaced averaged each cell against its four neighbours and scaled
+   the result by that cell's own conductivity over its own capacity. Read quickly it
+   looks like the same thing. It isn't: A gave heat away at a rate set by A, and B
+   took it at a rate set by B, so every boundary between two different materials was
+   quietly manufacturing or destroying energy — worst at exactly the interesting
+   places, like steel against air, where the two rates differ by nearly 3×.
+
+   Two conductances in contact add in series, which is the harmonic mean below. It is
+   also what stops a good conductor touching a bad one from behaving like two good
+   ones: steel carries heat along a bar and still hands it over slowly to the wood at
+   the end of it. */
+
+function diffuse(){ conduct(); convect(); roomLoss(); }
+
+function conduct(){
   for (let y=0; y<H; y++){
     for (let x=0; x<W; x++){
-      const i = idx(x,y), t = type[i];
-      const mt = M[t];
-      const c = mt.cond !== undefined ? mt.cond : .55;   // air conducts loosely
-      const cap = mt.cap !== undefined ? mt.cap : .35;
-      let sum = 0, n = 0;
-      if (x>0)   { sum += scratch[i-1]; n++; }
-      if (x<W-1) { sum += scratch[i+1]; n++; }
-      if (y>0)   { sum += scratch[i-W]; n++; }
-      if (y<H-1) { sum += scratch[i+W]; n++; }
-      const avg = sum / n;
-      temp[i] += (avg - scratch[i]) * (c / cap) * 0.62;
-      // hot air is buoyant: push some of the heat up regardless of medium
-      if (y>0 && temp[i] > AMBIENT + 40 && M[type[i-W]].ph === 0){
-        const lift = (temp[i]-AMBIENT) * .07;
-        temp[i] -= lift; temp[i-W] += lift;
+      const i = idx(x,y);
+      const ma = M[type[i]];
+      const ca = ma.cond !== undefined ? ma.cond : AIR_COND;
+      const pa = ma.cap  !== undefined ? ma.cap  : AIR_CAP;
+
+      // right neighbour, then the one below: every pair, exactly once
+      for (let d=0; d<2; d++){
+        const j = d ? i+W : i+1;
+        if (d ? y===H-1 : x===W-1) continue;
+        const mb = M[type[j]];
+        const cb = mb.cond !== undefined ? mb.cond : AIR_COND;
+        const pb = mb.cap  !== undefined ? mb.cap  : AIR_CAP;
+        // FLOW is bounded by the worst pair on the board — steel against steel, where
+        // k·(1/cap + 1/cap) is 1.15 — times the four pairs a cell belongs to. Above
+        // about .21 that cell overshoots its neighbours and the field starts to ring.
+        const q = (temp[i] - temp[j]) * (2*ca*cb/(ca+cb)) * FLOW;
+        temp[i] -= q / pa;
+        temp[j] += q / pb;
       }
-      temp[i] += (AMBIENT - temp[i]) * 0.0045;           // the room, losing it slowly
     }
   }
 }
 
+// Convection, and only in the gas. Hot air rises and takes its heat with it; a hot
+// log does not. The old model applied this lift to any cell with gas above it, which
+// meant every burning solid was venting 7% of its heat upward every tick. (Measured:
+// removing that alone fixed none of the failures, but it is still wrong, and it made
+// the rest of the model impossible to reason about.)
+function convect(){
+  for (let y=1; y<H; y++){
+    for (let x=0; x<W; x++){
+      const i = idx(x,y);
+      if (!gassy(type[i]) || temp[i] <= AMBIENT + 40) continue;
+      if (!gassy(type[i-W])) continue;
+      const lift = (temp[i] - AMBIENT) * .09;
+      temp[i] -= lift; temp[i-W] += lift;
+    }
+  }
+}
+
+// The room. Only the air is in touch with it — a stone floor loses its heat by
+// conducting into the air above it, which conduct() already does. Applying this to
+// every cell made a thick wall into a heat sink that no fire could ever warm.
+function roomLoss(){
+  for (let i=0; i<temp.length; i++){
+    if (gassy(type[i])) temp[i] += (AMBIENT - temp[i]) * ROOM_LOSS;
+  }
+}
+
+
 /* ============================================================ reactions */
+
+const NX = [-1, 1, 0, 0], NY = [0, 0, -1, 1];        // left, right, up, down
+
+/* What a burning cell gives to the four cells around it.
+
+   This is the difference between a fire and a column of smoke, and it is the single
+   change that made the box work. With everything going upward — which is what the
+   model did, because conduction was the only sideways path and no material's
+   conductivity could climb a neighbour from room temperature to its ignition point
+   before the room took the heat back — a fuse laid on the floor never reached its
+   charge, a candle went out as soon as the match left, green wood could not be lit
+   at all, and burning oil got the log it was touching to 96°C against an ignition
+   point of 300.
+
+   Weighted upward, because flames do go up. Not exclusively, because they also set
+   fire to the thing beside them. */
+const RAD = [.21, .21, .42, .16];                    // left, right, up, down
+
+function radiate(x, y, q){
+  for (let d=0; d<4; d++){
+    const xx = x+NX[d], yy = y+NY[d];
+    if (!inb(xx,yy)) continue;
+    const j = idx(xx,yy);
+    temp[j] += q * RAD[d] / capOf(type[j]);
+  }
+}
+
+/* Energy taken out of the neighbourhood, for a change of state that costs some.
+   Nothing may be driven below room temperature by this: boiling cools what it
+   touches, it does not refrigerate it. */
+function spend(x, y, q){
+  for (let d=0; d<4; d++){
+    const xx = x+NX[d], yy = y+NY[d];
+    if (!inb(xx,yy)) continue;
+    const j = idx(xx,yy);
+    temp[j] = Math.max(AMBIENT, temp[j] - (q/4) / capOf(type[j]));
+  }
+}
+
+/* A wick standing in liquid fuel spends the liquid rather than itself. Returns
+   whether it found any: if it did not, the wick is burning on its own account and
+   using itself up, which is what happens once the wax runs out.
+
+   The search runs down the wick as well as around the burning cell, because that is
+   what a wick is for. Melted wax runs downhill, away from the flame, so a wick that
+   could only reach what it was directly touching never found any: measured, the
+   candle burned for about twelve seconds — the length of the wick's own fuel — and
+   then went out with 127 of its 158 wax cells still solid. */
+function drawFuel(x, y){
+  if (sip(x, y)) return true;
+  const wick = type[idx(x,y)];
+  for (let yy = y+1; yy < H && yy <= y+30; yy++){
+    if (type[idx(x,yy)] !== wick) break;
+    if (sip(x, yy)) return true;
+  }
+  return false;
+}
+
+// A wick reaches into the pool, not merely at what it is touching. Drinking a cell
+// dry leaves a void, the rest of the melt runs down into it, and a wick that could
+// only reach one cell was left holding a crater: measured, the candle burned well for
+// sixteen seconds and then lost its whole wick in two as the pool sank out of contact.
+function sip(x, y){
+  for (let r=1; r<=WICK_REACH; r++){
+    for (let dy=-r; dy<=r; dy++){
+      for (let dx=-r; dx<=r; dx++){
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;   // this ring only
+        const xx = x+dx, yy = y+dy;
+        if (!inb(xx,yy)) continue;
+        const j = idx(xx,yy), mj = M[type[j]];
+        if (mj.ph !== 1 || !mj.fuel || fuel[j] <= 0) continue;
+        // A sip, not a swallow. Drawing a whole tick's worth drained the pool faster
+        // than the flame could melt more, so the wick spent most of its time dry and
+        // burned itself away instead.
+        fuel[j] -= WICK_DRAW;
+        if (fuel[j] <= 0) become(xx, yy, mj.ash !== undefined ? mj.ash : E);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+const touchingWater = (x,y) => {
+  for (let d=0; d<4; d++){
+    const xx = x+NX[d], yy = y+NY[d];
+    if (!inb(xx,yy)) continue;
+    const t = type[idx(xx,yy)];
+    if (t===WATER || t===ICE) return true;
+  }
+  return false;
+};
 
 function react(){
   for (let y=H-1; y>=0; y--){
@@ -331,37 +541,87 @@ function react(){
       const i = idx(x,y), t = type[i];
       if (t===E) continue;
       const m = M[t];
+      const cap = capOf(t);
 
-      // transient gases fade
+      // ---- gases last a while and are then air again, keeping whatever heat is
+      //      left in them. (They used to be reset to room temperature on the way
+      //      out, which deleted the heat a fire had just spent making.)
       if (m.ph===0){
         life[i] += 1;
-        const span = t===FIRE ? 9 : (t===STEAM ? 70 : 110);
-        if (life[i] > span * (0.6 + Math.random()*0.8)) put(x,y,E);
-        if (t===FIRE) temp[i] = Math.max(temp[i], 620);
+        if (t===FIRE){
+          // Touch water to a flame, or a flame to water, and something has to give.
+          // There was no rule anywhere connecting the two before: rain fell through
+          // a fire and burning cells went from 45 to 81 during it.
+          if (touchingWater(x,y)){ become(x,y,STEAM); temp[i] = 100; continue; }
+          if (temp[i] < FIRE_DIES){ become(x,y,E); continue; }
+        }
+        const span = t===FIRE ? 24 : (t===STEAM ? 70 : 110);
+        if (life[i] > span * (0.6 + Math.random()*0.8)) become(x,y,E);
         continue;
       }
 
-      // phase changes
-      if (m.melt !== undefined && temp[i] > m.melt){ put(x,y,m.into); continue; }
-      if (m.boil !== undefined && temp[i] > m.boil){ put(x,y,m.into); temp[i]=140; continue; }
+      // ---- melting. A melting cell soaks up energy at its melting point instead of
+      //      getting hotter, and only changes once it has absorbed the whole latent
+      //      cost. That is what makes a block of ice hold what it is touching near
+      //      freezing for as long as it lasts, rather than becoming a puddle on
+      //      contact — it was a puddle within a single tick before.
+      //
+      //      `life` is free for anything that isn't a gas, so the running total lives
+      //      there rather than in a fifth array. Both put() and become() clear it.
+      if (m.melt !== undefined && temp[i] > m.melt){
+        const soak = (temp[i] - m.melt) * cap * .25;
+        temp[i] -= soak / cap;
+        life[i] += soak;
+        if (life[i] >= LATENT_MELT) become(x,y,m.into);
+        continue;
+      }
 
-      // burning
+      // ---- boiling, which is where water does its real work. The energy comes out
+      //      of whatever the water is touching, and what it is usually touching is
+      //      the fire you are trying to put out.
+      if (m.boil !== undefined && temp[i] > m.boil){
+        spend(x, y, LATENT_BOIL);
+        become(x,y,m.into);
+        temp[i] = 100;
+        continue;
+      }
+
+      // ---- burning
       if (fuel[i] > 0 && m.ig !== undefined && temp[i] >= m.ig){
-        fuel[i] -= 1;
-        temp[i] += m.out * 2.6;
+        // Nothing burns underwater. A cell that would otherwise be alight but has
+        // water against it simply does not burn this tick; the heat it already has
+        // goes into the water by conduction, the water boils, and boiling is what
+        // takes the energy out of the fire.
+        if (touchingWater(x,y)) continue;
+
+        // A wick does not burn so much as draw, and a wick that is drawing does not
+        // burn away — it is soaked in what it is drawing. Spend the liquid instead of
+        // itself, and come back up to full while it can still reach some. A dry one
+        // has nothing to soak in and burns like the cord it is, which is what makes
+        // the same material a fuse when you lay it on the floor and a wick when you
+        // stand it in wax.
+        //
+        // Without the top-up the candle lasted between 1000 and 3000 ticks depending
+        // on how the melt happened to pool: every dry tick was a permanent bite out
+        // of a wick that had 150 to give.
+        if (m.wick && drawFuel(x,y)) fuel[i] = m.fuel;
+        else fuel[i] -= 1;
+        const q = m.out * BURN;
+        temp[i] += q * KEEP / cap;
+        radiate(x, y, q * (1 - KEEP));
         if (temp[i] > 1150) temp[i] = 1150;
 
         // flame above, smoke above that
         if (y>0 && type[i-W]===E){
           const smoky = m.smoky || 1;
-          if (Math.random() < 0.34/smoky) { put(x,y-1,FIRE); temp[i-W] = 700; }
-          else if (Math.random() < 0.05*smoky) put(x,y-1,SMOKE);
+          if (Math.random() < 0.34/smoky){ become(x,y-1,FIRE); temp[i-W] = Math.max(temp[i-W], FIRE_HEAT); }
+          else if (Math.random() < 0.05*smoky) become(x,y-1,SMOKE);
         }
         if (fuel[i] <= 0){
-          const r = m.ash !== undefined ? m.ash : E;
-          put(x,y,r);
-          if (r===EMBER) temp[i] = 560;
-          else if (r!==E) temp[i] = 240;
+          // Whatever is left keeps the heat it had. An ember is wood that has run out
+          // of wood, and it glows because it is still hot rather than because it has
+          // been told to be 560°C.
+          become(x, y, m.ash !== undefined ? m.ash : E);
         }
       }
     }
@@ -515,8 +775,11 @@ function paintAt(cx, cy){
       if (!inb(x,y)) continue;
       const i = idx(x,y);
       if (tool === 'match'){
-        temp[i] = Math.max(temp[i], 780);
-        if (type[i]===E && Math.random()<.28) put(x,y,FIRE);
+        temp[i] = Math.max(temp[i], MATCH_HEAT);
+        // `become`, not `put`: the flame has to keep the heat we just applied. `put`
+        // would hand this cell the resting temperature of a fresh flame, which is
+        // nothing at all, and the match would light nothing.
+        if (type[i]===E && Math.random()<.28) become(x,y,FIRE);
       } else if (tool === 'erase'){
         put(x,y,E);
       } else if (type[i]===E || M[type[i]].ph===0){
