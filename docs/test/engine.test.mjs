@@ -2307,3 +2307,85 @@ test('whole games still play out with the bundle valuation in place', () => {
     assert.ok(G.over, `seed ${seed} never finished`);
   }
 });
+
+// Carrying on from a conquest. This was withheld from that ending and offered
+// only on the swarm one — and a conquest is now the more interesting of the two
+// to continue, because a vassal can declare independence. checkVictory fires
+// only when somebody is bound, contested or released, so extending does not
+// immediately end the game again on the next check.
+test('a conquest can be played on from, and does not re-end itself', () => {
+  const G = game();
+  const [a, b] = G.players;
+  b.lord = a.i; a.vassals.push(b.i);
+  const before = G.circuits;
+
+  G.over = true; G.winner = a.i; G.endReason = 'conquest';
+  extendGame(G, 12);
+
+  assert.equal(G.over, false, 'the ledger reopened');
+  assert.equal(G.winner, null);
+  assert.equal(G.endReason, null);
+  assert.equal(G.circuits, before + 12);
+  assert.equal(G.phase, 'roll');
+  assert.equal(b.lord, a.i, 'and everyone sworn is still sworn');
+});
+
+test('and the Leader does not say nobody settled when somebody did', () => {
+  const line = reason => {
+    const G = game();
+    G.over = true; G.endReason = reason;
+    extendGame(G, 12);
+    return G.log.find(l => l.kind === 'leader').text;
+  };
+  assert.match(line('conquest'), /every page is still being kept/);
+  assert.match(line('circuit-limit'), /Nobody has settled/);
+});
+
+// The counter steps PAST the limit and that is what ends the game, so a swarm
+// ending is always one over its own total: "circuit 49 of 48", which is true and
+// reads like a defect.
+test('the circuit counter really does end one past the limit', () => {
+  const G = createGame({
+    seats: [{ name: 'A', kind: 'human' }, { name: 'B', kind: 'human' }],
+    seed: 5, circuits: 2
+  });
+  let guard = 0;
+  while (!G.over && guard++ < 400) {
+    if (G.phase === 'roll') roll(G);
+    else if (G.phase === 'landed') resolveLanding(G);
+    else if (G.phase === 'card') applyCard(G);
+    else if (G.phase === 'offer') openAuction(G, current(G).pos);
+    else if (G.phase === 'auction') {
+      if (G.auction.resolved) closeAuction(G);
+      else submitBid(G, G.auction.queue[G.auction.at], 0);
+    } else if (G.phase === 'settle') { autoSettle(G); settleNow(G); }
+    else if (G.phase === 'end') endTurn(G);
+    else break;
+  }
+  assert.equal(G.endReason, 'circuit-limit');
+  assert.ok(G.circuit > G.circuits,
+    `the final sheet must not print circuit ${G.circuit} of ${G.circuits} as a score`);
+});
+
+// A holding on a square with no price cannot happen through the rules — buy()
+// refuses one — so it only arrives from a damaged or hand-edited save. It used
+// to make holdingsValue NaN, which is the total the final sheet prints AND the
+// number standings sorts the winner by. NaN compares false both ways, so the
+// order became whatever the sort did and the game named a champion out of a hat.
+test('a holding the rules could not have made does not poison the totals', () => {
+  const G = game();
+  const [a] = G.players;
+  const taxSquare = BOARD.findIndex(b => b.t === 'tax');
+  own(G, a, 1);
+  a.holdings.push({ sq: taxSquare, garrisons: 0, citadel: 0, mortgaged: 0 });
+
+  const v = holdingsValue(a);
+  assert.ok(Number.isFinite(v), `holdings came to ${v}`);
+  assert.equal(v, RULES.startingCash + BOARD[1].pr, 'and the square with no price counted for nothing');
+
+  const rows = standings(G);
+  assert.ok(rows.every(r => Number.isFinite(r.worth)), 'every column has to be a number');
+  for (let i = 1; i < rows.length; i++) {
+    assert.ok(rows[i - 1].worth >= rows[i].worth, 'the order has to actually be an order');
+  }
+});

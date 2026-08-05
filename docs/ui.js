@@ -1892,7 +1892,15 @@ function settleDone() { closeSheet(); E.settleNow(G); tick(); }
 function showFinal() {
   const rows = E.standings(G);
   const champion = G.players[G.winner];
-  sheet(`<h3>The ledger closes</h3><div class="sub">circuit ${G.circuit} of ${G.circuits}</div>
+  // "Circuit 49 of 48" — which is true, and reads like a defect. The counter
+  // steps past the limit and THAT is what ends the game, so a swarm ending is
+  // always one over. It is not a number worth showing at all there: the run
+  // finished, and how long it was is the thing to say. A conquest ending does
+  // want its circuit, because the interesting part is that it came early.
+  const closed = G.endReason === 'conquest'
+    ? `taken on circuit ${G.circuit} of ${G.circuits}`
+    : `${G.circuits} circuits · the swarm arrives`;
+  sheet(`<h3>The ledger closes</h3><div class="sub">${closed}</div>
     <div class="card">${G.endReason === 'conquest'
       ? `Every column posts to one page. <b>${esc(champion.name)}</b> holds the galaxy outright.`
       : `They do not stop. They were never going to stop. On totals, <b>${esc(champion.name)}</b>
@@ -1905,7 +1913,13 @@ function showFinal() {
     ${rows.map(r => `<tr><td style="color:${pipOf(r.player)}">${esc(r.player.name)}</td>
       <td>${money(r.worth)}</td><td>${esc(r.status)}</td></tr>`).join('')}</table>
     ${btns([
-      ...(G.endReason === 'conquest' ? [] : [['Play on — +12 circuits', 'playOn', 'wide']]),
+      // Offered on both endings. It used to be withheld from a conquest, which
+      // was the one place it had become the more interesting of the two: a
+      // vassal can declare independence now, so carrying on from "one player
+      // holds everybody" is a run at whether they can hold them. checkVictory
+      // only fires when somebody is bound, contested or released, so extending
+      // does not simply end the game again on the next check.
+      ['Play on — +12 circuits', 'playOn', 'wide'],
       ['Copy result', 'copyResult', ''],
       ['New game', 'newGame', 'pri', 'Confirm — starts over'],
       ['Back to board', 'closeSheet', 'wide']

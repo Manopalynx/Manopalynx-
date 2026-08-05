@@ -117,6 +117,15 @@ export function holdingsValue(p) {
   let v = p.cash;
   for (const h of p.holdings) {
     const b = BOARD[h.sq];
+    // A square with no price cannot be bought — buy() refuses one and an
+    // auction never opens on one — so a holding on a tax square or a corner
+    // means the save is damaged, not that the rules changed. Skipped rather
+    // than added: `undefined` here makes the whole total NaN, and this total is
+    // what the final sheet prints and what standings SORTS THE WINNER BY. A
+    // NaN comparison is false both ways round, so the order becomes whatever
+    // the sort happened to do, and the game names its champion out of a hat
+    // while every figure on screen reads ₡NaN.
+    if (!b || !b.pr) continue;
     v += h.mortgaged ? Math.floor(b.pr / 2) : b.pr;
     if (b.s) v += (h.citadel ? 5 : h.garrisons) * SETS[b.s].gc;
   }
@@ -890,6 +899,11 @@ function announceSwarm(G) {
 }
 
 export function extendGame(G, extra = 12) {
+  // Read before it is cleared: a game that ended because one player holds
+  // everybody is a different thing to carry on from than one that ran out of
+  // circuits, and the Leader should not say nobody has settled when somebody
+  // very plainly has.
+  const was = G.endReason;
   G.circuits += extra;
   G.swarmMark = 0;                  // a longer run means the array reports again
   G.over = false;
@@ -897,7 +911,9 @@ export function extendGame(G, extra = 12) {
   G.endReason = null;
   G.phase = 'roll';
   G.dice = [0, 0];
-  leaderSays(G, `Nobody has settled, and the column stays open. ${extra} more circuits, then.`);
+  leaderSays(G, was === 'conquest'
+    ? `Every column posts to one page, and every page is still being kept. ${extra} more circuits, then.`
+    : `Nobody has settled, and the column stays open. ${extra} more circuits, then.`);
 }
 
 /* ============================================================ acquisition */

@@ -464,7 +464,7 @@ __m.data = (function () {
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-const BUILD = 'grandiose-v50';
+const BUILD = 'grandiose-v51';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -1043,6 +1043,15 @@ function holdingsValue(p) {
   let v = p.cash;
   for (const h of p.holdings) {
     const b = BOARD[h.sq];
+    // A square with no price cannot be bought — buy() refuses one and an
+    // auction never opens on one — so a holding on a tax square or a corner
+    // means the save is damaged, not that the rules changed. Skipped rather
+    // than added: `undefined` here makes the whole total NaN, and this total is
+    // what the final sheet prints and what standings SORTS THE WINNER BY. A
+    // NaN comparison is false both ways round, so the order becomes whatever
+    // the sort happened to do, and the game names its champion out of a hat
+    // while every figure on screen reads ₡NaN.
+    if (!b || !b.pr) continue;
     v += h.mortgaged ? Math.floor(b.pr / 2) : b.pr;
     if (b.s) v += (h.citadel ? 5 : h.garrisons) * SETS[b.s].gc;
   }
@@ -1816,6 +1825,11 @@ function announceSwarm(G) {
 }
 
 function extendGame(G, extra = 12) {
+  // Read before it is cleared: a game that ended because one player holds
+  // everybody is a different thing to carry on from than one that ran out of
+  // circuits, and the Leader should not say nobody has settled when somebody
+  // very plainly has.
+  const was = G.endReason;
   G.circuits += extra;
   G.swarmMark = 0;                  // a longer run means the array reports again
   G.over = false;
@@ -1823,7 +1837,9 @@ function extendGame(G, extra = 12) {
   G.endReason = null;
   G.phase = 'roll';
   G.dice = [0, 0];
-  leaderSays(G, `Nobody has settled, and the column stays open. ${extra} more circuits, then.`);
+  leaderSays(G, was === 'conquest'
+    ? `Every column posts to one page, and every page is still being kept. ${extra} more circuits, then.`
+    : `Nobody has settled, and the column stays open. ${extra} more circuits, then.`);
 }
 
 /* ============================================================ acquisition */
@@ -6418,7 +6434,15 @@ function settleDone() { closeSheet(); E.settleNow(G); tick(); }
 function showFinal() {
   const rows = E.standings(G);
   const champion = G.players[G.winner];
-  sheet(`<h3>The ledger closes</h3><div class="sub">circuit ${G.circuit} of ${G.circuits}</div>
+  // "Circuit 49 of 48" — which is true, and reads like a defect. The counter
+  // steps past the limit and THAT is what ends the game, so a swarm ending is
+  // always one over. It is not a number worth showing at all there: the run
+  // finished, and how long it was is the thing to say. A conquest ending does
+  // want its circuit, because the interesting part is that it came early.
+  const closed = G.endReason === 'conquest'
+    ? `taken on circuit ${G.circuit} of ${G.circuits}`
+    : `${G.circuits} circuits · the swarm arrives`;
+  sheet(`<h3>The ledger closes</h3><div class="sub">${closed}</div>
     <div class="card">${G.endReason === 'conquest'
       ? `Every column posts to one page. <b>${esc(champion.name)}</b> holds the galaxy outright.`
       : `They do not stop. They were never going to stop. On totals, <b>${esc(champion.name)}</b>
@@ -6431,7 +6455,13 @@ function showFinal() {
     ${rows.map(r => `<tr><td style="color:${pipOf(r.player)}">${esc(r.player.name)}</td>
       <td>${money(r.worth)}</td><td>${esc(r.status)}</td></tr>`).join('')}</table>
     ${btns([
-      ...(G.endReason === 'conquest' ? [] : [['Play on — +12 circuits', 'playOn', 'wide']]),
+      // Offered on both endings. It used to be withheld from a conquest, which
+      // was the one place it had become the more interesting of the two: a
+      // vassal can declare independence now, so carrying on from "one player
+      // holds everybody" is a run at whether they can hold them. checkVictory
+      // only fires when somebody is bound, contested or released, so extending
+      // does not simply end the game again on the next check.
+      ['Play on — +12 circuits', 'playOn', 'wide'],
       ['Copy result', 'copyResult', ''],
       ['New game', 'newGame', 'pri', 'Confirm — starts over'],
       ['Back to board', 'closeSheet', 'wide']
