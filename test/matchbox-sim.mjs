@@ -348,7 +348,17 @@ await check(browser, 'a lit scene does not run away', () => {
   const gone = n0 - __count(WOOD);
   // 600 ticks is ten seconds. A whole pile in ten seconds is a petrol fire, not wood.
   if (gone > n0 * 0.55) return `${gone} of ${n0} wood cells gone in 600 ticks — the fire is a fuse`;
-  if (__maxT() > 1400) return `peak temperature ${Math.round(__maxT())}°C — hotter than the model's own ceiling`;
+  if (__maxT() > MAX_T + 1) return `peak temperature ${Math.round(__maxT())}°C against a stated ceiling of ${MAX_T}`;
+
+  // The seeded scene as well, because the ceiling was breached there and not here: a
+  // cell with burning neighbours on several sides collects from all of them, and the
+  // pile in this check is too thin to surround one. It reached 2089°C — past the top
+  // of the colour ramp, so it did not even look wrong.
+  __wipe(); seed();
+  const f2 = H-3;
+  __hold((W*0.45)|0, f2-5, 3, 200);
+  for (let k=0;k<900;k++) __step(1);
+  if (__maxT() > MAX_T + 1) return `the opening scene reached ${Math.round(__maxT())}°C against a stated ceiling of ${MAX_T}`;
   return null;
 });
 

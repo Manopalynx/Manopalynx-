@@ -227,6 +227,7 @@ const RAIN_TICKS = 420;   // how long a press of Rain keeps raining. At 90 it wa
 const MATCH_HEAT = 780;   // what the match puts into whatever you touch with it
 const FIRE_HEAT  = 780;   // a flame, newly lit
 const FIRE_DIES  = 360;   // below this a flame is not a flame any more
+const MAX_T      = 1200;  // nothing in the box gets hotter than this
 const CHAR       = 30;    // charring a cell must do before it catches, if it has no
                           // `char` of its own. See "catching" in react().
 const WICK_DRAW  = .34;   // fuel a burning wick takes from the liquid it stands in
@@ -499,7 +500,12 @@ function radiate(x, y, q){
     const xx = x+NX[d], yy = y+NY[d];
     if (!inb(xx,yy)) continue;
     const j = idx(xx,yy);
-    temp[j] += q * RAD[d] / capOf(type[j]);
+    // Clamped, like the burning cell's own gain. A cell with burning neighbours on
+    // several sides collects from all of them, and unclamped that put the hottest
+    // cell of an ordinary seeded scene at 2089°C — well past the top of the colour
+    // ramp, which stops at 1150, so it was invisible as well as unbounded.
+    const t = temp[j] + q * RAD[d] / capOf(type[j]);
+    temp[j] = t > MAX_T ? MAX_T : t;
   }
 }
 
@@ -666,7 +672,7 @@ function react(){
         const q = m.out * BURN;
         temp[i] += q * KEEP / cap;
         radiate(x, y, q * (1 - KEEP));
-        if (temp[i] > 1150) temp[i] = 1150;
+        if (temp[i] > MAX_T) temp[i] = MAX_T;
 
         // flame above, smoke above that
         if (y>0 && type[i-W]===E){
