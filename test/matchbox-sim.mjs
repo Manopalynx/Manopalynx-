@@ -53,10 +53,10 @@ const HARNESS = `
   // reimplements the thing it is testing will agree with itself long after it has
   // stopped agreeing with the page.
   window.__flame = (x,y,r) => {
-    const t0 = tool, b0 = brush;
-    tool = 'match'; brush = r;
+    const t0 = tool, b0 = brush, m0 = matchLit;
+    tool = 'match'; brush = r; matchLit = 99;   // a lit match, since paintAt checks
     paintAt(x,y);
-    tool = t0; brush = b0;
+    tool = t0; brush = b0; matchLit = m0;
   };
   // Hold the match at a spot for n ticks, then let the scene get on with it.
   window.__hold = (x,y,r,ticks) => { for (let k=0;k<ticks;k++){ __flame(x,y,r); __step(1); } };
@@ -168,6 +168,21 @@ await check(browser, 'green wood can be burned, but only with help', () => {
   return null;
 });
 
+// The opening scene is the only thing every single person who opens the file sees,
+// and the obvious thing to do with it is put the match to the end of the oil. It used
+// to be three unrelated piles with the oil stopping six cells short of the wood, under
+// a comment describing it as a puddle running toward the stack.
+await check(browser, 'the opening scene works: light the oil and the stack catches', () => {
+  __wipe(); seed();
+  const f = H-3;
+  const wood0 = __count(WOOD);
+  __hold((W*0.84)|0, f-1, 2, 90);            // the far end of the trail
+  for (let k=0;k<2500;k++) __step(1);
+  const burnt = wood0 - __count(WOOD);
+  if (burnt < 10) return `the fire ran along the oil and stopped: ${burnt} of ${wood0} wood cells consumed`;
+  return null;
+});
+
 console.log('\n— water —');
 
 // Was: the water arrived at 539-652°C, flashed to steam, and burning cells went 45 -> 51.
@@ -213,7 +228,9 @@ await check(browser, 'rain drowns a fire it falls on', () => {
   __slab(10, f-5, 59, f-1, WOOD);
   __hold(20, f-2, 3, 200);
   const before = __hot(WOOD, M[WOOD].ig);
-  let raining = 400;
+  // RAIN_TICKS, not a number picked here: this has to be the shower the button
+  // actually delivers, or the check is about a downpour nobody can summon.
+  let raining = RAIN_TICKS;
   for (let k=0;k<1400;k++){
     if (raining-- > 0) for (let j=0;j<Math.ceil(W/22);j++){
       const x = (Math.random()*W)|0; if (type[idx(x,0)]===E) put(x, 0, WATER);

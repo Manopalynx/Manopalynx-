@@ -55,7 +55,9 @@
   canvas{display:block;width:100%;height:100%;image-rendering:pixelated;touch-action:none}
   .readout{position:absolute;top:7px;left:9px;font-size:10px;letter-spacing:.12em;
     color:#6b5c4b;pointer-events:none;text-transform:uppercase}
-  .hint{position:absolute;bottom:9px;left:0;right:0;text-align:center;font-size:10.5px;
+  /* Clear of the floor: at the foot of the stage this sat on top of the opening
+     scene, which is exactly where everything happens. */
+  .hint{position:absolute;bottom:26%;left:0;right:0;text-align:center;font-size:10.5px;
     letter-spacing:.1em;color:#7a6650;pointer-events:none;text-transform:uppercase;
     transition:opacity .5s}
 
@@ -164,7 +166,9 @@ M[E]      = {n:'—',        ph:3, col:[0,0,0]};
 M[WOOD]   = {n:'Wood',     ph:3, col:[122, 82, 46], ig:300, fuel:520, out:2.0, cond:.10, cap:1.0, ash:EMBER};
 M[PAPER]  = {n:'Paper',    ph:3, col:[214,201,172], ig:210, fuel:70,  out:2.6, cond:.16, cap:.6,  ash:ASH};
 M[STRAW]  = {n:'Straw',    ph:2, col:[186,150, 72], ig:170, fuel:55,  out:2.4, cond:.14, cap:.55, ash:ASH};
-M[OIL]    = {n:'Oil',      ph:1, col:[ 46, 38, 30], ig:190, fuel:180, out:3.4, cond:.12, cap:.9,  ash:E};
+// Lightened from [46,38,30], which against a void of [11,10,9] made a one-cell-deep
+// trail all but invisible — and a trail is the shape oil is usually in.
+M[OIL]    = {n:'Oil',      ph:1, col:[ 72, 58, 40], ig:190, fuel:180, out:3.4, cond:.12, cap:.9,  ash:E};
 M[WAX]    = {n:'Wax',      ph:3, col:[226,218,198], ig:9e9, fuel:0,   out:0,   cond:.09, cap:1.1, melt:62, into:MELT};
 // Molten wax does not light. Hold a match to a puddle of it and nothing happens —
 // that is the entire reason a candle has a wick, and it is what makes wax different
@@ -218,6 +222,8 @@ const FLOW       = .12;   // conduction rate — see conduct() for why it cannot
 const ROOM_LOSS  = .004;  // air handing heat back to the room, per tick
 const BURN       = 6.0;   // energy per unit of a material's `out`, per tick alight
 const KEEP       = .5;    // ...of which this much stays put; the rest goes to neighbours
+const RAIN_TICKS = 420;   // how long a press of Rain keeps raining. At 90 it was a
+                          // second and a half, which a fire of any size shrugged off.
 const MATCH_HEAT = 780;   // what the match puts into whatever you touch with it
 const FIRE_HEAT  = 780;   // a flame, newly lit
 const FIRE_DIES  = 360;   // below this a flame is not a flame any more
@@ -233,10 +239,22 @@ ctx.imageSmoothingEnabled = false;
 
 let W=0, H=0, type, temp, fuel, life, tint, img, buf;
 
+/* Sizing the grid, and carrying whatever is already in it across.
+
+   A phone resizes for reasons that have nothing to do with wanting a new box: the
+   address bar slides away, the keyboard appears, somebody turns it on its side. This
+   used to rebuild the grid and lay the opening scene down on top, so any of those
+   wiped what you had built and put your fire out. Anchored to the bottom, because
+   what is at the bottom is the floor and it should stay there. */
 function build(){
   const r = cv.parentElement.getBoundingClientRect();
-  W = Math.max(40, Math.floor(r.width  / CELL));
-  H = Math.max(40, Math.floor(r.height / CELL));
+  const nw = Math.max(40, Math.floor(r.width  / CELL));
+  const nh = Math.max(40, Math.floor(r.height / CELL));
+  if (nw === W && nh === H) return;
+
+  const old = W ? { W, H, type, temp, fuel, life } : null;
+
+  W = nw; H = nh;
   cv.width = W; cv.height = H;
   const n = W*H;
   type = new Uint8Array(n);
@@ -248,6 +266,20 @@ function build(){
   img = ctx.createImageData(W,H);
   buf = img.data;
   for (let i=3;i<buf.length;i+=4) buf[i] = 255;
+
+  if (old){
+    const drop = H - old.H;                       // bottom-aligned
+    const cols = Math.min(W, old.W);
+    for (let y=0; y<H; y++){
+      const oy = y - drop;
+      if (oy < 0 || oy >= old.H) continue;
+      for (let x=0; x<cols; x++){
+        const i = y*W + x, j = oy*old.W + x;
+        type[i] = old.type[j]; temp[i] = old.temp[j];
+        fuel[i] = old.fuel[j]; life[i] = old.life[j];
+      }
+    }
+  }
 }
 
 const idx = (x,y) => y*W + x;
@@ -682,8 +714,9 @@ const cueEl   = document.getElementById('cue');
 let matchLit = 0;          // seconds of flame remaining
 const MATCH_LIFE = 26;
 
+// Striking while one is already burning takes a fresh match out of the box, which is
+// what the gesture means. It used to do nothing at all, silently.
 function strike(){
-  if (matchLit > 0) return;
   matchLit = MATCH_LIFE;
   headEl.className = 'head lit';
   stickEl.className = 'stick';
@@ -698,7 +731,13 @@ function matchOut(){
   stickEl.className = 'stick spent';
   cueEl.textContent = 'Strike again';
   stripEl.classList.remove('hot');
-  if (tool === 'match') setTool(WOOD);
+  // Deliberately not switching to a material. A match can burn out in the middle of
+  // a stroke, and handing the moving finger a material to draw with meant 245 cells
+  // of wood laid into the scene by somebody who was applying flame and had not moved
+  // their hand. The flame tool stays selected and stops working, which is what a
+  // spent match does.
+  painting = false;
+  if (tool === 'match') say('Match out — strike the strip');
 }
 
 stripEl.addEventListener('pointerdown', e => { e.preventDefault(); strike(); });
@@ -738,10 +777,52 @@ function actionChip(labelName, fn, danger){
 }
 const eraseBtn = actionChip('Erase', ()=>setTool('erase'));
 actsEl.appendChild(eraseBtn);
-actsEl.appendChild(actionChip('Clear', ()=>{
-  type.fill(0); temp.fill(AMBIENT); fuel.fill(0); life.fill(0);
-}, true));
-actsEl.appendChild(actionChip('Rain', ()=>{ raining = 90; }));
+
+/* Clear asks first. It wipes everything, it cannot be undone, and it used to do that
+   on one tap while sitting the same size and colour as Erase and Rain beside it. Two
+   taps within the window, and the second one is on a button that has gone red and
+   changed its name, so it is a different target rather than the same one twice.
+
+   This is also what the .danger styling in the stylesheet was always for: it keys off
+   aria-pressed, which nothing ever set. */
+const CLEAR_WINDOW = 3000;
+let clearArmed = 0, clearTimer = 0;
+
+const clearBtn = actionChip('Clear', ()=>{
+  if (Date.now() < clearArmed){
+    type.fill(E); temp.fill(AMBIENT); fuel.fill(0); life.fill(0);
+    disarmClear();
+    say('Cleared');
+    return;
+  }
+  clearArmed = Date.now() + CLEAR_WINDOW;
+  clearBtn.textContent = 'Clear — sure?';
+  clearBtn.setAttribute('aria-pressed', 'true');
+  clearTimeout(clearTimer);
+  clearTimer = setTimeout(disarmClear, CLEAR_WINDOW);
+}, true);
+
+function disarmClear(){
+  clearArmed = 0;
+  clearTimeout(clearTimer);
+  clearBtn.textContent = 'Clear';
+  clearBtn.setAttribute('aria-pressed', 'false');
+}
+actsEl.appendChild(clearBtn);
+actsEl.appendChild(actionChip('Rain', ()=>{ raining = RAIN_TICKS; }));
+
+/* The readout, which is the only label on the page that can afford to change often.
+   It carries the current tool until the pointer is over the dark, and the cell under
+   the pointer while it is. On a phone there is no hover at all, so before this it
+   read "—" until you were already dragging — by which point you had found out what
+   the tool was by using it. */
+const roEl = document.getElementById('ro');
+const hintEl = document.getElementById('hint');
+let drawn = false;                                 // has anything been drawn yet?
+
+const toolName = () => tool==='match' ? 'Flame' : tool==='erase' ? 'Erase' : M[tool].n;
+function say(msg){ roEl.textContent = msg; }
+function sayTool(){ say(`${toolName()}  ·  brush ${brush}`); }
 
 function setTool(t){
   if (t==='match' && matchLit<=0) return;
@@ -749,17 +830,22 @@ function setTool(t){
   matsEl.querySelectorAll('.chip').forEach(c =>
     c.setAttribute('aria-pressed', String(Number(c.dataset.t)===tool)));
   eraseBtn.setAttribute('aria-pressed', String(tool==='erase'));
-  const hint = document.getElementById('hint');
-  hint.textContent = tool==='match' ? 'Touch the dark to apply flame'
-                   : tool==='erase' ? 'Erasing'
-                   : `${M[tool].n} — draw in the dark`;
-  hint.style.opacity = 1;
+  sayTool();
+  // The hint is an opening instruction, not a status line. Bringing it back every
+  // time the tool changed put a line of text over the middle of the scene, which is
+  // exactly where everything you are building is.
+  if (!drawn){
+    hintEl.textContent = tool==='match' ? 'Touch the dark to apply flame'
+                       : tool==='erase' ? 'Erasing'
+                       : `${M[tool].n} — draw in the dark`;
+  }
 }
 
 const brushEl = document.getElementById('brush');
 brushEl.addEventListener('input', ()=>{
   brush = +brushEl.value;
   document.getElementById('bval').textContent = brush;
+  sayTool();
 });
 
 /* ============================================================ input */
@@ -767,6 +853,7 @@ brushEl.addEventListener('input', ()=>{
 let painting = false, raining = 0;
 
 function paintAt(cx, cy){
+  if (tool === 'match' && matchLit <= 0) return;   // a spent match does nothing
   const r = brush;
   for (let dy=-r; dy<=r; dy++){
     for (let dx=-r; dx<=r; dx++){
@@ -798,17 +885,15 @@ function toCell(e){
 cv.addEventListener('pointerdown', e=>{
   e.preventDefault(); cv.setPointerCapture(e.pointerId);
   painting = true; const [x,y]=toCell(e); paintAt(x,y);
-  document.getElementById('hint').style.opacity = 0;
+  drawn = true;
+  hintEl.style.opacity = 0;
 });
 cv.addEventListener('pointermove', e=>{
   const [x,y] = toCell(e);
-  if (inb(x,y)){
-    const T = temp[idx(x,y)];
-    document.getElementById('ro').textContent =
-      `${M[type[idx(x,y)]].n}  ·  ${Math.round(T)}°C`;
-  }
+  if (inb(x,y)) say(`${M[type[idx(x,y)]].n}  ·  ${Math.round(temp[idx(x,y)])}°C`);
   if (painting) paintAt(x,y);
 });
+cv.addEventListener('pointerleave', ()=>{ if (!painting) sayTool(); });
 addEventListener('pointerup',     ()=>painting=false);
 addEventListener('pointercancel', ()=>painting=false);
 
@@ -844,17 +929,30 @@ function frame(now){
 
 /* ============================================================ boot */
 
+/* A little scene, so the first thing on screen is not an empty box.
+
+   The pieces touch, which they did not before: the oil trail runs from open floor at
+   the right all the way to the foot of the wood stack, and the straw is banked
+   against its left side. Light the far end of the oil and the fire travels the trail
+   and takes the stack — which is what the old comment here said the scene was, while
+   the oil actually stopped six cells short of the wood and could not have lit it
+   anyway. It is worth the first thing anyone tries being the thing that works.
+
+   `test/matchbox-sim.mjs` lights this scene from the end of the trail and asserts the
+   stack catches, so the opening scene cannot quietly stop meaning anything. */
 function seed(){
-  // A little scene, so the first thing on screen is not an empty box:
-  // a floor, a stack of wood, a puddle of oil running toward it.
   const floor = H-3;
+  const at = f => (W*f)|0;
   for (let x=0;x<W;x++) for (let y=floor;y<H;y++) put(x,y,STONE);
-  for (let x=(W*0.34)|0; x<(W*0.55)|0; x++)
+
+  for (let x=at(.30); x<at(.52); x++)
     for (let y=floor-9; y<floor; y++)
       if (Math.random()<.82) put(x,y,WOOD);
-  for (let x=(W*0.60)|0; x<(W*0.78)|0; x++) put(x,floor-1,OIL);
-  for (let x=(W*0.14)|0; x<(W*0.24)|0; x++)
+
+  for (let x=at(.18); x<at(.30); x++)
     for (let y=floor-4; y<floor; y++) put(x,y,STRAW);
+
+  for (let x=at(.52); x<at(.86); x++) put(x,floor-1,OIL);
 }
 
 function boot(){
@@ -865,8 +963,10 @@ function boot(){
 }
 boot();
 
+// Resize, but do not re-seed. build() carries the scene across; laying the opening
+// scene down again is how a rotation used to erase an hour's work.
 let rt;
-addEventListener('resize', ()=>{ clearTimeout(rt); rt = setTimeout(()=>{ build(); seed(); }, 220); });
+addEventListener('resize', ()=>{ clearTimeout(rt); rt = setTimeout(build, 220); });
 </script>
 </body>
 </html>
