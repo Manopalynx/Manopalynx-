@@ -163,12 +163,12 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
 M[E]      = {n:'—',        ph:3, col:[0,0,0]};
-M[WOOD]   = {n:'Wood',     ph:3, col:[122, 82, 46], ig:300, fuel:520, out:2.0, cond:.10, cap:1.0, ash:EMBER};
-M[PAPER]  = {n:'Paper',    ph:3, col:[214,201,172], ig:210, fuel:70,  out:2.6, cond:.16, cap:.6,  ash:ASH};
-M[STRAW]  = {n:'Straw',    ph:2, col:[186,150, 72], ig:170, fuel:55,  out:2.4, cond:.14, cap:.55, ash:ASH};
+M[WOOD]   = {n:'Wood',     ph:3, col:[122, 82, 46], ig:300, fuel:520, out:2.0, cond:.10, cap:1.0, ash:EMBER, char:30};
+M[PAPER]  = {n:'Paper',    ph:3, col:[214,201,172], ig:210, fuel:70,  out:2.6, cond:.16, cap:.6,  ash:ASH,   char:3};
+M[STRAW]  = {n:'Straw',    ph:2, col:[186,150, 72], ig:170, fuel:55,  out:2.4, cond:.14, cap:.55, ash:ASH,   char:3};
 // Lightened from [46,38,30], which against a void of [11,10,9] made a one-cell-deep
 // trail all but invisible — and a trail is the shape oil is usually in.
-M[OIL]    = {n:'Oil',      ph:1, col:[ 72, 58, 40], ig:190, fuel:180, out:3.4, cond:.12, cap:.9,  ash:E};
+M[OIL]    = {n:'Oil',      ph:1, col:[ 72, 58, 40], ig:190, fuel:180, out:3.4, cond:.12, cap:.9,  ash:E,     char:10};
 M[WAX]    = {n:'Wax',      ph:3, col:[226,218,198], ig:9e9, fuel:0,   out:0,   cond:.09, cap:1.1, melt:62, into:MELT};
 // Molten wax does not light. Hold a match to a puddle of it and nothing happens —
 // that is the entire reason a candle has a wick, and it is what makes wax different
@@ -180,12 +180,12 @@ M[WAX]    = {n:'Wax',      ph:3, col:[226,218,198], ig:9e9, fuel:0,   out:0,   c
 // 420 only moved the problem — a wick burns at 1150, so the wax right beside it still
 // caught, and burned off the fuel the wick was supposed to be drinking.
 M[MELT]   = {n:'Wax',      ph:1, col:[214,198,160], ig:9e9, fuel:220, out:2.1, cond:.11, cap:1.1, ash:E};
-M[POWDER] = {n:'Powder',   ph:2, col:[ 58, 56, 58], ig:150, fuel:14,  out:9.0, cond:.30, cap:.4,  ash:SMOKE};
+M[POWDER] = {n:'Powder',   ph:2, col:[ 58, 56, 58], ig:150, fuel:14,  out:9.0, cond:.30, cap:.4,  ash:SMOKE, char:2};
 // A fuse has to carry a front along itself for its whole length or it is a stick.
 // `out` at 1.5 was the lowest in the table and the front died about eight cells in.
-M[FUSE]   = {n:'Fuse',     ph:3, col:[142,116, 78], ig:200, fuel:150, out:3.2, cond:.10, cap:.7,  ash:ASH, wick:1};
-M[COAL]   = {n:'Coal',     ph:2, col:[ 34, 32, 34], ig:520, fuel:1500,out:3.0, cond:.13, cap:1.4, ash:ASH};
-M[GREEN]  = {n:'Green',    ph:3, col:[ 74,104, 54], ig:470, fuel:600, out:1.1, cond:.11, cap:1.9, ash:EMBER, smoky:3.2};
+M[FUSE]   = {n:'Fuse',     ph:3, col:[142,116, 78], ig:200, fuel:150, out:3.2, cond:.10, cap:.7,  ash:ASH,   char:12, wick:1};
+M[COAL]   = {n:'Coal',     ph:2, col:[ 34, 32, 34], ig:520, fuel:1500,out:3.0, cond:.13, cap:1.4, ash:ASH,   char:90};
+M[GREEN]  = {n:'Green',    ph:3, col:[ 74,104, 54], ig:470, fuel:600, out:1.1, cond:.11, cap:1.9, ash:EMBER, smoky:3.2, char:150};
 M[STONE]  = {n:'Stone',    ph:3, col:[104,100, 94], ig:9e9, cond:.20, cap:2.2};
 M[STEEL]  = {n:'Steel',    ph:3, col:[142,146,152], ig:9e9, cond:.92, cap:1.6};
 M[WATER]  = {n:'Water',    ph:1, col:[ 44, 92,132], ig:9e9, cond:.42, cap:6.0, boil:100, into:STEAM, t0:12};
@@ -194,7 +194,7 @@ M[SAND]   = {n:'Sand',     ph:2, col:[190,166,116], ig:9e9, cond:.16, cap:1.5};
 M[FIRE]   = {n:'Fire',     ph:0, col:[232,100, 26]};
 M[SMOKE]  = {n:'Smoke',    ph:0, col:[ 58, 54, 50]};
 M[STEAM]  = {n:'Steam',    ph:0, col:[178,182,186]};
-M[EMBER]  = {n:'Ember',    ph:2, col:[ 84, 40, 22], ig:340, fuel:340, out:1.6, cond:.14, cap:1.0, ash:ASH};
+M[EMBER]  = {n:'Ember',    ph:2, col:[ 84, 40, 22], ig:340, fuel:340, out:1.6, cond:.14, cap:1.0, ash:ASH,   char:20};
 M[ASH]    = {n:'Ash',      ph:2, col:[ 96, 92, 88], ig:9e9, cond:.10, cap:.9};
 
 const TRAY = [WOOD, PAPER, STRAW, OIL, WAX, POWDER, FUSE, COAL, GREEN, WATER, ICE, STONE, STEEL, SAND];
@@ -227,6 +227,8 @@ const RAIN_TICKS = 420;   // how long a press of Rain keeps raining. At 90 it wa
 const MATCH_HEAT = 780;   // what the match puts into whatever you touch with it
 const FIRE_HEAT  = 780;   // a flame, newly lit
 const FIRE_DIES  = 360;   // below this a flame is not a flame any more
+const CHAR       = 30;    // charring a cell must do before it catches, if it has no
+                          // `char` of its own. See "catching" in react().
 const WICK_DRAW  = .34;   // fuel a burning wick takes from the liquid it stands in
 const WICK_REACH = 3;     // ...and how far into the pool it can reach for it
 const LATENT_MELT= 140;   // energy a cell has to soak up before it can melt
@@ -618,8 +620,31 @@ function react(){
         continue;
       }
 
+      // ---- catching.
+      //
+      //      Ignition is not a line a temperature crosses. A cell over its ignition
+      //      point chars, at a rate set by how far over it is, and loses that
+      //      progress as it cools; it does not burn until it has charred enough. The
+      //      match is hotter than every ignition point in the table, so without this
+      //      every material lights the instant it is touched and they are all the
+      //      same material. Measured: a fifth-of-a-second dab lit a wood pile 20
+      //      times out of 20, and green wood — which is supposed to be the hard case
+      //      — burned from a one-second touch.
+      //
+      //      `char` counts ticks over the line, not degrees over it. Scaling by how
+      //      far over made no difference to anything, because the match at 780 is
+      //      hotter than every ignition point in the table — it charred a wood cell
+      //      in thirteen ticks, so a dab still lit everything while an oil fire
+      //      burning against a log for 150 ticks at 360°C still could not. Time is
+      //      what actually distinguishes the two.
+      if (fuel[i] > 0 && m.ig !== undefined){
+        if (temp[i] >= m.ig) life[i] += 1;
+        else life[i] *= .94;
+      }
+
       // ---- burning
-      if (fuel[i] > 0 && m.ig !== undefined && temp[i] >= m.ig){
+      if (fuel[i] > 0 && m.ig !== undefined && temp[i] >= m.ig
+          && life[i] >= (m.char !== undefined ? m.char : CHAR)){
         // Nothing burns underwater. A cell that would otherwise be alight but has
         // water against it simply does not burn this tick; the heat it already has
         // goes into the water by conduction, the water boils, and boiling is what
@@ -945,14 +970,24 @@ function seed(){
   const at = f => (W*f)|0;
   for (let x=0;x<W;x++) for (let y=floor;y<H;y++) put(x,y,STONE);
 
+  // The gappy 82% fill is what makes the stack look stacked rather than poured, but
+  // the two columns the kindling is banked against are solid. With gaps there, the
+  // straw could burn out beside a hole and the stack never caught: four times in
+  // fourteen, which is a scene that works by luck.
   for (let x=at(.30); x<at(.52); x++)
     for (let y=floor-9; y<floor; y++)
-      if (Math.random()<.82) put(x,y,WOOD);
+      if (x >= at(.52)-2 || Math.random()<.82) put(x,y,WOOD);
 
+  // Kindling on both sides of the stack. The right-hand bank is where the oil trail
+  // arrives, and it is there because the handover from a one-cell-deep trail straight
+  // into a log was marginal: over ten runs the stack caught nine times, and a scene
+  // that works nine times out of ten is a scene that does not work.
   for (let x=at(.18); x<at(.30); x++)
     for (let y=floor-4; y<floor; y++) put(x,y,STRAW);
+  for (let x=at(.52); x<at(.57); x++)
+    for (let y=floor-3; y<floor; y++) put(x,y,STRAW);
 
-  for (let x=at(.52); x<at(.86); x++) put(x,floor-1,OIL);
+  for (let x=at(.57); x<at(.88); x++) put(x,floor-1,OIL);
 }
 
 function boot(){
