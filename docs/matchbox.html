@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Matchbox</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23241F1B'/%3E%3Crect x='14' y='13' width='4' height='15' rx='1.5' fill='%23C4A47C'/%3E%3Cellipse cx='16' cy='10' rx='4' ry='5' fill='%23E8641A'/%3E%3Cellipse cx='16' cy='11' rx='2' ry='2.6' fill='%23FFC93C'/%3E%3C/svg%3E">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Anton&family=Space+Mono:wght@400;700&display=swap');
+
+  :root{
+    --card:#C4A47C;        /* matchbox kraft */
+    --card-deep:#9A7A52;
+    --card-dark:#6E5638;
+    --strip:#241F1B;       /* striking strip */
+    --phos:#A83226;        /* red phosphorus */
+    --void:#0B0A09;
+    --ink:#1A1512;
+    --pale:#EDD9BC;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden}
+  body{
+    background:var(--strip);
+    color:var(--ink);
+    font-family:'Space Mono',ui-monospace,monospace;
+    display:flex;justify-content:center;align-items:center;
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+
+  .box{
+    width:100%;max-width:520px;height:100%;max-height:940px;
+    display:flex;flex-direction:column;
+    background:var(--card);
+    background-image:
+      repeating-linear-gradient(96deg, rgba(110,86,56,.05) 0 2px, transparent 2px 5px),
+      repeating-linear-gradient(4deg, rgba(110,86,56,.045) 0 3px, transparent 3px 7px);
+    box-shadow:0 0 0 1px rgba(0,0,0,.5), 0 24px 60px rgba(0,0,0,.6);
+  }
+
+  /* ---- label ---- */
+  .label{
+    padding:9px 14px 8px;border-bottom:2px solid var(--card-dark);
+    display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex:none;
+  }
+  .word{font-family:'Anton',Impact,sans-serif;font-size:26px;letter-spacing:.045em;
+    color:var(--ink);line-height:1;text-transform:uppercase}
+  .word em{font-style:normal;color:var(--phos)}
+  .meta{font-size:10px;letter-spacing:.16em;color:var(--card-dark);text-transform:uppercase;
+    text-align:right;line-height:1.5;white-space:nowrap}
+
+  /* ---- the void ---- */
+  .stage{position:relative;flex:1;min-height:0;background:var(--void);
+    border-top:1px solid #000;border-bottom:1px solid #000;overflow:hidden}
+  canvas{display:block;width:100%;height:100%;image-rendering:pixelated;touch-action:none}
+  .readout{position:absolute;top:7px;left:9px;font-size:10px;letter-spacing:.12em;
+    color:#6b5c4b;pointer-events:none;text-transform:uppercase}
+  /* Clear of the floor: at the foot of the stage this sat on top of the opening
+     scene, which is exactly where everything happens. */
+  .hint{position:absolute;bottom:26%;left:0;right:0;text-align:center;font-size:10.5px;
+    letter-spacing:.1em;color:#7a6650;pointer-events:none;text-transform:uppercase;
+    transition:opacity .5s}
+
+  /* ---- striking strip ---- */
+  .strip{
+    flex:none;height:52px;background:var(--strip);position:relative;cursor:pointer;
+    background-image:repeating-linear-gradient(45deg, rgba(168,50,38,.30) 0 3px, transparent 3px 6px);
+    display:flex;align-items:center;justify-content:space-between;padding:0 14px;
+    touch-action:none;user-select:none;
+  }
+  .strip::after{content:'';position:absolute;inset:0;box-shadow:inset 0 2px 5px rgba(0,0,0,.75);
+    pointer-events:none}
+  .strip .cue{font-size:10px;letter-spacing:.2em;color:#8a7263;text-transform:uppercase;
+    position:relative;z-index:2;transition:color .2s}
+  .strip.hot .cue{color:#FFC93C}
+  .strip:focus-visible{outline:2px solid #FFC93C;outline-offset:-4px}
+
+  /* the match, drawn */
+  .match{position:relative;z-index:2;display:flex;align-items:center;gap:0;transform-origin:right center}
+  .stick{width:64px;height:6px;background:linear-gradient(180deg,#E0C79C,#B8996B);border-radius:2px}
+  .stick.spent{background:linear-gradient(90deg,#B8996B,#3A2E24 70%,#241F1B)}
+  .head{width:15px;height:15px;border-radius:50%;background:var(--phos);margin-left:-3px;
+    box-shadow:inset -2px -2px 3px rgba(0,0,0,.35)}
+  .head.lit{background:radial-gradient(circle at 50% 60%, #FFF3C4, #FFC93C 35%, #E8641A 62%, rgba(140,26,10,0) 78%);
+    width:30px;height:34px;border-radius:50% 50% 45% 45%;margin-left:-8px;box-shadow:none;
+    animation:flick .16s infinite alternate}
+  .head.out{background:#2E2620}
+  @keyframes flick{from{transform:scaleY(1) translateY(0)}to{transform:scaleY(1.14) translateY(-1.5px)}}
+
+  /* ---- tray ---- */
+  .tray{flex:none;padding:10px 10px 12px;display:flex;flex-direction:column;gap:8px}
+  .row{display:flex;gap:5px;flex-wrap:wrap}
+  .chip{
+    flex:1 1 auto;min-width:0;padding:7px 4px 6px;border:1.5px solid var(--card-dark);
+    background:rgba(255,255,255,.13);border-radius:3px;cursor:pointer;
+    font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.05em;color:var(--ink);
+    display:flex;flex-direction:column;align-items:center;gap:4px;text-transform:uppercase;
+  }
+  .chip:focus-visible{outline:2px solid var(--phos);outline-offset:1px}
+  .chip .sw{width:100%;height:7px;border-radius:1px}
+  .chip[aria-pressed="true"]{background:var(--ink);color:var(--pale);border-color:var(--ink)}
+  .chip.act{flex:0 0 auto;padding:7px 11px 6px}
+  .chip.danger[aria-pressed="true"]{background:var(--phos);border-color:var(--phos);color:#fff}
+
+  .bar{display:flex;align-items:center;gap:9px}
+  .bar span{font-size:9.5px;letter-spacing:.14em;color:var(--card-dark);text-transform:uppercase;flex:none}
+  input[type=range]{flex:1;accent-color:var(--phos);height:18px}
+  input[type=range]:focus-visible{outline:2px solid var(--phos);outline-offset:3px}
+
+  @media (max-height:700px){
+    .word{font-size:21px} .strip{height:44px} .tray{padding:7px 8px 9px;gap:6px}
+    .chip{font-size:9px;padding:5px 3px 4px}
+  }
+  @media (prefers-reduced-motion:reduce){ .head.lit{animation:none} }
+</style>
+</head>
+<body>
+<div class="box">
+
+  <div class="label">
+    <div class="word">Match<em>box</em></div>
+    <div class="meta">Strike the strip<br>Then touch the dark</div>
+  </div>
+
+  <div class="stage">
+    <canvas id="cv"></canvas>
+    <div class="readout" id="ro">—</div>
+    <div class="hint" id="hint">Pick a material · draw in the dark</div>
+  </div>
+
+  <div class="strip" id="strip" role="button" tabindex="0" aria-label="Striking strip — strike a match">
+    <div class="cue" id="cue">Strike</div>
+    <div class="match" id="matchEl">
+      <div class="stick" id="stick"></div>
+      <div class="head" id="head"></div>
+    </div>
+  </div>
+
+  <div class="tray">
+    <div class="row" id="mats"></div>
+    <div class="row" id="acts"></div>
+    <div class="bar">
+      <span>Brush</span>
+      <input type="range" id="brush" min="1" max="9" value="3" aria-label="Brush size">
+      <span id="bval">3</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+'use strict';
+
+/* ============================================================ materials
+   Every material is a row here and nothing else knows about it by name.
+   `ignite` is a temperature, not a flag — which is the whole reason a fire
+   can fail to catch, smoulder, or run along a fuse and die halfway. */
+
+const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
+      COAL=9, GREEN=10, STONE=11, STEEL=12, WATER=13, ICE=14, SAND=15,
+      FIRE=16, SMOKE=17, STEAM=18, EMBER=19, ASH=20;
+
+// phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
+const M = [];
+M[E]      = {n:'—',        ph:3, col:[0,0,0]};
+M[WOOD]   = {n:'Wood',     ph:3, col:[122, 82, 46], ig:300, fuel:520, out:2.0, cond:.10, cap:1.0, ash:EMBER, char:30};
+M[PAPER]  = {n:'Paper',    ph:3, col:[214,201,172], ig:210, fuel:70,  out:2.6, cond:.16, cap:.6,  ash:ASH,   char:3};
+M[STRAW]  = {n:'Straw',    ph:2, col:[186,150, 72], ig:170, fuel:55,  out:2.4, cond:.14, cap:.55, ash:ASH,   char:3};
+// Lightened from [46,38,30], which against a void of [11,10,9] made a one-cell-deep
+// trail all but invisible — and a trail is the shape oil is usually in.
+M[OIL]    = {n:'Oil',      ph:1, col:[ 72, 58, 40], ig:190, fuel:180, out:3.4, cond:.12, cap:.9,  ash:E,     char:10};
+M[WAX]    = {n:'Wax',      ph:3, col:[226,218,198], ig:9e9, fuel:0,   out:0,   cond:.09, cap:1.1, melt:62, into:MELT};
+// Molten wax does not light. Hold a match to a puddle of it and nothing happens —
+// that is the entire reason a candle has a wick, and it is what makes wax different
+// from oil rather than a slower version of it. It burns only where something with
+// `wick` is standing in it, which is the rule drawFuel() implements.
+//
+// It was ignitable at 250 and the pool lit itself: 158 wax cells and a wick became a
+// 126-cell fire that ate the whole candle in thirteen seconds. Raising the figure to
+// 420 only moved the problem — a wick burns at 1150, so the wax right beside it still
+// caught, and burned off the fuel the wick was supposed to be drinking.
+M[MELT]   = {n:'Wax',      ph:1, col:[214,198,160], ig:9e9, fuel:220, out:2.1, cond:.11, cap:1.1, ash:E};
+M[POWDER] = {n:'Powder',   ph:2, col:[ 58, 56, 58], ig:150, fuel:14,  out:9.0, cond:.30, cap:.4,  ash:SMOKE, char:2};
+// A fuse has to carry a front along itself for its whole length or it is a stick.
+// `out` at 1.5 was the lowest in the table and the front died about eight cells in.
+M[FUSE]   = {n:'Fuse',     ph:3, col:[142,116, 78], ig:200, fuel:150, out:3.2, cond:.10, cap:.7,  ash:ASH,   char:12, wick:1};
+M[COAL]   = {n:'Coal',     ph:2, col:[ 34, 32, 34], ig:520, fuel:1500,out:3.0, cond:.13, cap:1.4, ash:ASH,   char:90};
+M[GREEN]  = {n:'Green',    ph:3, col:[ 74,104, 54], ig:470, fuel:600, out:1.1, cond:.11, cap:1.9, ash:EMBER, smoky:3.2, char:150};
+M[STONE]  = {n:'Stone',    ph:3, col:[104,100, 94], ig:9e9, cond:.20, cap:2.2};
+M[STEEL]  = {n:'Steel',    ph:3, col:[142,146,152], ig:9e9, cond:.92, cap:1.6};
+M[WATER]  = {n:'Water',    ph:1, col:[ 44, 92,132], ig:9e9, cond:.42, cap:6.0, boil:100, into:STEAM, t0:12};
+M[ICE]    = {n:'Ice',      ph:3, col:[168,204,222], ig:9e9, cond:.28, cap:3.0, melt:0,   into:WATER, t0:-14};
+M[SAND]   = {n:'Sand',     ph:2, col:[190,166,116], ig:9e9, cond:.16, cap:1.5};
+M[FIRE]   = {n:'Fire',     ph:0, col:[232,100, 26]};
+M[SMOKE]  = {n:'Smoke',    ph:0, col:[ 58, 54, 50]};
+M[STEAM]  = {n:'Steam',    ph:0, col:[178,182,186]};
+M[EMBER]  = {n:'Ember',    ph:2, col:[ 84, 40, 22], ig:340, fuel:340, out:1.6, cond:.14, cap:1.0, ash:ASH,   char:20};
+M[ASH]    = {n:'Ash',      ph:2, col:[ 96, 92, 88], ig:9e9, cond:.10, cap:.9};
+
+const TRAY = [WOOD, PAPER, STRAW, OIL, WAX, POWDER, FUSE, COAL, GREEN, WATER, ICE, STONE, STEEL, SAND];
+
+/* ============================================================ grid
+
+   Temperatures are °C. Energy is temperature × capacity, and that distinction is
+   the spine of the whole model: the same energy poured into water and into paper
+   must not move them by the same amount. Every place heat changes hands below, it
+   is moved as energy and divided by the capacity of whatever receives it. */
+
+const AMBIENT    = 20;    // the room
+const CELL       = 4;     // pixels per cell
+/* Air is a poor conductor — better than nothing and worse than wood — and it moves
+   heat by rising, not by conducting. The table had it at .55, better than everything
+   except steel, which is backwards and was quietly fatal: every burning cell dumped
+   its heat into the air beside it faster than it could push it into the log it was
+   touching. Measured on the old figure, a lit wood cell settled at 320°C against an
+   ignition point of 300 and held its neighbour at 200 — permanently 100° short. That
+   is why nothing spread sideways, and why a fuse, a candle and an oil trail all
+   failed at once. Convection, below, is what actually carries heat through air. */
+const AIR_COND   = .06;
+const AIR_CAP    = .35;
+const FLOW       = .12;   // conduction rate — see conduct() for why it cannot go higher
+const ROOM_LOSS  = .004;  // air handing heat back to the room, per tick
+const BURN       = 6.0;   // energy per unit of a material's `out`, per tick alight
+const KEEP       = .5;    // ...of which this much stays put; the rest goes to neighbours
+const RAIN_TICKS = 420;   // how long a press of Rain keeps raining. At 90 it was a
+                          // second and a half, which a fire of any size shrugged off.
+const MATCH_HEAT = 780;   // what the match puts into whatever you touch with it
+const FIRE_HEAT  = 780;   // a flame, newly lit
+const FIRE_DIES  = 360;   // below this a flame is not a flame any more
+const MAX_T      = 1200;  // nothing in the box gets hotter than this
+const CHAR       = 30;    // charring a cell must do before it catches, if it has no
+                          // `char` of its own. See "catching" in react().
+const WICK_DRAW  = .34;   // fuel a burning wick takes from the liquid it stands in
+const WICK_REACH = 3;     // ...and how far into the pool it can reach for it
+const LATENT_MELT= 140;   // energy a cell has to soak up before it can melt
+const LATENT_BOIL= 1800;  // ...and before it can boil, taken out of whatever is
+                          // touching it. This is the number that puts a fire out.
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d', {alpha:false});
+ctx.imageSmoothingEnabled = false;
+
+let W=0, H=0, type, temp, fuel, life, tint, img, buf;
+
+/* Sizing the grid, and carrying whatever is already in it across.
+
+   A phone resizes for reasons that have nothing to do with wanting a new box: the
+   address bar slides away, the keyboard appears, somebody turns it on its side. This
+   used to rebuild the grid and lay the opening scene down on top, so any of those
+   wiped what you had built and put your fire out. Anchored to the bottom, because
+   what is at the bottom is the floor and it should stay there. */
+function build(){
+  const r = cv.parentElement.getBoundingClientRect();
+  const nw = Math.max(40, Math.floor(r.width  / CELL));
+  const nh = Math.max(40, Math.floor(r.height / CELL));
+  if (nw === W && nh === H) return;
+
+  const old = W ? { W, H, type, temp, fuel, life } : null;
+
+  W = nw; H = nh;
+  cv.width = W; cv.height = H;
+  const n = W*H;
+  type = new Uint8Array(n);
+  temp = new Float32Array(n).fill(AMBIENT);
+  fuel = new Float32Array(n);
+  life = new Float32Array(n);
+  tint = new Int8Array(n);
+  for (let i=0;i<n;i++) tint[i] = (Math.random()*26 - 13)|0;
+  img = ctx.createImageData(W,H);
+  buf = img.data;
+  for (let i=3;i<buf.length;i+=4) buf[i] = 255;
+
+  if (old){
+    const drop = H - old.H;                       // bottom-aligned
+    const cols = Math.min(W, old.W);
+    for (let y=0; y<H; y++){
+      const oy = y - drop;
+      if (oy < 0 || oy >= old.H) continue;
+      for (let x=0; x<cols; x++){
+        const i = y*W + x, j = oy*old.W + x;
+        type[i] = old.type[j]; temp[i] = old.temp[j];
+        fuel[i] = old.fuel[j]; life[i] = old.life[j];
+      }
+    }
+  }
+}
+
+const idx = (x,y) => y*W + x;
+const inb = (x,y) => x>=0 && x<W && y>=0 && y<H;
+
+// Empty space is air: it carries heat, it rises, and it is what gives heat back to
+// the room. The table marks it solid so that anything at all can displace it, so the
+// question "is this cell air" has to be asked here rather than read off `ph`.
+const gassy = t => t===E || M[t].ph===0;
+const capOf = t => { const c = M[t].cap; return c !== undefined ? c : AIR_CAP; };
+
+/* There are two ways for a cell to change, and telling them apart was worth four
+   defects on its own.
+
+   `put` introduces new material — your finger, the rain, the opening scene — and it
+   arrives at its own temperature. `become` converts what is already there — wax
+   melting, wood spending its last fuel, a flame going out — and the heat that was in
+   the cell stays in the cell.
+
+   One function did both jobs before, and got each of them the wrong way round. New
+   material inherited the temperature of the hole it landed in, so ice arrived at room
+   temperature and was water before your finger left the glass, and a splash on a fire
+   arrived at 600°C and flashed to steam without cooling anything. Converting in place
+   reset the cell to ambient, so a burning oil trail deleted its own heat as it went
+   and could not light the log it was running into. */
+
+function put(x,y,t){
+  if(!inb(x,y)) return;
+  const i = idx(x,y);
+  type[i] = t;
+  fuel[i] = M[t] && M[t].fuel ? M[t].fuel : 0;
+  life[i] = 0;
+  temp[i] = M[t] && M[t].t0 !== undefined ? M[t].t0 : AMBIENT;
+}
+
+function become(x,y,t){
+  if(!inb(x,y)) return;
+  const i = idx(x,y);
+  type[i] = t;
+  fuel[i] = M[t] && M[t].fuel ? M[t].fuel : 0;
+  life[i] = 0;
+}
+
+/* ============================================================ movement
+   Two passes. Falling things are walked bottom-up so a grain cannot fall
+   twice in one frame; rising things are walked top-down for the same reason
+   in the other direction. */
+
+function swap(a,b){
+  let t=type[a]; type[a]=type[b]; type[b]=t;
+  let f=fuel[a]; fuel[a]=fuel[b]; fuel[b]=f;
+  let l=life[a]; life[a]=life[b]; life[b]=l;
+  let h=temp[a]; temp[a]=temp[b]; temp[b]=h;
+}
+
+function denser(a,b){         // can a displace b?
+  if (b===E) return true;
+  const pa = M[a].ph, pb = M[b].ph;
+  return pb===0 || (pa<=2 && pb===1 && pa!==1);   // solids/powders sink through liquid
+}
+
+function moveFalling(){
+  for (let y=H-2; y>=0; y--){
+    const dir = Math.random()<.5 ? 1 : -1;
+    for (let k=0; k<W; k++){
+      const x = dir>0 ? k : W-1-k;
+      const i = idx(x,y), t = type[i];
+      if (t===E) continue;
+      const ph = M[t].ph;
+      if (ph!==1 && ph!==2) continue;
+
+      const d = idx(x,y+1);
+      if (denser(t, type[d])) { swap(i,d); continue; }
+
+      const s = Math.random()<.5 ? 1 : -1;
+      for (const dx of [s,-s]){
+        if (!inb(x+dx, y+1)) continue;
+        const dg = idx(x+dx, y+1);
+        if (denser(t, type[dg])) { swap(i,dg); break; }
+      }
+      // Liquids creep sideways, which is what makes oil a sheet rather than a column.
+      // Only when there is something on top of them, though: a puddle already one
+      // cell deep has nothing pushing it, and a film that keeps spreading is a film
+      // that runs away from where you poured it. Measured with the old rule, a lit
+      // oil trail retreated toward the flame as it burned — the far end drained back
+      // into the cells the fire had just emptied — so the fire consumed 38 of 40
+      // cells and the burning front never travelled past a third of the trail. The
+      // wood at the end of it stayed at 53°C.
+      if (ph===1 && type[idx(x,y)]===t && y>0 && type[idx(x,y-1)]===t){
+        for (const dx of [s,-s]){
+          if (!inb(x+dx,y)) continue;
+          const sd = idx(x+dx,y);
+          if (type[sd]===E) { swap(i,sd); break; }
+        }
+      }
+    }
+  }
+}
+
+function moveRising(){
+  for (let y=1; y<H; y++){
+    for (let x=0; x<W; x++){
+      const i = idx(x,y), t = type[i];
+      if (t===E || M[t].ph!==0) continue;
+      const u = idx(x,y-1);
+      if (type[u]===E){ swap(i,u); continue; }
+      const s = Math.random()<.5 ? 1 : -1;
+      for (const dx of [s,-s]){
+        if (!inb(x+dx,y-1)) continue;
+        const ud = idx(x+dx,y-1);
+        if (type[ud]===E){ swap(i,ud); break; }
+      }
+    }
+  }
+}
+
+/* ============================================================ heat
+   Conduction, as a trade between neighbours rather than an average.
+
+   Each pair of touching cells is visited exactly once — every cell trades with the
+   one to its right and the one below, which covers every pair on the grid — and the
+   energy that leaves one is precisely the energy that arrives in the other. That is
+   the whole reason for the shape of this loop, and `test/matchbox-sim.mjs` asserts
+   it: 300 ticks of diffusion over a lumpy field of wood, steel, water and stone must
+   not change the total heat in the box.
+
+   The model this replaced averaged each cell against its four neighbours and scaled
+   the result by that cell's own conductivity over its own capacity. Read quickly it
+   looks like the same thing. It isn't: A gave heat away at a rate set by A, and B
+   took it at a rate set by B, so every boundary between two different materials was
+   quietly manufacturing or destroying energy — worst at exactly the interesting
+   places, like steel against air, where the two rates differ by nearly 3×.
+
+   Two conductances in contact add in series, which is the harmonic mean below. It is
+   also what stops a good conductor touching a bad one from behaving like two good
+   ones: steel carries heat along a bar and still hands it over slowly to the wood at
+   the end of it. */
+
+function diffuse(){ conduct(); convect(); roomLoss(); }
+
+function conduct(){
+  for (let y=0; y<H; y++){
+    for (let x=0; x<W; x++){
+      const i = idx(x,y);
+      const ma = M[type[i]];
+      const ca = ma.cond !== undefined ? ma.cond : AIR_COND;
+      const pa = ma.cap  !== undefined ? ma.cap  : AIR_CAP;
+
+      // right neighbour, then the one below: every pair, exactly once
+      for (let d=0; d<2; d++){
+        const j = d ? i+W : i+1;
+        if (d ? y===H-1 : x===W-1) continue;
+        const mb = M[type[j]];
+        const cb = mb.cond !== undefined ? mb.cond : AIR_COND;
+        const pb = mb.cap  !== undefined ? mb.cap  : AIR_CAP;
+        // FLOW is bounded by the worst pair on the board — steel against steel, where
+        // k·(1/cap + 1/cap) is 1.15 — times the four pairs a cell belongs to. Above
+        // about .21 that cell overshoots its neighbours and the field starts to ring.
+        const q = (temp[i] - temp[j]) * (2*ca*cb/(ca+cb)) * FLOW;
+        temp[i] -= q / pa;
+        temp[j] += q / pb;
+      }
+    }
+  }
+}
+
+// Convection, and only in the gas. Hot air rises and takes its heat with it; a hot
+// log does not. The old model applied this lift to any cell with gas above it, which
+// meant every burning solid was venting 7% of its heat upward every tick. (Measured:
+// removing that alone fixed none of the failures, but it is still wrong, and it made
+// the rest of the model impossible to reason about.)
+function convect(){
+  for (let y=1; y<H; y++){
+    for (let x=0; x<W; x++){
+      const i = idx(x,y);
+      if (!gassy(type[i]) || temp[i] <= AMBIENT + 40) continue;
+      if (!gassy(type[i-W])) continue;
+      const lift = (temp[i] - AMBIENT) * .09;
+      temp[i] -= lift; temp[i-W] += lift;
+    }
+  }
+}
+
+// The room. Only the air is in touch with it — a stone floor loses its heat by
+// conducting into the air above it, which conduct() already does. Applying this to
+// every cell made a thick wall into a heat sink that no fire could ever warm.
+function roomLoss(){
+  for (let i=0; i<temp.length; i++){
+    if (gassy(type[i])) temp[i] += (AMBIENT - temp[i]) * ROOM_LOSS;
+  }
+}
+
+
+/* ============================================================ reactions */
+
+const NX = [-1, 1, 0, 0], NY = [0, 0, -1, 1];        // left, right, up, down
+
+/* What a burning cell gives to the four cells around it.
+
+   This is the difference between a fire and a column of smoke, and it is the single
+   change that made the box work. With everything going upward — which is what the
+   model did, because conduction was the only sideways path and no material's
+   conductivity could climb a neighbour from room temperature to its ignition point
+   before the room took the heat back — a fuse laid on the floor never reached its
+   charge, a candle went out as soon as the match left, green wood could not be lit
+   at all, and burning oil got the log it was touching to 96°C against an ignition
+   point of 300.
+
+   Weighted upward, because flames do go up. Not exclusively, because they also set
+   fire to the thing beside them. */
+const RAD = [.21, .21, .42, .16];                    // left, right, up, down
+
+function radiate(x, y, q){
+  for (let d=0; d<4; d++){
+    const xx = x+NX[d], yy = y+NY[d];
+    if (!inb(xx,yy)) continue;
+    const j = idx(xx,yy);
+    // Clamped, like the burning cell's own gain. A cell with burning neighbours on
+    // several sides collects from all of them, and unclamped that put the hottest
+    // cell of an ordinary seeded scene at 2089°C — well past the top of the colour
+    // ramp, which stops at 1150, so it was invisible as well as unbounded.
+    const t = temp[j] + q * RAD[d] / capOf(type[j]);
+    temp[j] = t > MAX_T ? MAX_T : t;
+  }
+}
+
+/* Energy taken out of the neighbourhood, for a change of state that costs some.
+   Nothing may be driven below room temperature by this: boiling cools what it
+   touches, it does not refrigerate it. */
+function spend(x, y, q){
+  for (let d=0; d<4; d++){
+    const xx = x+NX[d], yy = y+NY[d];
+    if (!inb(xx,yy)) continue;
+    const j = idx(xx,yy);
+    temp[j] = Math.max(AMBIENT, temp[j] - (q/4) / capOf(type[j]));
+  }
+}
+
+/* A wick standing in liquid fuel spends the liquid rather than itself. Returns
+   whether it found any: if it did not, the wick is burning on its own account and
+   using itself up, which is what happens once the wax runs out.
+
+   The search runs down the wick as well as around the burning cell, because that is
+   what a wick is for. Melted wax runs downhill, away from the flame, so a wick that
+   could only reach what it was directly touching never found any: measured, the
+   candle burned for about twelve seconds — the length of the wick's own fuel — and
+   then went out with 127 of its 158 wax cells still solid. */
+function drawFuel(x, y){
+  if (sip(x, y)) return true;
+  const wick = type[idx(x,y)];
+  for (let yy = y+1; yy < H && yy <= y+30; yy++){
+    if (type[idx(x,yy)] !== wick) break;
+    if (sip(x, yy)) return true;
+  }
+  return false;
+}
+
+// A wick reaches into the pool, not merely at what it is touching. Drinking a cell
+// dry leaves a void, the rest of the melt runs down into it, and a wick that could
+// only reach one cell was left holding a crater: measured, the candle burned well for
+// sixteen seconds and then lost its whole wick in two as the pool sank out of contact.
+function sip(x, y){
+  for (let r=1; r<=WICK_REACH; r++){
+    for (let dy=-r; dy<=r; dy++){
+      for (let dx=-r; dx<=r; dx++){
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;   // this ring only
+        const xx = x+dx, yy = y+dy;
+        if (!inb(xx,yy)) continue;
+        const j = idx(xx,yy), mj = M[type[j]];
+        if (mj.ph !== 1 || !mj.fuel || fuel[j] <= 0) continue;
+        // A sip, not a swallow. Drawing a whole tick's worth drained the pool faster
+        // than the flame could melt more, so the wick spent most of its time dry and
+        // burned itself away instead.
+        fuel[j] -= WICK_DRAW;
+        if (fuel[j] <= 0) become(xx, yy, mj.ash !== undefined ? mj.ash : E);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+const touchingWater = (x,y) => {
+  for (let d=0; d<4; d++){
+    const xx = x+NX[d], yy = y+NY[d];
+    if (!inb(xx,yy)) continue;
+    const t = type[idx(xx,yy)];
+    if (t===WATER || t===ICE) return true;
+  }
+  return false;
+};
+
+function react(){
+  for (let y=H-1; y>=0; y--){
+    for (let x=0; x<W; x++){
+      const i = idx(x,y), t = type[i];
+      if (t===E) continue;
+      const m = M[t];
+      const cap = capOf(t);
+
+      // ---- gases last a while and are then air again, keeping whatever heat is
+      //      left in them. (They used to be reset to room temperature on the way
+      //      out, which deleted the heat a fire had just spent making.)
+      if (m.ph===0){
+        life[i] += 1;
+        if (t===FIRE){
+          // Touch water to a flame, or a flame to water, and something has to give.
+          // There was no rule anywhere connecting the two before: rain fell through
+          // a fire and burning cells went from 45 to 81 during it.
+          if (touchingWater(x,y)){ become(x,y,STEAM); temp[i] = 100; continue; }
+          if (temp[i] < FIRE_DIES){ become(x,y,E); continue; }
+        }
+        const span = t===FIRE ? 24 : (t===STEAM ? 70 : 110);
+        if (life[i] > span * (0.6 + Math.random()*0.8)) become(x,y,E);
+        continue;
+      }
+
+      // ---- melting. A melting cell soaks up energy at its melting point instead of
+      //      getting hotter, and only changes once it has absorbed the whole latent
+      //      cost. That is what makes a block of ice hold what it is touching near
+      //      freezing for as long as it lasts, rather than becoming a puddle on
+      //      contact — it was a puddle within a single tick before.
+      //
+      //      `life` is free for anything that isn't a gas, so the running total lives
+      //      there rather than in a fifth array. Both put() and become() clear it.
+      if (m.melt !== undefined && temp[i] > m.melt){
+        const soak = (temp[i] - m.melt) * cap * .25;
+        temp[i] -= soak / cap;
+        life[i] += soak;
+        if (life[i] >= LATENT_MELT) become(x,y,m.into);
+        continue;
+      }
+
+      // ---- boiling, which is where water does its real work. The energy comes out
+      //      of whatever the water is touching, and what it is usually touching is
+      //      the fire you are trying to put out.
+      if (m.boil !== undefined && temp[i] > m.boil){
+        spend(x, y, LATENT_BOIL);
+        become(x,y,m.into);
+        temp[i] = 100;
+        continue;
+      }
+
+      // ---- catching.
+      //
+      //      Ignition is not a line a temperature crosses. A cell over its ignition
+      //      point chars, at a rate set by how far over it is, and loses that
+      //      progress as it cools; it does not burn until it has charred enough. The
+      //      match is hotter than every ignition point in the table, so without this
+      //      every material lights the instant it is touched and they are all the
+      //      same material. Measured: a fifth-of-a-second dab lit a wood pile 20
+      //      times out of 20, and green wood — which is supposed to be the hard case
+      //      — burned from a one-second touch.
+      //
+      //      `char` counts ticks over the line, not degrees over it. Scaling by how
+      //      far over made no difference to anything, because the match at 780 is
+      //      hotter than every ignition point in the table — it charred a wood cell
+      //      in thirteen ticks, so a dab still lit everything while an oil fire
+      //      burning against a log for 150 ticks at 360°C still could not. Time is
+      //      what actually distinguishes the two.
+      if (fuel[i] > 0 && m.ig !== undefined){
+        if (temp[i] >= m.ig) life[i] += 1;
+        else life[i] *= .94;
+      }
+
+      // ---- burning
+      if (fuel[i] > 0 && m.ig !== undefined && temp[i] >= m.ig
+          && life[i] >= (m.char !== undefined ? m.char : CHAR)){
+        // Nothing burns underwater. A cell that would otherwise be alight but has
+        // water against it simply does not burn this tick; the heat it already has
+        // goes into the water by conduction, the water boils, and boiling is what
+        // takes the energy out of the fire.
+        if (touchingWater(x,y)) continue;
+
+        // A wick does not burn so much as draw, and a wick that is drawing does not
+        // burn away — it is soaked in what it is drawing. Spend the liquid instead of
+        // itself, and come back up to full while it can still reach some. A dry one
+        // has nothing to soak in and burns like the cord it is, which is what makes
+        // the same material a fuse when you lay it on the floor and a wick when you
+        // stand it in wax.
+        //
+        // Without the top-up the candle lasted between 1000 and 3000 ticks depending
+        // on how the melt happened to pool: every dry tick was a permanent bite out
+        // of a wick that had 150 to give.
+        if (m.wick && drawFuel(x,y)) fuel[i] = m.fuel;
+        else fuel[i] -= 1;
+        const q = m.out * BURN;
+        temp[i] += q * KEEP / cap;
+        radiate(x, y, q * (1 - KEEP));
+        if (temp[i] > MAX_T) temp[i] = MAX_T;
+
+        // flame above, smoke above that
+        if (y>0 && type[i-W]===E){
+          const smoky = m.smoky || 1;
+          if (Math.random() < 0.34/smoky){ become(x,y-1,FIRE); temp[i-W] = Math.max(temp[i-W], FIRE_HEAT); }
+          else if (Math.random() < 0.05*smoky) become(x,y-1,SMOKE);
+        }
+        if (fuel[i] <= 0){
+          // Whatever is left keeps the heat it had. An ember is wood that has run out
+          // of wood, and it glows because it is still hot rather than because it has
+          // been told to be 560°C.
+          become(x, y, m.ash !== undefined ? m.ash : E);
+        }
+      }
+    }
+  }
+}
+
+/* ============================================================ render
+   Materials get a flat colour with a fixed per-cell jitter so nothing reads
+   as a solid block. Anything hot is mixed toward a blackbody ramp on top of
+   that, so a log that is merely warm looks warm rather than looking on fire. */
+
+function ramp(T){
+  // 300°C dull red → 1150°C near-white
+  const k = Math.max(0, Math.min(1, (T-300)/850));
+  if (k < .35){ const u=k/.35;  return [140+ 92*u,  26+ 74*u, 10+ 16*u]; }
+  if (k < .70){ const u=(k-.35)/.35; return [232+ 23*u, 100+ 101*u, 26+ 36*u]; }
+  const u=(k-.70)/.30;           return [255, 201+ 51*u, 62+ 138*u];
+}
+
+function draw(){
+  for (let i=0, p=0; i<type.length; i++, p+=4){
+    const t = type[i];
+    let r,g,b;
+    if (t===E){
+      r=11; g=10; b=9;
+    } else {
+      const c = M[t].col, j = tint[i];
+      r=c[0]+j; g=c[1]+j; b=c[2]+j;
+    }
+    const T = temp[i];
+    if (T > 300 && t!==WATER && t!==STEAM){
+      const f = ramp(T);
+      const w = Math.min(1, (T-300)/300) * (t===FIRE ? 1 : .88);
+      r = r + (f[0]-r)*w; g = g + (f[1]-g)*w; b = b + (f[2]-b)*w;
+    } else if (T > 120 && t!==E && t!==WATER){
+      const w = (T-120)/620;
+      r = r + (150-r)*w; g = g + (40-g)*w; b = b + (20-b)*w;
+    }
+    // heat haze in empty air, so you can see it coming before anything lights
+    if (t===E && T > AMBIENT+18){
+      const w = Math.min(.5, (T-AMBIENT-18)/420);
+      r += 120*w; g += 44*w; b += 12*w;
+    }
+    buf[p]   = r<0?0:r>255?255:r;
+    buf[p+1] = g<0?0:g>255?255:g;
+    buf[p+2] = b<0?0:b>255?255:b;
+  }
+  ctx.putImageData(img,0,0);
+}
+
+/* ============================================================ the match */
+
+const stripEl = document.getElementById('strip');
+const headEl  = document.getElementById('head');
+const stickEl = document.getElementById('stick');
+const cueEl   = document.getElementById('cue');
+
+let matchLit = 0;          // seconds of flame remaining
+const MATCH_LIFE = 26;
+
+// Striking while one is already burning takes a fresh match out of the box, which is
+// what the gesture means. It used to do nothing at all, silently.
+function strike(){
+  matchLit = MATCH_LIFE;
+  headEl.className = 'head lit';
+  stickEl.className = 'stick';
+  cueEl.textContent = 'Lit — touch the dark';
+  stripEl.classList.add('hot');
+  setTool('match');
+}
+
+function matchOut(){
+  matchLit = 0;
+  headEl.className = 'head out';
+  stickEl.className = 'stick spent';
+  cueEl.textContent = 'Strike again';
+  stripEl.classList.remove('hot');
+  // Deliberately not switching to a material. A match can burn out in the middle of
+  // a stroke, and handing the moving finger a material to draw with meant 245 cells
+  // of wood laid into the scene by somebody who was applying flame and had not moved
+  // their hand. The flame tool stays selected and stops working, which is what a
+  // spent match does.
+  painting = false;
+  if (tool === 'match') say('Match out — strike the strip');
+}
+
+stripEl.addEventListener('pointerdown', e => { e.preventDefault(); strike(); });
+stripEl.addEventListener('keydown', e => {
+  if (e.key===' ' || e.key==='Enter'){ e.preventDefault(); strike(); }
+});
+
+/* ============================================================ tools */
+
+let tool = WOOD;
+let brush = 3;
+
+const matsEl = document.getElementById('mats');
+const actsEl = document.getElementById('acts');
+
+function chipFor(t){
+  const b = document.createElement('button');
+  b.className = 'chip';
+  b.type = 'button';
+  b.setAttribute('aria-pressed', String(tool===t));
+  b.dataset.t = t;
+  const c = M[t].col;
+  b.innerHTML = `<span class="sw" style="background:rgb(${c[0]},${c[1]},${c[2]})"></span>${M[t].n}`;
+  b.addEventListener('click', ()=>setTool(t));
+  return b;
+}
+TRAY.forEach(t => matsEl.appendChild(chipFor(t)));
+
+function actionChip(labelName, fn, danger){
+  const b = document.createElement('button');
+  b.className = 'chip act' + (danger ? ' danger' : '');
+  b.type = 'button';
+  b.textContent = labelName;
+  b.setAttribute('aria-pressed','false');
+  b.addEventListener('click', fn);
+  return b;
+}
+const eraseBtn = actionChip('Erase', ()=>setTool('erase'));
+actsEl.appendChild(eraseBtn);
+
+/* Clear asks first. It wipes everything, it cannot be undone, and it used to do that
+   on one tap while sitting the same size and colour as Erase and Rain beside it. Two
+   taps within the window, and the second one is on a button that has gone red and
+   changed its name, so it is a different target rather than the same one twice.
+
+   This is also what the .danger styling in the stylesheet was always for: it keys off
+   aria-pressed, which nothing ever set. */
+const CLEAR_WINDOW = 3000;
+let clearArmed = 0, clearTimer = 0;
+
+const clearBtn = actionChip('Clear', ()=>{
+  if (Date.now() < clearArmed){
+    type.fill(E); temp.fill(AMBIENT); fuel.fill(0); life.fill(0);
+    disarmClear();
+    say('Cleared');
+    return;
+  }
+  clearArmed = Date.now() + CLEAR_WINDOW;
+  clearBtn.textContent = 'Clear — sure?';
+  clearBtn.setAttribute('aria-pressed', 'true');
+  clearTimeout(clearTimer);
+  clearTimer = setTimeout(disarmClear, CLEAR_WINDOW);
+}, true);
+
+function disarmClear(){
+  clearArmed = 0;
+  clearTimeout(clearTimer);
+  clearBtn.textContent = 'Clear';
+  clearBtn.setAttribute('aria-pressed', 'false');
+}
+actsEl.appendChild(clearBtn);
+actsEl.appendChild(actionChip('Rain', ()=>{ raining = RAIN_TICKS; }));
+
+/* The readout, which is the only label on the page that can afford to change often.
+   It carries the current tool until the pointer is over the dark, and the cell under
+   the pointer while it is. On a phone there is no hover at all, so before this it
+   read "—" until you were already dragging — by which point you had found out what
+   the tool was by using it. */
+const roEl = document.getElementById('ro');
+const hintEl = document.getElementById('hint');
+let drawn = false;                                 // has anything been drawn yet?
+
+const toolName = () => tool==='match' ? (matchLit > 0 ? 'Flame' : 'Match out')
+                     : tool==='erase' ? 'Erase' : M[tool].n;
+function say(msg){ roEl.textContent = msg; }
+function sayTool(){ say(`${toolName()}  ·  brush ${brush}`); }
+
+function setTool(t){
+  if (t==='match' && matchLit<=0) return;
+  tool = t;
+  matsEl.querySelectorAll('.chip').forEach(c =>
+    c.setAttribute('aria-pressed', String(Number(c.dataset.t)===tool)));
+  eraseBtn.setAttribute('aria-pressed', String(tool==='erase'));
+  sayTool();
+  // The hint is an opening instruction, not a status line. Bringing it back every
+  // time the tool changed put a line of text over the middle of the scene, which is
+  // exactly where everything you are building is.
+  if (!drawn){
+    hintEl.textContent = tool==='match' ? 'Touch the dark to apply flame'
+                       : tool==='erase' ? 'Erasing'
+                       : `${M[tool].n} — draw in the dark`;
+  }
+}
+
+const brushEl = document.getElementById('brush');
+brushEl.addEventListener('input', ()=>{
+  brush = +brushEl.value;
+  document.getElementById('bval').textContent = brush;
+  sayTool();
+});
+
+/* ============================================================ input */
+
+let painting = false, raining = 0;
+
+function paintAt(cx, cy){
+  if (tool === 'match' && matchLit <= 0) return;   // a spent match does nothing
+  const r = brush;
+  for (let dy=-r; dy<=r; dy++){
+    for (let dx=-r; dx<=r; dx++){
+      if (dx*dx+dy*dy > r*r) continue;
+      const x = cx+dx, y = cy+dy;
+      if (!inb(x,y)) continue;
+      const i = idx(x,y);
+      if (tool === 'match'){
+        temp[i] = Math.max(temp[i], MATCH_HEAT);
+        // `become`, not `put`: the flame has to keep the heat we just applied. `put`
+        // would hand this cell the resting temperature of a fresh flame, which is
+        // nothing at all, and the match would light nothing.
+        if (type[i]===E && Math.random()<.28) become(x,y,FIRE);
+      } else if (tool === 'erase'){
+        put(x,y,E);
+      } else if (type[i]===E || M[type[i]].ph===0){
+        if (Math.random() < .92) put(x,y,tool);
+      }
+    }
+  }
+}
+
+function toCell(e){
+  const r = cv.getBoundingClientRect();
+  return [ Math.floor((e.clientX-r.left)/r.width  * W),
+           Math.floor((e.clientY-r.top )/r.height * H) ];
+}
+
+cv.addEventListener('pointerdown', e=>{
+  e.preventDefault(); cv.setPointerCapture(e.pointerId);
+  painting = true; const [x,y]=toCell(e); paintAt(x,y);
+  drawn = true;
+  hintEl.style.opacity = 0;
+});
+cv.addEventListener('pointermove', e=>{
+  const [x,y] = toCell(e);
+  if (inb(x,y)) say(`${M[type[idx(x,y)]].n}  ·  ${Math.round(temp[idx(x,y)])}°C`);
+  if (painting) paintAt(x,y);
+});
+cv.addEventListener('pointerleave', ()=>{ if (!painting) sayTool(); });
+addEventListener('pointerup',     ()=>painting=false);
+addEventListener('pointercancel', ()=>painting=false);
+
+/* ============================================================ loop */
+
+let last = performance.now();
+
+function frame(now){
+  const dt = Math.min(50, now-last); last = now;
+
+  if (matchLit > 0){
+    matchLit -= dt/1000;
+    const k = Math.max(0, matchLit/MATCH_LIFE);
+    stickEl.style.width = (30 + 34*k) + 'px';
+    if (matchLit <= 0) matchOut();
+  }
+
+  if (raining > 0){
+    raining--;
+    for (let k=0;k<Math.ceil(W/22);k++){
+      const x = (Math.random()*W)|0;
+      if (type[idx(x,0)]===E) put(x,0,WATER);
+    }
+  }
+
+  moveFalling();
+  moveRising();
+  diffuse();
+  react();
+  draw();
+  requestAnimationFrame(frame);
+}
+
+/* ============================================================ boot */
+
+/* A little scene, so the first thing on screen is not an empty box.
+
+   The pieces touch, which they did not before: the oil trail runs from open floor at
+   the right all the way to the foot of the wood stack, and the straw is banked
+   against its left side. Light the far end of the oil and the fire travels the trail
+   and takes the stack — which is what the old comment here said the scene was, while
+   the oil actually stopped six cells short of the wood and could not have lit it
+   anyway. It is worth the first thing anyone tries being the thing that works.
+
+   `test/matchbox-sim.mjs` lights this scene from the end of the trail and asserts the
+   stack catches, so the opening scene cannot quietly stop meaning anything. */
+function seed(){
+  const floor = H-3;
+  const at = f => (W*f)|0;
+  for (let x=0;x<W;x++) for (let y=floor;y<H;y++) put(x,y,STONE);
+
+  // The gappy 82% fill is what makes the stack look stacked rather than poured, but
+  // the two columns the kindling is banked against are solid. With gaps there, the
+  // straw could burn out beside a hole and the stack never caught: four times in
+  // fourteen, which is a scene that works by luck.
+  for (let x=at(.30); x<at(.52); x++)
+    for (let y=floor-9; y<floor; y++)
+      if (x >= at(.52)-2 || Math.random()<.82) put(x,y,WOOD);
+
+  // Kindling on both sides of the stack. The right-hand bank is where the oil trail
+  // arrives, and it is there because the handover from a one-cell-deep trail straight
+  // into a log was marginal: over ten runs the stack caught nine times, and a scene
+  // that works nine times out of ten is a scene that does not work.
+  for (let x=at(.18); x<at(.30); x++)
+    for (let y=floor-4; y<floor; y++) put(x,y,STRAW);
+  for (let x=at(.52); x<at(.57); x++)
+    for (let y=floor-3; y<floor; y++) put(x,y,STRAW);
+
+  for (let x=at(.57); x<at(.88); x++) put(x,floor-1,OIL);
+}
+
+function boot(){
+  build();
+  seed();
+  setTool(WOOD);
+  requestAnimationFrame(frame);
+}
+boot();
+
+// Resize, but do not re-seed. build() carries the scene across; laying the opening
+// scene down again is how a rotation used to erase an hour's work.
+let rt;
+addEventListener('resize', ()=>{ clearTimeout(rt); rt = setTimeout(build, 220); });
+</script>
+</body>
+</html>
