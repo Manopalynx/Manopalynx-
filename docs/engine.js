@@ -63,6 +63,7 @@ export function createGame({ seats, seed = 1, circuits = 72 } = {}) {
     pendingCard: null,
     settlement: null,   // a bill parked while a human decides how to raise it
     swarmMark: 0,       // how many deep-array reports have been made
+    swarmFrom: 1,       // and the circuit they are measured from — see extendGame
     doublesRun: 0,      // consecutive doubles this turn
     rollAgain: false    // a doubles roll buys another before the turn settles
   };
@@ -886,8 +887,17 @@ export function swarmDistance(G) {
   return Math.max(0, G.circuits - G.circuit + 1);
 }
 
-function announceSwarm(G) {
-  const elapsed = (G.circuit - 1) / G.circuits;
+export function announceSwarm(G) {
+  // Measured from the start of the CURRENT stretch, not from circuit one. After
+  // playing on, a game at circuit 49 of 68 is 71% elapsed overall — so a reset
+  // report count would announce stage two immediately and stage three a few
+  // circuits later, dropping the player into the middle of a buildup they were
+  // meant to watch begin. `swarmFrom` is the circuit the run restarted at, and
+  // for a game that has never been extended it is 1, which is what this always
+  // was.
+  const from = G.swarmFrom ?? 1;
+  const span = Math.max(1, G.circuits - from + 1);
+  const elapsed = (G.circuit - from) / span;
   // The highest stage passed, not every stage passed: a short game can cross two
   // at once and two paragraphs of doom in one turn is comedy, not tension.
   let reached = -1;
@@ -898,21 +908,35 @@ function announceSwarm(G) {
   G.swarmMark = reached + 1;
 }
 
-export function extendGame(G, extra = 12) {
+// How many circuits carrying on should add, which is not the same question at
+// the two endings. Exported so the button can say the true figure rather than a
+// number that happens to match.
+export function playOnCircuits(G) {
+  const left = G.circuits - G.circuit + 1;
+  return G.endReason === 'conquest'
+    ? Math.max(0, RULES.playOnLeast - left)     // it stopped early; use what is left
+    : RULES.playOnExtra;
+}
+
+export function extendGame(G, extra = playOnCircuits(G)) {
   // Read before it is cleared: a game that ended because one player holds
   // everybody is a different thing to carry on from than one that ran out of
   // circuits, and the Leader should not say nobody has settled when somebody
   // very plainly has.
   const was = G.endReason;
-  G.circuits += extra;
-  G.swarmMark = 0;                  // a longer run means the array reports again
+  if (extra > 0) {
+    G.circuits += extra;
+    G.swarmMark = 0;                // the array reports again over the new run
+    G.swarmFrom = G.circuit;        // ...and measures it from here, not circuit one
+  }
   G.over = false;
   G.winner = null;
   G.endReason = null;
   G.phase = 'roll';
   G.dice = [0, 0];
   leaderSays(G, was === 'conquest'
-    ? `Every column posts to one page, and every page is still being kept. ${extra} more circuits, then.`
+    ? 'Every column posts to one page, and every page is still being kept. '
+      + `${swarmDistance(G)} circuits still stand on the clock.`
     : `Nobody has settled, and the column stays open. ${extra} more circuits, then.`);
 }
 

@@ -464,7 +464,7 @@ __m.data = (function () {
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-const BUILD = 'grandiose-v51';
+const BUILD = 'grandiose-v52';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -897,6 +897,18 @@ const RULES = {
   // able to declare and 2%: a buffer larger than the thing it buffered. It is
   // gone, and opponents now face exactly the bar the interface quotes a human.
   revoltCost: 150,
+  // ---- carrying on past an ending ---------------------------------------
+  // A swarm ending stops at the limit, so playing on needs more circuits — and
+  // enough of them to be worth having. The approach opens at 15 circuits out
+  // and the score turns at 10, so +12 lands a player at a distance of 12: back
+  // inside the invasion they just watched arrive, music already ducked and the
+  // sky already red. 20 puts them clear of it with a run-up to spend.
+  playOnExtra: 20,
+  // A CONQUEST ends with circuits still on the clock — it was the victory
+  // condition, not the limit — so carrying on wants the ones that were left,
+  // not more on top. This is only the floor for the case where somebody takes
+  // the galaxy on the last circuit and there is nothing left to play.
+  playOnLeast: 6,
   // The rates an overlord may set, and what each of them picks.
   //
   // The tithe used to be one line — `random(G) < 0.3` and a pick from a shared
@@ -989,6 +1001,7 @@ function createGame({ seats, seed = 1, circuits = 72 } = {}) {
     pendingCard: null,
     settlement: null,   // a bill parked while a human decides how to raise it
     swarmMark: 0,       // how many deep-array reports have been made
+    swarmFrom: 1,       // and the circuit they are measured from — see extendGame
     doublesRun: 0,      // consecutive doubles this turn
     rollAgain: false    // a doubles roll buys another before the turn settles
   };
@@ -1813,7 +1826,16 @@ function swarmDistance(G) {
 }
 
 function announceSwarm(G) {
-  const elapsed = (G.circuit - 1) / G.circuits;
+  // Measured from the start of the CURRENT stretch, not from circuit one. After
+  // playing on, a game at circuit 49 of 68 is 71% elapsed overall — so a reset
+  // report count would announce stage two immediately and stage three a few
+  // circuits later, dropping the player into the middle of a buildup they were
+  // meant to watch begin. `swarmFrom` is the circuit the run restarted at, and
+  // for a game that has never been extended it is 1, which is what this always
+  // was.
+  const from = G.swarmFrom ?? 1;
+  const span = Math.max(1, G.circuits - from + 1);
+  const elapsed = (G.circuit - from) / span;
   // The highest stage passed, not every stage passed: a short game can cross two
   // at once and two paragraphs of doom in one turn is comedy, not tension.
   let reached = -1;
@@ -1824,21 +1846,35 @@ function announceSwarm(G) {
   G.swarmMark = reached + 1;
 }
 
-function extendGame(G, extra = 12) {
+// How many circuits carrying on should add, which is not the same question at
+// the two endings. Exported so the button can say the true figure rather than a
+// number that happens to match.
+function playOnCircuits(G) {
+  const left = G.circuits - G.circuit + 1;
+  return G.endReason === 'conquest'
+    ? Math.max(0, RULES.playOnLeast - left)     // it stopped early; use what is left
+    : RULES.playOnExtra;
+}
+
+function extendGame(G, extra = playOnCircuits(G)) {
   // Read before it is cleared: a game that ended because one player holds
   // everybody is a different thing to carry on from than one that ran out of
   // circuits, and the Leader should not say nobody has settled when somebody
   // very plainly has.
   const was = G.endReason;
-  G.circuits += extra;
-  G.swarmMark = 0;                  // a longer run means the array reports again
+  if (extra > 0) {
+    G.circuits += extra;
+    G.swarmMark = 0;                // the array reports again over the new run
+    G.swarmFrom = G.circuit;        // ...and measures it from here, not circuit one
+  }
   G.over = false;
   G.winner = null;
   G.endReason = null;
   G.phase = 'roll';
   G.dice = [0, 0];
   leaderSays(G, was === 'conquest'
-    ? `Every column posts to one page, and every page is still being kept. ${extra} more circuits, then.`
+    ? 'Every column posts to one page, and every page is still being kept. '
+      + `${swarmDistance(G)} circuits still stand on the clock.`
     : `Nobody has settled, and the column stays open. ${extra} more circuits, then.`);
 }
 
@@ -3004,7 +3040,7 @@ function standings(G) {
     .sort((a, b) => b.worth - a.worth);
 }
 
-return { random, createGame, current, square, ownerOf, holding, ownsSet, countType, garrisonsOf, citadelsOf, holdingsValue, netWorth, upkeep, rentOf, paybackTurns, revoltThreshold, pay, liquidate, payRent, money, raisableValue, parkForSettlement, autoSettle, settleNow, claimValue, submitClaim, closeContest, releaseVassal, setTithe, declareIndependence, previewAt, landingPreview, cardEffect, roll, usePardon, payFacilityFee, amendCost, amendManifest, resolveLanding, applyCard, endTurn, swarmDistance, extendGame, buy, openAuction, submitBid, closeAuction, canBuild, build, canRaiseCitadel, raiseCitadel, sellDevelopment, pledgeValue, redeemCost, pledge, mortgage, redeem, repayDebt, tradable, settleContract, setCompletingTargets, setBuildingTargets, denialTargets, seekContract, recordRefusal, refusalFor, refusalBlocks, contractIsLegal, proposeContract, respondToContract, netValue, aiValue, aiBid, aiWantsToBuy, threatPenalty, sqList, contractValue, aiAcceptsContract, aiCounter, aiRedeem, aiRepay, seekSale, openBoardFraction, aiPayFacilityFee, landingCost, aiAmend, aiTithe, aiDevelop, SAVE_VERSION, serialize, deserialize, standings };
+return { random, createGame, current, square, ownerOf, holding, ownsSet, countType, garrisonsOf, citadelsOf, holdingsValue, netWorth, upkeep, rentOf, paybackTurns, revoltThreshold, pay, liquidate, payRent, money, raisableValue, parkForSettlement, autoSettle, settleNow, claimValue, submitClaim, closeContest, releaseVassal, setTithe, declareIndependence, previewAt, landingPreview, cardEffect, roll, usePardon, payFacilityFee, amendCost, amendManifest, resolveLanding, applyCard, endTurn, swarmDistance, announceSwarm, playOnCircuits, extendGame, buy, openAuction, submitBid, closeAuction, canBuild, build, canRaiseCitadel, raiseCitadel, sellDevelopment, pledgeValue, redeemCost, pledge, mortgage, redeem, repayDebt, tradable, settleContract, setCompletingTargets, setBuildingTargets, denialTargets, seekContract, recordRefusal, refusalFor, refusalBlocks, contractIsLegal, proposeContract, respondToContract, netValue, aiValue, aiBid, aiWantsToBuy, threatPenalty, sqList, contractValue, aiAcceptsContract, aiCounter, aiRedeem, aiRepay, seekSale, openBoardFraction, aiPayFacilityFee, landingCost, aiAmend, aiTithe, aiDevelop, SAVE_VERSION, serialize, deserialize, standings };
 })();
 
 __m.score = (function () {
@@ -6439,6 +6475,7 @@ function showFinal() {
   // always one over. It is not a number worth showing at all there: the run
   // finished, and how long it was is the thing to say. A conquest ending does
   // want its circuit, because the interesting part is that it came early.
+  const playOn = E.playOnCircuits(G);
   const closed = G.endReason === 'conquest'
     ? `taken on circuit ${G.circuit} of ${G.circuits}`
     : `${G.circuits} circuits · the swarm arrives`;
@@ -6461,13 +6498,18 @@ function showFinal() {
       // holds everybody" is a run at whether they can hold them. checkVictory
       // only fires when somebody is bound, contested or released, so extending
       // does not simply end the game again on the next check.
-      ['Play on — +12 circuits', 'playOn', 'wide'],
+      //
+      // The figure comes from the engine so the label cannot drift from what
+      // the button does. A conquest usually adds nothing at all — it stopped
+      // early and the circuits it stopped short of are still there.
+      [playOn === 0 ? `Play on — ${E.swarmDistance(G)} circuits still stand`
+                    : `Play on — +${playOn} circuits`, 'playOn', 'wide'],
       ['Copy result', 'copyResult', ''],
       ['New game', 'newGame', 'pri', 'Confirm — starts over'],
       ['Back to board', 'closeSheet', 'wide']
     ])}<div id="cpOut"></div>`);
 }
-function playOn() { E.extendGame(G, 12); closeSheet(); tick(); }
+function playOn() { E.extendGame(G); closeSheet(); tick(); }
 
 function newGame() {
   clearSave();

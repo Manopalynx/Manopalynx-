@@ -26,7 +26,7 @@ import {
   pledge, pledgeValue, redeemCost, raisableValue, parkForSettlement, autoSettle, settleNow,
   threatPenalty, setBuildingTargets, denialTargets, aiCounter, aiAcceptsContract,
   landingPreview, previewAt, cardEffect, usePardon, swarmDistance, extendGame,
-  sqList, contractValue
+  sqList, contractValue, playOnCircuits, announceSwarm
 } from '../engine.js';
 
 /* -------------------------------------------------------------- fixtures */
@@ -2313,6 +2313,72 @@ test('whole games still play out with the bundle valuation in place', () => {
 // to continue, because a vassal can declare independence. checkVictory fires
 // only when somebody is bound, contested or released, so extending does not
 // immediately end the game again on the next check.
+// Carrying on is not the same question at the two endings. A swarm ending
+// stopped AT the limit; a conquest stopped with circuits still on the clock.
+test('a conquest keeps the circuits it stopped short of, rather than adding more', () => {
+  const G = game();
+  const [a, b] = G.players;
+  b.lord = a.i; a.vassals.push(b.i);
+  G.circuit = 31; G.circuits = 48;
+  G.over = true; G.winner = a.i; G.endReason = 'conquest';
+
+  assert.equal(playOnCircuits(G), 0, 'seventeen circuits are still there to play');
+  extendGame(G);
+  assert.equal(G.circuits, 48, 'the limit did not move');
+  assert.equal(swarmDistance(G), 18, 'and the swarm is where it always was');
+  assert.equal(G.swarmFrom, 1, 'so the array keeps its original schedule');
+});
+
+test('unless it was taken on the last circuit, when there would be nothing left', () => {
+  const G = game();
+  const [a, b] = G.players;
+  b.lord = a.i; a.vassals.push(b.i);
+  G.circuit = 48; G.circuits = 48;
+  G.over = true; G.endReason = 'conquest';
+  extendGame(G);
+  assert.ok(swarmDistance(G) >= RULES.playOnLeast,
+    `carrying on left ${swarmDistance(G)} circuits, which is not a game`);
+});
+
+// The one that was reported. The approach opens at 15 circuits out and the score
+// turns at 10, so a small extension puts a player straight back inside the
+// invasion they just watched arrive.
+test('playing on from the swarm lands clear of the approach, not inside it', () => {
+  const G = game();
+  G.circuit = 49; G.circuits = 48;          // the counter always ends one over
+  G.over = true; G.endReason = 'circuit-limit';
+
+  extendGame(G);
+  // The approach table opens at 15 out and the score turns at 10. Both are in
+  // audio.js and score.js; what the engine owes them is a distance clear of it.
+  assert.ok(swarmDistance(G) > 15,
+    `${swarmDistance(G)} circuits out is already inside the approach`);
+});
+
+// And the buildup restarts rather than resuming mid-scale: at circuit 49 of 68
+// a game is 71% elapsed, so reports measured from circuit one would announce
+// the second stage immediately and the third a few circuits later.
+test('and the deep array reports from the beginning again', () => {
+  const G = game();
+  G.circuit = 49; G.circuits = 48;
+  G.over = true; G.endReason = 'circuit-limit';
+  extendGame(G);
+
+  assert.equal(G.swarmMark, 0, 'the count reset');
+  assert.equal(G.swarmFrom, 49, 'and it is measured from where the run restarted');
+
+  // Walk the circuits and collect the stages as they are announced.
+  const seen = [];
+  for (let c = G.circuit; c <= G.circuits + 1; c++) {
+    G.circuit = c;
+    const before = G.swarmMark;
+    announceSwarm(G);
+    if (G.swarmMark !== before) seen.push(G.swarmMark);
+  }
+  assert.deepEqual(seen, [1, 2, 3, 4],
+    'every stage should arrive again, in order, across the new run');
+});
+
 test('a conquest can be played on from, and does not re-end itself', () => {
   const G = game();
   const [a, b] = G.players;

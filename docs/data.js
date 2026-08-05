@@ -19,7 +19,7 @@
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-export const BUILD = 'grandiose-v51';
+export const BUILD = 'grandiose-v52';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -452,6 +452,18 @@ export const RULES = {
   // able to declare and 2%: a buffer larger than the thing it buffered. It is
   // gone, and opponents now face exactly the bar the interface quotes a human.
   revoltCost: 150,
+  // ---- carrying on past an ending ---------------------------------------
+  // A swarm ending stops at the limit, so playing on needs more circuits — and
+  // enough of them to be worth having. The approach opens at 15 circuits out
+  // and the score turns at 10, so +12 lands a player at a distance of 12: back
+  // inside the invasion they just watched arrive, music already ducked and the
+  // sky already red. 20 puts them clear of it with a run-up to spend.
+  playOnExtra: 20,
+  // A CONQUEST ends with circuits still on the clock — it was the victory
+  // condition, not the limit — so carrying on wants the ones that were left,
+  // not more on top. This is only the floor for the case where somebody takes
+  // the galaxy on the last circuit and there is nothing left to play.
+  playOnLeast: 6,
   // The rates an overlord may set, and what each of them picks.
   //
   // The tithe used to be one line — `random(G) < 0.3` and a pick from a shared

@@ -1897,6 +1897,7 @@ function showFinal() {
   // always one over. It is not a number worth showing at all there: the run
   // finished, and how long it was is the thing to say. A conquest ending does
   // want its circuit, because the interesting part is that it came early.
+  const playOn = E.playOnCircuits(G);
   const closed = G.endReason === 'conquest'
     ? `taken on circuit ${G.circuit} of ${G.circuits}`
     : `${G.circuits} circuits · the swarm arrives`;
@@ -1919,13 +1920,18 @@ function showFinal() {
       // holds everybody" is a run at whether they can hold them. checkVictory
       // only fires when somebody is bound, contested or released, so extending
       // does not simply end the game again on the next check.
-      ['Play on — +12 circuits', 'playOn', 'wide'],
+      //
+      // The figure comes from the engine so the label cannot drift from what
+      // the button does. A conquest usually adds nothing at all — it stopped
+      // early and the circuits it stopped short of are still there.
+      [playOn === 0 ? `Play on — ${E.swarmDistance(G)} circuits still stand`
+                    : `Play on — +${playOn} circuits`, 'playOn', 'wide'],
       ['Copy result', 'copyResult', ''],
       ['New game', 'newGame', 'pri', 'Confirm — starts over'],
       ['Back to board', 'closeSheet', 'wide']
     ])}<div id="cpOut"></div>`);
 }
-function playOn() { E.extendGame(G, 12); closeSheet(); tick(); }
+function playOn() { E.extendGame(G); closeSheet(); tick(); }
 
 function newGame() {
   clearSave();
