@@ -322,6 +322,105 @@ await check(browser, 'the tray has an ignition gradient, not a switch', () => {
   return null;
 });
 
+console.log('\n— things that are only made, never placed —');
+
+// Stone, steel, sand and ash could not become anything at all before this: no fuel,
+// no melting point, nothing. The entire top of the temperature range had nothing to
+// do with itself. These are the checks that it now does.
+
+await check(browser, 'lava left alone crusts over into stone', () => {
+  __wipe(); const f = __floor();
+  __slab(30, f-6, 59, f-1, LAVA);
+  const n0 = __count(LAVA);
+  if (n0 < 100) return `only ${n0} cells of lava were placed`;
+  if (temp[idx(45,f-3)] < 900) return `lava was placed at ${Math.round(temp[idx(45,f-3)])}°C — it is meant to arrive molten`;
+  for (let k=0;k<4000;k++) __step(1);
+  const stone = __count(STONE), lava = __count(LAVA);
+  if (stone < n0 * 0.5) return `${n0} cells of lava left ${stone} of stone and ${lava} still molten`;
+  return null;
+});
+
+await check(browser, 'lava quenched in water makes obsidian', () => {
+  __wipe(); const f = __floor();
+  __slab(20, f-1, 79, f-1, STONE);
+  __slab(30, f-10, 59, f-5, WATER);
+  __slab(30, f-20, 59, f-16, LAVA);
+  for (let k=0;k<1200;k++) __step(1);
+  const ob = __count(OBSIDIAN);
+  if (ob < 10) return `lava met water and made ${ob} cells of obsidian`;
+  if (__count(STEAM) + __count(WATER) === 0) return 'the water vanished without a trace of steam';
+  return null;
+});
+
+// Sand dropped into a pool of lava, which is the thing anybody would actually try.
+// The first version of this check laid a thin sheet of lava over sand on a cold stone
+// floor and got one cell of glass — and I spent three rounds tuning melting points
+// and densities against it before measuring that the scene was the problem, not the
+// model. A shallow pour on a cold floor has its heat drunk by the floor. Sand into a
+// pool works every time, and always did.
+await check(browser, 'sand melts into glass', () => {
+  __wipe();
+  const f = H-4;
+  __slab(0, f, W-1, H-1, STONE);
+  for (let d=0; d<3; d++) __slab(24+d, f-30, 24+d, f-1, STONE), __slab(76+d, f-30, 76+d, f-1, STONE);
+  __slab(27, f-22, 75, f-1, LAVA);       // a deep pool
+  __slab(40, f-26, 59, f-26, SAND);      // sprinkled in from above
+  for (let k=0;k<2500;k++) __step(1);
+  const glass = __count(GLASS);
+  if (glass < 5) return `${glass} cells of glass — lava at 1180°C could not take sand past its melting point of ${M[SAND].melt}`;
+
+  // ...and the other end of that figure: the match is at 780°C, and a dab of it on a
+  // beach must not produce glass.
+  __wipe(); const f2 = __floor();
+  __slab(20, f2-6, 79, f2-1, SAND);
+  __hold(50, f2-3, 3, 240);
+  for (let k=0;k<600;k++) __step(1);
+  if (__count(GLASS) > 0) return `${__count(GLASS)} cells of glass from holding a match on sand — the melting point is under what the match hands out`;
+  return null;
+});
+
+await check(browser, 'molten steel sets back into steel', () => {
+  __wipe(); const f = __floor();
+  __slab(20, f-1, 79, f-1, STONE);
+  __slab(40, f-8, 59, f-2, MOLTEN);
+  const n0 = __count(MOLTEN);
+  for (let k=0;k<5000;k++) __step(1);
+  const steel = __count(STEEL);
+  if (steel < n0 * 0.5) return `${n0} cells of molten steel left ${steel} of steel and ${__count(MOLTEN)} still liquid`;
+  return null;
+});
+
+await check(browser, 'lava sets fire to what it runs into', () => {
+  __wipe(); const f = __floor();
+  __slab(20, f-1, 79, f-1, STONE);
+  __slab(50, f-9, 74, f-2, WOOD);
+  const wood0 = __count(WOOD);
+  __slab(30, f-9, 46, f-2, LAVA);
+  for (let k=0;k<3000;k++) __step(1);
+  const gone = wood0 - __count(WOOD);
+  if (gone < 8) return `lava sat against a wood pile and consumed ${gone} of ${wood0} cells`;
+  return null;
+});
+
+// The trap this whole table could hide: a reaction that reads perfectly well and can
+// never happen, because nothing in the box gets hot enough to trigger it. Green wood
+// was exactly that for the entire life of the file.
+await check(browser, 'every melting point in the table is reachable by something', () => {
+  const hottest = Math.max(...[LAVA, MOLTEN].map(t => M[t].t0));
+  const unreachable = [];
+  for (let t=0; t<M.length; t++){
+    const m = M[t];
+    if (!m || m.melt === undefined || m.into === undefined) continue;
+    // ...either something can be placed that is already hotter, or a fire gets there
+    if (m.melt > hottest && m.melt > 1250) unreachable.push(`${m.n} melts at ${m.melt}, hotter than anything that exists`);
+  }
+  if (unreachable.length) return unreachable.join('; ');
+  if (MAX_T < Math.max(...[STEEL, STONE, SAND].map(t => M[t].melt))) {
+    return `the ceiling is ${MAX_T}°C but something in the table melts above it`;
+  }
+  return null;
+});
+
 console.log('\n— falling —');
 
 // Was: a 98-cell drop took exactly 98 ticks for sand in air, sand in water, coal in
