@@ -4,6 +4,25 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Matchbox</title>
+
+<!-- Added to a Home Screen, this opens on its own rather than inside the browser,
+     and carries its own icon. Both need saying explicitly:
+
+     · without apple-mobile-web-app-capable, iOS opens a Home Screen bookmark in
+       Safari, chrome and all.
+     · iOS will not use an SVG for a Home Screen icon, and will not read one out of
+       a data: URI either. The favicon below is both, so it was ignored and iOS drew
+       its own fallback tile — a white M on a dark square.
+
+     The two companion files are optional. The page runs on its own from anywhere; a
+     missing icon or manifest costs the Home Screen appearance and nothing else. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Matchbox">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#241F1B">
+<link rel="apple-touch-icon" href="matchbox-icon-180.png">
+<link rel="manifest" href="matchbox.webmanifest">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23241F1B'/%3E%3Crect x='14' y='13' width='4' height='15' rx='1.5' fill='%23C4A47C'/%3E%3Cellipse cx='16' cy='10' rx='4' ry='5' fill='%23E8641A'/%3E%3Cellipse cx='16' cy='11' rx='2' ry='2.6' fill='%23FFC93C'/%3E%3C/svg%3E">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Anton&family=Space+Mono:wght@400;700&display=swap');
