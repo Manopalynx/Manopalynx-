@@ -81,11 +81,15 @@
   .stage{position:relative;flex:1;min-height:0;background:var(--void);
     border-top:1px solid #000;border-bottom:1px solid #000;overflow:hidden}
   canvas{display:block;width:100%;height:100%;image-rendering:pixelated;touch-action:none}
-  .readout{position:absolute;top:7px;left:9px;font-size:10px;letter-spacing:.12em;
-    color:#6b5c4b;pointer-events:none;text-transform:uppercase}
-  .gauge{position:absolute;top:7px;right:9px;font-size:10px;letter-spacing:.12em;
-    color:#6b5c4b;pointer-events:none;text-transform:uppercase;text-align:right}
-  .gauge b{font-weight:400;color:#a8724a}
+  /* Both of these sit over the scene, and the scene is whatever has been built in
+     it. Grey on near-black reads well and grey on a box packed with sand does not,
+     so they carry their own shade with them. */
+  .readout,.gauge{position:absolute;top:7px;font-size:10px;letter-spacing:.12em;
+    color:#b0a08c;pointer-events:none;text-transform:uppercase;
+    text-shadow:0 0 3px #000, 0 1px 2px #000}
+  .readout{left:9px}
+  .gauge{right:9px;text-align:right}
+  .gauge b{font-weight:400;color:#ffb066}
   /* Clear of the floor: at the foot of the stage this sat on top of the opening
      scene, which is exactly where everything happens. */
   .hint{position:absolute;bottom:26%;left:0;right:0;text-align:center;font-size:10.5px;
@@ -240,7 +244,12 @@ M[GREEN]  = {n:'Green',    ph:3, col:[ 74,104, 54], ig:470, fuel:600, out:1.1, c
 M[STONE]  = {n:'Stone',    ph:3, col:[104,100, 94], ig:9e9, cond:.20, cap:2.2, dens:2.6, melt:1250, into:LAVA};
 M[STEEL]  = {n:'Steel',    ph:3, col:[142,146,152], ig:9e9, cond:.92, cap:1.6, dens:7.8, melt:1400, into:MOLTEN};
 M[WATER]  = {n:'Water',    ph:1, col:[ 44, 92,132], ig:9e9, cond:.42, cap:6.0, boil:100, into:STEAM, t0:12, dens:1.0};
-M[ICE]    = {n:'Ice',      ph:2, col:[168,204,222], ig:9e9, cond:.28, cap:3.0, melt:0,   into:WATER, t0:-14, dens:.92, rigid:1};
+M[ICE]    = {n:'Ice',      ph:2, col:[168,204,222], ig:9e9, cond:.28, cap:3.0, melt:0,   into:WATER, t0:-14, dens:.92, rigid:1, lat:430};
+// Its own latent heat, and a large one: melting ice really does cost far more per
+// unit than melting wax. Sharing the default meant that opening the box up to the
+// room — which it badly needed, or a lava scene simply cooked — took a third of a
+// block of ice in ten seconds. Ice is something you put down to hold a fire back;
+// it has to last longer than that.
 M[SAND]   = {n:'Sand',     ph:2, col:[190,166,116], ig:9e9, cond:.16, cap:1.5, dens:2.7, melt:830,  into:GLASS};
 // Denser than lava, so it sinks into a pour and is surrounded by it. At 1.6 it
 // floated to the top and only its underside ever touched anything hot: measured,
@@ -318,7 +327,15 @@ const CELL       = 4;     // pixels per cell
 const AIR_COND   = .06;
 const AIR_CAP    = .35;
 const FLOW       = .12;   // conduction rate — see conduct() for why it cannot go higher
-const ROOM_LOSS  = .004;  // air handing heat back to the room, per tick
+const ROOM_LOSS  = .018;  // air handing heat back to the room, per tick. At .004 a
+                          // box with a lava pool in it simply cooked: the air reached
+                          // 417°C and stayed there, because the only way out was a
+                          // 0.4% nudge a tick against a source that never stopped.
+const EDGE_LOSS  = .055;  // ...and the walls of the box, which are open to the room
+                          // whatever is against them. Without this a scene packed
+                          // solid has no boundary at all and heat only accumulates:
+                          // measured, cells over 300°C went from 1% of the box to 13%
+                          // and climbing, so everything slowly turned amber.
 const BURN       = 6.0;   // energy per unit of a material's `out`, per tick alight
 const KEEP       = .5;    // ...of which this much stays put; the rest goes to neighbours
 const RAIN_TICKS = 420;   // how long a press of Rain keeps raining. At 90 it was a
@@ -666,6 +683,18 @@ function roomLoss(){
     // scattered through the reaction code — one of which did not exist.
     if (temp[i] > MAX_T) temp[i] = MAX_T;
   }
+  // The walls. Whatever is pressed against the outside of the box is in contact with
+  // the room, so the border ring sheds heat properly rather than banking it.
+  for (let x=0; x<W; x++){
+    const top = x, bot = (H-1)*W + x;
+    temp[top] += (AMBIENT - temp[top]) * EDGE_LOSS;
+    temp[bot] += (AMBIENT - temp[bot]) * EDGE_LOSS;
+  }
+  for (let y=0; y<H; y++){
+    const l = y*W, r = y*W + W-1;
+    temp[l] += (AMBIENT - temp[l]) * EDGE_LOSS;
+    temp[r] += (AMBIENT - temp[r]) * EDGE_LOSS;
+  }
 }
 
 
@@ -844,7 +873,7 @@ function react(){
         const soak = (temp[i] - m.melt) * cap * .25;
         temp[i] -= soak / cap;
         life[i] += soak;
-        if (life[i] >= LATENT_MELT){ become(x,y,m.into); found(t+':melt', `${m.n} → ${M[m.into].n}`); }
+        if (life[i] >= (m.lat !== undefined ? m.lat : LATENT_MELT)){ become(x,y,m.into); found(t+':melt', `${m.n} → ${M[m.into].n}`); }
         continue;
       }
 
@@ -973,7 +1002,11 @@ function draw(){
     const T = temp[i];
     if (T > 300 && t!==E && t!==WATER && t!==STEAM){
       const f = ramp(T);
-      const w = Math.min(1, (T-300)/300) * (t===FIRE ? 1 : .88);
+      // Reaching full weight at 300° above the ignition threshold meant anything
+      // merely warm was already fully amber, so a box that had been played in for a
+      // while was one colour from edge to edge. Spread over the whole range instead:
+      // a warm log still looks like a log, and only genuinely hot things glow.
+      const w = Math.min(1, (T-300)/(MAX_T-300)) * (t===FIRE ? 1 : .92);
       r = r + (f[0]-r)*w; g = g + (f[1]-g)*w; b = b + (f[2]-b)*w;
     } else if (T > 120 && t!==E && t!==WATER){
       const w = (T-120)/620;
@@ -984,7 +1017,7 @@ function draw(){
     // scene had a lava pool in it every empty cell in the box rendered as glowing
     // white and the picture lost all its detail — the whole thing went cream.
     if (t===E && T > AMBIENT+18){
-      const w = Math.min(.62, (T-AMBIENT-18)/520);
+      const w = Math.min(.55, (T-AMBIENT-18)/900);
       r += 150*w; g += 58*w; b += 16*w;
     }
     buf[p]   = r<0?0:r>255?255:r;
