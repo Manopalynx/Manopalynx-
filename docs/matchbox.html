@@ -195,8 +195,8 @@
          was a fifth of the screen and the stage is the point of the page. -->
     <div class="bar">
       <div class="shapes" id="shapes"></div>
-      <input type="range" id="brush" min="1" max="9" value="3" aria-label="Brush size">
-      <span id="bval">3</span>
+      <input type="range" id="brush" min="1" max="12" value="4" aria-label="Brush size">
+      <span id="bval">4</span>
     </div>
   </div>
 
@@ -315,7 +315,13 @@ const GROUPS = [
    is moved as energy and divided by the capacity of whatever receives it. */
 
 const AMBIENT    = 20;    // the room
-const CELL       = 4;     // pixels per cell
+const CELL       = 3;     // pixels per cell. Three rather than four gives about 1.8×
+                          // the cells for the same screen — measured on the device,
+                          // a busy scene costs 3.0-4.5ms of work at 4px, against a
+                          // 16.6ms frame, so there was room. Everything below that is
+                          // expressed in cells stays in cells; the two things that
+                          // are really about screen size — the brush and the opening
+                          // scene — are scaled so they look the same as before.
 /* Air is a poor conductor — better than nothing and worse than wood — and it moves
    heat by rising, not by conducting. The table had it at .55, better than everything
    except steel, which is backwards and was quietly fatal: every burning cell dumped
@@ -338,6 +344,7 @@ const EDGE_LOSS  = .055;  // ...and the walls of the box, which are open to the 
                           // and climbing, so everything slowly turned amber.
 const BURN       = 6.0;   // energy per unit of a material's `out`, per tick alight
 const KEEP       = .5;    // ...of which this much stays put; the rest goes to neighbours
+const STEPS      = 2;     // simulation ticks per drawn frame — see frame()
 const RAIN_TICKS = 420;   // how long a press of Rain keeps raining. At 90 it was a
                           // second and a half, which a fire of any size shrugged off.
 const MATCH_HEAT = 780;   // what the match puts into whatever you touch with it
@@ -1122,7 +1129,7 @@ stripEl.addEventListener('keydown', e => {
 /* ============================================================ tools */
 
 let tool = WOOD;
-let brush = 3;
+let brush = 4;
 let shape = 'free';          // 'free' | 'line' | 'box'
 let anchor = null, ghost = null;   // the two ends of a shape being dragged out
 let heatView = false;        // false-colour the whole grid by temperature
@@ -1409,23 +1416,34 @@ function frame(now){
     if (matchLit <= 0) matchOut();
   }
 
-  if (raining > 0){
-    raining--;
-    for (let k=0;k<Math.ceil(W/22);k++){
-      const x = (Math.random()*W)|0;
-      if (type[idx(x,0)]===E) put(x,0,WATER);
-    }
-  }
 
   /* How long the work actually takes on the device holding it, which is not the same
      as how long a frame lasts: requestAnimationFrame is pinned to the refresh rate,
      so measuring now-last reported 16.6ms and 60fps on a phone no matter what was in
      the box. It would have said the same thing about an empty one. */
   const t0 = performance.now();
-  moveFalling();
-  moveRising();
-  diffuse();
-  react();
+  /* More than one tick a frame. A grid of 3px cells is nearly twice the world of a
+     4px one, and the physics runs per cell, so everything took correspondingly longer
+     to cross it: the opening scene went from about 30 seconds to reach the wood stack
+     to 36.8. Two ticks a frame gives the bigger box back its old pace and then some,
+     and there is room for it — 2.3ms of work for a busy scene against a 16.6ms frame,
+     on a phone that measured faster than this machine.
+
+     Everything in the model is per tick, so this changes how fast the world runs and
+     nothing about how it behaves. The suites step it themselves and are unaffected. */
+  for (let s=0; s<STEPS; s++){
+    if (raining > 0){
+      raining--;
+      for (let k=0;k<Math.ceil(W/22);k++){
+        const x = (Math.random()*W)|0;
+        if (type[idx(x,0)]===E) put(x,0,WATER);
+      }
+    }
+    moveFalling();
+    moveRising();
+    diffuse();
+    react();
+  }
   heatView ? drawHeat() : draw();
   frameMs += (performance.now() - t0 - frameMs) * .05;
   if (findFlash > 0 && --findFlash === 0) sayTool();
@@ -1500,7 +1518,10 @@ function updateGauge(){
    `test/matchbox-sim.mjs` lights this scene from the end of the trail and asserts the
    stack catches, so the opening scene cannot quietly stop meaning anything. */
 function seed(){
-  const floor = H-3;
+  // Thicknesses in pixels-worth rather than cells, so the scene looks the same
+  // whatever CELL is set to. Everything else here is already a fraction of the box.
+  const sc = n => Math.max(1, Math.round(n * 4 / CELL));
+  const floor = H - sc(3);
   const at = f => (W*f)|0;
   for (let x=0;x<W;x++) for (let y=floor;y<H;y++) put(x,y,STONE);
 
@@ -1509,17 +1530,17 @@ function seed(){
   // straw could burn out beside a hole and the stack never caught: four times in
   // fourteen, which is a scene that works by luck.
   for (let x=at(.30); x<at(.52); x++)
-    for (let y=floor-9; y<floor; y++)
-      if (x >= at(.52)-2 || Math.random()<.82) put(x,y,WOOD);
+    for (let y=floor-sc(9); y<floor; y++)
+      if (x >= at(.52)-sc(2) || Math.random()<.82) put(x,y,WOOD);
 
   // Kindling on both sides of the stack. The right-hand bank is where the oil trail
   // arrives, and it is there because the handover from a one-cell-deep trail straight
   // into a log was marginal: over ten runs the stack caught nine times, and a scene
   // that works nine times out of ten is a scene that does not work.
   for (let x=at(.18); x<at(.30); x++)
-    for (let y=floor-4; y<floor; y++) put(x,y,STRAW);
+    for (let y=floor-sc(4); y<floor; y++) put(x,y,STRAW);
   for (let x=at(.52); x<at(.57); x++)
-    for (let y=floor-3; y<floor; y++) put(x,y,STRAW);
+    for (let y=floor-sc(3); y<floor; y++) put(x,y,STRAW);
 
   for (let x=at(.57); x<at(.88); x++) put(x,floor-1,OIL);
 }
