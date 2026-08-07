@@ -107,9 +107,9 @@ failing before the rework — see *What changed* below.
 - **Glass, from sand and lava.** Drop sand into a pool of lava. A thin pour of lava
   over sand on a cold floor will not do it — the floor drinks the heat.
 - **Obsidian.** Pour water on lava. Left alone it crusts over into stone instead.
-- **Melting steel.** Thermite, lit with a magnesium ribbon, because nothing else in
-  the box gets near 1400°C. It will not cut a clean hole through a plate — see the
-  honest notes.
+- **Cutting steel.** Thermite sitting directly on a plate, lit with a magnesium
+  ribbon, because nothing else in the box gets near 1400°C. It cuts a hole through a
+  plate a few cells thick and is stopped by a thick one — see the honest notes.
 - **A gas explosion.** Fill a sealed space with gas, wait for it to gather under the
   lid, and then reach in with a match.
 - **Getting water wrong.** Set magnesium alight and pour water on it. Measured: 2213°C
@@ -239,13 +239,11 @@ The pool recedes below what the wick can reach, the wick goes dry and burns away
 **Ice never falls.** It is a static solid, like stone and wood, so a block of it hangs
 where you put it.
 
-**Thermite melts steel but does not cut through it.** A liquid cannot displace a solid,
-so the melt sits in the hole it has made and freezes back into it — measured, a charge
-takes the top two layers of a seven-deep plate to molten and they set again, leaving
-the plate slightly thicker than it started. Aiming the charge's heat downward took it
-from one layer to two and no further. Draining the melt would need a rule letting
-molten metal sink through the solid form of itself, which is a real change rather than
-a number.
+**Thermite has a reach, and thick steel defeats it.** Measured: 10 of 12 columns
+through a two-deep plate, 8 through a three-deep one, and nothing at all through six.
+That is the melt-through rule doing what it should — a hot liquid sinks into a solid it
+is hot enough to melt and stops the moment it has given away enough heat to fall below
+that melting point. Use more thermite, or a thinner plate.
 
 ## Performance
 

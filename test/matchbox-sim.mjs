@@ -469,47 +469,47 @@ await check(browser, 'a match will not light thermite, and magnesium will', () =
 });
 
 // Counting steel cells is no good here: what thermite leaves behind is molten iron,
-// which cools and sets into steel, so a successful burn can end with more steel in
-// the box than it started with. Measured that way it scored minus 71.
+// which cools and sets into steel, so a burn can end with more steel in the box than
+// it started with. Measured that way it scored minus 71. The question is whether the
+// plate was breached.
 //
-// The claim is that thermite is the only thing that can melt steel at all, which is
-// the entire reason it exists — everything else in the box tops out around 1200°C
-// and steel melts at 1400, so melting steel needed molten steel, which is no way to
-// get any. That is what this checks, against a match as the control.
-//
-// It does NOT cut a clean hole through a plate, and that is worth writing down. A
-// liquid cannot displace a solid, so the melt sits in the hole it has made and
-// freezes back into it: measured, a charge takes the top two layers of a seven-deep
-// plate to molten and they set again, leaving the plate slightly thicker. Aiming the
-// charge's heat downward took it from one layer to two and no further. Draining the
-// melt would need a rule that lets molten metal sink through the solid form of
-// itself, which is a real change and not a number.
-await check(browser, 'thermite melts steel, and nothing else can', () => {
-  const run = (withThermite) => {
-    __wipe(); const f = __floor();
-    __slab(20, f-1, 79, f-1, STONE);
-    __slab(40, f-8, 59, f-2, STEEL);
-    let peakSteel = 0, sawMolten = 0;
-    if (withThermite){
-      __slab(44, f-14, 55, f-9, THERMITE);
-      __slab(46, f-16, 53, f-15, MAGNES);
-      __hold(50, f-15, 3, 300);
+// The depth limit is the other half of the claim, and it is not arbitrary: a hot
+// liquid sinks into a solid it is hot enough to melt, and stops as soon as it has
+// given away enough heat to fall below that melting point. So a charge has a reach.
+// Without that rule thermite was a spectacle and nothing else — it burns at 2538°C
+// and the plate underneath came through completely untouched, because the melt had
+// nowhere to go and froze back into the dent it had made.
+await check(browser, 'thermite cuts through a steel plate, and thick steel defeats it', () => {
+  const run = (deep, chargeDeep, useThermite) => {
+    __wipe();
+    const f = H-4;
+    __slab(0, f, W-1, f, STONE);                       // a tray, well below
+    const pt = f-12, pb = pt+deep-1;
+    __slab(30, pt, 69, pb, STEEL);
+    if (useThermite){
+      __slab(44, pt-chargeDeep, 55, pt-1, THERMITE);   // sitting directly on the plate
+      __slab(46, pt-chargeDeep-2, 53, pt-chargeDeep-1, MAGNES);
+      __hold(50, pt-chargeDeep-1, 3, 300);
     } else {
-      __hold(50, f-9, 3, 300);            // a match held on the plate instead
+      __hold(50, pt-1, 3, 300);
     }
-    for (let k=0;k<1200;k++){
-      __step(1);
-      for (let i=0;i<type.length;i++) if (type[i]===STEEL && temp[i] > peakSteel) peakSteel = temp[i];
-      sawMolten = Math.max(sawMolten, __count(MOLTEN));
+    for (let k=0;k<3000;k++) __step(1);
+    let breached = 0;
+    for (let x=44; x<=55; x++){
+      let solid = 0;
+      for (let y=pt; y<=pb; y++) if (type[idx(x,y)]===STEEL) solid++;
+      if (solid === 0) breached++;
     }
-    return { peak: Math.round(peakSteel), molten: sawMolten };
+    return breached;
   };
-  const match = run(false);
-  if (match.peak >= M[STEEL].melt) return `a match alone took steel to ${match.peak}°C, past its melting point of ${M[STEEL].melt} — thermite is not needed for this`;
+  const match = run(3, 6, false);
+  if (match > 0) return `a match alone breached ${match} of 12 columns, so this proves nothing about thermite`;
 
-  const therm = run(true);
-  if (therm.peak < M[STEEL].melt) return `thermite took the steel plate to ${therm.peak}°C against a melting point of ${M[STEEL].melt}`;
-  if (therm.molten < 12) return `the plate reached ${therm.peak}°C but only ${therm.molten} cells were ever molten at once`;
+  const cut = run(3, 6, true);
+  if (cut < 5) return `thermite on a three-deep plate breached ${cut} of 12 columns`;
+
+  const thick = run(6, 6, true);
+  if (thick >= cut) return `the same charge breached ${thick} of 12 columns of a six-deep plate against ${cut} of a three-deep — depth means nothing`;
   return null;
 });
 

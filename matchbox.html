@@ -331,7 +331,7 @@ M[OBSIDIAN]={n:'Obsidian', ph:3, col:[ 40, 33, 46], ig:9e9, cond:.19, cap:2.1, d
 // one cell can melt: measured, a 70-fuel charge took the steel to 1399°C against a
 // melting point of 1400 and then went out. Thermite is a sustained ferocious burn
 // rather than a bang, and the length of it is the point.
-M[THERMITE]={n:'Thermite', ph:2, col:[122,116,112], ig:950, fuel:140, out:15.0, cond:.18, cap:1.0,
+M[THERMITE]={n:'Thermite', ph:2, col:[134, 88, 66], ig:950, fuel:140, out:15.0, cond:.18, cap:1.0,
              dens:2.2, char:24, peak:2450, ash:MOLTEN, rad:[.08,.08,.10,.74]};
 M[MAGNES]  ={n:'Magnesium',ph:3, col:[196,198,204], ig:430, fuel:150, out:9.0,  cond:.55, cap:1.0,
              dens:1.7, char:18, peak:2100, ash:ASH,
@@ -443,6 +443,8 @@ const MAX_T      = 2600;  // nothing in the box gets hotter than this. It has to
                           // same defect as green wood that could never be lit. 2600
                           // now, because thermite burns at 2450 and a ceiling below
                           // that would quietly make it ordinary.
+const MELT_HARD  = 500;  // only solids that melt at least this hot can be sunk into
+const MELT_THRU  = 60;   // ...and only by a liquid this far over their melting point
 const ACID_BITE  = .012; // chance an acid cell takes a bite in a tick. At .18 it went
                          // through half of a six-deep wall in four tenths of a second,
                          // which is not corrosion, it is a hole appearing.
@@ -631,6 +633,33 @@ function moveFalling(){
         if (slid) continue;
         vel[ci] = 0;                   // landed on something
         break;
+      }
+
+      /* A liquid hot enough to melt what is under it sinks into it, rather than
+         sitting on top of the hole it has made.
+
+         Without this, thermite was a spectacle and nothing else: it burns at 2538°C
+         and the steel plate beneath came through completely untouched. The plate did
+         melt — measured at 1469°C against a melting point of 1400 — but a liquid
+         cannot displace a solid, so the melt had nowhere to go, and steel conducts
+         better than anything else in the table, so the whole plate sat just under
+         melting while the puddle on top froze back into the dent it had made.
+
+         Self-limiting, and physically so: the front stops as soon as the liquid has
+         given away enough heat to fall below the melting point of what it is eating,
+         which is what gives a cut its depth. */
+      if (ph===1 && cy<H-1){
+        const b = idx(cx, cy+1), mb = M[type[b]];
+        // Only into things that melt hot, and only with a clear margin over it. This
+        // is a rule about cutting metal and rock; wax melts at 62°C and ice at 0, and
+        // with either of them in scope a candle's pool burrowed straight down through
+        // the candle and away from its own wick. The candle went from ~1150 ticks to
+        // 453 with no margin, and 600 with a margin alone.
+        if (mb.ph===3 && mb.melt >= MELT_HARD && temp[ci] > mb.melt + MELT_THRU){
+          become(cx, cy+1, mb.into);
+          swap(ci, b);
+          continue;
+        }
       }
 
       // Lighter than the liquid it is sitting in: it comes up. Ice bobs, oil rises
