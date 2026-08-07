@@ -219,7 +219,7 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
 M[E]      = {n:'—',        ph:3, col:[0,0,0]};
-M[WOOD]   = {n:'Wood',     ph:3, col:[122, 82, 46], ig:300, fuel:520, out:2.0, cond:.10, cap:1.0, ash:EMBER, char:30, dens:.7};
+M[WOOD]   = {n:'Wood',     ph:3, col:[122, 82, 46], ig:300, fuel:520, out:2.0, cond:.10, cap:1.0, ash:EMBER, char:30, dens:.7, tough:1.4};
 M[PAPER]  = {n:'Paper',    ph:3, col:[214,201,172], ig:210, fuel:70,  out:2.6, cond:.16, cap:.6,  ash:ASH,   char:3,  dens:.8};
 M[STRAW]  = {n:'Straw',    ph:2, col:[186,150, 72], ig:170, fuel:55,  out:2.4, cond:.14, cap:.55, ash:ASH,   char:3,  dens:.35};
 // Lightened from [46,38,30], which against a void of [11,10,9] made a one-cell-deep
@@ -240,10 +240,10 @@ M[POWDER] = {n:'Powder',   ph:2, col:[ 58, 56, 58], ig:150, fuel:14,  out:9.0, c
 // A fuse has to carry a front along itself for its whole length or it is a stick.
 // `out` at 1.5 was the lowest in the table and the front died about eight cells in.
 M[FUSE]   = {n:'Fuse',     ph:3, col:[142,116, 78], ig:200, fuel:150, out:3.2, cond:.10, cap:.7,  ash:ASH,   char:12, dens:.8, wick:1};
-M[COAL]   = {n:'Coal',     ph:2, col:[ 34, 32, 34], ig:520, fuel:1500,out:3.0, cond:.13, cap:1.4, ash:ASH,   char:90, dens:1.4};
+M[COAL]   = {n:'Coal',     ph:2, col:[ 34, 32, 34], ig:520, fuel:1500,out:3.0, cond:.13, cap:1.4, ash:ASH,   char:90, dens:1.4, tough:2};
 M[GREEN]  = {n:'Green',    ph:3, col:[ 74,104, 54], ig:470, fuel:600, out:1.1, cond:.11, cap:1.9, ash:EMBER, smoky:3.2, char:150, dens:.9};
-M[STONE]  = {n:'Stone',    ph:3, col:[104,100, 94], ig:9e9, cond:.20, cap:2.2, dens:2.6, melt:1250, into:LAVA};
-M[STEEL]  = {n:'Steel',    ph:3, col:[142,146,152], ig:9e9, cond:.92, cap:1.6, dens:7.8, melt:1400, into:MOLTEN};
+M[STONE]  = {n:'Stone',    ph:3, col:[104,100, 94], ig:9e9, cond:.20, cap:2.2, dens:2.6, melt:1250, into:LAVA, tough:3.5};
+M[STEEL]  = {n:'Steel',    ph:3, col:[142,146,152], ig:9e9, cond:.92, cap:1.6, dens:7.8, melt:1400, into:MOLTEN, tough:4.5};
 M[WATER]  = {n:'Water',    ph:1, col:[ 44, 92,132], ig:9e9, cond:.42, cap:6.0, boil:100, into:STEAM, t0:12, dens:1.0};
 M[ICE]    = {n:'Ice',      ph:2, col:[168,204,222], ig:9e9, cond:.28, cap:3.0, melt:0,   into:WATER, t0:-14, dens:.92, rigid:1, lat:430};
 // Its own latent heat, and a large one: melting ice really does cost far more per
@@ -251,7 +251,7 @@ M[ICE]    = {n:'Ice',      ph:2, col:[168,204,222], ig:9e9, cond:.28, cap:3.0, m
 // room — which it badly needed, or a lava scene simply cooked — took a third of a
 // block of ice in ten seconds. Ice is something you put down to hold a fire back;
 // it has to last longer than that.
-M[SAND]   = {n:'Sand',     ph:2, col:[190,166,116], ig:9e9, cond:.16, cap:1.5, dens:2.7, melt:830,  into:GLASS};
+M[SAND]   = {n:'Sand',     ph:2, col:[190,166,116], ig:9e9, cond:.16, cap:1.5, dens:2.7, melt:830,  into:GLASS, tough:1.8};
 // Denser than lava, so it sinks into a pour and is surrounded by it. At 1.6 it
 // floated to the top and only its underside ever touched anything hot: measured,
 // four cells of glass formed and then the sand cooled while the lava beneath it was
@@ -279,13 +279,20 @@ M[ASH]    = {n:'Ash',      ph:2, col:[ 96, 92, 88], ig:9e9, cond:.10, cap:.9,  d
    `meets` is contact rather than temperature: this touching that makes those. It is
    how lava quenched in water becomes glass rather than stone, which is the same
    thing that happens to it in the world. */
-// cap 3.2, not the 1.8 it started at. Molten rock carries a great deal of heat for
-// its volume, and the figure decides everything lava is for: at 1.8 a pour spent
-// itself warming whatever it landed on and froze before it had done anything, and a
-// generous pour on a thin layer of sand settled at 789°C against a melting point of
-// 830. It is the difference between lava and hot gravel.
-M[LAVA]   = {n:'Lava',     ph:1, col:[198, 76, 20], ig:9e9, cond:.22, cap:3.2, dens:2.4,
-             t0:1180, cool:760, sets:STONE, flow:.45, glow:1,
+/* Three figures here decide whether lava is lava, and all three were wrong.
+
+   A line of it drawn across the box went from 1180°C to solid stone in 120 ticks —
+   under two seconds — leaving a scatter of grey specks hanging in the air. Lava that
+   sets before it can flow anywhere is hot gravel.
+
+   cond .07, because molten basalt is a poor conductor, close to wood. At .22 it was
+   handing its heat to the air faster than anything else in the table bar steel.
+   cap 6.4, because rock carries a great deal of heat for its volume, and this is the
+   number that decides how long a pour lasts.
+   cool 560, because 760 left only 420°C of headroom before it set, and the whole
+   point of lava is the time it spends being liquid. */
+M[LAVA]   = {n:'Lava',     ph:1, col:[198, 76, 20], ig:9e9, cond:.07, cap:6.4, dens:2.4,
+             t0:1180, cool:560, sets:STONE, flow:.45, glow:1,
              meets:[{with:WATER, become:OBSIDIAN, they:STEAM}]};
 M[GLASS]  = {n:'Glass',    ph:3, col:[172,204,206], ig:9e9, cond:.18, cap:1.2, dens:2.5, proof:1};
 M[MOLTEN] = {n:'Molten',   ph:1, col:[240,158, 62], ig:9e9, cond:.60, cap:1.5, dens:7.0,
@@ -336,7 +343,12 @@ M[RUBBER]  ={n:'Rubber',   ph:3, col:[ 44, 42, 46], ig:340, fuel:220, out:3.0,  
 M[MRUBBER] ={n:'Rubber',   ph:1, col:[ 62, 50, 44], ig:270, fuel:200, out:3.4,  cond:.10, cap:1.2,
              dens:1.05, char:6, smoky:3.4, ash:E, flow:.5};
 M[ACID]    ={n:'Acid',     ph:1, col:[132,196, 56], ig:9e9, cond:.24, cap:2.4,
-             dens:1.2, fuel:26, eats:1, boil:180, into:SMOKE, t0:18};
+             dens:1.2, fuel:12, eats:1, boil:180, into:SMOKE, t0:18};
+// fuel 12: a dozen cells eaten and the drop is gone. At 26 a splash could get through
+// most of a scene, and with bites now rare enough to watch, it would have taken over
+// a minute of real time per cell to find that out.
+// `tough` is how well a material resists being eaten — how many bites it takes rather
+// than whether acid works on it at all. Without it steel dissolved as fast as paper.
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
              span:900, peak:1500};
 
@@ -431,6 +443,9 @@ const MAX_T      = 2600;  // nothing in the box gets hotter than this. It has to
                           // same defect as green wood that could never be lit. 2600
                           // now, because thermite burns at 2450 and a ceiling below
                           // that would quietly make it ordinary.
+const ACID_BITE  = .012; // chance an acid cell takes a bite in a tick. At .18 it went
+                         // through half of a six-deep wall in four tenths of a second,
+                         // which is not corrosion, it is a hole appearing.
 const CHAR       = 30;    // charring a cell must do before it catches, if it has no
                           // `char` of its own. See "catching" in react().
 const WICK_DRAW  = .34;   // fuel a burning wick takes from the liquid it stands in
@@ -983,12 +998,13 @@ function react(){
       //      one cell quietly eating an entire wall and still being there afterwards.
       //      Glass and obsidian are proof against it, which makes a tank worth
       //      building rather than a decoration.
-      if (m.eats && fuel[i] > 0 && Math.random() < .18){
+      if (m.eats && fuel[i] > 0 && Math.random() < ACID_BITE){
         for (let d=0; d<4; d++){
           const xx = x+NX[d], yy = y+NY[d];
           if (!inb(xx,yy)) continue;
           const j = idx(xx,yy), tj = type[j], mj = M[tj];
           if (tj===E || tj===t || mj.ph===0 || mj.ph===1 || mj.proof) continue;
+          if (Math.random() * (mj.tough !== undefined ? mj.tough : 1) > 1) continue;
           become(xx, yy, E);
           found(t+':eats', `${m.n} eats through ${mj.n}`);
           fuel[i] -= m.eats;
