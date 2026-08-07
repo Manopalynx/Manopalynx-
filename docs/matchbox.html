@@ -134,6 +134,17 @@
   .chip.act{flex:0 0 auto;padding:7px 10px 6px}
   .chip.danger[aria-pressed="true"]{background:var(--phos);border-color:var(--phos);color:#fff}
 
+  .tabs{gap:4px}
+  .tab{
+    flex:1 1 auto;min-width:0;min-height:26px;padding:4px 6px;
+    border:1.5px solid var(--card-dark);border-bottom-width:0;border-radius:3px 3px 0 0;
+    background:rgba(110,86,56,.18);cursor:pointer;
+    font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--card-dark);
+  }
+  .tab[aria-pressed="true"]{background:var(--ink);color:var(--pale);border-color:var(--ink)}
+  .tab:focus-visible{outline:2px solid var(--phos);outline-offset:1px}
+
   .bar{display:flex;align-items:center;gap:9px}
   .bar span{font-size:9.5px;letter-spacing:.14em;color:var(--card-dark);text-transform:uppercase;flex:none}
   .shapes{display:flex;gap:4px;flex:none}
@@ -174,8 +185,8 @@
   </div>
 
   <div class="tray">
+    <div class="row tabs" id="tabs"></div>
     <div class="row" id="mats"></div>
-    <div class="row" id="acts"></div>
     <!-- Shapes share the brush's line rather than taking one of their own. The tray
          was a fifth of the screen and the stage is the point of the page. -->
     <div class="bar">
@@ -197,7 +208,8 @@
 
 const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
       COAL=9, GREEN=10, STONE=11, STEEL=12, WATER=13, ICE=14, SAND=15,
-      FIRE=16, SMOKE=17, STEAM=18, EMBER=19, ASH=20;
+      FIRE=16, SMOKE=17, STEAM=18, EMBER=19, ASH=20,
+      LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24;
 
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
@@ -225,18 +237,66 @@ M[POWDER] = {n:'Powder',   ph:2, col:[ 58, 56, 58], ig:150, fuel:14,  out:9.0, c
 M[FUSE]   = {n:'Fuse',     ph:3, col:[142,116, 78], ig:200, fuel:150, out:3.2, cond:.10, cap:.7,  ash:ASH,   char:12, dens:.8, wick:1};
 M[COAL]   = {n:'Coal',     ph:2, col:[ 34, 32, 34], ig:520, fuel:1500,out:3.0, cond:.13, cap:1.4, ash:ASH,   char:90, dens:1.4};
 M[GREEN]  = {n:'Green',    ph:3, col:[ 74,104, 54], ig:470, fuel:600, out:1.1, cond:.11, cap:1.9, ash:EMBER, smoky:3.2, char:150, dens:.9};
-M[STONE]  = {n:'Stone',    ph:3, col:[104,100, 94], ig:9e9, cond:.20, cap:2.2, dens:2.6};
-M[STEEL]  = {n:'Steel',    ph:3, col:[142,146,152], ig:9e9, cond:.92, cap:1.6, dens:7.8};
+M[STONE]  = {n:'Stone',    ph:3, col:[104,100, 94], ig:9e9, cond:.20, cap:2.2, dens:2.6, melt:1250, into:LAVA};
+M[STEEL]  = {n:'Steel',    ph:3, col:[142,146,152], ig:9e9, cond:.92, cap:1.6, dens:7.8, melt:1400, into:MOLTEN};
 M[WATER]  = {n:'Water',    ph:1, col:[ 44, 92,132], ig:9e9, cond:.42, cap:6.0, boil:100, into:STEAM, t0:12, dens:1.0};
 M[ICE]    = {n:'Ice',      ph:2, col:[168,204,222], ig:9e9, cond:.28, cap:3.0, melt:0,   into:WATER, t0:-14, dens:.92, rigid:1};
-M[SAND]   = {n:'Sand',     ph:2, col:[190,166,116], ig:9e9, cond:.16, cap:1.5, dens:1.6};
+M[SAND]   = {n:'Sand',     ph:2, col:[190,166,116], ig:9e9, cond:.16, cap:1.5, dens:2.7, melt:830,  into:GLASS};
+// Denser than lava, so it sinks into a pour and is surrounded by it. At 1.6 it
+// floated to the top and only its underside ever touched anything hot: measured,
+// four cells of glass formed and then the sand cooled while the lava beneath it was
+// still at 900°C. Quartz is heavier than molten basalt, so this is the right way up.
+// 830, and the figure is load-bearing at both ends. Above 780, because that is what
+// the match puts into whatever it touches and a dab of a match should not turn a
+// beach into glass. Below what a pour of lava can actually achieve: lava arrives at
+// 1180°C but it shares that heat with whatever it lands on, and 120 cells of it on
+// 80 of sand settles at 789 — measured, with the melting point at 950, which nothing
+// in the box could ever reach.
 M[FIRE]   = {n:'Fire',     ph:0, col:[232,100, 26]};
 M[SMOKE]  = {n:'Smoke',    ph:0, col:[ 58, 54, 50]};
 M[STEAM]  = {n:'Steam',    ph:0, col:[178,182,186]};
 M[EMBER]  = {n:'Ember',    ph:2, col:[ 84, 40, 22], ig:340, fuel:340, out:1.6, cond:.14, cap:1.0, ash:ASH,   char:20, dens:.7};
 M[ASH]    = {n:'Ash',      ph:2, col:[ 96, 92, 88], ig:9e9, cond:.10, cap:.9,  dens:.45};
 
-const TRAY = [WOOD, PAPER, STRAW, OIL, WAX, POWDER, FUSE, COAL, GREEN, WATER, ICE, STONE, STEEL, SAND];
+/* Matter that only exists once something has been hot enough.
+
+   Stone, steel, sand and ash could never become anything at all: no fuel, no melting
+   point, nothing. The whole top of the temperature range had nothing to do with
+   itself. These are what it is for.
+
+   `cool`/`sets` is the other direction from `melt`/`into` — what a hot liquid turns
+   back into as it loses its heat, giving back the latent heat it took to melt.
+   `meets` is contact rather than temperature: this touching that makes those. It is
+   how lava quenched in water becomes glass rather than stone, which is the same
+   thing that happens to it in the world. */
+// cap 3.2, not the 1.8 it started at. Molten rock carries a great deal of heat for
+// its volume, and the figure decides everything lava is for: at 1.8 a pour spent
+// itself warming whatever it landed on and froze before it had done anything, and a
+// generous pour on a thin layer of sand settled at 789°C against a melting point of
+// 830. It is the difference between lava and hot gravel.
+M[LAVA]   = {n:'Lava',     ph:1, col:[198, 76, 20], ig:9e9, cond:.22, cap:3.2, dens:2.4,
+             t0:1180, cool:760, sets:STONE, flow:.45, glow:1, meets:[[WATER, OBSIDIAN, STEAM]]};
+M[GLASS]  = {n:'Glass',    ph:3, col:[172,204,206], ig:9e9, cond:.18, cap:1.2, dens:2.5};
+M[MOLTEN] = {n:'Molten',   ph:1, col:[240,158, 62], ig:9e9, cond:.60, cap:1.5, dens:7.0,
+             t0:1500, cool:1380, sets:STEEL, flow:.6, glow:1, meets:[[WATER, STEEL, STEAM]]};
+M[OBSIDIAN]={n:'Obsidian', ph:3, col:[ 40, 33, 46], ig:9e9, cond:.19, cap:2.1, dens:2.6};
+
+/* The tray, in drawers.
+
+   Fourteen materials already wrapped to two rows on a phone, and the plan is many
+   more than fourteen. A flat tray does not scale: every material added costs a slice
+   of the stage, which is the part of the page worth having. Grouped, one row shows
+   one drawer and the tray stops growing no matter how much goes in it.
+
+   `TOOLS` is a drawer like any other. It holds the things that are not materials —
+   the eraser, the weather, the views — and later the presets and the saves. */
+const GROUPS = [
+  { name:'Fuel',  items:[WOOD, PAPER, STRAW, FUSE, COAL, GREEN, POWDER] },
+  { name:'Wet',   items:[WATER, OIL, ICE] },
+  { name:'Solid', items:[STONE, STEEL, SAND, WAX, GLASS, OBSIDIAN] },
+  { name:'Hot',   items:[LAVA, MOLTEN, EMBER] },
+  { name:'Tools', items:'tools' },
+];
 
 /* ============================================================ grid
 
@@ -266,7 +326,9 @@ const RAIN_TICKS = 420;   // how long a press of Rain keeps raining. At 90 it wa
 const MATCH_HEAT = 780;   // what the match puts into whatever you touch with it
 const FIRE_HEAT  = 780;   // a flame, newly lit
 const FIRE_DIES  = 360;   // below this a flame is not a flame any more
-const MAX_T      = 1200;  // nothing in the box gets hotter than this
+const MAX_T      = 1650;  // nothing in the box gets hotter than this. It has to clear
+                          // steel's melting point or steel can never melt, which is the
+                          // same defect as green wood that could never be lit.
 const CHAR       = 30;    // charring a cell must do before it catches, if it has no
                           // `char` of its own. See "catching" in react().
 const WICK_DRAW  = .34;   // fuel a burning wick takes from the liquid it stands in
@@ -671,6 +733,37 @@ function sip(x, y){
   return false;
 }
 
+/* A contact reaction, read off the material's own `meets`: each row is
+   [what it has to touch, what this becomes, what that becomes].
+
+   Returns whether anything happened, so the caller can stop — a cell that has just
+   turned into obsidian must not then be asked whether it is cool enough to set. */
+function meet(x, y, m){
+  for (let d=0; d<4; d++){
+    const xx = x+NX[d], yy = y+NY[d];
+    if (!inb(xx,yy)) continue;
+    const j = idx(xx,yy), tj = type[j];
+    for (let r=0; r<m.meets.length; r++){
+      const row = m.meets[r];
+      if (tj !== row[0]) continue;
+      const heat = temp[idx(x,y)], was = type[idx(x,y)];
+      become(x, y, row[1]);
+      if (row[2] !== undefined){
+        become(xx, yy, row[2]);
+        // The steam is steam because the heat went into making it, so it leaves at
+        // boiling rather than carrying the lava's temperature away with it.
+        temp[j] = row[2] === STEAM ? 100 : Math.min(heat, temp[j]);
+      }
+      // What is left is hot, but it is not lava any more. Halfway between what it
+      // was and the thing that quenched it.
+      temp[idx(x,y)] = Math.max(AMBIENT, heat * .5);
+      found(was + ':meets' + r, `${m.n} + ${M[row[0]].n} → ${M[row[1]].n}`);
+      return true;
+    }
+  }
+  return false;
+}
+
 const touchingWater = (x,y) => {
   for (let d=0; d<4; d++){
     const xx = x+NX[d], yy = y+NY[d];
@@ -718,7 +811,24 @@ function react(){
         const soak = (temp[i] - m.melt) * cap * .25;
         temp[i] -= soak / cap;
         life[i] += soak;
-        if (life[i] >= LATENT_MELT) become(x,y,m.into);
+        if (life[i] >= LATENT_MELT){ become(x,y,m.into); found(t+':melt', `${m.n} → ${M[m.into].n}`); }
+        continue;
+      }
+
+      // ---- contact. Some things react to what they are touching rather than to a
+      //      temperature: lava quenched in water becomes obsidian and a cloud of
+      //      steam, molten steel does the same and sets. Read straight off the
+      //      material's own `meets`, so a new reaction is a row in the table rather
+      //      than another special case welded in here.
+      if (m.meets && meet(x, y, m)) continue;
+
+      // ---- setting. The other direction from melting: what a hot liquid turns back
+      //      into once it has lost its heat, handing back the latent heat that
+      //      melting it took. Lava left alone crusts over into stone.
+      if (m.cool !== undefined && temp[i] < m.cool){
+        become(x,y,m.sets);
+        temp[i] += LATENT_MELT / cap;
+        found(t+':cool', `${m.n} sets into ${M[m.sets].n}`);
         continue;
       }
 
@@ -729,6 +839,7 @@ function react(){
         spend(x, y, LATENT_BOIL);
         become(x,y,m.into);
         temp[i] = 100;
+        found(t+':boil', `${m.n} → ${M[m.into].n}`);
         continue;
       }
 
@@ -790,7 +901,9 @@ function react(){
           // Whatever is left keeps the heat it had. An ember is wood that has run out
           // of wood, and it glows because it is still hot rather than because it has
           // been told to be 560°C.
-          become(x, y, m.ash !== undefined ? m.ash : E);
+          const left = m.ash !== undefined ? m.ash : E;
+          become(x, y, left);
+          if (left !== E) found(t+':ash', `${m.n} burns down to ${M[left].n}`);
         }
       }
     }
@@ -803,8 +916,11 @@ function react(){
    that, so a log that is merely warm looks warm rather than looking on fire. */
 
 function ramp(T){
-  // 300°C dull red → 1150°C near-white
-  const k = Math.max(0, Math.min(1, (T-300)/850));
+  // 300°C dull red → MAX_T near-white. Pinned to the ceiling rather than to a figure
+  // of its own: with the top of the ramp at 1150 and the ceiling raised to 1650 for
+  // steel, lava at 1180 came out the same white as molten steel at 1500, and
+  // everything above 1150 was one colour.
+  const k = Math.max(0, Math.min(1, (T-300)/(MAX_T-300)));
   if (k < .35){ const u=k/.35;  return [140+ 92*u,  26+ 74*u, 10+ 16*u]; }
   if (k < .70){ const u=(k-.35)/.35; return [232+ 23*u, 100+ 101*u, 26+ 36*u]; }
   const u=(k-.70)/.30;           return [255, 201+ 51*u, 62+ 138*u];
@@ -941,8 +1057,9 @@ let shape = 'free';          // 'free' | 'line' | 'box'
 let anchor = null, ghost = null;   // the two ends of a shape being dragged out
 let heatView = false;        // false-colour the whole grid by temperature
 
+const tabsEl = document.getElementById('tabs');
 const matsEl = document.getElementById('mats');
-const actsEl = document.getElementById('acts');
+const actsEl = document.createElement('div');   // holds the tool chips between shows
 
 function chipFor(t){
   const b = document.createElement('button');
@@ -955,7 +1072,32 @@ function chipFor(t){
   b.addEventListener('click', ()=>setTool(t));
   return b;
 }
-TRAY.forEach(t => matsEl.appendChild(chipFor(t)));
+let openDrawer = 0;
+
+function showDrawer(n){
+  openDrawer = n;
+  matsEl.textContent = '';
+  const g = GROUPS[n];
+  if (g.items === 'tools') while (actsEl.firstChild) matsEl.appendChild(actsEl.firstChild);
+  else g.items.forEach(t => matsEl.appendChild(chipFor(t)));
+  tabsEl.querySelectorAll('.tab').forEach((b,i) => b.setAttribute('aria-pressed', String(i===n)));
+}
+
+// Tools live in actsEl while their drawer is shut, so the buttons keep their identity
+// and their listeners rather than being rebuilt — a Clear that is halfway through
+// asking would forget it had asked.
+function stowTools(){
+  if (GROUPS[openDrawer].items !== 'tools') return;
+  while (matsEl.firstChild) actsEl.appendChild(matsEl.firstChild);
+}
+
+GROUPS.forEach((g,i) => {
+  const b = document.createElement('button');
+  b.className = 'tab'; b.type = 'button'; b.textContent = g.name;
+  b.setAttribute('aria-pressed', String(i===0));
+  b.addEventListener('click', ()=>{ stowTools(); showDrawer(i); });
+  tabsEl.appendChild(b);
+});
 
 function actionChip(labelName, fn, danger){
   const b = document.createElement('button');
@@ -1012,6 +1154,8 @@ const heatBtn = actionChip('Heat', ()=>{
 });
 actsEl.appendChild(heatBtn);
 
+showDrawer(0);
+
 /* The readout, which is the only label on the page that can afford to change often.
    It carries the current tool until the pointer is over the dark, and the cell under
    the pointer while it is. On a phone there is no hover at all, so before this it
@@ -1023,7 +1167,10 @@ let drawn = false;                                 // has anything been drawn ye
 
 const toolName = () => tool==='match' ? (matchLit > 0 ? 'Flame' : 'Match out')
                      : tool==='erase' ? 'Erase' : M[tool].n;
-function say(msg){ roEl.textContent = msg; }
+function say(msg, force){
+  if (findFlash > 0 && !force) return;   // a discovery holds the line while it shows
+  roEl.textContent = msg;
+}
 function sayTool(){
   const how = shape === 'free' ? '' : `  ·  ${shape}`;
   say(`${toolName()}  ·  brush ${brush}${how}`);
@@ -1184,6 +1331,11 @@ let last = performance.now();
 
 function frame(now){
   const dt = Math.min(50, now-last); last = now;
+  // A rolling average of how long a frame actually takes on the device holding it.
+  // The grid is 4px cells because that is what a desktop measurement said was safe,
+  // and a desktop measurement is not the one that matters — this is how the number
+  // gets decided by the phone instead of by me.
+  frameMs += (dt - frameMs) * .05;
 
   if (matchLit > 0){
     matchLit -= dt/1000;
@@ -1205,14 +1357,49 @@ function frame(now){
   diffuse();
   react();
   heatView ? drawHeat() : draw();
+  if (findFlash > 0 && --findFlash === 0) sayTool();
   if ((++gaugeTick % 12) === 0) updateGauge();
   requestAnimationFrame(frame);
+}
+
+/* The discovery log.
+
+   Every transition in the material table is something to find: what melts into what,
+   what a hot liquid sets into, what burns down to what, and what happens when two
+   things touch. The list is read off the table rather than written out separately,
+   so a reaction added to a material is a reaction the log already knows about and
+   there is no second place to forget to update.
+
+   Nothing is locked. The reward for finding one is being told you found it and
+   watching the count go up — a record of what you have done rather than a gate in
+   front of what you have not. */
+const ALL_FINDS = (() => {
+  const list = [];
+  for (let t=0; t<M.length; t++){
+    const m = M[t]; if (!m) continue;
+    if (m.melt !== undefined && m.into  !== undefined) list.push(t+':melt');
+    if (m.boil !== undefined && m.into  !== undefined) list.push(t+':boil');
+    if (m.cool !== undefined && m.sets  !== undefined) list.push(t+':cool');
+    if (m.ash  !== undefined && m.ash   !== E)         list.push(t+':ash');
+    if (m.meets) m.meets.forEach((_,r) => list.push(t+':meets'+r));
+  }
+  return list;
+})();
+
+const finds = new Set();
+let findFlash = 0;
+
+function found(key, label){
+  if (finds.has(key)) return;
+  finds.add(key);
+  findFlash = 150;                 // hold it on screen for a couple of seconds
+  say(`Found — ${label}`, true);                 // hold it on screen for a couple of seconds
 }
 
 /* What the box is doing as a whole, rather than the one cell under a finger. The air
    figure is the room warming up; the peak is the hottest thing in the box, which is
    the number that says whether anything is close to catching. */
-let gaugeTick = 0;
+let gaugeTick = 0, frameMs = 16;
 const gaugeEl = document.getElementById('gauge');
 
 function updateGauge(){
@@ -1223,7 +1410,9 @@ function updateGauge(){
     if (type[i] === E){ airSum += T; airN++; }
   }
   const air = airN ? airSum/airN : AMBIENT;
-  gaugeEl.innerHTML = `air ${Math.round(air)}°C<br><b>peak ${Math.round(peak)}°C</b>`;
+  gaugeEl.innerHTML = `air ${Math.round(air)}°C<br><b>peak ${Math.round(peak)}°C</b>` +
+                      `<br>found ${finds.size}/${ALL_FINDS.length}` +
+                      `<br>${frameMs.toFixed(1)}ms · ${(1000/frameMs).toFixed(0)}fps · ${W}×${H}`;
 }
 
 /* ============================================================ boot */
