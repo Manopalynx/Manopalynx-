@@ -67,6 +67,15 @@
   .word em{font-style:normal;color:var(--phos)}
   .meta{font-size:10px;letter-spacing:.16em;color:var(--card-dark);text-transform:uppercase;
     text-align:right;line-height:1.5;white-space:nowrap}
+  /* Folding the tray away is the only thing that buys the stage a real amount of
+     room. Tightening the chips only made them harder to hit: the tray came down by
+     eight pixels and the targets went under a fingertip, which is a bad trade. */
+  .fold{flex:none;align-self:center;padding:6px 9px;min-height:30px;
+    border:1.5px solid var(--card-dark);border-radius:3px;background:rgba(255,255,255,.13);
+    font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink);cursor:pointer}
+  .fold:focus-visible{outline:2px solid var(--phos);outline-offset:1px}
+  .tray.folded{display:none}
 
   /* ---- the void ---- */
   .stage{position:relative;flex:1;min-height:0;background:var(--void);
@@ -74,6 +83,9 @@
   canvas{display:block;width:100%;height:100%;image-rendering:pixelated;touch-action:none}
   .readout{position:absolute;top:7px;left:9px;font-size:10px;letter-spacing:.12em;
     color:#6b5c4b;pointer-events:none;text-transform:uppercase}
+  .gauge{position:absolute;top:7px;right:9px;font-size:10px;letter-spacing:.12em;
+    color:#6b5c4b;pointer-events:none;text-transform:uppercase;text-align:right}
+  .gauge b{font-weight:400;color:#a8724a}
   /* Clear of the floor: at the foot of the stage this sat on top of the opening
      scene, which is exactly where everything happens. */
   .hint{position:absolute;bottom:26%;left:0;right:0;text-align:center;font-size:10.5px;
@@ -107,22 +119,25 @@
   @keyframes flick{from{transform:scaleY(1) translateY(0)}to{transform:scaleY(1.14) translateY(-1.5px)}}
 
   /* ---- tray ---- */
-  .tray{flex:none;padding:10px 10px 12px;display:flex;flex-direction:column;gap:8px}
+  .tray{flex:none;padding:7px 8px 9px;display:flex;flex-direction:column;gap:6px}
   .row{display:flex;gap:5px;flex-wrap:wrap}
   .chip{
     flex:1 1 auto;min-width:0;padding:7px 4px 6px;border:1.5px solid var(--card-dark);
     background:rgba(255,255,255,.13);border-radius:3px;cursor:pointer;
     font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.05em;color:var(--ink);
-    display:flex;flex-direction:column;align-items:center;gap:4px;text-transform:uppercase;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    text-transform:uppercase;min-height:32px;   /* a fingertip, not a pixel */
   }
   .chip:focus-visible{outline:2px solid var(--phos);outline-offset:1px}
-  .chip .sw{width:100%;height:7px;border-radius:1px}
+  .chip .sw{width:100%;height:6px;border-radius:1px}
   .chip[aria-pressed="true"]{background:var(--ink);color:var(--pale);border-color:var(--ink)}
-  .chip.act{flex:0 0 auto;padding:7px 11px 6px}
+  .chip.act{flex:0 0 auto;padding:7px 10px 6px}
   .chip.danger[aria-pressed="true"]{background:var(--phos);border-color:var(--phos);color:#fff}
 
   .bar{display:flex;align-items:center;gap:9px}
   .bar span{font-size:9.5px;letter-spacing:.14em;color:var(--card-dark);text-transform:uppercase;flex:none}
+  .shapes{display:flex;gap:4px;flex:none}
+  .shapes .chip{flex:0 0 auto;padding:7px 9px 6px}
   input[type=range]{flex:1;accent-color:var(--phos);height:18px}
   input[type=range]:focus-visible{outline:2px solid var(--phos);outline-offset:3px}
 
@@ -139,11 +154,14 @@
   <div class="label">
     <div class="word">Match<em>box</em></div>
     <div class="meta">Strike the strip<br>Then touch the dark</div>
+    <button class="fold" id="fold" type="button" aria-expanded="true"
+            aria-label="Hide the tray and give the room to the box">Hide</button>
   </div>
 
   <div class="stage">
     <canvas id="cv"></canvas>
     <div class="readout" id="ro">—</div>
+    <div class="gauge" id="gauge"></div>
     <div class="hint" id="hint">Pick a material · draw in the dark</div>
   </div>
 
@@ -158,8 +176,10 @@
   <div class="tray">
     <div class="row" id="mats"></div>
     <div class="row" id="acts"></div>
+    <!-- Shapes share the brush's line rather than taking one of their own. The tray
+         was a fifth of the screen and the stage is the point of the page. -->
     <div class="bar">
-      <span>Brush</span>
+      <div class="shapes" id="shapes"></div>
       <input type="range" id="brush" min="1" max="9" value="3" aria-label="Brush size">
       <span id="bval">3</span>
     </div>
@@ -198,7 +218,7 @@ M[WAX]    = {n:'Wax',      ph:3, col:[226,218,198], ig:9e9, fuel:0,   out:0,   c
 // 126-cell fire that ate the whole candle in thirteen seconds. Raising the figure to
 // 420 only moved the problem — a wick burns at 1150, so the wax right beside it still
 // caught, and burned off the fuel the wick was supposed to be drinking.
-M[MELT]   = {n:'Wax',      ph:1, col:[214,198,160], ig:9e9, fuel:220, out:2.1, cond:.11, cap:1.1, ash:E, dens:.95};
+M[MELT]   = {n:'Wax',      ph:1, col:[214,198,160], ig:9e9, fuel:220, out:2.1, cond:.11, cap:1.1, ash:E, dens:.95, flow:.25};
 M[POWDER] = {n:'Powder',   ph:2, col:[ 58, 56, 58], ig:150, fuel:14,  out:9.0, cond:.30, cap:.4,  ash:SMOKE, char:2,  dens:1.3};
 // A fuse has to carry a front along itself for its whole length or it is a stick.
 // `out` at 1.5 was the lowest in the table and the front died about eight cells in.
@@ -368,7 +388,8 @@ function become(x,y,t){
 const GRAVITY  = .12;   // gained per tick
 const DRAG_AIR = .94;   // ...against this, so about 1.9 cells a tick in the open
 const DRAG_WET = .62;   // ...and about 0.3 in a liquid: six times slower
-const CREEP    = .22;   // chance a liquid takes a sideways step when it can
+const CREEP    = .22;   // chance a liquid takes a sideways step when it can,
+                        // scaled by the material's own `flow`: wax is not water
 
 const densOf = t => { const d = M[t].dens; return d !== undefined ? d : 1; };
 
@@ -454,7 +475,7 @@ function moveFalling(){
       // surface layer of a pool has nothing above it either, so a body of water sat
       // in a dome instead of levelling off. Being part of a pool at all is the test —
       // liquid above OR liquid below. A one-deep film has neither and stays put.
-      if (ph===1 && Math.random() < CREEP &&
+      if (ph===1 && Math.random() < CREEP * (m.flow !== undefined ? m.flow : 1) &&
           ((cy>0 && type[idx(cx,cy-1)]===t) || (cy<H-1 && type[idx(cx,cy+1)]===t))){
         const s = Math.random()<.5 ? 1 : -1;
         for (const dx of [s,-s]){
@@ -818,6 +839,57 @@ function draw(){
     buf[p+2] = b<0?0:b>255?255:b;
   }
   ctx.putImageData(img,0,0);
+  overlay();
+}
+
+/* The heat view. Everything the model does is temperature, and almost none of it can
+   be seen: a log at 280°C and a log at 20°C are the same colour right up until one of
+   them catches. This paints the field itself — the plume standing over a fire, heat
+   running along a steel bar, the cold shadow under a block of ice.
+
+   It reuses the same loop rather than adding a second one, and the gauge totals come
+   out of the pass either way, so neither costs a frame. */
+function drawHeat(){
+  for (let i=0, p=0; i<temp.length; i++, p+=4){
+    const T = temp[i];
+    let r, g, b;
+    if (T < AMBIENT){                       // colder than the room: blue
+      const k = Math.min(1, (AMBIENT - T) / 40);
+      r = 16 + 24*(1-k); g = 40 + 60*(1-k); b = 90 + 120*k;
+    } else {
+      const k = Math.min(1, (T - AMBIENT) / (MAX_T - AMBIENT));
+      const u = Math.pow(k, .55);           // most of the interest is at the low end
+      r = 16 + 239*Math.min(1, u*1.9);
+      g = 12 + 243*Math.max(0, Math.min(1, u*1.7 - .45));
+      b = 26 + 229*Math.max(0, Math.min(1, u*2.6 - 1.55));
+    }
+    buf[p] = r; buf[p+1] = g; buf[p+2] = b;
+  }
+  ctx.putImageData(img,0,0);
+  overlay();
+}
+
+/* Drawn on top of the cells rather than into them: the shape you are dragging out is
+   not part of the scene until you let go of it. */
+function overlay(){
+  if (!anchor || !ghost) return;
+  ctx.fillStyle = '#FFC93C';
+  const [ax,ay] = anchor, [gx,gy] = ghost;
+  if (shape === 'box'){
+    const x0 = Math.min(ax,gx), x1 = Math.max(ax,gx);
+    const y0 = Math.min(ay,gy), y1 = Math.max(ay,gy);
+    ctx.fillRect(x0, y0, x1-x0+1, 1);
+    ctx.fillRect(x0, y1, x1-x0+1, 1);
+    ctx.fillRect(x0, y0, 1, y1-y0+1);
+    ctx.fillRect(x1, y0, 1, y1-y0+1);
+  } else {
+    ctx.save();
+    ctx.strokeStyle = '#FFC93C'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ax+.5, ay+.5); ctx.lineTo(gx+.5, gy+.5); ctx.stroke();
+    ctx.restore();
+  }
+  // both ends, so a shape started off the top of a pile is still findable
+  ctx.fillRect(ax-2, ay, 5, 1); ctx.fillRect(ax, ay-2, 1, 5);
 }
 
 /* ============================================================ the match */
@@ -865,6 +937,9 @@ stripEl.addEventListener('keydown', e => {
 
 let tool = WOOD;
 let brush = 3;
+let shape = 'free';          // 'free' | 'line' | 'box'
+let anchor = null, ghost = null;   // the two ends of a shape being dragged out
+let heatView = false;        // false-colour the whole grid by temperature
 
 const matsEl = document.getElementById('mats');
 const actsEl = document.getElementById('acts');
@@ -927,6 +1002,16 @@ function disarmClear(){
 actsEl.appendChild(clearBtn);
 actsEl.appendChild(actionChip('Rain', ()=>{ raining = RAIN_TICKS; }));
 
+/* A false-colour view of the temperature field. The model is the whole point of this
+   box and almost none of it is visible: a log at 280°C and a log at 20°C look the
+   same until one of them catches. This shows the plume, the conduction along a steel
+   bar, and the cold shadow under a block of ice. */
+const heatBtn = actionChip('Heat', ()=>{
+  heatView = !heatView;
+  heatBtn.setAttribute('aria-pressed', String(heatView));
+});
+actsEl.appendChild(heatBtn);
+
 /* The readout, which is the only label on the page that can afford to change often.
    It carries the current tool until the pointer is over the dark, and the cell under
    the pointer while it is. On a phone there is no hover at all, so before this it
@@ -939,7 +1024,10 @@ let drawn = false;                                 // has anything been drawn ye
 const toolName = () => tool==='match' ? (matchLit > 0 ? 'Flame' : 'Match out')
                      : tool==='erase' ? 'Erase' : M[tool].n;
 function say(msg){ roEl.textContent = msg; }
-function sayTool(){ say(`${toolName()}  ·  brush ${brush}`); }
+function sayTool(){
+  const how = shape === 'free' ? '' : `  ·  ${shape}`;
+  say(`${toolName()}  ·  brush ${brush}${how}`);
+}
 
 function setTool(t){
   if (t==='match' && matchLit<=0) return;
@@ -958,6 +1046,24 @@ function setTool(t){
   }
 }
 
+/* Shapes. Free is the brush; Line and Box are press, drag and release. */
+const shapesEl = document.getElementById('shapes');
+const shapeBtns = {};
+for (const [key, labelName] of [['free','Free'], ['line','Line'], ['box','Box']]){
+  const b = document.createElement('button');
+  b.className = 'chip'; b.type = 'button'; b.textContent = labelName;
+  b.setAttribute('aria-pressed', String(shape === key));
+  b.addEventListener('click', ()=>setShape(key));
+  shapeBtns[key] = b;
+  shapesEl.appendChild(b);
+}
+function setShape(s){
+  shape = s;
+  anchor = ghost = null;
+  for (const k in shapeBtns) shapeBtns[k].setAttribute('aria-pressed', String(k === s));
+  sayTool();
+}
+
 const brushEl = document.getElementById('brush');
 brushEl.addEventListener('input', ()=>{
   brush = +brushEl.value;
@@ -969,28 +1075,68 @@ brushEl.addEventListener('input', ()=>{
 
 let painting = false, raining = 0;
 
+/* One cell, one rule. Everything that puts material into the box goes through here —
+   the brush, a line, a rectangle — so a shape can never quietly behave differently
+   from a stroke. */
+function paintCell(x, y, solid){
+  if (!inb(x,y)) return;
+  const i = idx(x,y);
+  if (tool === 'match'){
+    temp[i] = Math.max(temp[i], MATCH_HEAT);
+    // `become`, not `put`: the flame has to keep the heat we just applied. `put`
+    // would hand this cell the resting temperature of a fresh flame, which is
+    // nothing at all, and the match would light nothing.
+    if (type[i]===E && Math.random()<.28) become(x,y,FIRE);
+  } else if (tool === 'erase'){
+    put(x,y,E);
+  } else if (type[i]===E || M[type[i]].ph===0){
+    // The brush lays down 92% of what it covers, which is what stops a stroke
+    // reading as a printed block. A shape is a deliberate edge and lays down all of
+    // it: measured, a "solid" rectangle came out 1986 cells of a 2156-cell box, and
+    // a wall with eight per cent holes is not a wall — water runs through it, and
+    // the next shape you draw fills the gaps with whatever it is made of.
+    if (solid || Math.random() < .92) put(x,y,tool);
+  }
+}
+
+function disc(cx, cy, r, solid){
+  if (r <= 0){ paintCell(cx, cy, solid); return; }
+  for (let dy=-r; dy<=r; dy++)
+    for (let dx=-r; dx<=r; dx++)
+      if (dx*dx+dy*dy <= r*r) paintCell(cx+dx, cy+dy, solid);
+}
+
 function paintAt(cx, cy){
   if (tool === 'match' && matchLit <= 0) return;   // a spent match does nothing
-  const r = brush;
-  for (let dy=-r; dy<=r; dy++){
-    for (let dx=-r; dx<=r; dx++){
-      if (dx*dx+dy*dy > r*r) continue;
-      const x = cx+dx, y = cy+dy;
-      if (!inb(x,y)) continue;
-      const i = idx(x,y);
-      if (tool === 'match'){
-        temp[i] = Math.max(temp[i], MATCH_HEAT);
-        // `become`, not `put`: the flame has to keep the heat we just applied. `put`
-        // would hand this cell the resting temperature of a fresh flame, which is
-        // nothing at all, and the match would light nothing.
-        if (type[i]===E && Math.random()<.28) become(x,y,FIRE);
-      } else if (tool === 'erase'){
-        put(x,y,E);
-      } else if (type[i]===E || M[type[i]].ph===0){
-        if (Math.random() < .92) put(x,y,tool);
-      }
-    }
+  disc(cx, cy, brush);
+}
+
+/* Lines and rectangles. Drawing a straight wall with a thumb is miserable, and every
+   scene worth building — a tank, a fuse, a floor — is made of straight edges.
+
+   The brush still means something: it is the thickness of a line, one cell at the
+   smallest so a fuse can be a single cell wide. A rectangle is filled; four taps of
+   erase inside one gives you a tank. */
+function stampLine(x0, y0, x1, y1){
+  if (tool === 'match' && matchLit <= 0) return;
+  const r = Math.max(0, brush - 1);
+  let dx = Math.abs(x1-x0), sx = x0 < x1 ? 1 : -1;
+  let dy = -Math.abs(y1-y0), sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  for (let guard = 0; guard < 4096; guard++){
+    disc(x0, y0, r, true);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2*err;
+    if (e2 >= dy){ err += dy; x0 += sx; }
+    if (e2 <= dx){ err += dx; y0 += sy; }
   }
+}
+
+function stampBox(x0, y0, x1, y1){
+  if (tool === 'match' && matchLit <= 0) return;
+  const ax = Math.min(x0,x1), bx = Math.max(x0,x1);
+  const ay = Math.min(y0,y1), by = Math.max(y0,y1);
+  for (let y=ay; y<=by; y++) for (let x=ax; x<=bx; x++) paintCell(x, y, true);
 }
 
 function toCell(e){
@@ -999,20 +1145,38 @@ function toCell(e){
            Math.floor((e.clientY-r.top )/r.height * H) ];
 }
 
+/* Press, drag, release — one gesture, rather than tapping a corner and then hunting
+   for the opposite one. There is no hover on a phone, so a two-tap shape would spend
+   most of its life as an anchor sitting on screen with nothing showing where the
+   other end was going to land. */
 cv.addEventListener('pointerdown', e=>{
   e.preventDefault(); cv.setPointerCapture(e.pointerId);
-  painting = true; const [x,y]=toCell(e); paintAt(x,y);
+  const [x,y] = toCell(e);
   drawn = true;
   hintEl.style.opacity = 0;
+  if (shape === 'free'){ painting = true; paintAt(x,y); }
+  else { anchor = [x,y]; ghost = [x,y]; }
 });
+
 cv.addEventListener('pointermove', e=>{
   const [x,y] = toCell(e);
   if (inb(x,y)) say(`${M[type[idx(x,y)]].n}  ·  ${Math.round(temp[idx(x,y)])}°C`);
   if (painting) paintAt(x,y);
+  else if (anchor) ghost = [x,y];
 });
-cv.addEventListener('pointerleave', ()=>{ if (!painting) sayTool(); });
-addEventListener('pointerup',     ()=>painting=false);
-addEventListener('pointercancel', ()=>painting=false);
+
+function endStroke(){
+  if (anchor && ghost){
+    if (shape === 'line') stampLine(anchor[0], anchor[1], ghost[0], ghost[1]);
+    else if (shape === 'box') stampBox(anchor[0], anchor[1], ghost[0], ghost[1]);
+  }
+  anchor = ghost = null;
+  painting = false;
+}
+
+cv.addEventListener('pointerleave', ()=>{ if (!painting && !anchor) sayTool(); });
+addEventListener('pointerup',     endStroke);
+addEventListener('pointercancel', ()=>{ anchor = ghost = null; painting = false; });
 
 /* ============================================================ loop */
 
@@ -1040,8 +1204,26 @@ function frame(now){
   moveRising();
   diffuse();
   react();
-  draw();
+  heatView ? drawHeat() : draw();
+  if ((++gaugeTick % 12) === 0) updateGauge();
   requestAnimationFrame(frame);
+}
+
+/* What the box is doing as a whole, rather than the one cell under a finger. The air
+   figure is the room warming up; the peak is the hottest thing in the box, which is
+   the number that says whether anything is close to catching. */
+let gaugeTick = 0;
+const gaugeEl = document.getElementById('gauge');
+
+function updateGauge(){
+  let peak = -1e9, airSum = 0, airN = 0;
+  for (let i=0; i<temp.length; i++){
+    const T = temp[i];
+    if (T > peak) peak = T;
+    if (type[i] === E){ airSum += T; airN++; }
+  }
+  const air = airN ? airSum/airN : AMBIENT;
+  gaugeEl.innerHTML = `air ${Math.round(air)}°C<br><b>peak ${Math.round(peak)}°C</b>`;
 }
 
 /* ============================================================ boot */
@@ -1092,6 +1274,19 @@ boot();
 
 // Resize, but do not re-seed. build() carries the scene across; laying the opening
 // scene down again is how a rotation used to erase an hour's work.
+/* Fold the tray away. The stage takes the room, which on a phone is about a third
+   more box. build() carries the scene across bottom-anchored, so the floor stays the
+   floor and the new space appears above it — the same path a rotation takes. */
+const trayEl = document.querySelector('.tray');
+const foldEl = document.getElementById('fold');
+foldEl.addEventListener('click', ()=>{
+  const folded = trayEl.classList.toggle('folded');
+  foldEl.textContent = folded ? 'Tray' : 'Hide';
+  foldEl.setAttribute('aria-expanded', String(!folded));
+  build();
+  heatView ? drawHeat() : draw();
+});
+
 let rt;
 addEventListener('resize', ()=>{ clearTimeout(rt); rt = setTimeout(build, 220); });
 </script>

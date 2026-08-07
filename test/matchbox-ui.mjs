@@ -143,14 +143,132 @@ await check('the readout says what the tool is before you have touched anything'
   return null;
 });
 
+console.log('\n— shapes —');
+
+// Press, drag, release. Drawing a straight wall freehand with a thumb is miserable,
+// and a tank, a fuse and a floor are all straight edges.
+const wipe = p => p.evaluate(() => { type.fill(0); temp.fill(AMBIENT); fuel.fill(0); life.fill(0); vel.fill(0); });
+const pick = (p, name) => p.locator('.chip', { hasText: new RegExp('^' + name + '$', 'i') }).first().click();
+
+async function dragOn(p, ax, ay, bx, by, hold) {
+  const s = await stageBox(p);
+  const at = (fx,fy) => [s.x + s.width*fx, s.y + s.height*fy];
+  const [x0,y0] = at(ax,ay), [x1,y1] = at(bx,by);
+  await p.mouse.move(x0,y0); await p.mouse.down();
+  await p.mouse.move((x0+x1)/2, (y0+y1)/2); await p.mouse.move(x1,y1);
+  if (hold) await hold();
+  await p.mouse.up();
+}
+
+await check('a dragged box fills a rectangle, and only on release', async p => {
+  await wipe(p);
+  await pick(p, 'stone'); await pick(p, 'box');
+  let during = null;
+  await dragOn(p, 0.2, 0.3, 0.7, 0.6, async () => {
+    during = await p.evaluate(() => __count(11));
+  });
+  // The ghost outline is drawn over the scene, not into it. A shape that landed while
+  // you were still choosing where to put it would be a shape you could not aim.
+  if (during !== 0) return `${during} cells of stone were already in the scene mid-drag, before letting go`;
+  const after = await p.evaluate(() => __count(11));
+  if (after < 200) return `only ${after} cells landed — that is not a rectangle`;
+  // and it should be a rectangle, not a blob
+  const shape = await p.evaluate(() => {
+    let x0=1e9,x1=-1,y0=1e9,y1=-1,n=0;
+    for (let i=0;i<type.length;i++) if (type[i]===11){ const x=i%W, y=(i/W)|0;
+      x0=Math.min(x0,x); x1=Math.max(x1,x); y0=Math.min(y0,y); y1=Math.max(y1,y); n++; }
+    return { n, area: (x1-x0+1)*(y1-y0+1) };
+  });
+  if (shape.n < shape.area * 0.98) return `${shape.n} cells inside a ${shape.area}-cell bounding box — it has holes`;
+  return null;
+});
+
+await check('a dragged line is one cell wide at brush 1', async p => {
+  await wipe(p);
+  await p.evaluate(() => { brush = 1; document.getElementById('brush').value = 1; });
+  await pick(p, 'fuse'); await pick(p, 'line');
+  await dragOn(p, 0.2, 0.35, 0.8, 0.35);
+  const r = await p.evaluate(() => {
+    let n = 0, cols = new Set(), rows = new Set();
+    for (let i=0;i<type.length;i++) if (type[i]===8){ n++; cols.add(i%W); rows.add((i/W)|0); }
+    return { n, cols: cols.size, rows: rows.size };
+  });
+  if (r.n < 20) return `the line laid ${r.n} cells`;
+  // A fuse has to be able to be one cell thick, or it is a wall
+  if (r.rows > 2) return `a brush-1 horizontal line came out ${r.rows} cells thick`;
+  if (r.n > r.cols * 2) return `${r.n} cells across ${r.cols} columns — thicker than it should be`;
+  return null;
+});
+
+await check('shapes obey the same rules as the brush', async p => {
+  await wipe(p);
+  // Stone first, then try to draw wood straight over it: the brush refuses to paint
+  // into occupied cells and a box must refuse in exactly the same way, or a shape
+  // becomes a way to overwrite a scene the brush cannot touch.
+  await pick(p, 'stone'); await pick(p, 'box');
+  await dragOn(p, 0.25, 0.35, 0.65, 0.55);
+  const stone = await p.evaluate(() => __count(11));
+  await pick(p, 'wood');
+  await dragOn(p, 0.25, 0.35, 0.65, 0.55);
+  const after = await p.evaluate(() => ({ stone: __count(11), wood: __count(1) }));
+  if (after.stone < stone * 0.98) return `a box of wood ate ${stone - after.stone} cells of stone`;
+  if (after.wood > 0) return `${after.wood} cells of wood landed inside solid stone`;
+  return null;
+});
+
 console.log('\n— the box itself —');
+
+await check('the heat view shows the field without touching it', async p => {
+  const before = await p.evaluate(() => {
+    let sum = 0; for (let i=0;i<type.length;i++) sum += type[i]*7 + Math.round(temp[i]);
+    return sum;
+  });
+  await p.locator('.chip', { hasText: /^heat$/i }).first().click();
+  const on = await p.evaluate(() => heatView);
+  if (!on) return 'the Heat chip did not turn the view on';
+  const after = await p.evaluate(() => {
+    let sum = 0; for (let i=0;i<type.length;i++) sum += type[i]*7 + Math.round(temp[i]);
+    return sum;
+  });
+  // A few ticks of simulation will have run between the two reads, so this is not an
+  // equality check — it is "the view did not tip a bucket of heat into the scene".
+  if (Math.abs(after - before) > Math.abs(before) * 0.25 + 500) {
+    return `the scene changed by ${after - before} when the view was toggled`;
+  }
+  return null;
+});
+
+await check('folding the tray away gives the stage the room', async p => {
+  const before = await p.locator('.stage').boundingBox();
+  await p.evaluate(() => { for (let x=10;x<40;x++) for (let y=H-9;y<H-4;y++) put(x,y,11); });
+  await p.waitForTimeout(400);
+  const cells = await p.evaluate(() => __count(11));
+  await p.locator('#fold').click();
+  await p.waitForTimeout(400);
+  const after = await p.locator('.stage').boundingBox();
+  if (after.height < before.height * 1.15) {
+    return `the stage went from ${Math.round(before.height)}px to ${Math.round(after.height)}px — folding bought almost nothing`;
+  }
+  const kept = await p.evaluate(() => __count(11));
+  if (kept < cells * 0.9) return `${cells} cells of stone became ${kept} when the tray folded`;
+  await p.locator('#fold').click();
+  await p.waitForTimeout(400);
+  const back = await p.locator('.stage').boundingBox();
+  if (Math.abs(back.height - before.height) > 2) return `unfolding did not put the tray back (${Math.round(back.height)}px against ${Math.round(before.height)}px)`;
+  return null;
+});
 
 await check('resizing does not destroy the scene', async p => {
   // Build something recognisable, then move the goalposts the way a phone does when
   // its address bar slides away or it is turned on its side.
+  // Built on the floor and left to settle, which is where a scene lives. Coal is a
+  // powder: dropped in mid-air it is still falling when the resize crops the grid,
+  // and a bottom-anchored crop is supposed to lose what is above the new ceiling.
+  // Asserting otherwise would be asserting against the anchoring, not the scene.
   await p.evaluate(() => {
-    for (let x=20;x<40;x++) for (let y=20;y<30;y++) put(x,y,9);   // a slab of coal
+    for (let x=20;x<40;x++) for (let y=H-14;y<H-4;y++) put(x,y,9);   // a slab of coal
   });
+  await p.waitForTimeout(600);
   const before = await p.evaluate(() => __count(9));
   await p.setViewportSize({ width: 390, height: 700 });
   await p.waitForTimeout(700);
@@ -187,7 +305,7 @@ await check('the whole tray is reachable without scrolling', async p => {
     const b = await el.boundingBox();
     if (!b) return `${label} has no box at all`;
     if (b.y + b.height > box.y + box.height + 1) return `${label} falls ${Math.round(b.y + b.height - box.y - box.height)}px below the box`;
-    if (b.height < 24) return `${label} is only ${Math.round(b.height)}px tall — under a fingertip`;
+    if (b.height < 30) return `${label} is only ${Math.round(b.height)}px tall — under a fingertip`;
   }
   const strip = await p.locator('#strip').boundingBox();
   if (strip.height < 40) return `the striking strip is only ${Math.round(strip.height)}px tall`;
