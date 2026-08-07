@@ -138,11 +138,36 @@ await check(browser, 'a candle stays lit and eats its own wax', () => {
   for (let y=f-26; y<f-18; y++) put(52, y, FUSE);
   const wax0 = __count(WAX);
   __hold(52, f-25, 2, 120);
-  let alight = 0;
-  for (let k=0;k<3000;k++){ __step(1); if (__count(FIRE) > 0) alight++; }
-  if (alight < 1500) return `the flame survived ${alight} of 3000 ticks after the match left`;
+  // Measured up to the moment the flame goes out, not at some tick long afterwards.
+  // The wick goes on smouldering once the candle is over, so a count taken at the end
+  // of a fixed run reports on the remains rather than on the candle.
+  // A flame flickers: FIRE cells are transient and spawned on a dice roll, so a
+  // single tick with none of them is a gap and not the end of the candle. Breaking
+  // on the first gap reported anywhere between 327 and 1200 ticks for the same
+  // scene — the variance was in the measurement, not the candle.
+  let alight = 0, dark = 0, wickAtEnd = __count(FUSE);
+  for (let k=0;k<3000;k++){
+    __step(1);
+    if (__count(FIRE) > 0){ alight++; dark = 0; wickAtEnd = __count(FUSE); }
+    else if (++dark > 90) break;
+  }
+
+  // 800. It measures 1106-1204 and ends when the wick is finally spent, having eaten
+  // about fifty cells of wax.
+  //
+  // It used to be ~1800, and that figure was inflated: the candle was living on heat
+  // from flames that were only that hot because convection was leaking upward without
+  // limit — the same bug that put a lava scene at 3774°C against a 1650°C ceiling.
+  // Bounding it cost the candle a third of its life, honestly.
+  if (alight < 800) return `the flame survived ${alight} of 3000 ticks after the match left`;
+
   const melted = wax0 - __count(WAX);
   if (melted < 20) return `it burned but consumed almost no wax (${melted} of ${wax0} cells)`;
+  // The wax consumption is what proves it is drawing. Eight cells of wick hold 1200
+  // ticks of fuel between them and several burn at once, so a string on its own is
+  // good for a few hundred ticks and no wax at all. Asserting the wick is still
+  // whole was the wrong test — a real wick is consumed slowly too, which is why you
+  // trim them.
   return null;
 });
 
