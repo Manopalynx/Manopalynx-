@@ -326,6 +326,20 @@ const RAIN_TICKS = 420;   // how long a press of Rain keeps raining. At 90 it wa
 const MATCH_HEAT = 780;   // what the match puts into whatever you touch with it
 const FIRE_HEAT  = 780;   // a flame, newly lit
 const FIRE_DIES  = 360;   // below this a flame is not a flame any more
+const FLAME_RAD  = 3.4;   // energy a flame gives the cells around it each tick
+const FLAME_PEAK = 1200;  // as hot as combustion alone can drive a cell, unless the
+                          // material says otherwise. MAX_T is the ceiling for the box;
+                          // this is the ceiling for a fire, and they are not the same
+                          // number — raising the first for steel let a wood fire run
+                          // at 1650°C, which cooked the air and washed the picture to
+                          // cream. Wood flame is about 1100 in the world.
+                          //
+                          // 1200 rather than 1150 because that is the figure the rest
+                          // of the box was balanced against while MAX_T was 1200, and
+                          // the candle in particular: bounding the convection leak
+                          // took the heat over a wick down with it, and at 1150 the
+                          // candle fell from ~1800 ticks to 1104. The leak had been
+                          // propping it up.
 const MAX_T      = 1650;  // nothing in the box gets hotter than this. It has to clear
                           // steel's melting point or steel can never melt, which is the
                           // same defect as green wood that could never be lit.
@@ -628,7 +642,14 @@ function convect(){
       const i = idx(x,y);
       if (!gassy(type[i]) || temp[i] <= AMBIENT + 40) continue;
       if (!gassy(type[i-W])) continue;
-      const lift = (temp[i] - AMBIENT) * .09;
+      // Never past the cell it is rising into. Buoyancy carries heat up a gradient;
+      // it does not pump against one. Unbounded, this was the leak that put the
+      // hottest cell of a lava scene at 3774°C against a stated ceiling of 1650:
+      // every gas cell handed 9% of its excess to the one above, so a column of hot
+      // air concentrated at the top with nothing to stop it. Measured at up to
+      // +130°C a tick, on its own, with conduction and reaction adding nothing.
+      const lift = Math.min((temp[i] - AMBIENT) * .09,
+                            Math.max(0, (temp[i] - temp[i-W]) * .5));
       temp[i] -= lift; temp[i-W] += lift;
     }
   }
@@ -640,6 +661,10 @@ function convect(){
 function roomLoss(){
   for (let i=0; i<temp.length; i++){
     if (gassy(type[i])) temp[i] += (AMBIENT - temp[i]) * ROOM_LOSS;
+    // The ceiling, enforced in one place. "Nothing gets hotter than MAX_T" is a
+    // claim the file makes, and it was being trusted to five separate clamps
+    // scattered through the reaction code — one of which did not exist.
+    if (temp[i] > MAX_T) temp[i] = MAX_T;
   }
 }
 
@@ -794,6 +819,14 @@ function react(){
           if (touchingWater(x,y)){ become(x,y,STEAM); temp[i] = 100; continue; }
           if (temp[i] < FIRE_DIES){ become(x,y,E); continue; }
         }
+        // A flame heats what it licks. Only cells with fuel radiated before, so a
+        // flame was a thing that looked hot and did nothing to its neighbours except
+        // by conduction — and air conducts badly on purpose. It mattered most where
+        // the fire is the whole point: a candle's wick is heated by the flame
+        // standing on it, and without this the wick cooled into its own melt and
+        // went out with wax still in reach.
+        if (t===FIRE) radiate(x, y, FLAME_RAD);
+
         const span = t===FIRE ? 24 : (t===STEAM ? 70 : 110);
         if (life[i] > span * (0.6 + Math.random()*0.8)) become(x,y,E);
         continue;
@@ -889,7 +922,8 @@ function react(){
         const q = m.out * BURN;
         temp[i] += q * KEEP / cap;
         radiate(x, y, q * (1 - KEEP));
-        if (temp[i] > MAX_T) temp[i] = MAX_T;
+        const flameCap = m.peak !== undefined ? m.peak : FLAME_PEAK;
+        if (temp[i] > flameCap) temp[i] = flameCap;
 
         // flame above, smoke above that
         if (y>0 && type[i-W]===E){
@@ -937,7 +971,7 @@ function draw(){
       r=c[0]+j; g=c[1]+j; b=c[2]+j;
     }
     const T = temp[i];
-    if (T > 300 && t!==WATER && t!==STEAM){
+    if (T > 300 && t!==E && t!==WATER && t!==STEAM){
       const f = ramp(T);
       const w = Math.min(1, (T-300)/300) * (t===FIRE ? 1 : .88);
       r = r + (f[0]-r)*w; g = g + (f[1]-g)*w; b = b + (f[2]-b)*w;
@@ -945,10 +979,13 @@ function draw(){
       const w = (T-120)/620;
       r = r + (150-r)*w; g = g + (40-g)*w; b = b + (20-b)*w;
     }
-    // heat haze in empty air, so you can see it coming before anything lights
+    // Heat haze in empty air, so you can see it coming before anything lights. Air
+    // used to take the full blackbody blend at 88% weight like any solid, so once a
+    // scene had a lava pool in it every empty cell in the box rendered as glowing
+    // white and the picture lost all its detail — the whole thing went cream.
     if (t===E && T > AMBIENT+18){
-      const w = Math.min(.5, (T-AMBIENT-18)/420);
-      r += 120*w; g += 44*w; b += 12*w;
+      const w = Math.min(.62, (T-AMBIENT-18)/520);
+      r += 150*w; g += 58*w; b += 16*w;
     }
     buf[p]   = r<0?0:r>255?255:r;
     buf[p+1] = g<0?0:g>255?255:g;
@@ -1331,11 +1368,6 @@ let last = performance.now();
 
 function frame(now){
   const dt = Math.min(50, now-last); last = now;
-  // A rolling average of how long a frame actually takes on the device holding it.
-  // The grid is 4px cells because that is what a desktop measurement said was safe,
-  // and a desktop measurement is not the one that matters — this is how the number
-  // gets decided by the phone instead of by me.
-  frameMs += (dt - frameMs) * .05;
 
   if (matchLit > 0){
     matchLit -= dt/1000;
@@ -1352,11 +1384,17 @@ function frame(now){
     }
   }
 
+  /* How long the work actually takes on the device holding it, which is not the same
+     as how long a frame lasts: requestAnimationFrame is pinned to the refresh rate,
+     so measuring now-last reported 16.6ms and 60fps on a phone no matter what was in
+     the box. It would have said the same thing about an empty one. */
+  const t0 = performance.now();
   moveFalling();
   moveRising();
   diffuse();
   react();
   heatView ? drawHeat() : draw();
+  frameMs += (performance.now() - t0 - frameMs) * .05;
   if (findFlash > 0 && --findFlash === 0) sayTool();
   if ((++gaugeTick % 12) === 0) updateGauge();
   requestAnimationFrame(frame);
@@ -1412,7 +1450,7 @@ function updateGauge(){
   const air = airN ? airSum/airN : AMBIENT;
   gaugeEl.innerHTML = `air ${Math.round(air)}°C<br><b>peak ${Math.round(peak)}°C</b>` +
                       `<br>found ${finds.size}/${ALL_FINDS.length}` +
-                      `<br>${frameMs.toFixed(1)}ms · ${(1000/frameMs).toFixed(0)}fps · ${W}×${H}`;
+                      `<br>${frameMs.toFixed(1)}ms work · ${W}×${H}`;
 }
 
 /* ============================================================ boot */
