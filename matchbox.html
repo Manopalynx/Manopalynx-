@@ -134,6 +134,17 @@
   .chip.act{flex:0 0 auto;padding:7px 10px 6px}
   .chip.danger[aria-pressed="true"]{background:var(--phos);border-color:var(--phos);color:#fff}
 
+  .tabs{gap:4px}
+  .tab{
+    flex:1 1 auto;min-width:0;min-height:26px;padding:4px 6px;
+    border:1.5px solid var(--card-dark);border-bottom-width:0;border-radius:3px 3px 0 0;
+    background:rgba(110,86,56,.18);cursor:pointer;
+    font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--card-dark);
+  }
+  .tab[aria-pressed="true"]{background:var(--ink);color:var(--pale);border-color:var(--ink)}
+  .tab:focus-visible{outline:2px solid var(--phos);outline-offset:1px}
+
   .bar{display:flex;align-items:center;gap:9px}
   .bar span{font-size:9.5px;letter-spacing:.14em;color:var(--card-dark);text-transform:uppercase;flex:none}
   .shapes{display:flex;gap:4px;flex:none}
@@ -174,8 +185,8 @@
   </div>
 
   <div class="tray">
+    <div class="row tabs" id="tabs"></div>
     <div class="row" id="mats"></div>
-    <div class="row" id="acts"></div>
     <!-- Shapes share the brush's line rather than taking one of their own. The tray
          was a fifth of the screen and the stage is the point of the page. -->
     <div class="bar">
@@ -236,7 +247,21 @@ M[STEAM]  = {n:'Steam',    ph:0, col:[178,182,186]};
 M[EMBER]  = {n:'Ember',    ph:2, col:[ 84, 40, 22], ig:340, fuel:340, out:1.6, cond:.14, cap:1.0, ash:ASH,   char:20, dens:.7};
 M[ASH]    = {n:'Ash',      ph:2, col:[ 96, 92, 88], ig:9e9, cond:.10, cap:.9,  dens:.45};
 
-const TRAY = [WOOD, PAPER, STRAW, OIL, WAX, POWDER, FUSE, COAL, GREEN, WATER, ICE, STONE, STEEL, SAND];
+/* The tray, in drawers.
+
+   Fourteen materials already wrapped to two rows on a phone, and the plan is many
+   more than fourteen. A flat tray does not scale: every material added costs a slice
+   of the stage, which is the part of the page worth having. Grouped, one row shows
+   one drawer and the tray stops growing no matter how much goes in it.
+
+   `TOOLS` is a drawer like any other. It holds the things that are not materials —
+   the eraser, the weather, the views — and later the presets and the saves. */
+const GROUPS = [
+  { name:'Fuel',  items:[WOOD, PAPER, STRAW, FUSE, COAL, GREEN, POWDER] },
+  { name:'Wet',   items:[WATER, OIL, ICE] },
+  { name:'Solid', items:[STONE, STEEL, SAND, WAX] },
+  { name:'Tools', items:'tools' },
+];
 
 /* ============================================================ grid
 
@@ -941,8 +966,9 @@ let shape = 'free';          // 'free' | 'line' | 'box'
 let anchor = null, ghost = null;   // the two ends of a shape being dragged out
 let heatView = false;        // false-colour the whole grid by temperature
 
+const tabsEl = document.getElementById('tabs');
 const matsEl = document.getElementById('mats');
-const actsEl = document.getElementById('acts');
+const actsEl = document.createElement('div');   // holds the tool chips between shows
 
 function chipFor(t){
   const b = document.createElement('button');
@@ -955,7 +981,32 @@ function chipFor(t){
   b.addEventListener('click', ()=>setTool(t));
   return b;
 }
-TRAY.forEach(t => matsEl.appendChild(chipFor(t)));
+let openDrawer = 0;
+
+function showDrawer(n){
+  openDrawer = n;
+  matsEl.textContent = '';
+  const g = GROUPS[n];
+  if (g.items === 'tools') while (actsEl.firstChild) matsEl.appendChild(actsEl.firstChild);
+  else g.items.forEach(t => matsEl.appendChild(chipFor(t)));
+  tabsEl.querySelectorAll('.tab').forEach((b,i) => b.setAttribute('aria-pressed', String(i===n)));
+}
+
+// Tools live in actsEl while their drawer is shut, so the buttons keep their identity
+// and their listeners rather than being rebuilt — a Clear that is halfway through
+// asking would forget it had asked.
+function stowTools(){
+  if (GROUPS[openDrawer].items !== 'tools') return;
+  while (matsEl.firstChild) actsEl.appendChild(matsEl.firstChild);
+}
+
+GROUPS.forEach((g,i) => {
+  const b = document.createElement('button');
+  b.className = 'tab'; b.type = 'button'; b.textContent = g.name;
+  b.setAttribute('aria-pressed', String(i===0));
+  b.addEventListener('click', ()=>{ stowTools(); showDrawer(i); });
+  tabsEl.appendChild(b);
+});
 
 function actionChip(labelName, fn, danger){
   const b = document.createElement('button');
@@ -1011,6 +1062,8 @@ const heatBtn = actionChip('Heat', ()=>{
   heatBtn.setAttribute('aria-pressed', String(heatView));
 });
 actsEl.appendChild(heatBtn);
+
+showDrawer(0);
 
 /* The readout, which is the only label on the page that can afford to change often.
    It carries the current tool until the pointer is over the dark, and the cell under

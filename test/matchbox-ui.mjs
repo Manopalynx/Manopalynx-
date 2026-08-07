@@ -58,6 +58,26 @@ async function check(name, body) {
 
 const stageBox = p => p.locator('.stage').boundingBox();
 
+// Materials live in drawers now, so reaching one means opening the right drawer
+// first — exactly as a thumb would. Hunting for the chip rather than hard-coding
+// which tab holds it means moving a material between drawers cannot break the suite
+// without also breaking the box.
+async function pick(p, name) {
+  const re = new RegExp('^' + name + '$', 'i');
+  const tabs = await p.locator('.tab').count();
+  for (let i = 0; i < tabs; i++) {
+    await p.locator('.tab').nth(i).click();
+    const chip = p.locator('#mats .chip', { hasText: re }).first();
+    if (await chip.count() && await chip.isVisible()) { await chip.click(); return; }
+  }
+  throw new Error(`no chip called ${name} in any drawer`);
+}
+
+// Shape modes are not in a drawer — they sit with the brush, because they change how
+// you draw rather than what you draw with.
+const pickShape = (p, name) =>
+  p.locator('#shapes .chip', { hasText: new RegExp('^' + name + '$', 'i') }).first().click();
+
 console.log('\n— the match —');
 
 await check('the match going out mid-drag does not start drawing wood', async p => {
@@ -100,7 +120,8 @@ console.log('\n— the tray —');
 await check('Clear asks before it wipes the scene', async p => {
   const before = await p.evaluate(() => __cells());
   if (before < 100) return 'the opening scene is empty, so there is nothing to wipe';
-  const clear = p.locator('.chip', { hasText: /^Clear/ }).first();
+  await p.locator('.tab', { hasText: /^tools$/i }).click();
+  const clear = p.locator('#mats .chip', { hasText: /^Clear/ }).first();
   await clear.click();
   const mid = await p.evaluate(() => __cells());
   if (mid !== before) return `one tap wiped ${before - mid} cells with no confirmation and no undo`;
@@ -112,7 +133,8 @@ await check('Clear asks before it wipes the scene', async p => {
 
 await check('a Clear left unconfirmed goes back to being harmless', async p => {
   const before = await p.evaluate(() => __cells());
-  const clear = p.locator('.chip', { hasText: /^Clear/ }).first();
+  await p.locator('.tab', { hasText: /^tools$/i }).click();
+  const clear = p.locator('#mats .chip', { hasText: /^Clear/ }).first();
   await clear.click();
   await p.waitForTimeout(3200);                  // longer than the window to confirm
   await clear.click();                           // this must ask again, not wipe
@@ -127,7 +149,7 @@ await check('picking a material does not put the hint back over the scene', asyn
   await p.waitForTimeout(700);                                  // the fade is .5s
   const gone = await p.locator('#hint').evaluate(el => getComputedStyle(el).opacity);
   if (gone !== '0') return `the hint did not fade when drawing started (opacity ${gone})`;
-  await p.locator('.chip', { hasText: 'STRAW' }).first().click();
+  await pick(p, 'straw');
   await p.waitForTimeout(120);
   const back = await p.locator('#hint').evaluate(el => getComputedStyle(el).opacity);
   if (back !== '0') return `changing material put the overlay back over the scene (opacity ${back})`;
@@ -137,7 +159,7 @@ await check('picking a material does not put the hint back over the scene', asyn
 await check('the readout says what the tool is before you have touched anything', async p => {
   const ro = (await p.locator('#ro').textContent()).trim();
   if (!ro || ro === '—') return `the readout reads "${ro}" on a device with no hover, until you drag`;
-  await p.locator('.chip', { hasText: 'COAL' }).first().click();
+  await pick(p, 'coal');
   const after = (await p.locator('#ro').textContent()).trim();
   if (!/coal/i.test(after)) return `after picking Coal the readout still reads "${after}"`;
   return null;
@@ -148,7 +170,6 @@ console.log('\n— shapes —');
 // Press, drag, release. Drawing a straight wall freehand with a thumb is miserable,
 // and a tank, a fuse and a floor are all straight edges.
 const wipe = p => p.evaluate(() => { type.fill(0); temp.fill(AMBIENT); fuel.fill(0); life.fill(0); vel.fill(0); });
-const pick = (p, name) => p.locator('.chip', { hasText: new RegExp('^' + name + '$', 'i') }).first().click();
 
 async function dragOn(p, ax, ay, bx, by, hold) {
   const s = await stageBox(p);
@@ -162,7 +183,7 @@ async function dragOn(p, ax, ay, bx, by, hold) {
 
 await check('a dragged box fills a rectangle, and only on release', async p => {
   await wipe(p);
-  await pick(p, 'stone'); await pick(p, 'box');
+  await pick(p, 'stone'); await pickShape(p, 'box');
   let during = null;
   await dragOn(p, 0.2, 0.3, 0.7, 0.6, async () => {
     during = await p.evaluate(() => __count(11));
@@ -186,7 +207,7 @@ await check('a dragged box fills a rectangle, and only on release', async p => {
 await check('a dragged line is one cell wide at brush 1', async p => {
   await wipe(p);
   await p.evaluate(() => { brush = 1; document.getElementById('brush').value = 1; });
-  await pick(p, 'fuse'); await pick(p, 'line');
+  await pick(p, 'fuse'); await pickShape(p, 'line');
   await dragOn(p, 0.2, 0.35, 0.8, 0.35);
   const r = await p.evaluate(() => {
     let n = 0, cols = new Set(), rows = new Set();
@@ -205,7 +226,7 @@ await check('shapes obey the same rules as the brush', async p => {
   // Stone first, then try to draw wood straight over it: the brush refuses to paint
   // into occupied cells and a box must refuse in exactly the same way, or a shape
   // becomes a way to overwrite a scene the brush cannot touch.
-  await pick(p, 'stone'); await pick(p, 'box');
+  await pick(p, 'stone'); await pickShape(p, 'box');
   await dragOn(p, 0.25, 0.35, 0.65, 0.55);
   const stone = await p.evaluate(() => __count(11));
   await pick(p, 'wood');
@@ -223,7 +244,8 @@ await check('the heat view shows the field without touching it', async p => {
     let sum = 0; for (let i=0;i<type.length;i++) sum += type[i]*7 + Math.round(temp[i]);
     return sum;
   });
-  await p.locator('.chip', { hasText: /^heat$/i }).first().click();
+  await p.locator('.tab', { hasText: /^tools$/i }).click();
+  await p.locator('#mats .chip', { hasText: /^heat$/i }).first().click();
   const on = await p.evaluate(() => heatView);
   if (!on) return 'the Heat chip did not turn the view on';
   const after = await p.evaluate(() => {
@@ -300,12 +322,26 @@ await check('a fire survives being resized', async p => {
 
 await check('the whole tray is reachable without scrolling', async p => {
   const box = await p.locator('.box').boundingBox();
-  for (const label of ['WOOD','SAND','ERASE','CLEAR','RAIN']) {
-    const el = p.locator('.chip', { hasText: new RegExp('^' + label, 'i') }).first();
-    const b = await el.boundingBox();
-    if (!b) return `${label} has no box at all`;
-    if (b.y + b.height > box.y + box.height + 1) return `${label} falls ${Math.round(b.y + b.height - box.y - box.height)}px below the box`;
-    if (b.height < 30) return `${label} is only ${Math.round(b.height)}px tall — under a fingertip`;
+  // Every drawer, every chip in it, plus the tabs themselves — a drawer whose
+  // contents fall off the bottom of the box is a drawer you cannot open.
+  const tabs = await p.locator('.tab').count();
+  if (tabs < 2) return `only ${tabs} drawers — the tray is not grouped`;
+  for (let i = 0; i < tabs; i++) {
+    const tab = p.locator('.tab').nth(i);
+    const tb = await tab.boundingBox();
+    if (tb.height < 24) return `a drawer tab is only ${Math.round(tb.height)}px tall`;
+    await tab.click();
+    const chips = p.locator('#mats .chip');
+    const n = await chips.count();
+    if (!n) return `drawer ${i} is empty`;
+    for (let j = 0; j < n; j++) {
+      const b = await chips.nth(j).boundingBox();
+      const label = (await chips.nth(j).textContent()).trim();
+      if (!b) return `${label} has no box at all`;
+      if (b.y + b.height > box.y + box.height + 1) return `${label} falls ${Math.round(b.y + b.height - box.y - box.height)}px below the box`;
+      if (b.height < 30) return `${label} is only ${Math.round(b.height)}px tall — under a fingertip`;
+      if (b.width < 28) return `${label} is only ${Math.round(b.width)}px wide — under a fingertip`;
+    }
   }
   const strip = await p.locator('#strip').boundingBox();
   if (strip.height < 40) return `the striking strip is only ${Math.round(strip.height)}px tall`;
