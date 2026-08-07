@@ -195,8 +195,8 @@
          was a fifth of the screen and the stage is the point of the page. -->
     <div class="bar">
       <div class="shapes" id="shapes"></div>
-      <input type="range" id="brush" min="1" max="12" value="4" aria-label="Brush size">
-      <span id="bval">4</span>
+      <input type="range" id="brush" min="1" max="9" value="3" aria-label="Brush size">
+      <span id="bval">3</span>
     </div>
   </div>
 
@@ -321,7 +321,10 @@ const CELL       = 3;     // pixels per cell. Three rather than four gives about
                           // 16.6ms frame, so there was room. Everything below that is
                           // expressed in cells stays in cells; the two things that
                           // are really about screen size — the brush and the opening
-                          // scene — are scaled so they look the same as before.
+                          // scene — were scaled to look the same as before, and the
+                          // brush has since been put back. A brush measured in cells
+                          // covers less of the screen here, which is the point: finer
+                          // detail in a box with more room in it.
 /* Air is a poor conductor — better than nothing and worse than wood — and it moves
    heat by rising, not by conducting. The table had it at .55, better than everything
    except steel, which is backwards and was quietly fatal: every burning cell dumped
@@ -344,7 +347,16 @@ const EDGE_LOSS  = .055;  // ...and the walls of the box, which are open to the 
                           // and climbing, so everything slowly turned amber.
 const BURN       = 6.0;   // energy per unit of a material's `out`, per tick alight
 const KEEP       = .5;    // ...of which this much stays put; the rest goes to neighbours
-const STEPS      = 2;     // simulation ticks per drawn frame — see frame()
+const STEPS      = 1;     // simulation ticks per drawn frame — see frame().
+                          //
+                          // Was 2 for exactly one build. The bigger grid made the
+                          // world take longer to cross, so I sped the world up to
+                          // compensate — and between that and holding the brush at
+                          // the same size on screen, the extra room cancelled itself
+                          // out. A box that behaves identically and is drawn in finer
+                          // pixels is not a bigger box. Fire covers the same cells
+                          // per second it always did, and there are simply more cells
+                          // between one side and the other.
 const RAIN_TICKS = 420;   // how long a press of Rain keeps raining. At 90 it was a
                           // second and a half, which a fire of any size shrugged off.
 const MATCH_HEAT = 780;   // what the match puts into whatever you touch with it
@@ -1129,7 +1141,7 @@ stripEl.addEventListener('keydown', e => {
 /* ============================================================ tools */
 
 let tool = WOOD;
-let brush = 4;
+let brush = 3;
 let shape = 'free';          // 'free' | 'line' | 'box'
 let anchor = null, ghost = null;   // the two ends of a shape being dragged out
 let heatView = false;        // false-colour the whole grid by temperature
