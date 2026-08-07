@@ -213,7 +213,8 @@
 const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
       COAL=9, GREEN=10, STONE=11, STEEL=12, WATER=13, ICE=14, SAND=15,
       FIRE=16, SMOKE=17, STEAM=18, EMBER=19, ASH=20,
-      LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24;
+      LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24,
+      THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30;
 
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
@@ -284,11 +285,60 @@ M[ASH]    = {n:'Ash',      ph:2, col:[ 96, 92, 88], ig:9e9, cond:.10, cap:.9,  d
 // generous pour on a thin layer of sand settled at 789°C against a melting point of
 // 830. It is the difference between lava and hot gravel.
 M[LAVA]   = {n:'Lava',     ph:1, col:[198, 76, 20], ig:9e9, cond:.22, cap:3.2, dens:2.4,
-             t0:1180, cool:760, sets:STONE, flow:.45, glow:1, meets:[[WATER, OBSIDIAN, STEAM]]};
-M[GLASS]  = {n:'Glass',    ph:3, col:[172,204,206], ig:9e9, cond:.18, cap:1.2, dens:2.5};
+             t0:1180, cool:760, sets:STONE, flow:.45, glow:1,
+             meets:[{with:WATER, become:OBSIDIAN, they:STEAM}]};
+M[GLASS]  = {n:'Glass',    ph:3, col:[172,204,206], ig:9e9, cond:.18, cap:1.2, dens:2.5, proof:1};
 M[MOLTEN] = {n:'Molten',   ph:1, col:[240,158, 62], ig:9e9, cond:.60, cap:1.5, dens:7.0,
-             t0:1500, cool:1380, sets:STEEL, flow:.6, glow:1, meets:[[WATER, STEEL, STEAM]]};
-M[OBSIDIAN]={n:'Obsidian', ph:3, col:[ 40, 33, 46], ig:9e9, cond:.19, cap:2.1, dens:2.6};
+             // cool 1120, not 1380. Steel melts at 1400, so molten steel that set again at 1380
+// had a liquid window twenty degrees wide: a thermite cut melted straight through a
+// plate and the metal froze back into the hole before it could fall out of it, so the
+// plate ended up thicker than it started. Molten metal has to have time to run.
+             t0:1500, cool:1120, sets:STEEL, flow:.6, glow:1,
+             meets:[{with:WATER, become:STEEL, they:STEAM}]};
+M[OBSIDIAN]={n:'Obsidian', ph:3, col:[ 40, 33, 46], ig:9e9, cond:.19, cap:2.1, dens:2.6, proof:1};
+
+/* Each of these exists because nothing else in the box did the thing it does.
+
+   Thermite is the only thing that gets near steel. Everything that burns tops out
+   around 1200°C and steel melts at 1400, so melting steel needed molten steel, which
+   is no way to get any. It will not take from a match either — 950 against the
+   match's 780 — so it wants magnesium, which is exactly how it is done in the world.
+   What it leaves behind is molten iron.
+
+   Magnesium is the one that punishes the reflex. Everything else in the box teaches
+   that water puts fires out; this one gets hotter. It lights from a match, which is
+   what makes it the way in to thermite.
+
+   Rubber carries fire downward, which nothing did — burning things do not move, so
+   fire only ever went up and sideways. It softens into a liquid that is already
+   alight and drips, setting light to whatever is underneath.
+
+   Acid destroys without heat, the only verb in the box that is not about fire. It
+   wears out as it works, and glass and obsidian shrug it off, so a tank to keep it
+   in is worth building.
+
+   Gas is the one whose danger is that you forgot about it. It rises, gathers under
+   whatever is above it, and goes off all at once when something finally reaches it. */
+// fuel 140, not the 70 it started at. Steel conducts better than anything else in the
+// table, so a flash of heat on a plate is spread across the whole plate before any
+// one cell can melt: measured, a 70-fuel charge took the steel to 1399°C against a
+// melting point of 1400 and then went out. Thermite is a sustained ferocious burn
+// rather than a bang, and the length of it is the point.
+M[THERMITE]={n:'Thermite', ph:2, col:[122,116,112], ig:950, fuel:140, out:15.0, cond:.18, cap:1.0,
+             dens:2.2, char:24, peak:2450, ash:MOLTEN, rad:[.08,.08,.10,.74]};
+M[MAGNES]  ={n:'Magnesium',ph:3, col:[196,198,204], ig:430, fuel:150, out:9.0,  cond:.55, cap:1.0,
+             dens:1.7, char:18, peak:2100, ash:ASH,
+             // Burning, and only burning: a cold block of it sits in water quite happily.
+             meets:[{with:WATER, become:MAGNES, they:STEAM, onlyAbove:520, addHeat:520,
+                     tale:'Magnesium + Water → a much worse fire'}]};
+M[RUBBER]  ={n:'Rubber',   ph:3, col:[ 44, 42, 46], ig:340, fuel:220, out:3.0,  cond:.09, cap:1.3,
+             dens:.95, char:24, smoky:3.0, ash:ASH, melt:200, into:MRUBBER, lat:90};
+M[MRUBBER] ={n:'Rubber',   ph:1, col:[ 62, 50, 44], ig:270, fuel:200, out:3.4,  cond:.10, cap:1.2,
+             dens:1.05, char:6, smoky:3.4, ash:E, flow:.5};
+M[ACID]    ={n:'Acid',     ph:1, col:[132,196, 56], ig:9e9, cond:.24, cap:2.4,
+             dens:1.2, fuel:26, eats:1, boil:180, into:SMOKE, t0:18};
+M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
+             span:900, peak:1500};
 
 /* The tray, in drawers.
 
@@ -300,10 +350,10 @@ M[OBSIDIAN]={n:'Obsidian', ph:3, col:[ 40, 33, 46], ig:9e9, cond:.19, cap:2.1, d
    `TOOLS` is a drawer like any other. It holds the things that are not materials —
    the eraser, the weather, the views — and later the presets and the saves. */
 const GROUPS = [
-  { name:'Fuel',  items:[WOOD, PAPER, STRAW, FUSE, COAL, GREEN, POWDER] },
-  { name:'Wet',   items:[WATER, OIL, ICE] },
+  { name:'Fuel',  items:[WOOD, PAPER, STRAW, FUSE, COAL, GREEN, POWDER, RUBBER] },
+  { name:'Wet',   items:[WATER, OIL, ICE, ACID] },
   { name:'Solid', items:[STONE, STEEL, SAND, WAX, GLASS, OBSIDIAN] },
-  { name:'Hot',   items:[LAVA, MOLTEN, EMBER] },
+  { name:'Hot',   items:[LAVA, MOLTEN, EMBER, THERMITE, MAGNES, GAS] },
   { name:'Tools', items:'tools' },
 ];
 
@@ -376,9 +426,11 @@ const FLAME_PEAK = 1200;  // as hot as combustion alone can drive a cell, unless
                           // took the heat over a wick down with it, and at 1150 the
                           // candle fell from ~1800 ticks to 1104. The leak had been
                           // propping it up.
-const MAX_T      = 1650;  // nothing in the box gets hotter than this. It has to clear
+const MAX_T      = 2600;  // nothing in the box gets hotter than this. It has to clear
                           // steel's melting point or steel can never melt, which is the
-                          // same defect as green wood that could never be lit.
+                          // same defect as green wood that could never be lit. 2600
+                          // now, because thermite burns at 2450 and a ceiling below
+                          // that would quietly make it ordinary.
 const CHAR       = 30;    // charring a cell must do before it catches, if it has no
                           // `char` of its own. See "catching" in react().
 const WICK_DRAW  = .34;   // fuel a burning wick takes from the liquid it stands in
@@ -736,7 +788,14 @@ const NX = [-1, 1, 0, 0], NY = [0, 0, -1, 1];        // left, right, up, down
    fire to the thing beside them. */
 const RAD = [.21, .21, .42, .16];                    // left, right, up, down
 
-function radiate(x, y, q){
+/* Some things throw their heat somewhere in particular. A thermite charge is built to
+   send it down, and without that it behaves like a bonfire: measured, a charge on a
+   steel plate melted the top layer, the melt froze straight back into the hole it had
+   made, and the plate came out thicker than it went in — at every plate thickness and
+   charge size tried. Steel spreads heat better than anything else in the table, so a
+   cut has to be aimed. */
+function radiate(x, y, q, rad){
+  const w = rad || RAD;
   for (let d=0; d<4; d++){
     const xx = x+NX[d], yy = y+NY[d];
     if (!inb(xx,yy)) continue;
@@ -745,7 +804,7 @@ function radiate(x, y, q){
     // several sides collects from all of them, and unclamped that put the hottest
     // cell of an ordinary seeded scene at 2089°C — well past the top of the colour
     // ramp, which stops at 1150, so it was invisible as well as unbounded.
-    const t = temp[j] + q * RAD[d] / capOf(type[j]);
+    const t = temp[j] + q * w[d] / capOf(type[j]);
     temp[j] = t > MAX_T ? MAX_T : t;
   }
 }
@@ -806,8 +865,15 @@ function sip(x, y){
   return false;
 }
 
-/* A contact reaction, read off the material's own `meets`: each row is
-   [what it has to touch, what this becomes, what that becomes].
+/* A contact reaction, read off the material's own `meets`. Each row says what it has
+   to be touching, what this cell becomes and what that one becomes:
+
+     { with:WATER, become:OBSIDIAN, they:STEAM }
+
+   and optionally `onlyAbove`, so a reaction can need the cell to be hot already, and
+   `addHeat`, for the reactions that release energy rather than spend it. Object rows
+   rather than a three-slot array, because the moment magnesium needed both of those
+   the array stopped saying what it meant.
 
    Returns whether anything happened, so the caller can stop — a cell that has just
    turned into obsidian must not then be asked whether it is cool enough to set. */
@@ -818,19 +884,23 @@ function meet(x, y, m){
     const j = idx(xx,yy), tj = type[j];
     for (let r=0; r<m.meets.length; r++){
       const row = m.meets[r];
-      if (tj !== row[0]) continue;
+      if (tj !== row.with) continue;
       const heat = temp[idx(x,y)], was = type[idx(x,y)];
-      become(x, y, row[1]);
-      if (row[2] !== undefined){
-        become(xx, yy, row[2]);
+      if (row.onlyAbove !== undefined && heat < row.onlyAbove) continue;
+      become(x, y, row.become);
+      if (row.they !== undefined){
+        become(xx, yy, row.they);
         // The steam is steam because the heat went into making it, so it leaves at
         // boiling rather than carrying the lava's temperature away with it.
-        temp[j] = row[2] === STEAM ? 100 : Math.min(heat, temp[j]);
+        temp[j] = row.they === STEAM ? 100 : Math.min(heat, temp[j]);
       }
-      // What is left is hot, but it is not lava any more. Halfway between what it
-      // was and the thing that quenched it.
-      temp[idx(x,y)] = Math.max(AMBIENT, heat * .5);
-      found(was + ':meets' + r, `${m.n} + ${M[row[0]].n} → ${M[row[1]].n}`);
+      // What is left is hot but is not lava any more — halfway between what it was
+      // and the thing that quenched it. Unless the reaction gives off heat of its
+      // own, in which case it is hotter than either.
+      temp[idx(x,y)] = row.addHeat !== undefined
+        ? Math.min(MAX_T, heat + row.addHeat)
+        : Math.max(AMBIENT, heat * .5);
+      found(was + ':meets' + r, row.tale || `${m.n} + ${M[row.with].n} → ${M[row.become].n}`);
       return true;
     }
   }
@@ -875,7 +945,19 @@ function react(){
         // went out with wax still in reach.
         if (t===FIRE) radiate(x, y, FLAME_RAD);
 
-        const span = t===FIRE ? 24 : (t===STEAM ? 70 : 110);
+        // A gas does not smoulder — it goes off. The whole cell converts at once and
+        // throws its heat at everything around it, which is what carries the front
+        // through the rest of the cloud. Before this, gases could not burn at all:
+        // the phase held only fire, smoke and steam, none of which have any fuel.
+        if (m.out !== undefined && m.ig !== undefined && temp[i] >= m.ig){
+          radiate(x, y, m.out * BURN);
+          become(x, y, FIRE);
+          temp[i] = Math.max(temp[i], FIRE_HEAT);
+          found(t+':burst', `${m.n} goes off`);
+          continue;
+        }
+
+        const span = m.span !== undefined ? m.span : (t===FIRE ? 24 : (t===STEAM ? 70 : 110));
         if (life[i] > span * (0.6 + Math.random()*0.8)) become(x,y,E);
         continue;
       }
@@ -894,6 +976,26 @@ function react(){
         life[i] += soak;
         if (life[i] >= (m.lat !== undefined ? m.lat : LATENT_MELT)){ become(x,y,m.into); found(t+':melt', `${m.n} → ${M[m.into].n}`); }
         continue;
+      }
+
+      // ---- acid, which is the only thing in the box that destroys without heat.
+      //      It wears out as it works, so a splash has a budget: the alternative is
+      //      one cell quietly eating an entire wall and still being there afterwards.
+      //      Glass and obsidian are proof against it, which makes a tank worth
+      //      building rather than a decoration.
+      if (m.eats && fuel[i] > 0 && Math.random() < .18){
+        for (let d=0; d<4; d++){
+          const xx = x+NX[d], yy = y+NY[d];
+          if (!inb(xx,yy)) continue;
+          const j = idx(xx,yy), tj = type[j], mj = M[tj];
+          if (tj===E || tj===t || mj.ph===0 || mj.ph===1 || mj.proof) continue;
+          become(xx, yy, E);
+          found(t+':eats', `${m.n} eats through ${mj.n}`);
+          fuel[i] -= m.eats;
+          if (fuel[i] <= 0) become(x, y, E);
+          break;
+        }
+        if (type[i] !== t) continue;      // spent itself on that last bite
       }
 
       // ---- contact. Some things react to what they are touching rather than to a
@@ -969,7 +1071,7 @@ function react(){
         else fuel[i] -= 1;
         const q = m.out * BURN;
         temp[i] += q * KEEP / cap;
-        radiate(x, y, q * (1 - KEEP));
+        radiate(x, y, q * (1 - KEEP), m.rad);
         const flameCap = m.peak !== undefined ? m.peak : FLAME_PEAK;
         if (temp[i] > flameCap) temp[i] = flameCap;
 
@@ -1483,6 +1585,8 @@ const ALL_FINDS = (() => {
     if (m.cool !== undefined && m.sets  !== undefined) list.push(t+':cool');
     if (m.ash  !== undefined && m.ash   !== E)         list.push(t+':ash');
     if (m.meets) m.meets.forEach((_,r) => list.push(t+':meets'+r));
+    if (m.eats)  list.push(t+':eats');
+    if (m.ph===0 && m.out !== undefined) list.push(t+':burst');
   }
   return list;
 })();

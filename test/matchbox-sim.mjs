@@ -446,6 +446,164 @@ await check(browser, 'every melting point in the table is reachable by something
   return null;
 });
 
+console.log('\n— the five that were added for a verb nothing else had —');
+
+// Each of these exists because of a gap. The check is that the gap is actually
+// closed: a material that reads well and cannot do its one job is the defect this
+// file has had more than any other.
+
+await check(browser, 'a match will not light thermite, and magnesium will', () => {
+  const run = (withRibbon) => {
+    __wipe(); const f = __floor();
+    __slab(40, f-6, 59, f-1, THERMITE);
+    if (withRibbon) __slab(44, f-8, 51, f-7, MAGNES);
+    __hold(47, withRibbon ? f-7 : f-3, 3, 300);
+    for (let k=0;k<1500;k++) __step(1);
+    return { thermite: __count(THERMITE), molten: __count(MOLTEN) };
+  };
+  const alone = run(false);
+  if (alone.thermite < 100) return `a match on its own consumed ${120-alone.thermite} cells of thermite — it is meant to need more than 780°C`;
+  const lit = run(true);
+  if (lit.thermite > 60) return `with a magnesium ribbon on top, ${lit.thermite} of 120 cells of thermite were left`;
+  return null;
+});
+
+// Counting steel cells is no good here: what thermite leaves behind is molten iron,
+// which cools and sets into steel, so a successful burn can end with more steel in
+// the box than it started with. Measured that way it scored minus 71.
+//
+// The claim is that thermite is the only thing that can melt steel at all, which is
+// the entire reason it exists — everything else in the box tops out around 1200°C
+// and steel melts at 1400, so melting steel needed molten steel, which is no way to
+// get any. That is what this checks, against a match as the control.
+//
+// It does NOT cut a clean hole through a plate, and that is worth writing down. A
+// liquid cannot displace a solid, so the melt sits in the hole it has made and
+// freezes back into it: measured, a charge takes the top two layers of a seven-deep
+// plate to molten and they set again, leaving the plate slightly thicker. Aiming the
+// charge's heat downward took it from one layer to two and no further. Draining the
+// melt would need a rule that lets molten metal sink through the solid form of
+// itself, which is a real change and not a number.
+await check(browser, 'thermite melts steel, and nothing else can', () => {
+  const run = (withThermite) => {
+    __wipe(); const f = __floor();
+    __slab(20, f-1, 79, f-1, STONE);
+    __slab(40, f-8, 59, f-2, STEEL);
+    let peakSteel = 0, sawMolten = 0;
+    if (withThermite){
+      __slab(44, f-14, 55, f-9, THERMITE);
+      __slab(46, f-16, 53, f-15, MAGNES);
+      __hold(50, f-15, 3, 300);
+    } else {
+      __hold(50, f-9, 3, 300);            // a match held on the plate instead
+    }
+    for (let k=0;k<1200;k++){
+      __step(1);
+      for (let i=0;i<type.length;i++) if (type[i]===STEEL && temp[i] > peakSteel) peakSteel = temp[i];
+      sawMolten = Math.max(sawMolten, __count(MOLTEN));
+    }
+    return { peak: Math.round(peakSteel), molten: sawMolten };
+  };
+  const match = run(false);
+  if (match.peak >= M[STEEL].melt) return `a match alone took steel to ${match.peak}°C, past its melting point of ${M[STEEL].melt} — thermite is not needed for this`;
+
+  const therm = run(true);
+  if (therm.peak < M[STEEL].melt) return `thermite took the steel plate to ${therm.peak}°C against a melting point of ${M[STEEL].melt}`;
+  if (therm.molten < 12) return `the plate reached ${therm.peak}°C but only ${therm.molten} cells were ever molten at once`;
+  return null;
+});
+
+// The trap, and the whole point of it: everything else in the box teaches that water
+// puts fires out.
+await check(browser, 'water makes burning magnesium worse, not better', () => {
+  const run = (douse) => {
+    __wipe(); const f = __floor();
+    __slab(20, f-1, 79, f-1, STONE);
+    __slab(40, f-7, 59, f-2, MAGNES);
+    __hold(50, f-4, 3, 250);
+    if (douse) __slab(40, f-12, 59, f-9, WATER);
+    let peak = 0;
+    for (let k=0;k<900;k++){ __step(1); if (__maxT() > peak) peak = __maxT(); }
+    return { peak: Math.round(peak), water: __count(WATER) };
+  };
+  const dry = run(false), wet = run(true);
+  // Temperature is the claim. Counting cells consumed is not: measured, the wet run
+  // burns a shade slower at the start because the water displaces some of it before
+  // it catches, and both runs get through the lot either way. What water changes is
+  // how hot it gets — 2213°C dry against 2600 wet, which is the ceiling.
+  if (wet.peak <= dry.peak + 150) return `peak with water ${wet.peak}°C against ${dry.peak}°C dry — the water did nothing`;
+  if (wet.water > 0) return `${wet.water} cells of water survived being poured on burning magnesium`;
+  return null;
+});
+
+// Nothing else carries fire downward: burning cells do not move, so fire has only
+// ever gone up and sideways.
+await check(browser, 'burning rubber drips and lights what is underneath', () => {
+  __wipe(); const f = __floor();
+  __slab(20, f-1, 79, f-1, STONE);
+  __slab(44, f-30, 55, f-25, RUBBER);
+  __slab(40, f-4, 59, f-2, STRAW);      // well below, with a gap between
+  const straw0 = __count(STRAW);
+  __hold(50, f-28, 3, 400);
+  for (let k=0;k<3000;k++) __step(1);
+  const gone = straw0 - __count(STRAW);
+  if (gone < 8) return `the rubber burned above it and the straw lost ${gone} of ${straw0} cells — nothing dripped`;
+  return null;
+});
+
+await check(browser, 'acid eats through solids, wears out, and glass holds it', () => {
+  __wipe(); const f = __floor();
+  __slab(20, f-1, 79, f-1, STONE);
+  __slab(30, f-10, 49, f-2, STEEL);
+  const steel0 = __count(STEEL);
+  __slab(30, f-16, 49, f-12, ACID);
+  for (let k=0;k<2500;k++) __step(1);
+  const eaten = steel0 - __count(STEEL);
+  if (eaten < 10) return `acid sat on a steel plate and removed ${eaten} of ${steel0} cells`;
+
+  // Wearing out is a budget, not a timer: a cell spends itself only on what it
+  // actually eats, so a splash beside nothing stays a splash. Give a little acid far
+  // more than it can manage and it should run out and vanish.
+  __wipe(); const f3 = __floor();
+  __slab(0, f3-1, W-1, f3-1, STONE);
+  __slab(20, f3-40, 79, f3-2, COAL);
+  __slab(46, f3-44, 53, f3-42, ACID);
+  const acid0 = __count(ACID);
+  for (let k=0;k<4000;k++) __step(1);
+  if (__count(ACID) > acid0 * 0.15) return `${__count(ACID)} of ${acid0} cells of acid survived eating into a solid block — it never runs out`;
+
+  // ...and a tank you can actually keep it in
+  __wipe(); const f2 = __floor();
+  __slab(30, f2-1, 49, f2-1, GLASS);
+  for (let y=f2-12; y<f2-1; y++){ put(30,y,GLASS); put(49,y,GLASS); }
+  const glass0 = __count(GLASS);
+  __slab(32, f2-10, 47, f2-3, ACID);
+  for (let k=0;k<2500;k++) __step(1);
+  if (__count(GLASS) < glass0) return `acid ate ${glass0 - __count(GLASS)} cells of the glass holding it`;
+  return null;
+});
+
+await check(browser, 'gas gathers overhead and goes off all at once', () => {
+  __wipe(); const f = __floor();
+  __slab(0, f, W-1, H-1, STONE);
+  for (let y=f-40; y<f; y++){ for (let d=0;d<2;d++){ put(20+d,y,STONE); put(78+d,y,STONE); } }
+  __slab(0, f-41, W-1, f-40, STONE);                 // a lid, so it pools
+  __slab(30, f-6, 69, f-3, GAS);
+  for (let k=0;k<500;k++) __step(1);                 // let it rise and gather
+  const pooled = __count(GAS);
+  if (pooled < 80) return `only ${pooled} cells of gas survived the rise — it cannot gather`;
+  let high = 0;
+  for (let i=0;i<type.length;i++) if (type[i]===GAS && (i/W|0) < f-20) high++;
+  if (high < pooled * 0.5) return `${high} of ${pooled} cells reached the top — gas is meant to rise`;
+
+  __hold(50, f-24, 3, 12);                           // a spark, briefly
+  let peakFire = 0;
+  for (let k=0;k<200;k++){ __step(1); peakFire = Math.max(peakFire, __count(FIRE)); }
+  if (peakFire < 40) return `lighting a pool of ${pooled} cells of gas made ${peakFire} flames — that is a candle, not a bang`;
+  if (__count(GAS) > pooled * 0.4) return `${__count(GAS)} of ${pooled} cells of gas were left unburned`;
+  return null;
+});
+
 console.log('\n— falling —');
 
 // Was: a 98-cell drop took exactly 98 ticks for sand in air, sand in water, coal in
