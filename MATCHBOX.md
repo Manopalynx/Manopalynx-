@@ -16,14 +16,28 @@ the machine has and everything else works.
 ### On a phone
 
 **https://manopalynx.github.io/Manopalynx-/matchbox.html** — open it, then Share → Add
-to Home Screen if you want it as an icon.
+to Home Screen. It opens in its own window with its own icon.
+
+> **iOS caches the icon and the display mode at the moment the bookmark is made.** An
+> icon added before that was set up keeps the old behaviour forever, however many
+> times the page is updated. Delete it from the Home Screen and add it again.
+
+Three files travel together: the page, `matchbox-icon-180.png` and
+`matchbox.webmanifest`. Both companions are optional — the page runs on its own from
+anywhere, and without them it loses the Home Screen appearance and nothing else. They
+exist because **iOS will not take a Home Screen icon from an SVG, and will not read
+one out of a `data:` URI.** The favicon is both, so iOS ignored it and drew its own
+fallback tile: a white M on a dark square. And without
+`apple-mobile-web-app-capable`, a Home Screen bookmark opens inside Safari with the
+chrome still on it.
 
 GitHub Pages serves `/docs` from `claude/grandiose-monopoly-game-y93uw8`, so that is
-the only place in this repository a file can be given a URL. The published copy is
-exactly that — a copy. The file is developed at the root of
-`claude/matchbox-improvement-z6pfx3`, and **`test/published.mjs` asserts the two are
-byte-identical**, because a copy nothing compares is a copy that goes stale. It prints
-the three commands to republish when it fails.
+the only place in this repository a file can be given a URL. What is published there
+is a copy; the files are developed at the root of `claude/matchbox-improvement-z6pfx3`,
+and **`test/published.mjs` asserts all three are byte-identical**, because a copy
+nothing compares is a copy that goes stale — and a page published without its icon
+lands right back on the fallback tile. It prints the commands to republish when it
+fails.
 
 There is no service worker of its own. The game's is network-first, so the page is
 fetched fresh whenever there is a signal — no stale-build trap, and nothing to bump.
@@ -150,7 +164,7 @@ the glass.
 npm i playwright
 node test/matchbox-sim.mjs     # 18 checks — the simulation
 node test/matchbox-ui.mjs      # 10 checks — the hand
-node test/published.mjs        #  1 check  — the copy with the URL still matches
+node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
 
 Chromium only. Neither needs a server; the page is loaded over `file://`.
