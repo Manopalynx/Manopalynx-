@@ -44,9 +44,14 @@ fetched fresh whenever there is a signal — no stale-build trap, and nothing to
 
 ## What is in the box
 
-Fourteen materials in the tray, and five more the simulation makes for itself: fire,
-smoke, steam, embers and ash. Every material is one row of the `M` table and nothing
-else in the file knows any of them by name.
+Twenty materials in the tray and six more the simulation makes for itself: fire,
+smoke, steam, embers, ash and molten wax. Every material is one row of the `M` table
+and nothing else in the file knows any of them by name.
+
+The tray is in drawers — **Fuel, Wet, Solid, Hot, Tools** — one row at a time, so the
+tray has a fixed height however much goes into it. A flat tray does not scale: every
+material added used to cost a slice of the stage, which is the part of the page worth
+having.
 
 A material is described by a handful of numbers. The ones that matter:
 
@@ -58,6 +63,11 @@ A material is described by a handful of numbers. The ones that matter:
 | `out` | how fiercely |
 | `cond` `cap` | how it carries heat, and how much it takes to warm it |
 | `melt` `boil` | what it turns into, and at what |
+| `cool` `sets` | ...and what a hot liquid turns back into as it loses its heat |
+| `meets` | contact rather than temperature: this touching that makes those |
+| `dens` | what sinks through what |
+| `tough` | how many bites acid needs to get through it |
+| `peak` | as hot as burning alone can drive it, where that differs |
 
 `ig` and `char` together are what make the tray more than fourteen colours. The match
 is at 780°C, which is hotter than every ignition point in the table, so on temperature
@@ -70,14 +80,15 @@ Measured, on a bar of each with the match held at one end:
 |---|---|
 | Powder, straw, paper, oil | a touch |
 | Fuse, embers | a moment |
-| Wood | a moment — see the honest note below |
+| Wood, magnesium, rubber | a moment — see the honest note below |
 | Coal, green wood | the match held on it for seconds |
+| Thermite | not from a match at all — 950°C against the match's 780. Use magnesium |
 | Wax | nothing. It needs a wick |
-| Stone, steel, sand, ash | nothing at all |
+| Stone, steel, sand, ash, glass, obsidian, acid | nothing at all |
 
 ## Things worth building
 
-All four of these are checked by `test/matchbox-sim.mjs`, and all four were measured
+Every one of these is checked by `test/matchbox-sim.mjs`. The first four were measured
 failing before the rework — see *What changed* below.
 
 - **A fuse to a charge.** Fuse along the floor, a block of powder at the end of it,
@@ -93,6 +104,18 @@ failing before the rework — see *What changed* below.
 - **Putting a fire out.** Water on flames kills them on contact. It is boiling that
   does the real work: vaporising takes its energy out of whatever the water is
   touching, which is the fire. Rain does the same thing from above, for longer.
+- **Glass, from sand and lava.** Drop sand into a pool of lava. A thin pour of lava
+  over sand on a cold floor will not do it — the floor drinks the heat.
+- **Obsidian.** Pour water on lava. Left alone it crusts over into stone instead.
+- **Melting steel.** Thermite, lit with a magnesium ribbon, because nothing else in
+  the box gets near 1400°C. It will not cut a clean hole through a plate — see the
+  honest notes.
+- **A gas explosion.** Fill a sealed space with gas, wait for it to gather under the
+  lid, and then reach in with a match.
+- **Getting water wrong.** Set magnesium alight and pour water on it. Measured: 2213°C
+  dry, 2600°C wet.
+- **An acid tank.** Acid eats through most things and wears out doing it — a dozen
+  cells per drop. Glass and obsidian are the two it cannot touch.
 
 ## How the heat works
 
@@ -216,11 +239,24 @@ The pool recedes below what the wick can reach, the wick goes dry and burns away
 **Ice never falls.** It is a static solid, like stone and wood, so a block of it hangs
 where you put it.
 
+**Thermite melts steel but does not cut through it.** A liquid cannot displace a solid,
+so the melt sits in the hole it has made and freezes back into it — measured, a charge
+takes the top two layers of a seven-deep plate to molten and they set again, leaving
+the plate slightly thicker than it started. Aiming the charge's heat downward took it
+from one layer to two and no further. Draining the melt would need a rule letting
+molten metal sink through the solid form of itself, which is a real change rather than
+a number.
+
 ## Performance
 
-1.6 ms a frame including the draw, on a 107×156 grid of 16,692 cells in a busy scene,
-on a desktop CPU. A phone is several times slower and this is a tenth of a frame at
-60Hz, so there is a lot of room. The suite asserts under 4 ms.
+2.5 ms a frame including the draw, on a 130×203 grid of 26,390 cells in a busy scene.
+The suite asserts under 8 ms, which is half a frame at 60Hz.
+
+**A phone is not several times slower.** Every grid estimate here assumed it was, and
+the assumption was load-bearing and wrong: the gauge on an iPhone reported 3.0-4.5ms
+of work where this machine managed 4.4 on a comparable scene. That is what the frame
+timer in the corner is for — the number that decides how big the grid can be has to
+come from the device holding it.
 
 ## If you change something
 
