@@ -16,10 +16,15 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
-const ROOT      = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const LOCAL     = resolve(ROOT, 'matchbox.html');
-const BRANCH    = 'claude/grandiose-monopoly-game-y93uw8';
-const PUBLISHED = 'docs/matchbox.html';
+const ROOT   = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const BRANCH = 'claude/grandiose-monopoly-game-y93uw8';
+
+// The page, and the two companions that only matter once it is on a Home Screen: iOS
+// will not take an icon from an SVG or a data: URI, so the icon has to be a real file
+// sitting next to the page. All three have to travel together — a page published
+// without its icon gets a fallback tile with a letter on it, which is what started
+// this.
+const FILES = ['matchbox.html', 'matchbox-icon-180.png', 'matchbox.webmanifest'];
 
 const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'buffer', stdio: ['ignore','pipe','pipe'] });
 
@@ -36,30 +41,38 @@ try {
   console.log(`      · could not reach the remote; comparing against whatever ${ref} is already on disk`);
 }
 
-let published;
-try {
-  published = git('show', `${ref}:${PUBLISHED}`);
-} catch {
-  console.log(`FAIL  the published copy is missing`);
-  console.log(`        · ${ref}:${PUBLISHED} could not be read. If Pages has moved, this check needs its branch updating.`);
-  process.exit(1);
+let passed = 0;
+
+for (const name of FILES) {
+  const local = readFileSync(resolve(ROOT, name));
+  let published;
+  try {
+    published = git('show', `${ref}:docs/${name}`);
+  } catch {
+    failed++;
+    console.log(`FAIL  ${name} is not published at all`);
+    console.log(`        · ${ref}:docs/${name} could not be read`);
+    continue;
+  }
+  if (Buffer.compare(local, published) === 0) {
+    passed++;
+    console.log(` ok   docs/${name} matches this branch's copy`);
+  } else {
+    failed++;
+    console.log(`FAIL  docs/${name} has drifted from the one being worked on`);
+    console.log(`        · here it is ${local.length} bytes, published it is ${published.length} bytes`);
+  }
 }
 
-const local = readFileSync(LOCAL);
-
-if (Buffer.compare(local, published) === 0) {
-  console.log(` ok   docs/matchbox.html on ${BRANCH} is the file in this branch's root`);
-} else {
-  failed++;
-  console.log(`FAIL  the published copy has drifted from the one being worked on`);
-  console.log(`        · root matchbox.html is ${local.length} bytes, ${PUBLISHED} is ${published.length} bytes`);
-  console.log(`        · the URL people open serves the second one:`);
-  console.log(`          https://manopalynx.github.io/Manopalynx-/matchbox.html`);
-  console.log(`        · to republish:`);
-  console.log(`            git worktree add /tmp/pub ${BRANCH}`);
-  console.log(`            cp matchbox.html /tmp/pub/${PUBLISHED}`);
-  console.log(`            cd /tmp/pub && git commit -am 'Republish matchbox.html' && git push`);
+if (failed) {
+  console.log(`\n      The URL people open serves the published copies:`);
+  console.log(`        https://manopalynx.github.io/Manopalynx-/matchbox.html`);
+  console.log(`      To republish:`);
+  console.log(`        git worktree add /tmp/pub ${BRANCH}`);
+  FILES.forEach(f => console.log(`        cp ${f} /tmp/pub/docs/${f}`));
+  console.log(`        cd /tmp/pub && git commit -am 'Republish matchbox' && git push`);
+  console.log(`        git worktree remove /tmp/pub`);
 }
 
-console.log(`\n${failed ? 0 : 1} passed, ${failed} failed\n`);
+console.log(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
