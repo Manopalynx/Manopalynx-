@@ -182,13 +182,13 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
 M[E]      = {n:'—',        ph:3, col:[0,0,0]};
-M[WOOD]   = {n:'Wood',     ph:3, col:[122, 82, 46], ig:300, fuel:520, out:2.0, cond:.10, cap:1.0, ash:EMBER, char:30};
-M[PAPER]  = {n:'Paper',    ph:3, col:[214,201,172], ig:210, fuel:70,  out:2.6, cond:.16, cap:.6,  ash:ASH,   char:3};
-M[STRAW]  = {n:'Straw',    ph:2, col:[186,150, 72], ig:170, fuel:55,  out:2.4, cond:.14, cap:.55, ash:ASH,   char:3};
+M[WOOD]   = {n:'Wood',     ph:3, col:[122, 82, 46], ig:300, fuel:520, out:2.0, cond:.10, cap:1.0, ash:EMBER, char:30, dens:.7};
+M[PAPER]  = {n:'Paper',    ph:3, col:[214,201,172], ig:210, fuel:70,  out:2.6, cond:.16, cap:.6,  ash:ASH,   char:3,  dens:.8};
+M[STRAW]  = {n:'Straw',    ph:2, col:[186,150, 72], ig:170, fuel:55,  out:2.4, cond:.14, cap:.55, ash:ASH,   char:3,  dens:.35};
 // Lightened from [46,38,30], which against a void of [11,10,9] made a one-cell-deep
 // trail all but invisible — and a trail is the shape oil is usually in.
-M[OIL]    = {n:'Oil',      ph:1, col:[ 72, 58, 40], ig:190, fuel:180, out:3.4, cond:.12, cap:.9,  ash:E,     char:10};
-M[WAX]    = {n:'Wax',      ph:3, col:[226,218,198], ig:9e9, fuel:0,   out:0,   cond:.09, cap:1.1, melt:62, into:MELT};
+M[OIL]    = {n:'Oil',      ph:1, col:[ 72, 58, 40], ig:190, fuel:180, out:3.4, cond:.12, cap:.9,  ash:E,     char:10, dens:.85};
+M[WAX]    = {n:'Wax',      ph:3, col:[226,218,198], ig:9e9, fuel:0,   out:0,   cond:.09, cap:1.1, melt:62, into:MELT, dens:.96};
 // Molten wax does not light. Hold a match to a puddle of it and nothing happens —
 // that is the entire reason a candle has a wick, and it is what makes wax different
 // from oil rather than a slower version of it. It burns only where something with
@@ -198,23 +198,23 @@ M[WAX]    = {n:'Wax',      ph:3, col:[226,218,198], ig:9e9, fuel:0,   out:0,   c
 // 126-cell fire that ate the whole candle in thirteen seconds. Raising the figure to
 // 420 only moved the problem — a wick burns at 1150, so the wax right beside it still
 // caught, and burned off the fuel the wick was supposed to be drinking.
-M[MELT]   = {n:'Wax',      ph:1, col:[214,198,160], ig:9e9, fuel:220, out:2.1, cond:.11, cap:1.1, ash:E};
-M[POWDER] = {n:'Powder',   ph:2, col:[ 58, 56, 58], ig:150, fuel:14,  out:9.0, cond:.30, cap:.4,  ash:SMOKE, char:2};
+M[MELT]   = {n:'Wax',      ph:1, col:[214,198,160], ig:9e9, fuel:220, out:2.1, cond:.11, cap:1.1, ash:E, dens:.95};
+M[POWDER] = {n:'Powder',   ph:2, col:[ 58, 56, 58], ig:150, fuel:14,  out:9.0, cond:.30, cap:.4,  ash:SMOKE, char:2,  dens:1.3};
 // A fuse has to carry a front along itself for its whole length or it is a stick.
 // `out` at 1.5 was the lowest in the table and the front died about eight cells in.
-M[FUSE]   = {n:'Fuse',     ph:3, col:[142,116, 78], ig:200, fuel:150, out:3.2, cond:.10, cap:.7,  ash:ASH,   char:12, wick:1};
-M[COAL]   = {n:'Coal',     ph:2, col:[ 34, 32, 34], ig:520, fuel:1500,out:3.0, cond:.13, cap:1.4, ash:ASH,   char:90};
-M[GREEN]  = {n:'Green',    ph:3, col:[ 74,104, 54], ig:470, fuel:600, out:1.1, cond:.11, cap:1.9, ash:EMBER, smoky:3.2, char:150};
-M[STONE]  = {n:'Stone',    ph:3, col:[104,100, 94], ig:9e9, cond:.20, cap:2.2};
-M[STEEL]  = {n:'Steel',    ph:3, col:[142,146,152], ig:9e9, cond:.92, cap:1.6};
-M[WATER]  = {n:'Water',    ph:1, col:[ 44, 92,132], ig:9e9, cond:.42, cap:6.0, boil:100, into:STEAM, t0:12};
-M[ICE]    = {n:'Ice',      ph:3, col:[168,204,222], ig:9e9, cond:.28, cap:3.0, melt:0,   into:WATER, t0:-14};
-M[SAND]   = {n:'Sand',     ph:2, col:[190,166,116], ig:9e9, cond:.16, cap:1.5};
+M[FUSE]   = {n:'Fuse',     ph:3, col:[142,116, 78], ig:200, fuel:150, out:3.2, cond:.10, cap:.7,  ash:ASH,   char:12, dens:.8, wick:1};
+M[COAL]   = {n:'Coal',     ph:2, col:[ 34, 32, 34], ig:520, fuel:1500,out:3.0, cond:.13, cap:1.4, ash:ASH,   char:90, dens:1.4};
+M[GREEN]  = {n:'Green',    ph:3, col:[ 74,104, 54], ig:470, fuel:600, out:1.1, cond:.11, cap:1.9, ash:EMBER, smoky:3.2, char:150, dens:.9};
+M[STONE]  = {n:'Stone',    ph:3, col:[104,100, 94], ig:9e9, cond:.20, cap:2.2, dens:2.6};
+M[STEEL]  = {n:'Steel',    ph:3, col:[142,146,152], ig:9e9, cond:.92, cap:1.6, dens:7.8};
+M[WATER]  = {n:'Water',    ph:1, col:[ 44, 92,132], ig:9e9, cond:.42, cap:6.0, boil:100, into:STEAM, t0:12, dens:1.0};
+M[ICE]    = {n:'Ice',      ph:2, col:[168,204,222], ig:9e9, cond:.28, cap:3.0, melt:0,   into:WATER, t0:-14, dens:.92, rigid:1};
+M[SAND]   = {n:'Sand',     ph:2, col:[190,166,116], ig:9e9, cond:.16, cap:1.5, dens:1.6};
 M[FIRE]   = {n:'Fire',     ph:0, col:[232,100, 26]};
 M[SMOKE]  = {n:'Smoke',    ph:0, col:[ 58, 54, 50]};
 M[STEAM]  = {n:'Steam',    ph:0, col:[178,182,186]};
-M[EMBER]  = {n:'Ember',    ph:2, col:[ 84, 40, 22], ig:340, fuel:340, out:1.6, cond:.14, cap:1.0, ash:ASH,   char:20};
-M[ASH]    = {n:'Ash',      ph:2, col:[ 96, 92, 88], ig:9e9, cond:.10, cap:.9};
+M[EMBER]  = {n:'Ember',    ph:2, col:[ 84, 40, 22], ig:340, fuel:340, out:1.6, cond:.14, cap:1.0, ash:ASH,   char:20, dens:.7};
+M[ASH]    = {n:'Ash',      ph:2, col:[ 96, 92, 88], ig:9e9, cond:.10, cap:.9,  dens:.45};
 
 const TRAY = [WOOD, PAPER, STRAW, OIL, WAX, POWDER, FUSE, COAL, GREEN, WATER, ICE, STONE, STEEL, SAND];
 
@@ -259,7 +259,7 @@ const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d', {alpha:false});
 ctx.imageSmoothingEnabled = false;
 
-let W=0, H=0, type, temp, fuel, life, tint, img, buf;
+let W=0, H=0, type, temp, fuel, life, vel, tint, img, buf;
 
 /* Sizing the grid, and carrying whatever is already in it across.
 
@@ -274,7 +274,7 @@ function build(){
   const nh = Math.max(40, Math.floor(r.height / CELL));
   if (nw === W && nh === H) return;
 
-  const old = W ? { W, H, type, temp, fuel, life } : null;
+  const old = W ? { W, H, type, temp, fuel, life, vel } : null;
 
   W = nw; H = nh;
   cv.width = W; cv.height = H;
@@ -283,6 +283,7 @@ function build(){
   temp = new Float32Array(n).fill(AMBIENT);
   fuel = new Float32Array(n);
   life = new Float32Array(n);
+  vel  = new Float32Array(n);
   tint = new Int8Array(n);
   for (let i=0;i<n;i++) tint[i] = (Math.random()*26 - 13)|0;
   img = ctx.createImageData(W,H);
@@ -298,7 +299,7 @@ function build(){
       for (let x=0; x<cols; x++){
         const i = y*W + x, j = oy*old.W + x;
         type[i] = old.type[j]; temp[i] = old.temp[j];
-        fuel[i] = old.fuel[j]; life[i] = old.life[j];
+        fuel[i] = old.fuel[j]; life[i] = old.life[j]; vel[i] = old.vel[j];
       }
     }
   }
@@ -334,6 +335,7 @@ function put(x,y,t){
   type[i] = t;
   fuel[i] = M[t] && M[t].fuel ? M[t].fuel : 0;
   life[i] = 0;
+  vel[i]  = 0;
   temp[i] = M[t] && M[t].t0 !== undefined ? M[t].t0 : AMBIENT;
 }
 
@@ -343,24 +345,47 @@ function become(x,y,t){
   type[i] = t;
   fuel[i] = M[t] && M[t].fuel ? M[t].fuel : 0;
   life[i] = 0;
+  vel[i]  = 0;
 }
 
 /* ============================================================ movement
    Two passes. Falling things are walked bottom-up so a grain cannot fall
    twice in one frame; rising things are walked top-down for the same reason
-   in the other direction. */
+   in the other direction.
+
+   Falling things have a speed, and lose it to whatever they are falling
+   through. Before this, everything in the box moved exactly one cell a tick
+   in every medium — measured, a 98-cell drop took 98 ticks for sand in air,
+   sand in water, coal in water and ash in water alike. Nothing accelerated
+   and nothing was slowed by anything, because there was no speed in the
+   model at all: a grain either moved a cell or it did not.
+
+   `dens` decides what can sink through what. It used to be a rule about
+   phases — powders sink through liquids, full stop — which meant oil and
+   water simply ignored each other and stayed wherever they happened to
+   land. */
+
+const GRAVITY  = .12;   // gained per tick
+const DRAG_AIR = .94;   // ...against this, so about 1.9 cells a tick in the open
+const DRAG_WET = .62;   // ...and about 0.3 in a liquid: six times slower
+const CREEP    = .22;   // chance a liquid takes a sideways step when it can
+
+const densOf = t => { const d = M[t].dens; return d !== undefined ? d : 1; };
 
 function swap(a,b){
   let t=type[a]; type[a]=type[b]; type[b]=t;
   let f=fuel[a]; fuel[a]=fuel[b]; fuel[b]=f;
   let l=life[a]; life[a]=life[b]; life[b]=l;
   let h=temp[a]; temp[a]=temp[b]; temp[b]=h;
+  let v=vel[a];  vel[a]=vel[b];   vel[b]=v;
 }
 
-function denser(a,b){         // can a displace b?
+function denser(a,b){                  // can a displace b?
   if (b===E) return true;
-  const pa = M[a].ph, pb = M[b].ph;
-  return pb===0 || (pa<=2 && pb===1 && pa!==1);   // solids/powders sink through liquid
+  const pb = M[b].ph;
+  if (pb===0) return true;             // anything pushes through gas
+  if (pb!==1) return false;            // nothing pushes through a powder or a solid
+  return densOf(a) > densOf(b);        // and through a liquid only if heavier than it
 }
 
 function moveFalling(){
@@ -370,18 +395,52 @@ function moveFalling(){
       const x = dir>0 ? k : W-1-k;
       const i = idx(x,y), t = type[i];
       if (t===E) continue;
-      const ph = M[t].ph;
+      const m = M[t], ph = m.ph;
       if (ph!==1 && ph!==2) continue;
 
-      const d = idx(x,y+1);
-      if (denser(t, type[d])) { swap(i,d); continue; }
+      // Drag comes from what is directly underneath, which is what makes a grain
+      // slow the moment it reaches the surface of a pool rather than at some
+      // arbitrary depth.
+      const under = y<H-1 ? type[idx(x,y+1)] : STONE;
+      const wet = M[under].ph === 1;
+      vel[i] = (vel[i] + GRAVITY) * (wet ? DRAG_WET : DRAG_AIR);
 
-      const s = Math.random()<.5 ? 1 : -1;
-      for (const dx of [s,-s]){
-        if (!inb(x+dx, y+1)) continue;
-        const dg = idx(x+dx, y+1);
-        if (denser(t, type[dg])) { swap(i,dg); break; }
+      // Whole cells this tick, plus the fraction as a chance of one more. That is
+      // the same thing as carrying a sub-cell offset around, without a second array
+      // to keep in step — and it stops a poured stream moving in lockstep.
+      const v = vel[i];
+      let steps = Math.floor(v) + (Math.random() < v - Math.floor(v) ? 1 : 0);
+
+      let ci = i, cx = x, cy = y, fell = 0;
+      while (steps-- > 0){
+        if (cy >= H-1){ vel[ci] = 0; break; }
+        const d = idx(cx, cy+1);
+        if (denser(t, type[d])){ swap(ci,d); ci = d; cy++; fell++; continue; }
+
+        // Sliding off a heap is not falling, so it does not keep the speed — and a
+        // rigid thing does not slide at all, it comes straight down.
+        let slid = false;
+        if (!m.rigid){
+          const s = Math.random()<.5 ? 1 : -1;
+          for (const dx of [s,-s]){
+            if (!inb(cx+dx, cy+1)) continue;
+            const dg = idx(cx+dx, cy+1);
+            if (denser(t, type[dg])){ swap(ci,dg); ci = dg; cx += dx; cy++; fell++; slid = true; break; }
+          }
+        }
+        if (slid) continue;
+        vel[ci] = 0;                   // landed on something
+        break;
       }
+
+      // Lighter than the liquid it is sitting in: it comes up. Ice bobs, oil rises
+      // through water and lies on top of it.
+      if (fell===0 && cy>0){
+        const u = idx(cx, cy-1);
+        const mu = M[type[u]];
+        if (mu.ph===1 && densOf(type[u]) > densOf(t)){ swap(ci,u); continue; }
+      }
+
       // Liquids creep sideways, which is what makes oil a sheet rather than a column.
       // Only when there is something on top of them, though: a puddle already one
       // cell deep has nothing pushing it, and a film that keeps spreading is a film
@@ -390,11 +449,18 @@ function moveFalling(){
       // into the cells the fire had just emptied — so the fire consumed 38 of 40
       // cells and the burning front never travelled past a third of the trail. The
       // wood at the end of it stayed at 53°C.
-      if (ph===1 && type[idx(x,y)]===t && y>0 && type[idx(x,y-1)]===t){
+      //
+      // "Something on top of it" turned out to be too strict once pools got big: the
+      // surface layer of a pool has nothing above it either, so a body of water sat
+      // in a dome instead of levelling off. Being part of a pool at all is the test —
+      // liquid above OR liquid below. A one-deep film has neither and stays put.
+      if (ph===1 && Math.random() < CREEP &&
+          ((cy>0 && type[idx(cx,cy-1)]===t) || (cy<H-1 && type[idx(cx,cy+1)]===t))){
+        const s = Math.random()<.5 ? 1 : -1;
         for (const dx of [s,-s]){
-          if (!inb(x+dx,y)) continue;
-          const sd = idx(x+dx,y);
-          if (type[sd]===E) { swap(i,sd); break; }
+          if (!inb(cx+dx,cy)) continue;
+          const sd = idx(cx+dx,cy);
+          if (type[sd]===E){ swap(ci,sd); break; }
         }
       }
     }
@@ -840,7 +906,7 @@ let clearArmed = 0, clearTimer = 0;
 
 const clearBtn = actionChip('Clear', ()=>{
   if (Date.now() < clearArmed){
-    type.fill(E); temp.fill(AMBIENT); fuel.fill(0); life.fill(0);
+    type.fill(E); temp.fill(AMBIENT); fuel.fill(0); life.fill(0); vel.fill(0);
     disarmClear();
     say('Cleared');
     return;

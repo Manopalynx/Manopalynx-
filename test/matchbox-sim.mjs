@@ -53,7 +53,7 @@ const HARNESS = `
     return n; };
   window.__maxT  = () => { let m=-1e9; for (let i=0;i<temp.length;i++) if (temp[i]>m) m=temp[i]; return m; };
   window.__nan   = () => { for (let i=0;i<temp.length;i++) if (!Number.isFinite(temp[i])) return true; return false; };
-  window.__wipe  = () => { type.fill(0); temp.fill(AMBIENT); fuel.fill(0); life.fill(0); };
+  window.__wipe  = () => { type.fill(0); temp.fill(AMBIENT); fuel.fill(0); life.fill(0); vel.fill(0); };
   window.__floor = () => { const f = H-6; for (let x=0;x<W;x++) for (let y=f;y<H;y++) put(x,y,STONE); return f; };
   window.__slab  = (x0,y0,x1,y1,t) => { for (let y=y0;y<=y1;y++) for (let x=x0;x<=x1;x++) put(x,y,t); };
   // Deliberately the page's own paintAt rather than a copy of it. A harness that
@@ -319,6 +319,77 @@ await check(browser, 'the tray has an ignition gradient, not a switch', () => {
   const greenHeld = consumed(GREEN, 600);
   if (greenHeld < 40) return `green would not take even with the match held on it for ten seconds (${greenHeld} cells)`;
   if (greenDab * 3 > greenHeld) return `a touch took ${greenDab} cells of green against ${greenHeld} for a long hold — nothing in the tray is any harder to light than anything else`;
+  return null;
+});
+
+console.log('\n— falling —');
+
+// Was: a 98-cell drop took exactly 98 ticks for sand in air, sand in water, coal in
+// water and ash in water alike. Nothing accelerated and nothing was slowed by
+// anything, because there was no speed in the model at all — a grain either moved a
+// cell in a tick or it did not.
+await check(browser, 'things fall slower through a liquid than through air', () => {
+  const drop = (medium, mat) => {
+    __wipe();
+    const top = 18, bottom = 116;
+    if (medium !== null) __slab(38, top+2, 61, bottom+4, medium);
+    put(50, top, mat);
+    for (let k=1;k<=1500;k++){
+      __step(1);
+      let y = -1;
+      for (let yy=0;yy<H;yy++) for (let xx=44;xx<56;xx++) if (type[idx(xx,yy)]===mat) y = Math.max(y,yy);
+      if (y >= bottom-2) return k;
+      if (y < 0) return null;                       // melted, burned or otherwise gone
+    }
+    return Infinity;
+  };
+  const air = drop(null, SAND), wet = drop(WATER, SAND);
+  if (!air || !wet) return 'the grain vanished mid-drop, so this measured nothing';
+  if (wet < air * 2) return `the same drop took ${air} ticks through air and ${wet} through water`;
+  return null;
+});
+
+await check(browser, 'a falling grain speeds up', () => {
+  __wipe();
+  put(50, 8, SAND);
+  const rowOf = () => { for (let y=H-1;y>=0;y--) for (let x=46;x<55;x++) if (type[idx(x,y)]===SAND) return y; return -1; };
+  __step(20); const a = rowOf();
+  __step(20); const b = rowOf();
+  __step(20); const c = rowOf();
+  if (a < 0 || c < 0) return 'lost the grain';
+  const first = a - 8, later = c - b;
+  if (later <= first) return `it covered ${first} cells in the first 20 ticks and ${later} in the third 20 — it is not accelerating`;
+  return null;
+});
+
+// Density, which used to be a rule about phases: powders sink through liquids, full
+// stop, and liquids ignored each other completely. Oil and water simply stayed
+// wherever they were put.
+await check(browser, 'oil floats, sand sinks, ice bobs up', () => {
+  const meanRow = t => { let sum=0, n=0; for (let i=0;i<type.length;i++) if (type[i]===t){ sum += (i/W)|0; n++; } return n ? sum/n : null; };
+  const pool = () => {
+    __wipe();
+    const f = H-4;
+    __slab(0, f, W-1, H-1, STONE);
+    __slab(20, f-24, 79, f-1, WATER);
+    return f;
+  };
+
+  let f = pool(); __slab(44, f-30, 55, f-27, OIL);
+  for (let k=0;k<900;k++) __step(1);
+  if (meanRow(OIL) === null) return 'the oil disappeared';
+  if (meanRow(OIL) >= meanRow(WATER)) return `oil settled at row ${meanRow(OIL).toFixed(1)} against water at ${meanRow(WATER).toFixed(1)} — it did not float`;
+
+  f = pool(); __slab(44, f-30, 55, f-27, SAND);
+  for (let k=0;k<900;k++) __step(1);
+  if (meanRow(SAND) <= meanRow(WATER)) return `sand settled at row ${meanRow(SAND).toFixed(1)} against water at ${meanRow(WATER).toFixed(1)} — it did not sink`;
+
+  f = pool(); __slab(46, f-14, 53, f-9, ICE);
+  const before = meanRow(ICE);
+  for (let k=0;k<400;k++) __step(1);
+  const after = meanRow(ICE);
+  if (after === null) return 'the ice melted before it could float, so this measured nothing';
+  if (after >= before) return `ice sat at row ${before.toFixed(1)} and was at ${after.toFixed(1)} 400 ticks later — it did not rise`;
   return null;
 });
 
