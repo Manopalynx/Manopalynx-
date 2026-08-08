@@ -397,8 +397,43 @@ const GROUPS = [
   { name:'Wet',   items:[WATER, OIL, ICE, ACID] },
   { name:'Solid', items:[STONE, STEEL, SAND, WAX, GLASS, OBSIDIAN] },
   { name:'Hot',   items:[LAVA, MOLTEN, EMBER, THERMITE, MAGNES, GAS] },
+  { name:'Scene', items:'scenes' },
   { name:'Tools', items:'tools' },
 ];
+
+/* What a saved scene calls each material, which is deliberately not what the tray
+   calls it.
+
+   A save has to survive materials being added, because they will be, and the numbers
+   above are positions in a list — insert one in the middle and every save ever written
+   becomes a different scene. So a save stores names.
+
+   It cannot store the *display* name, and finding out why was the whole reason this
+   table exists rather than a one-line `M[t].n`. Two pairs collide: WAX and MELT are
+   both 'Wax', RUBBER and MRUBBER are both 'Rubber'. Saving by display name would have
+   quietly turned every puddle of molten wax into a solid block of it on the way back
+   in — a corruption that throws nothing, warns nothing, and looks like a scene you
+   drew slightly wrong.
+
+   Keeping the two apart also means the tray is free to rename anything it likes. These
+   strings are a file format: once written they are frozen, and a material dropped from
+   the table should keep its key here so old saves can say what is missing rather than
+   silently losing a cell. `test/matchbox-sim.mjs` asserts every material has one and
+   that no two share. */
+const SAVE_KEY = [];
+SAVE_KEY[E]='air';            SAVE_KEY[WOOD]='wood';        SAVE_KEY[PAPER]='paper';
+SAVE_KEY[STRAW]='straw';      SAVE_KEY[OIL]='oil';          SAVE_KEY[WAX]='wax';
+SAVE_KEY[MELT]='wax-molten';  SAVE_KEY[POWDER]='powder';    SAVE_KEY[FUSE]='fuse';
+SAVE_KEY[COAL]='coal';        SAVE_KEY[GREEN]='green';      SAVE_KEY[STONE]='stone';
+SAVE_KEY[STEEL]='steel';      SAVE_KEY[WATER]='water';      SAVE_KEY[ICE]='ice';
+SAVE_KEY[SAND]='sand';        SAVE_KEY[FIRE]='fire';        SAVE_KEY[SMOKE]='smoke';
+SAVE_KEY[STEAM]='steam';      SAVE_KEY[EMBER]='ember';      SAVE_KEY[ASH]='ash';
+SAVE_KEY[LAVA]='lava';        SAVE_KEY[GLASS]='glass';      SAVE_KEY[MOLTEN]='steel-molten';
+SAVE_KEY[OBSIDIAN]='obsidian';SAVE_KEY[THERMITE]='thermite';SAVE_KEY[MAGNES]='magnesium';
+SAVE_KEY[RUBBER]='rubber';    SAVE_KEY[MRUBBER]='rubber-molten';
+SAVE_KEY[ACID]='acid';        SAVE_KEY[GAS]='gas';
+
+const TYPE_OF_KEY = new Map(SAVE_KEY.map((k,t) => [k,t]));
 
 /* ============================================================ grid
 
@@ -1341,28 +1376,35 @@ function chipFor(t){
 }
 let openDrawer = 0;
 
+// The two drawers that hold buttons rather than materials, and where those buttons
+// live while their drawer is shut.
+const HOLDER = { tools: () => actsEl, scenes: () => scenesEl };
+
 function showDrawer(n){
   openDrawer = n;
   matsEl.textContent = '';
   const g = GROUPS[n];
-  if (g.items === 'tools') while (actsEl.firstChild) matsEl.appendChild(actsEl.firstChild);
+  const holder = typeof g.items === 'string' ? HOLDER[g.items]() : null;
+  if (holder) while (holder.firstChild) matsEl.appendChild(holder.firstChild);
   else g.items.forEach(t => matsEl.appendChild(chipFor(t)));
   tabsEl.querySelectorAll('.tab').forEach((b,i) => b.setAttribute('aria-pressed', String(i===n)));
 }
 
-// Tools live in actsEl while their drawer is shut, so the buttons keep their identity
-// and their listeners rather than being rebuilt — a Clear that is halfway through
-// asking would forget it had asked.
-function stowTools(){
-  if (GROUPS[openDrawer].items !== 'tools') return;
-  while (matsEl.firstChild) actsEl.appendChild(matsEl.firstChild);
+// Buttons live in their holder while their drawer is shut, so they keep their identity
+// and their listeners rather than being rebuilt — a Clear or a Save that is halfway
+// through asking would forget it had asked.
+function stowButtons(){
+  const g = GROUPS[openDrawer];
+  if (typeof g.items !== 'string') return;
+  const holder = HOLDER[g.items]();
+  while (matsEl.firstChild) holder.appendChild(matsEl.firstChild);
 }
 
 GROUPS.forEach((g,i) => {
   const b = document.createElement('button');
   b.className = 'tab'; b.type = 'button'; b.textContent = g.name;
   b.setAttribute('aria-pressed', String(i===0));
-  b.addEventListener('click', ()=>{ stowTools(); showDrawer(i); });
+  b.addEventListener('click', ()=>{ stowButtons(); showDrawer(i); });
   tabsEl.appendChild(b);
 });
 
@@ -1420,6 +1462,241 @@ const heatBtn = actionChip('Heat', ()=>{
   heatBtn.setAttribute('aria-pressed', String(heatView));
 });
 actsEl.appendChild(heatBtn);
+
+/* ============================================================ scenes
+
+   Presets and saves both drop a whole box in at once, so they share the plumbing.
+
+   Built in cells, not in fractions of the screen. A wick is one cell wide and a
+   candle is twenty tall wherever you open this, because the simulation is in cells and
+   a scene scaled to the screen would behave differently on every phone — a wick two
+   cells wide is a different candle, not the same candle bigger. Everything is centred
+   and clipped instead, so a narrow box shows less of a wide scene rather than a
+   squashed one. */
+
+function wipeAll(){
+  type.fill(E); temp.fill(AMBIENT); fuel.fill(0); life.fill(0); vel.fill(0);
+  raining = 0;
+}
+function sSlab(x0,y0,x1,y1,t){
+  for (let y=y0;y<=y1;y++) for (let x=x0;x<=x1;x++) if (inb(x,y)) put(x,y,t);
+}
+
+// Every scene stands on the same floor, six deep, so the bottom of the box is the
+// bottom of the box and a preset never leaves a pour with nowhere to go.
+function sceneFloor(){ const f = H-6; sSlab(0, f, W-1, H-1, STONE); return f; }
+
+/* Six of them, and every one is a scenario the suite already measures — which is the
+   point of choosing these six rather than six pretty ones. A preset that cannot be
+   made to work is the worst thing in the box: it looks like a promise. If one of these
+   ever stops paying off, a check goes red in `test/matchbox-sim.mjs` first.
+
+   None of them is lit. The match is the whole interaction and a scene that arrives
+   already burning has spent it. */
+const SCENES = [
+  { name:'Candle', tell:'Candle — light the wick',
+    build(){
+      const f = sceneFloor(), cx = W>>1;
+      sSlab(cx-4, f-20, cx+3, f-1, WAX);
+      for (let y=f-26; y<=f-19; y++) if (inb(cx,y)) put(cx, y, FUSE);
+    } },
+
+  { name:'Fuse', tell:'Fuse — light the far end and stand back',
+    build(){
+      const f = sceneFloor(), cx = W>>1;
+      const x1 = Math.min(W-18, cx+30);
+      sSlab(x1, f-8, x1+14, f-1, POWDER);
+      for (let x=Math.max(2, x1-46); x<x1; x++) put(x, f-1, FUSE);
+    } },
+
+  { name:'Cut', tell:'Cut — light the magnesium, not the thermite',
+    build(){
+      const f = sceneFloor(), cx = W>>1;
+      const pt = f-14;                       // plate hangs with air under it, so a
+      sSlab(cx-20, pt, cx+19, pt+2, STEEL);  // cut has somewhere to fall
+      sSlab(cx-6, pt-6, cx+5, pt-1, THERMITE);
+      sSlab(cx-4, pt-8, cx+3, pt-7, MAGNES);
+    } },
+
+  { name:'Lava', tell:'Lava — sand makes glass, water makes obsidian',
+    build(){
+      const f = sceneFloor(), cx = W>>1;
+      sSlab(cx-22, f-15, cx-22, f-1, STONE);
+      sSlab(cx+21, f-15, cx+21, f-1, STONE);
+      sSlab(cx-21, f-12, cx+20, f-1, LAVA);
+    } },
+
+  { name:'Acid', tell:'Acid — glass holds it, nothing else does for long',
+    build(){
+      const f = sceneFloor(), cx = W>>1;
+      sSlab(cx-20, f-17, cx-20, f-1, GLASS);
+      sSlab(cx+19, f-17, cx+19, f-1, GLASS);
+      sSlab(cx-20, f-1, cx+19, f-1, GLASS);
+      sSlab(cx-19, f-14, cx+18, f-2, ACID);
+      sSlab(cx-12, f-10, cx-6, f-4, STEEL);
+      sSlab(cx+3, f-10, cx+9, f-4, WOOD);
+    } },
+
+  // The tell says "does not wait" because it does not: gas has a lifespan and this
+  // room empties itself in about ten seconds if nothing lights it. Measured, unlit:
+  // 396 cells at tick 450, 37 at 600, none at 750. A preset that quietly becomes an
+  // empty box while you are reading the label is a preset that looks broken.
+  { name:'Gas', tell:'Gas — it gathers under the lid, and it does not wait',
+    build(){
+      const f = sceneFloor(), cx = W>>1;
+      const lid = Math.max(2, f-26);
+      sSlab(cx-20, lid, cx+19, lid, STONE);
+      sSlab(cx-20, lid, cx-20, f-1, STONE);
+      sSlab(cx+19, lid, cx+19, f-1, STONE);
+      sSlab(cx-18, f-12, cx+17, f-2, GAS);
+    } },
+];
+
+function loadScene(s){
+  wipeAll();
+  s.build();
+  drawn = true;
+  hintEl.style.opacity = 0;
+  say(s.tell, true);
+}
+
+/* ------------------------------------------------------------ saving
+
+   What a save is, and what it deliberately is not: it stores **what you built, not
+   what the fire was doing**. Every cell comes back through `put()`, at its own
+   starting temperature with its fuel full, exactly as though you had just drawn it.
+
+   That is a choice and it costs something — a scene saved halfway through burning
+   comes back unburnt. It buys three things worth more. A save is a few kilobytes
+   instead of most of a megabyte, because the material layout run-length encodes to
+   almost nothing while a temperature field mid-fire has a different number in every
+   cell and encodes to nothing at all. It is the same scene every time it is loaded,
+   rather than a physics state that may or may not still catch. And it cannot come back
+   subtly wrong, which a rounded temperature field can: four degrees of quantisation on
+   the wrong side of an ignition point is a scene that used to light and now does not.
+
+   If resuming a fire mid-burn turns out to matter, that is a second format and not a
+   change to this one. */
+
+const STORE_KEY = 'matchbox.scene.1';
+let storeOK = null;
+
+// Asked once, and asked by trying rather than by feature-detecting: `localStorage`
+// exists and throws on access in a private window, and on file:// in some browsers.
+function storageWorks(){
+  if (storeOK !== null) return storeOK;
+  try {
+    localStorage.setItem('matchbox.probe','1');
+    localStorage.removeItem('matchbox.probe');
+    storeOK = true;
+  } catch { storeOK = false; }
+  return storeOK;
+}
+
+function encodeScene(){
+  const keys = [], seen = new Map();
+  const idxOf = t => {
+    const k = SAVE_KEY[t] !== undefined ? SAVE_KEY[t] : 'air';
+    if (!seen.has(k)){ seen.set(k, keys.length); keys.push(k); }
+    return seen.get(k);
+  };
+  const runs = [];
+  let prev = idxOf(type[0]), n = 1;
+  for (let i=1;i<type.length;i++){
+    const k = idxOf(type[i]);
+    if (k === prev){ n++; continue; }
+    runs.push(n, prev); prev = k; n = 1;
+  }
+  runs.push(n, prev);
+  return { v:1, w:W, h:H, keys, runs };
+}
+
+// Returns the keys it could not place, which is not an error: a save written by a
+// later build can name a material this one has never heard of, and losing those cells
+// while keeping the rest is better than refusing the whole scene. Saying so out loud
+// is the part that matters — silently dropping them is how a save becomes a scene you
+// did not draw.
+function decodeScene(s){
+  const missing = [];
+  const map = s.keys.map(k => {
+    if (TYPE_OF_KEY.has(k)) return TYPE_OF_KEY.get(k);
+    missing.push(k); return E;
+  });
+  const src = new Uint8Array(s.w * s.h);
+  let p = 0;
+  for (let r=0; r+1<s.runs.length; r+=2){
+    const n = s.runs[r], t = map[s.runs[r+1]];
+    for (let q=0; q<n && p<src.length; q++) src[p++] = t === undefined ? E : t;
+  }
+  wipeAll();
+  // Bottom-aligned and clipped, the same rule a resize already uses, because the
+  // floor is the floor. A scene saved on a taller screen loses its ceiling rather
+  // than its ground.
+  const drop = H - s.h, cols = Math.min(W, s.w);
+  for (let y=0; y<H; y++){
+    const oy = y - drop;
+    if (oy < 0 || oy >= s.h) continue;
+    for (let x=0; x<cols; x++) put(x, y, src[oy*s.w + x]);
+  }
+  return missing;
+}
+
+let saveArmed = 0, saveTimer = 0;
+function disarmSave(){
+  saveArmed = 0;
+  clearTimeout(saveTimer);
+  saveBtn.textContent = 'Save';
+  saveBtn.setAttribute('aria-pressed','false');
+}
+
+const saveBtn = actionChip('Save', ()=>{
+  if (!storageWorks()){ say('This browser will not store anything', true); return; }
+  // Only the overwrite asks. Saving into an empty slot cannot lose anything, and a
+  // confirm on a harmless action is what teaches people to tap through the one that
+  // is not.
+  if (localStorage.getItem(STORE_KEY) && Date.now() >= saveArmed){
+    saveArmed = Date.now() + CLEAR_WINDOW;
+    saveBtn.textContent = 'Save — replace?';
+    saveBtn.setAttribute('aria-pressed','true');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(disarmSave, CLEAR_WINDOW);
+    say('Replace the saved scene?', true);
+    return;
+  }
+  const text = JSON.stringify(encodeScene());
+  let ok = true;
+  try { localStorage.setItem(STORE_KEY, text); } catch { ok = false; }
+  // A write that threw nothing has still not necessarily happened. This exact failure
+  // — a full quota reported as a clean save — is one the ledger in this repository
+  // shipped with, and it is invisible until the day you try to load.
+  if (ok && localStorage.getItem(STORE_KEY) !== text) ok = false;
+  disarmSave();
+  say(ok ? `Saved  ·  ${(text.length/1024).toFixed(1)}kB` : 'The save did not stick — storage is full or blocked', true);
+}, true);
+
+const loadBtn = actionChip('Load', ()=>{
+  if (!storageWorks()){ say('This browser will not store anything', true); return; }
+  const text = localStorage.getItem(STORE_KEY);
+  if (!text){ say('Nothing saved yet', true); return; }
+  let s = null;
+  try { s = JSON.parse(text); } catch { s = null; }
+  if (!s || s.v !== 1 || !Array.isArray(s.keys) || !Array.isArray(s.runs) ||
+      !(s.w > 0) || !(s.h > 0)){
+    say('That save is damaged', true); return;
+  }
+  const missing = decodeScene(s);
+  drawn = true;
+  hintEl.style.opacity = 0;
+  say(missing.length ? `Loaded  ·  ${missing.length} unknown left out` : 'Loaded', true);
+});
+
+actsEl.appendChild(saveBtn);
+actsEl.appendChild(loadBtn);
+
+// Scene chips live in their own holder for the same reason the tools do: a Save that
+// is halfway through asking must not be rebuilt out from under itself.
+const scenesEl = document.createElement('div');
+SCENES.forEach(s => scenesEl.appendChild(actionChip(s.name, ()=>loadScene(s))));
 
 showDrawer(0);
 
