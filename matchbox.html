@@ -498,8 +498,11 @@ M[ACID]    ={n:'Acid',     ph:1, col:[132,196, 56], ig:9e9, cond:.24, cap:2.4,
    pours is not a source. */
 M[VENT]    ={n:'Vent',     ph:3, col:[ 78, 74, 84], ig:9e9, cond:.20, cap:2.4, dens:9.9,
              proof:1, tough:9e9};
+// `leak` instead of `span`: it does not fade on a clock, it escapes at the top of the box
+// and only while it is touching it. Contained, it keeps. See the two-ways-out note in
+// react() for why those are different things.
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
-             span:900, peak:1500};
+             leak:.02, peak:1500};
 
 /* The tray, in drawers.
 
@@ -1289,8 +1292,29 @@ function react(){
           continue;
         }
 
-        const span = m.span !== undefined ? m.span : (t===FIRE ? 24 : (t===STEAM ? 70 : 110));
-        if (life[i] > span * (0.6 + Math.random()*0.8)) become(x,y,E);
+        /* Two different ways for a gas to stop being there, and telling them apart is
+           the point.
+
+           Fire, smoke and steam are *events*. They are made by something happening and
+           they are finished a moment later, so they fade on a clock: 24 ticks, 110, 70.
+
+           A gas you painted is a *material*, and it inherited that clock — which meant a
+           sealed room full of it emptied itself in nine to twenty-one seconds with
+           nowhere for the gas to have gone. Reported from the phone as not being able to
+           do anything with gas, and that was right: a bomb with a fuse you cannot beat is
+           not a bomb. It was mislabelled rather than designed, and the label on the Gas
+           preset ("it does not wait") was decorating the fault instead of fixing it.
+
+           So a material gas leaves the only way it should be able to: out of the top of
+           the box, and only while it is actually against it. The walls of this box are
+           already open to the room — that is what EDGE_LOSS is — so the ceiling venting
+           is the same idea. Under a lid it stays put for as long as you leave it. */
+        if (m.leak !== undefined){
+          if (y === 0 && Math.random() < m.leak) become(x,y,E);
+        } else {
+          const span = m.span !== undefined ? m.span : (t===FIRE ? 24 : (t===STEAM ? 70 : 110));
+          if (life[i] > span * (0.6 + Math.random()*0.8)) become(x,y,E);
+        }
         continue;
       }
 
@@ -1920,11 +1944,12 @@ const SCENES = [
       sSlab(cx+3, f-10, cx+9, f-4, WOOD);
     } },
 
-  // The tell says "does not wait" because it does not: gas has a lifespan and this
-  // room empties itself in about ten seconds if nothing lights it. Measured, unlit:
-  // 396 cells at tick 450, 37 at 600, none at 750. A preset that quietly becomes an
-  // empty box while you are reading the label is a preset that looks broken.
-  { name:'Gas', tell:'Gas — it gathers under the lid, and it does not wait',
+  // This used to say "and it does not wait", which was true and was the wrong thing to
+  // do about it: the room emptied itself in about ten seconds because a painted gas was
+  // fading on the same clock as smoke. Now it keeps — measured, 396 cells at nought
+  // seconds and 396 at sixty — so the label can say what the scene is for instead of
+  // apologising for it.
+  { name:'Gas', tell:'Gas — let it gather under the lid, then reach in with a match',
     build(){
       const f = sceneFloor(), cx = W>>1;
       const lid = Math.max(2, f-26);

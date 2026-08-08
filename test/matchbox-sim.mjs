@@ -662,25 +662,83 @@ await check(browser, 'acid eats through solids, wears out, and glass holds it', 
   return null;
 });
 
+/* The chamber here used to be forty cells tall with four rows of gas in it, and it was
+   that shape because gas used to halve itself while rising: by the time it had gathered,
+   what was left was a plausible cloud. Now that a shut-in gas keeps, the same scene is all
+   160 cells spread through 2,300 — a 7% mixture, too lean to carry a front, and it
+   measured 105 of 160 left unburned.
+
+   That is not the model being wrong, it is the scene no longer being a cloud. Retuned to
+   the proportions the Gas preset uses, which are measured to work: a room 26 deep with ten
+   rows of gas in it. A lean mixture failing to go off all at once is behaviour worth
+   having; it is just not what this check is about. */
 await check(browser, 'gas gathers overhead and goes off all at once', () => {
   __wipe(); const f = __floor();
   __slab(0, f, W-1, H-1, STONE);
-  for (let y=f-40; y<f; y++){ for (let d=0;d<2;d++){ put(20+d,y,STONE); put(78+d,y,STONE); } }
-  __slab(0, f-41, W-1, f-40, STONE);                 // a lid, so it pools
-  __slab(30, f-6, 69, f-3, GAS);
-  for (let k=0;k<500;k++) __step(1);                 // let it rise and gather
+  const cx = (W/2)|0, lid = f-26;
+  __slab(cx-20, lid, cx+19, lid, STONE);             // a lid, so it pools
+  for (let y=lid; y<f; y++){ put(cx-20, y, STONE); put(cx+19, y, STONE); }
+  __slab(cx-18, f-12, cx+17, f-2, GAS);
+  const placed = __count(GAS);
+  for (let k=0;k<300;k++) __step(1);                 // let it rise and gather
   const pooled = __count(GAS);
-  if (pooled < 80) return `only ${pooled} cells of gas survived the rise — it cannot gather`;
+  if (pooled < placed * 0.9) return `${placed-pooled} of ${placed} cells of gas went missing inside a sealed room`;
   let high = 0;
-  for (let i=0;i<type.length;i++) if (type[i]===GAS && (i/W|0) < f-20) high++;
-  if (high < pooled * 0.5) return `${high} of ${pooled} cells reached the top — gas is meant to rise`;
+  for (let i=0;i<type.length;i++) if (type[i]===GAS && (i/W|0) < f-13) high++;
+  if (high < pooled * 0.5) return `${high} of ${pooled} cells reached the upper half — gas is meant to rise`;
 
-  __hold(50, f-24, 3, 12);                           // a spark, briefly
+  // The middle of the cloud, which is where a finger goes. Lighting the first cell found
+  // instead put the spark in a corner against a wall and measured a fizzle.
+  let sx=0, sy=0, n=0;
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++) if (type[idx(x,y)]===GAS){ sx+=x; sy+=y; n++; }
+  __hold(Math.round(sx/n), Math.round(sy/n), 3, 12);  // a spark, briefly
   let peakFire = 0;
   for (let k=0;k<200;k++){ __step(1); peakFire = Math.max(peakFire, __count(FIRE)); }
   if (peakFire < 40) return `lighting a pool of ${pooled} cells of gas made ${peakFire} flames — that is a candle, not a bang`;
   if (__count(GAS) > pooled * 0.4) return `${__count(GAS)} of ${pooled} cells of gas were left unburned`;
   return null;
+});
+
+/* Reported from the phone: gas vanished in a few seconds even sealed in, so there was
+   nothing you could build with it. It was fading on the same clock as smoke — 900 ticks
+   spread 0.6-1.4×, so nine to twenty-one seconds — with nowhere for it to have gone.
+
+   Both halves of this are the check. A gas that keeps forever wherever you put it is the
+   other way to get this wrong, so the open box has to still empty. And smoke and steam
+   have to go on fading, because they are events rather than materials and that clock is
+   correct for them. */
+await check(browser, 'gas keeps when it is shut in and drifts off when it is not', () => {
+  const bad = [];
+  const room = (lidded) => {
+    __wipe();
+    const f = __floor(); const cx = (W/2)|0;
+    if (lidded){
+      const lid = f-26;
+      __slab(cx-20, lid, cx+19, lid, STONE);
+      for (let y=lid; y<f; y++){ put(cx-20, y, STONE); put(cx+19, y, STONE); }
+    }
+    __slab(cx-18, f-12, cx+17, f-2, GAS);
+    return __count(GAS);
+  };
+
+  const sealed0 = room(true);
+  for (let k=0;k<3600;k++) __step(1);
+  const sealed = __count(GAS);
+  if (sealed < sealed0 * 0.95) bad.push(`a sealed room lost ${sealed0-sealed} of ${sealed0} cells of gas in a minute with nowhere for them to go`);
+
+  const open0 = room(false);
+  for (let k=0;k<3600;k++) __step(1);
+  if (__count(GAS) > open0 * 0.05) bad.push(`an open box still held ${__count(GAS)} of ${open0} cells of gas after a minute — it should rise out`);
+
+  // The clock is right for the things that are made rather than placed.
+  for (const t of [SMOKE, STEAM]){
+    __wipe(); const f = __floor(); const cx = (W/2)|0;
+    __slab(cx-10, f-20, cx+10, f-10, t);
+    const n0 = __count(t);
+    for (let k=0;k<600;k++) __step(1);
+    if (__count(t) > n0 * 0.1) bad.push(`${M[t].n} did not fade: ${__count(t)} of ${n0} left after ten seconds`);
+  }
+  return bad.length ? bad.join('; ') : null;
 });
 
 console.log('\n— falling —');

@@ -126,6 +126,7 @@ A material is described by a handful of numbers. The ones that matter:
 | `dens` | what sinks through what |
 | `tough` | how many bites acid needs to get through it |
 | `peak` | as hot as burning alone can drive it, where that differs |
+| `span` `leak` | how a gas stops being there: a clock, or only by escaping |
 | `feed` (per cell) | what a vent pours — not a table field, one per cell |
 
 `ig` and `char` together are what make the tray more than fourteen colours. The match
@@ -185,6 +186,35 @@ of ice can hold out in an oven for a while.
 sets:ICE` on water, which is the same rule lava already used to become stone rather than
 anything added for it. The coldest setting was labelled "water freezes" and did not
 freeze water — a worse fault than not having the setting.
+
+## Two ways for a gas to stop being there
+
+Fire, smoke and steam are **events**. Something happens and they are the sign of it, so
+they fade on a clock — 24 ticks, 110, 70 — and that is right for them.
+
+A gas you painted is a **material**, and it inherited the same clock at 900 ticks spread
+0.6–1.4×. So a sealed room full of gas emptied itself in nine to twenty-one seconds with
+nowhere for the gas to have gone. Reported from the phone as not being able to do anything
+with gas, which was fair: a bomb with a fuse you cannot beat is not a bomb. Worse, the Gas
+preset's label had been written to *describe* it — "and it does not wait" — which is
+decorating a fault rather than fixing it.
+
+A material gas now leaves the only way it should be able to: `leak`, a chance per tick of
+escaping while it is against the top of the box, and no clock at all. The walls of this box
+are already open to the room — that is what `EDGE_LOSS` is — so a venting ceiling is the
+same idea.
+
+Measured: **a sealed room holds 396 cells at nought seconds and 396 at sixty.** An open box
+drains in about twenty as it rises out of the top. Smoke and steam are gone inside ten,
+unchanged.
+
+That change broke the explosion check, and the failure was worth reading rather than
+silencing. Its chamber was forty cells deep with four rows of gas in it, which was a
+sensible cloud back when half of it evaporated on the way up; with nothing fading it became
+160 cells spread through 2,300 — a 7% mixture, and 105 of them would not burn. A lean
+mixture failing to go off all at once is behaviour worth having. It was just no longer a
+test of "goes off all at once", so the chamber was retuned to the proportions the Gas
+preset uses, which are measured to work.
 
 ## The vent
 
@@ -307,7 +337,7 @@ failing before the rework — see *What changed* below.
   ribbon, because nothing else in the box gets near 1400°C. It cuts a hole through a
   plate a few cells thick and is stopped by a thick one — see the honest notes.
 - **A gas explosion.** Fill a sealed space with gas, wait for it to gather under the
-  lid, and then reach in with a match.
+  lid, and then reach in with a match. **Shut in, it keeps** — there is no hurry.
 - **Getting water wrong.** Set magnesium alight and pour water on it. Measured: 2213°C
   dry, 2600°C wet.
 - **An acid tank.** Acid eats through most things and wears out doing it — a dozen
@@ -428,7 +458,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 45 checks — the simulation
+node test/matchbox-sim.mjs     # 46 checks — the simulation
 node test/matchbox-ui.mjs      # 36 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
