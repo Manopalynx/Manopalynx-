@@ -45,7 +45,7 @@ fetched fresh whenever there is a signal — no stale-build trap, and nothing to
 
 ## What is in the box
 
-Twenty-two materials in the tray and six more the simulation makes for itself: fire,
+Twenty-three materials in the tray and six more the simulation makes for itself: fire,
 smoke, steam, embers, ash and molten wax. Every material is one row of the `M` table
 and nothing else in the file knows any of them by name.
 
@@ -299,6 +299,43 @@ certain half separately: a bug walled in with a match held on it burns every tim
 them a proper wander made them *better* at not dying, which is how the death count ended
 up on the noise floor in the first place.
 
+### The moth, which is the bug's opposite
+
+Everything else in this box treats heat as a hazard. One thing that treats it as a
+destination turns a candle into a lure and a fire into a funeral. A **Moth** flies rather
+than walks, does not fall, and steers towards warmth — with the lowest ignition point in
+the table, because a moth that reached a flame and survived it would be missing the point.
+
+Measured, a lit candle at one end of the box and twelve moths released at the other: they
+are at the wick within **three seconds**, and then go one at a time — twelve, nine, six,
+two, one — with the last circling it. Unlit, none of them die.
+
+**It does not dive, it mills about.** Once a moth is warm it stops steering and goes back
+to fluttering, so it gathers at the edge of a fire and blunders in by accident rather than
+flying down the wick on purpose. Without that, all twelve went straight in and were gone
+inside thirteen seconds, which is a worse picture than the one it replaced.
+
+#### Seeing across a room, once for all of them
+
+A moth orients on a light it can see from the other side of a room, so it has to be able to
+see across the room. The first version gave each one a seven-cell look around itself, and
+air conducts badly on purpose, so it could not find a candle it was not already touching.
+
+The check that caught it is the **control**, not the claim: unlit, twelve fluttering things
+still drift to a mean x of 39-62 all on their own, which overlaps a candle at 18 closely
+enough to look like success. The version that could not see anything reached x=37 lit and
+x=44 unlit, and reading the first number alone would have shipped a moth attracted to
+nothing at all. So the check counts **deaths**, because drift does not kill.
+
+Looking across the whole grid per moth is affordable for twelve and not for two hundred, so
+it is done once a tick and shared: the box is diced into blocks and the hottest cell in each
+block that clears the threshold becomes a beacon, which also means several fires each get
+one instead of the single hottest winning the box. Each moth then picks by brightness
+against distance — so a bonfire across the room beats the warm patch of floor beside it, and
+a candle it is standing next to beats a furnace at the far end.
+
+Cost with a fire lit: **0.17ms a tick for two hundred moths.**
+
 ### Wandering is not travelling
 
 Reported from the phone after the first version: they do not move around unless there is a
@@ -549,7 +586,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 53 checks — the simulation
+node test/matchbox-sim.mjs     # 56 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```

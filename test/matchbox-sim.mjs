@@ -1291,15 +1291,113 @@ await check(browser, 'the box kills bugs with what it already had', () => {
   return bad.length ? bad.join('; ') : null;
 });
 
-await check(browser, 'a box full of bugs still costs less than a frame', () => {
-  __wipe(); const f = __floor();
-  for (let k=0;k<500;k++) put(4+(k%120), f-1-((k/120)|0), BUG);
-  for (let k=0;k<60;k++) __step(1);
-  const t0 = performance.now();
-  for (let k=0;k<200;k++) moveLife();
-  const ms = (performance.now() - t0) / 200;
-  if (ms > 1) return `${ms.toFixed(2)}ms a tick for ${__count(BUG)} bugs, on its own before anything else runs`;
+await check(browser, 'a moth flies, and does not fall out of the air', () => {
+  __wipe(); __floor();
+  const cx = (W/2)|0;
+  put(cx, 40, MOTH);
+  const at = () => { for (let i=0;i<type.length;i++) if (type[i]===MOTH) return [i%W,(i/W)|0]; return null; };
+  const start = at();
+  let lowest = start[1], moved = 0, last = start;
+  for (let k=0;k<900;k++){
+    __step(1);
+    const p = at(); if (!p) return 'it died in an empty box';
+    if (p[0]!==last[0] || p[1]!==last[1]) moved++;
+    lowest = Math.max(lowest, p[1]);
+    last = p;
+  }
+  if (!moved) return 'it never moved at all';
+  if (lowest >= H-8) return `it sank to row ${lowest} — a moth that ends up on the floor is not flying`;
   return null;
+});
+
+/* The check that matters for this creature, and it is the control rather than the claim.
+
+   The first version of the moth gave each one a seven-cell look around itself. Air
+   conducts badly on purpose, so it could not find a candle it was not already touching —
+   and it *still* drifted across the box, because twelve fluttering things spread out. Lit,
+   they reached a mean x of 37; unlit, 44. Reading the lit number on its own would have
+   shipped a moth that was not attracted to anything. */
+await check(browser, 'a moth crosses the box to a flame, and does not without one', () => {
+  const bad = [];
+  const run = (light) => {
+    __wipe(); const f = __floor();
+    __slab(14, f-16, 21, f-1, WAX);
+    for (let y=f-22; y<f-14; y++) put(18, y, FUSE);
+    for (let k=0;k<12;k++) put(90+k*3, 40, MOTH);
+    if (light) __hold(18, f-21, 2, 120);
+    for (let k=0;k<1200;k++) __step(1);
+    const at = [];
+    for (let i=0;i<type.length;i++) if (type[i]===MOTH) at.push(i%W);
+    return { left: at.length, meanX: at.length ? Math.round(at.reduce((a,c)=>a+c,0)/at.length) : null };
+  };
+  /* Deaths are the discriminator, not position. Twelve fluttering things spread across a
+     box on their own, so where they end up is drift as much as attraction — measured, the
+     unlit control wanders to a mean x of 39 to 62 all by itself, which overlaps a candle at
+     18 closely enough to prove nothing. Nothing about drift kills them. */
+  const dark = run(false);
+  if (dark.left < 10) bad.push(`${12-dark.left} of 12 moths died in a room with nothing lit in it`);
+
+  const lit = run(true);
+  if (lit.left > 3) bad.push(`${lit.left} of 12 moths survived a lit candle — they are not going to it`);
+  if (lit.left && lit.meanX > 45) bad.push(`the survivors are at x=${lit.meanX}, nowhere near the candle at 18`);
+  if (dark.left - lit.left < 6) bad.push(`a lit candle killed ${12-lit.left} and an unlit one killed ${12-dark.left} — that is not attraction`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+await check(browser, 'the box kills moths with what it already had', () => {
+  const bad = [];
+  const f0 = H-6;
+  // Fire, walled in so it cannot fly off — the same shape of test the bug gets.
+  __wipe(); __floor();
+  const mx = (W/2)|0;
+  __slab(mx-1, f0-3, mx+1, f0-3, STONE);
+  put(mx-1, f0-2, STONE); put(mx+1, f0-2, STONE);
+  put(mx, f0-2, MOTH);
+  const ash0 = __count(ASH);
+  __hold(mx, f0-2, 2, 150);
+  for (let k=0;k<300;k++) __step(1);
+  if (__count(MOTH)) bad.push('a moth walled in with a match held on it did not burn');
+  if (__count(ASH) <= ash0) bad.push('a burned moth left nothing behind');
+
+  /* Water, through its own `meets` row, which also earns it a discovery.
+     Poured *beside* them rather than over them: `put` replaces whatever is in the cell, so
+     slabbing water across where the moths are standing deletes them without any reaction
+     happening at all — which measured as ten dead moths and no discovery, and looked for
+     all the world like the reaction being broken. */
+  __wipe(); __floor();
+  let wet0 = 0;
+  for (let k=0;k<10;k++){
+    const x = 40 + k*6;
+    put(x, f0-6, MOTH); wet0++;
+    put(x-1, f0-6, WATER); put(x+1, f0-6, WATER); put(x, f0-7, WATER);
+  }
+  for (let k=0;k<600;k++) __step(1);
+  if (__count(MOTH) > wet0*0.3) bad.push(`${__count(MOTH)} of ${wet0} moths survived being surrounded by water`);
+  if (![...finds].some(k => k.startsWith(MOTH + ':meets'))) bad.push('drowning did not register as a discovery');
+  return bad.length ? bad.join('; ') : null;
+});
+
+// Moths are the expensive ones: each looks at every beacon in the box, and the beacons
+// themselves are a full pass over the grid. Both are bounded — one pass however many
+// moths there are, and the beacons are capped by dicing the box into blocks — but bounded
+// is a claim and this is the measurement.
+await check(browser, 'a box full of living things still costs less than a frame', () => {
+  const bad = [];
+  const bench = (t, n) => {
+    __wipe(); const f = __floor();
+    __slab(10, f-14, 40, f-1, STRAW);              // something alight, so there are beacons
+    __hold(12, f-2, 2, 60);
+    for (let k=0;k<n;k++) put(4+(k%120), f-20-((k/120)|0), t);
+    for (let k=0;k<60;k++) __step(1);
+    const t0 = performance.now();
+    for (let k=0;k<200;k++) moveLife();
+    return (performance.now() - t0) / 200;
+  };
+  const bugs = bench(BUG, 500);
+  if (bugs > 1) bad.push(`${bugs.toFixed(2)}ms a tick for 500 bugs`);
+  const moths = bench(MOTH, 500);
+  if (moths > 2) bad.push(`${moths.toFixed(2)}ms a tick for 500 moths with a fire lit`);
+  return bad.length ? bad.join('; ') : null;
 });
 
 console.log('\n— scenes, and getting them back —');

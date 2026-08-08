@@ -313,7 +313,8 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
       COAL=9, GREEN=10, STONE=11, STEEL=12, WATER=13, ICE=14, SAND=15,
       FIRE=16, SMOKE=17, STEAM=18, EMBER=19, ASH=20,
       LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24,
-      THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31, BUG=32;
+      THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31, BUG=32,
+      MOTH=33;
 
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
@@ -524,6 +525,20 @@ M[VENT]    ={n:'Vent',     ph:3, col:[ 78, 74, 84], ig:9e9, cond:.20, cap:2.4, d
 M[BUG]     ={n:'Bug',      ph:3, col:[176, 92,132], ig:190, fuel:20, out:1.2, cond:.30, cap:1.0,
              char:4, ash:ASH, dens:1.1, tough:.6, sparse:.16,
              meets:[{with:WATER, become:E, tale:'A bug cannot swim'}]};
+/* The bug's opposite, and deliberately so: it flies, and warmth pulls it in rather than
+   driving it off. Everything else in this box treats heat as a hazard. One thing that
+   treats it as a destination turns a candle into a lure and a fire into a funeral.
+
+   `ig` 120 and `char` 2, the lowest in the table, because a moth that reached a flame and
+   survived it would be missing the point.
+
+   It does not fall — flight is the whole of what it adds — so `ph:3` keeps the falling
+   pass away from it and everything it does is in moveLife(). The cost of that is a moth
+   hovering in a sandfall dams it, which is odd and rare and noted here rather than
+   solved. */
+M[MOTH]    ={n:'Moth',     ph:3, col:[214,198,166], ig:120, fuel:8, out:0.8, cond:.28, cap:.7,
+             char:2, ash:ASH, dens:.4, tough:.5, sparse:.10,
+             meets:[{with:WATER, become:E, tale:'A moth cannot swim either'}]};
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
              leak:.02, peak:1500};
 
@@ -541,7 +556,7 @@ const GROUPS = [
   { name:'Wet',   items:[WATER, OIL, ICE, ACID] },
   { name:'Solid', items:[STONE, STEEL, SAND, WAX, GLASS, OBSIDIAN] },
   { name:'Hot',   items:[LAVA, MOLTEN, EMBER, THERMITE, MAGNES, GAS, VENT] },
-  { name:'Life',  items:[BUG] },
+  { name:'Life',  items:[BUG, MOTH] },
   { name:'Scene', items:'scenes' },
   { name:'Tools', items:'tools' },
 ];
@@ -579,7 +594,7 @@ SAVE_KEY[LAVA]='lava';        SAVE_KEY[GLASS]='glass';      SAVE_KEY[MOLTEN]='st
 SAVE_KEY[OBSIDIAN]='obsidian';SAVE_KEY[THERMITE]='thermite';SAVE_KEY[MAGNES]='magnesium';
 SAVE_KEY[RUBBER]='rubber';    SAVE_KEY[MRUBBER]='rubber-molten';
 SAVE_KEY[ACID]='acid';        SAVE_KEY[GAS]='gas';           SAVE_KEY[VENT]='vent';
-SAVE_KEY[BUG]='bug';
+SAVE_KEY[BUG]='bug';          SAVE_KEY[MOTH]='moth';
 
 const TYPE_OF_KEY = new Map(SAVE_KEY.map((k,t) => [k,t]));
 
@@ -1317,13 +1332,115 @@ const footing = (x,y) => {
 };
 const walkable = (x,y) => inb(x,y) && (type[idx(x,y)] === E || M[type[idx(x,y)]].ph === 0);
 
+/* A moth flies, which means it needs a direction in two dimensions where a bug only ever
+   needed left or right. `way` holds one of these eight, plus one, so that nought still
+   means "has not decided yet". Kept in ring order, because turning means stepping round
+   the ring by one — which curves a flight path instead of scattering it. */
+const MOTH_DIRS = [[1,0],[1,-1],[0,-1],[-1,-1],[-1,0],[-1,1],[0,1],[1,1]];
+const MOTH_STEP = 3;     // ticks a wingbeat. A moth is quicker than a bug and less steady.
+const MOTH_TURN = .3;    // ...and it wanders off course this often, by one notch of the ring
+const MOTH_WAKE = 14;    // how much warmer than the room a thing has to be to be worth flying at
+const MOTH_SHY  = 45;    // ...and how warm it has to get before it stops closing in. A moth
+                         // circles a light rather than diving down it; this is what makes it
+                         // mill about at the edge of a fire and blunder in now and then,
+                         // instead of twelve of them going straight down the wick at once.
+
+/* Where the warm things are, worked out once a tick for all of them together.
+
+   The first version gave each moth a seven-cell look around itself, and it did not work:
+   air conducts badly on purpose, so a candle's warmth does not carry, and a moth had to
+   blunder within seven cells of the flame before it knew the flame was there. Measured
+   across a box with a lit candle at one end and twelve moths released at the other, they
+   drifted to a mean x of 37 — and the control with the candle never lit drifted to 44.
+   That is diffusion with a story told over the top of it.
+
+   A moth orients on a light it can see across a room, so it needs to see across the room.
+   Doing that per moth is a full-grid scan each, which is affordable for twelve and not for
+   two hundred. Doing it once and sharing the answer is one pass however many there are.
+
+   The box is diced into blocks and the hottest cell in each block that clears the
+   threshold becomes a beacon, so several fires each get one instead of the single hottest
+   winning the whole box. */
+const BEACON_BLOCK = 16;
+let beacons = [], beaconBest = null;
+
+function findBeacons(){
+  const bw = Math.ceil(W/BEACON_BLOCK), bh = Math.ceil(H/BEACON_BLOCK), n = bw*bh;
+  if (!beaconBest || beaconBest.n !== n)
+    beaconBest = { n, bw, t:new Float32Array(n), i:new Int32Array(n) };
+  beaconBest.t.fill(-1e9); beaconBest.i.fill(-1);
+  const lim = AMBIENT + MOTH_WAKE;
+  for (let y=0;y<H;y++){
+    const row = ((y/BEACON_BLOCK)|0) * bw, base = y*W;
+    for (let x=0;x<W;x++){
+      const T = temp[base+x];
+      if (T <= lim) continue;
+      const b = row + ((x/BEACON_BLOCK)|0);
+      if (T > beaconBest.t[b]){ beaconBest.t[b] = T; beaconBest.i[b] = base+x; }
+    }
+  }
+  beacons.length = 0;
+  for (let b=0;b<n;b++) if (beaconBest.i[b] >= 0) beacons.push(beaconBest.i[b]);
+}
+
+function moveMoth(i, x, y){
+  /* Which warm thing, of the ones it can see. Brightness against distance rather than
+     simply the nearest, so a bonfire across the box beats a warm patch of floor beside
+     it — and rather than simply the hottest, so it is not dragged past a candle it is
+     standing next to by a furnace at the far end. */
+  let bx = -1, by = -1, best = 0;
+  for (let k=0;k<beacons.length;k++){
+    const j = beacons[k], jx = j % W, jy = (j / W) | 0;
+    const d = Math.abs(jx - x) + Math.abs(jy - y);
+    const score = (temp[j] - AMBIENT) / (1 + d);
+    if (score > best){ best = score; bx = jx; by = jy; }
+  }
+
+  // Close enough to be warm: stop steering and flutter. It has arrived, and what happens
+  // next is an accident rather than a decision, which is the whole of a moth.
+  if (temp[i] >= AMBIENT + MOTH_SHY) bx = -1;
+
+  if (bx >= 0){
+    // Towards it, diagonally if it can, straight if it cannot. No hesitation and no
+    // sense of danger — that is the entire character of the thing.
+    const sx = Math.sign(bx - x), sy = Math.sign(by - y);
+    for (const [dx,dy] of [[sx,sy],[sx,0],[0,sy]]){
+      if ((dx||dy) && walkable(x+dx, y+dy)){ swap(i, idx(x+dx, y+dy)); return; }
+    }
+    return;
+  }
+
+  // Nothing worth flying at: flutter, keeping roughly to a heading so the path curves.
+  let d = (way[i] || (1 + ((Math.random()*8)|0))) - 1;
+  if (Math.random() < MOTH_TURN) d = (d + (Math.random() < .5 ? 1 : 7)) % 8;
+  for (let k=0;k<8;k++){
+    const [dx,dy] = MOTH_DIRS[(d + k) % 8];
+    if (walkable(x+dx, y+dy)){
+      way[i] = ((d + k) % 8) + 1;
+      swap(i, idx(x+dx, y+dy));
+      return;
+    }
+  }
+}
+
 function moveLife(){
   const alive = [];
-  for (let i=0;i<type.length;i++) if (type[i] === BUG) alive.push(i);
+  let anyMoth = false;
+  for (let i=0;i<type.length;i++){
+    const t = type[i];
+    if (t === BUG || t === MOTH){ alive.push(i); if (t === MOTH) anyMoth = true; }
+  }
   if (!alive.length) return;
+  // One pass for all of them, and only when there is something that cares.
+  if (anyMoth) findBeacons(); else beacons.length = 0;
 
   for (const i of alive){
-    if (type[i] !== BUG) continue;          // burned, eaten or drowned since the list
+    const kind = type[i];
+    if (kind !== BUG && kind !== MOTH) continue;   // burned, eaten or drowned since the list
+    if (kind === MOTH){
+      if (Math.random() * MOTH_STEP < 1) moveMoth(i, i % W, (i / W) | 0);
+      continue;
+    }
     const x = i % W, y = (i / W) | 0;
 
     // Falls, because nothing else will do it: a bug is a static solid so that it does not
