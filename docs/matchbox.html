@@ -451,6 +451,8 @@ const GROUPS = [
   { name:'Scene', items:'scenes' },
   { name:'Tools', items:'tools' },
 ];
+// Where the room and vent pickers hand the tray back to when they are done.
+const TOOLS_DRAWER = GROUPS.findIndex(g => g.items === 'tools');
 
 /* What a saved scene calls each material, which is deliberately not what the tray
    calls it.
@@ -1508,17 +1510,23 @@ stripEl.addEventListener('keydown', e => {
 
 let tool = WOOD;
 let brush = 3;
-/* What a vent will pour, and how you say so: pick the material, then pick Vent.
+/* What a vent will pour, and how you say so: tap Vent, then tap a material.
 
-   No extra control for it. Selecting any material remembers it here, so "Lava, then
-   Vent" gives a lava vent and "Water, then Vent" gives a spring, using only the two taps
-   you would have made anyway. The vent chip wears the colour of whatever it is holding
-   and the readout spells it out — "Vent · Lava" — because an invisible mode that changes
-   what a button does is a mode you will get wrong.
+   The first version took it from whatever you had selected before — "Lava, then Vent" —
+   and that was reported as clunky, again correctly. It is the same number of taps, but
+   the order is backwards from the way anybody says it, and nothing on screen tells you
+   the first tap has done anything. A tool whose behaviour depends on what you touched
+   before it is a mode, and an invisible one.
+
+   So tapping Vent asks. It stays selected, the readout says what it is waiting for, and
+   the next material you touch becomes what it pours rather than what you draw. Tapping
+   Vent again backs out and leaves the payload alone. Every material is reachable because
+   the drawers keep working while it waits — no curated shortlist to argue about.
 
    Declared here with the rest of the tool state rather than beside setVentFeed, because
    `put()` and `chipFor()` both read it and both can run before that point. */
 let ventFeed = LAVA;
+let ventAsking = false;
 let shape = 'free';          // 'free' | 'line' | 'box'
 let anchor = null, ghost = null;   // the two ends of a shape being dragged out
 let heatView = false;        // false-colour the whole grid by temperature
@@ -1547,16 +1555,40 @@ function chipFor(t){
 function chipLabel(b, text){ b.querySelector('.lb').textContent = text; }
 let openDrawer = 0;
 
-// The two drawers that hold buttons rather than materials, and where those buttons
-// live while their drawer is shut.
-const HOLDER = { tools: () => actsEl, scenes: () => scenesEl };
+// The drawers that hold buttons rather than materials, and where those buttons live
+// while their drawer is shut. The room picker is in here too: it is not a drawer, it
+// has no tab, and it borrows the same row when it is asked for — which is the whole
+// reason it costs no height and moves nothing.
+const HOLDER = { tools: () => actsEl, scenes: () => scenesEl, room: () => roomEl };
+
+/* One place decides what is in the row, and one place puts it back.
+   Buttons are moved rather than rebuilt so they keep their identity and their state — a
+   Clear halfway through asking, or a Save halfway through asking, must not be replaced
+   by a fresh copy that has forgotten. `shownHolder` is what that row was borrowed from,
+   so it can be given back before the row is emptied. */
+let shownHolder = null;
+
+function stowButtons(){
+  if (!shownHolder) return;
+  while (matsEl.firstChild) shownHolder.appendChild(matsEl.firstChild);
+  shownHolder = null;
+}
+
+function fillFrom(holder){
+  stowButtons();
+  matsEl.textContent = '';
+  while (holder.firstChild) matsEl.appendChild(holder.firstChild);
+  shownHolder = holder;
+  fitLabels();
+}
 
 function showDrawer(n){
+  stowButtons();
   openDrawer = n;
   matsEl.textContent = '';
   const g = GROUPS[n];
   const holder = typeof g.items === 'string' ? HOLDER[g.items]() : null;
-  if (holder) while (holder.firstChild) matsEl.appendChild(holder.firstChild);
+  if (holder){ while (holder.firstChild) matsEl.appendChild(holder.firstChild); shownHolder = holder; }
   else g.items.forEach(t => matsEl.appendChild(chipFor(t)));
   tabsEl.querySelectorAll('.tab').forEach((b,i) => b.setAttribute('aria-pressed', String(i===n)));
   fitLabels();
@@ -1593,21 +1625,11 @@ function fitLabels(){
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitLabels);
 addEventListener('resize', fitLabels);
 
-// Buttons live in their holder while their drawer is shut, so they keep their identity
-// and their listeners rather than being rebuilt — a Clear or a Save that is halfway
-// through asking would forget it had asked.
-function stowButtons(){
-  const g = GROUPS[openDrawer];
-  if (typeof g.items !== 'string') return;
-  const holder = HOLDER[g.items]();
-  while (matsEl.firstChild) holder.appendChild(matsEl.firstChild);
-}
-
 GROUPS.forEach((g,i) => {
   const b = document.createElement('button');
   b.className = 'tab'; b.type = 'button'; b.textContent = g.name;
   b.setAttribute('aria-pressed', String(i===0));
-  b.addEventListener('click', ()=>{ stowButtons(); showDrawer(i); });
+  b.addEventListener('click', ()=>showDrawer(i));
   tabsEl.appendChild(b);
 });
 
@@ -1699,14 +1721,41 @@ const ROOMS = [
   { n:'Oven',     t:230, tell:'powder, straw, oil, fuse and paper catch on their own' },
   { n:'Furnace',  t:480, tell:'everything but coal and thermite goes by itself' },
 ];
-let roomAt = 2;                                  // Room, 20°C
+let roomAt = 2;                                  // Normal, 20°C
+
+/* Tapping Room shows the six, rather than stepping to the next one.
+
+   Cycling was the first version and it was reported as clunky, correctly: the settings
+   are invisible until you have been through them, and getting from Furnace back to
+   Normal is five taps in one direction and none in the other. Six chips is one row,
+   which is the size of every other drawer, so showing them costs nothing and moves
+   nothing — the row it borrows is the row the tray already keeps clear. */
+const roomEl = document.createElement('div');
+
+function setRoom(i){
+  roomAt = i;
+  const r = ROOMS[i];
+  AMBIENT = r.t;
+  // The room is the air. Everything solid comes along by conduction at whatever its own
+  // `cond` and `cap` say, which is the interesting part and is why ice can hold out in
+  // an oven for a while.
+  for (let k=0;k<type.length;k++) if (type[k]===E) temp[k] = AMBIENT;
+  roomEl.querySelectorAll('.chip').forEach((c,k) => c.setAttribute('aria-pressed', String(k===i)));
+  matsEl.querySelectorAll('.chip[data-room]').forEach((c,k) => c.setAttribute('aria-pressed', String(k===i)));
+  say(`${r.n} — ${r.t}°C, ${r.tell}`, true);
+}
+
+ROOMS.forEach((r,i) => {
+  const b = actionChip(r.n, ()=>{ setRoom(i); showDrawer(TOOLS_DRAWER); }, false, 'room-' + r.n.toLowerCase());
+  b.dataset.room = i;
+  b.setAttribute('aria-pressed', String(i === roomAt));
+  roomEl.appendChild(b);
+});
 
 const roomBtn = actionChip('Room', ()=>{
-  roomAt = (roomAt + 1) % ROOMS.length;
-  const r = ROOMS[roomAt];
-  AMBIENT = r.t;
-  for (let i=0;i<type.length;i++) if (type[i]===E) temp[i] = AMBIENT;
-  say(`${r.n} — ${r.t}°C, ${r.tell}`, true);
+  fillFrom(roomEl);
+  tabsEl.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-pressed','false'));
+  say(`Room — ${ROOMS[roomAt].n}, ${AMBIENT}°C. Pick one`, true);
 }, false, 'room');
 actsEl.appendChild(roomBtn);
 
@@ -1988,6 +2037,10 @@ function say(msg, force){
   roEl.textContent = msg;
 }
 function sayTool(){
+  // While the vent is asking, the readout is the only thing on screen saying that the
+  // next tap means something different. It takes the whole line rather than sharing it
+  // with the brush, because it is a question and not a status.
+  if (ventAsking){ say('Vent — tap a material for it to pour', true); return; }
   const how = shape === 'free' ? '' : `  ·  ${shape}`;
   say(`${toolName()}  ·  brush ${brush}${how}`);
 }
@@ -1997,13 +2050,33 @@ function setVentFeed(t){
   ventFeed = t;
   const c = M[t].col, chip = matsEl.querySelector('.chip[data-t="' + VENT + '"]');
   if (chip) chip.querySelector('.sw').style.background = `rgb(${c[0]},${c[1]},${c[2]})`;
+  // ...and the chip is rebuilt from `ventFeed` by chipFor whenever the drawer reopens,
+  // so this only has to cover the case where it is already on screen.
 }
 
 function setTool(t){
   if (t==='match' && matchLit<=0) return;
-  if (typeof t === 'number') setVentFeed(t);
-  tool = t;
-  matsEl.querySelectorAll('.chip').forEach(c =>
+
+  // Tapping Vent asks what to pour; tapping it again backs out. Anything else touched
+  // while it is asking answers the question rather than changing the tool — which is
+  // the one place in the tray where a chip does something other than what it says, so
+  // the readout says so for as long as it is true.
+  if (t === VENT){
+    ventAsking = !ventAsking;
+    tool = VENT;
+  } else if (ventAsking && typeof t === 'number' && t !== E){
+    setVentFeed(t);
+    ventAsking = false;
+    tool = VENT;
+  } else {
+    ventAsking = false;
+    tool = t;
+  }
+  // Only the material chips. This used to sweep every chip in the row, which meant
+  // anything else sharing it got told it was not selected: tapping Erase while the Tools
+  // drawer was open switched the Heat view's own pressed state off underneath it, and
+  // the room picker's tick would have gone the same way.
+  matsEl.querySelectorAll('.chip[data-t]').forEach(c =>
     c.setAttribute('aria-pressed', String(Number(c.dataset.t)===tool)));
   eraseBtn.setAttribute('aria-pressed', String(tool==='erase'));
   sayTool();
