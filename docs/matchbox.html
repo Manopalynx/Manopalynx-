@@ -1552,6 +1552,19 @@ const FISH_HOT  = 40;    // water this warm kills it, well before the water itse
                          // anything at all.
 const BREATH_BACK = 4;   // breath recovered per tick out of the water, against one lost per
                          // tick in it — so surfacing pays, but only while you keep doing it.
+const SINK_SLOW = 6;     /* one chance in this many, per tick, of going down a cell through a
+                            liquid — against a certainty through air. Reported from the
+                            phone: bugs sank at exactly the speed they fell, which reads as
+                            a hole in the water rather than as water. Six is taken from the
+                            falling pass, which already slows a grain by about that much the
+                            moment it reaches a pool (DRAG_WET .62 against DRAG_AIR .94), so
+                            a creature does not sink at a visibly different rate to the sand
+                            beside it.
+                            Measured, it comes out at 4.1 ticks per cell rather than 6:
+                            water flowing round the bug opens the odd gap underneath it, and
+                            a gap is air, and it drops straight through that one. Against 1
+                            cell a tick in the open, and about 36 cells in the 150 it has
+                            before it drowns — which is most of the way down a tank. */
 
 /* Something that breathes air, in water. It used to be a `meets` row, which fires the
    instant the two touch — so a bug that so much as brushed the surface was simply gone,
@@ -1654,8 +1667,15 @@ function moveLife(){
 
     // Falls, because nothing else will do it: a bug is a static solid so that it does not
     // trickle down a slope like a powder, which means gravity is this pass's job. Through
-    // a liquid as well as through air — a bug that lands in a pond goes under it.
-    if (walkable(x, y+1) || sinkable(x, y+1, kind)){ swap(i, idx(x, y+1)); continue; }
+    // a liquid as well as through air — a bug that lands in a pond goes under it — but not
+    // at the same speed, or the pond may as well not be there.
+    if (walkable(x, y+1)){ swap(i, idx(x, y+1)); continue; }
+    if (sinkable(x, y+1, kind)){
+      // A failed roll is still sinking, not standing: it does not fall through to the
+      // walking code, because there is nothing under it to walk on.
+      if (Math.random() * SINK_SLOW < 1) swap(i, idx(x, y+1));
+      continue;
+    }
 
     const hot = temp[i] >= PANIC_AT;
     const every = hot ? BUG_FLEE : BUG_STEP;
@@ -2846,7 +2866,19 @@ function paintCell(x, y, solid){
     if (type[i]===E && Math.random()<.28) become(x,y,FIRE);
   } else if (tool === 'erase'){
     put(x,y,E);
-  } else if (type[i]===E || M[type[i]].ph===0){
+  } else if (type[i]===E || M[type[i]].ph===0 || M[type[i]].ph===1){
+    /* Into a liquid as well as into air and gas, which it would not do before: you could
+       only ever build *above* a tank, never in it, so a fish had to be dropped from the top
+       and a weight could not be placed on the bottom of a pool. A liquid is the one thing
+       in this box that gets out of the way of other things — the falling pass displaces it
+       all day — so a brush that cannot is the odd one out.
+
+       Solids and powders still refuse, and deliberately: painting over a wall you meant to
+       draw beside is not a feature, and Erase is one tap away.
+
+       It replaces the water rather than pushing it aside, so filling a sealed tank with
+       sand leaves you less water than you started with. Displacing properly means finding
+       somewhere for it to go, and in a sealed tank there is nowhere. */
     // The brush lays down 92% of what it covers, which is what stops a stroke
     // reading as a printed block. A shape is a deliberate edge and lays down all of
     // it: measured, a "solid" rectangle came out 1986 cells of a 2156-cell box, and
