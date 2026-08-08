@@ -988,6 +988,42 @@ await check(browser, 'a vent under a shaft builds a volcano out of its own lava'
   return null;
 });
 
+/* The count in the corner is the denominator of a progress bar, so the list behind it has
+   to be the real list. There used to be two derivations of it — this table, and the label
+   written out again at each `found()` call site — with nothing comparing them. If they had
+   drifted the box would have promised discoveries that did not exist, or hidden ones that
+   did, and the only symptom would have been a number. */
+await check(browser, 'every discovery a scene can raise is in the table behind the counter', () => {
+  const bad = [];
+  const keys = new Set(FINDS.map(f => f.key));
+  if (keys.size !== FINDS.length) bad.push(`${FINDS.length} entries but only ${keys.size} distinct keys`);
+  for (const f of FINDS){
+    if (!f.label) bad.push(`${f.key} has no label`);
+    if (!M[f.t]) bad.push(`${f.key} names material ${f.t}, which does not exist`);
+    if (FIND_LABEL.get(f.key) !== f.label) bad.push(`${f.key} is missing from the label lookup`);
+  }
+
+  // Now the other direction, which is the one that matters: play a handful of scenes and
+  // check every key they actually raise is one the table knows about.
+  const scenes = [
+    () => { const f = __floor(); __slab(20, f-8, 44, f-1, LAVA); __slab(50, f-8, 60, f-1, WAX);
+            __slab(50, f-12, 60, f-10, WATER); },
+    () => { const f = __floor(); __slab(20, f-8, 44, f-1, ACID); __slab(50, f-8, 60, f-1, STEEL);
+            __slab(46, f-8, 49, f-1, ACID); },
+    () => { const f = __floor(); __slab(20, f-6, 60, f-1, SAND);
+            __slab(20, f-14, 60, f-8, LAVA); },
+    () => { const f = __floor(); __slab(30, f-10, 60, f-1, ICE); __slab(20, f-4, 28, f-1, OIL); },
+  ];
+  for (const build of scenes){
+    __wipe(); build();
+    __hold(40, H-10, 3, 200);
+    for (let k=0;k<2000;k++) __step(1);
+  }
+  for (const k of finds) if (!keys.has(k)) bad.push(`a scene raised "${k}", which is not in the table`);
+  if (finds.size === 0) bad.push('four scenes and a match raised no discoveries at all, so this proves nothing');
+  return bad.length ? bad.join('; ') : null;
+});
+
 console.log('\n— scenes, and getting them back —');
 
 /* The reason this table exists at all, and it is a trap that was live before anything
@@ -1009,6 +1045,40 @@ await check(browser, 'every material has a save key and no two share one', () =>
     seen.set(k, M[t].n);
   }
   if (TYPE_OF_KEY.size !== seen.size) bad.push(`the reverse lookup has ${TYPE_OF_KEY.size} entries for ${seen.size} keys`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* The room is part of what was built, not part of the app around it. Leaving it out of
+   the save was a defect: a volcano built in a Furnace and loaded back at Normal is a
+   different scene doing different things, and nothing about it looks wrong. */
+await check(browser, 'a save carries the room it was built in', () => {
+  const bad = [];
+  const hot = ROOMS.findIndex(r => r.n === 'Oven');
+  const cold = ROOMS.findIndex(r => r.n === 'Freezing');
+  setRoom(hot);
+  __wipe(); const f = __floor();
+  __slab(30, f-6, 60, f-1, WOOD);
+  const text = JSON.stringify(encodeScene());
+  setRoom(cold);
+  decodeScene(JSON.parse(text));
+  if (roomAt !== hot) bad.push(`saved in ${ROOMS[hot].n} and loaded as ${ROOMS[roomAt].n}`);
+  if (AMBIENT !== ROOMS[hot].t) bad.push(`the room reads ${ROOMS[roomAt].n} but AMBIENT is ${AMBIENT}`);
+
+  // The order matters and is easy to get wrong: the field is filled with the current
+  // AMBIENT and put() hands a material with no `t0` the current AMBIENT, so the room has
+  // to be set before the scene is laid down. Measured wrong once, in this suite's own
+  // scene: a stone floor left at −30 froze the water standing on it in a 20°C room.
+  let coldest = Infinity;
+  for (let i=0;i<temp.length;i++) if (temp[i] < coldest) coldest = temp[i];
+  if (coldest < ROOMS[hot].t - 1) bad.push(`something came back at ${Math.round(coldest)}°C in a ${ROOMS[hot].t}°C room`);
+
+  // A save from before the room was stored keeps whatever is set rather than guessing.
+  setRoom(cold);
+  const old = JSON.parse(text); delete old.room; old.v = 2;
+  decodeScene(old);
+  if (roomAt !== cold) bad.push(`a save with no room in it moved the room to ${ROOMS[roomAt].n}`);
+
+  setRoom(ROOMS.findIndex(r => r.n === 'Normal'));
   return bad.length ? bad.join('; ') : null;
 });
 

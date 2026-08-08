@@ -72,6 +72,21 @@ const stageBox = p => p.locator('.stage').boundingBox();
 // are asking a question, so the text is read from the span rather than the button.
 const labelOf = chip => chip.locator('.lb').textContent();
 
+// Opens the drawer a button lives in and hands back its locator WITHOUT clicking it, for
+// the checks that need to measure something before the tap. `press` clicks; this does not.
+// Hunting for the drawer rather than naming it is what stopped Save moving from Tools to
+// Scene from being a silent breakage — it was not silent, but only because of this.
+async function reveal(p, act) {
+  const sel = `[data-act="${act}"]`;
+  const tabs = await p.locator('.tab').count();
+  for (let i = 0; i < tabs; i++) {
+    await p.locator('.tab').nth(i).click();
+    const chip = p.locator(sel);
+    if (await chip.count() && await chip.isVisible()) return chip;
+  }
+  throw new Error(`no button with data-act="${act}" in any drawer`);
+}
+
 // Materials live in drawers now, so reaching one means opening the right drawer
 // first — exactly as a thumb would. Hunting for the chip rather than hard-coding
 // which tab holds it means moving a material between drawers cannot break the suite
@@ -439,9 +454,8 @@ await check('a button that asks a question does not move the scene while asking'
   });
   const bad = [];
   for (const act of ['clear', 'save']) {
-    await p.locator('.tab', { hasText: /^tools$/i }).click();
+    const btn = await reveal(p, act);
     const before = await geom();
-    const btn = p.locator(`[data-act="${act}"]`);
     if (act === 'save') await btn.click();          // first save fills the slot
     await btn.click();                              // this one asks
     const label = await labelOf(btn);
@@ -784,6 +798,165 @@ await check('a vent drawn on the stage actually pours', async p => {
   const made = await p.evaluate(() => __count(LAVA) + __count(STONE));
   const lava = await p.evaluate(() => __count(LAVA));
   if (!lava) return `${vents} vents poured nothing in four seconds`;
+  return null;
+});
+
+console.log('\n— undo and the finds —');
+
+/* The only way back from a stray drag across a finished build used to be Clear, which
+   throws away the whole box: the recovery for a small mistake was a bigger one. */
+await check('a stray stroke can be taken back', async p => {
+  const sig = () => p.evaluate(() => { let h=0; for (let i=0;i<type.length;i++) h=(h*31+type[i])|0; return h; });
+  await p.locator('.tab', { hasText: /^tools$/i }).click();
+  const undoBtn = p.locator('[data-act="undo"]');
+  if (!await undoBtn.isDisabled()) return 'Undo offered to undo something before anything had happened';
+
+  await pick(p, 'stone');
+  const before = await sig();
+  const cells0 = await p.evaluate(() => __cells());
+  const s = await stageBox(p);
+  await p.mouse.move(s.x + s.width*0.2, s.y + s.height*0.5);
+  await p.mouse.down();
+  for (let i=0;i<20;i++) await p.mouse.move(s.x + s.width*(0.2+0.03*i), s.y + s.height*0.5);
+  await p.mouse.up();
+  const laid = await p.evaluate(() => __cells()) - cells0;
+  if (laid < 50) return `the stroke only laid ${laid} cells, so there is nothing much to undo`;
+
+  await p.locator('.tab', { hasText: /^tools$/i }).click();
+  if (await undoBtn.isDisabled()) return 'Undo was still disabled after a stroke';
+  await undoBtn.click();
+  if (await sig() !== before) return `the scene did not come back — ${await p.evaluate(() => __cells())} cells against ${cells0}`;
+  if (!await undoBtn.isDisabled()) return 'Undo stayed available after being used, so it is offering a second step it does not have';
+  const said = await p.locator('#ro').textContent();
+  if (!/undid/i.test(said)) return `the readout says "${said}"`;
+  return null;
+});
+
+// The whole-box actions are where an accident costs the most, so they are the ones that
+// most need taking back. Clear especially: it asks first, but asking is not undoing.
+/* The whole-box actions are where an accident costs the most, so they are the ones that
+   most need taking back. Clear especially: it asks first, but asking is not undoing.
+
+   Everything here happens on a scene of nothing but stone, and that is not tidiness. The
+   simulation keeps running in this harness, so a scene with anything mobile in it drifts
+   between one line of the check and the next — measured, comparing against a signature
+   taken before the opening scene had settled reported "the scene did not come back" for an
+   undo that had worked perfectly. Stone does not move. */
+await check('Clear, a preset and Load can all be taken back', async p => {
+  const sig = () => p.evaluate(() => { let h=0; for (let i=0;i<type.length;i++) h=(h*31+type[i])|0; return h; });
+  const stillness = async () => { const a = await sig(); await p.waitForTimeout(350); return a === await sig(); };
+  await p.evaluate(() => {
+    wipeAll();
+    const f = H-6;
+    for (let x=0;x<W;x++) for (let y=f;y<H;y++) put(x,y,STONE);
+    for (let x=(W>>2); x<(W>>1); x++) for (let y=f-9;y<f;y++) put(x,y,STONE);
+  });
+  if (!await stillness()) return 'a scene of nothing but stone is not holding still, so nothing here can be concluded';
+
+  const undoBtn = await reveal(p, 'undo');
+
+  const beforeClear = await sig();
+  const clear = await reveal(p, 'clear');
+  await clear.click(); await clear.click();
+  if (await p.evaluate(() => __cells()) !== 0) return 'Clear did not clear, so this proves nothing';
+  await (await reveal(p, 'undo')).click();
+  if (await sig() !== beforeClear) return 'the scene did not come back after undoing a Clear';
+
+  const beforePreset = await sig();
+  await press(p, 'scene-candle');
+  if (await sig() === beforePreset) return 'the preset changed nothing, so this proves nothing';
+  await (await reveal(p, 'undo')).click();
+  if (await sig() !== beforePreset) return 'the scene did not come back after undoing a preset';
+
+  // Candle for this leg rather than Cut: Cut's thermite is a powder and its pile slumps,
+  // so the scene drifts between taking the signature and undoing back to it. That measured
+  // as "the scene did not come back after undoing a Load" for an undo that was working.
+  await press(p, 'save');
+  await press(p, 'scene-candle');
+  if (!await stillness()) return 'the scene to be undone back to is still moving';
+  const beforeLoad = await sig();
+  await press(p, 'load');
+  if (await sig() === beforeLoad) return 'Load changed nothing, so this proves nothing';
+  await (await reveal(p, 'undo')).click();
+  if (await sig() !== beforeLoad) return 'the scene did not come back after undoing a Load';
+  return null;
+});
+
+/* The counter said "FOUND 3/27" and that was the whole of it: twenty-four things existed
+   that the box would never name, mention again, or hint at. A progress bar for a task
+   nobody has been told. */
+await check('the finds panel lists everything, without giving the answers away', async p => {
+  const geom = () => p.evaluate(() => {
+    const r = e => { const b = document.querySelector(e).getBoundingClientRect();
+                     return [Math.round(b.top), Math.round(b.height)]; };
+    return JSON.stringify({ stage:r('.stage'), tray:r('.tray'), strip:r('#strip'), mats:r('#mats') });
+  });
+  const base = await geom();
+  await press(p, 'finds');
+  const r = await p.evaluate(() => {
+    const rows = [...document.querySelectorAll('#findList .find')];
+    return { rows: rows.length, total: FINDS.length,
+             title: document.getElementById('findTitle').textContent,
+             unfoundText: rows.filter(x => x.dataset.got !== 'true').map(x => x.querySelector('.lb').textContent),
+             open: getComputedStyle(document.getElementById('findPick')).display !== 'none' };
+  });
+  if (!r.open) return 'the panel did not open';
+  if (r.rows !== r.total) return `the panel listed ${r.rows} of the ${r.total} discoveries the counter promises`;
+  if (!r.title.includes(String(r.total))) return `the heading reads "${r.title}" and never says how many there are`;
+  if (await geom() !== base) return 'opening the panel moved the page';
+
+  // An unfound row must say where to look and not what happens there.
+  const leaks = r.unfoundText.filter(t => /→|\binto\b|through|goes off|burns down/.test(t));
+  if (leaks.length) return `${leaks.length} unfound rows give the answer away, e.g. "${leaks[0]}"`;
+  if (!r.unfoundText.every(t => /—\s*\?$/.test(t))) return `an unfound row reads "${r.unfoundText.find(t => !/—\s*\?$/.test(t))}"`;
+  return null;
+});
+
+await check('finding something moves it into the list with its name on it', async p => {
+  // A lava pool with water over it: it sets into stone, the water boils, and the two
+  // touching makes obsidian. Three of the twenty-seven, without a match.
+  await p.evaluate(() => {
+    wipeAll(); const f = H-6;
+    for (let x=0;x<W;x++) for (let y=f;y<H;y++) put(x,y,STONE);
+    for (let x=20;x<44;x++) for (let y=f-8;y<f;y++) put(x,y,LAVA);
+    for (let x=50;x<60;x++) for (let y=f-12;y<f-9;y++) put(x,y,WATER);
+    for (let x=50;x<60;x++) for (let y=f-8;y<f;y++) put(x,y,WAX);
+    for (let k=0;k<3000;k++){ moveFalling(); moveRising(); diffuse(); react(); }
+  });
+  await press(p, 'finds');
+  const r = await p.evaluate(() => {
+    const rows = [...document.querySelectorAll('#findList .find')];
+    const got = rows.filter(x => x.dataset.got === 'true');
+    return { got: got.map(x => x.querySelector('.lb').textContent),
+             firstUnfound: rows.findIndex(x => x.dataset.got !== 'true'),
+             gotCount: got.length, title: document.getElementById('findTitle').textContent,
+             counter: document.getElementById('gauge').textContent };
+  });
+  if (!r.gotCount) return 'the scene found nothing, so this proves nothing';
+  if (r.firstUnfound !== r.gotCount) return 'found and unfound rows are interleaved rather than found first';
+  if (r.got.some(t => /—\s*\?$/.test(t))) return `a found row still reads as unknown: "${r.got.find(t => /—\s*\?$/.test(t))}"`;
+  if (!r.title.includes(String(r.gotCount))) return `the heading "${r.title}" does not agree with the ${r.gotCount} rows ticked`;
+  return null;
+});
+
+await check('the finds panel can be closed on a screen too small to show it all', async p => {
+  await p.setViewportSize({ width: 320, height: 568 });
+  await p.waitForTimeout(150);
+  await press(p, 'finds');
+  const r = await p.evaluate(() => {
+    const panel = document.getElementById('findPick');
+    const close = document.getElementById('findClose').getBoundingClientRect();
+    const pb = panel.getBoundingClientRect();
+    return { scrolls: panel.scrollHeight > panel.clientHeight + 1,
+             inView: close.top >= pb.top - 1 && close.bottom <= pb.bottom + 1,
+             tall: Math.round(close.height) };
+  });
+  if (!r.scrolls) return '27 rows fitted a 320×568 screen without scrolling, so this proves nothing';
+  if (!r.inView) return 'Close is outside the visible panel on a screen that has to scroll';
+  if (r.tall < 30) return `Close is ${r.tall}px tall — that is not a fingertip`;
+  await p.locator('#findClose').click();
+  if (await p.evaluate(() => getComputedStyle(document.getElementById('findPick')).display !== 'none'))
+    return 'Close did not close the panel';
   return null;
 });
 

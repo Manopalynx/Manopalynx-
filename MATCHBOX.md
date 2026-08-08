@@ -242,6 +242,46 @@ a vent at room temperature is a cold spot in the one cell where that is fatal. I
 `proof` against acid and has no melting point: a source you can destroy with what it
 pours is not a source.
 
+## Undo
+
+One step, in **Tools**, disabled until there is something to go back to. It covers a
+stroke, a Clear, a preset, a Load and a Rain — every action that changes the box in one go.
+
+The only way back from a stray drag across a finished build used to be Clear, which throws
+away the whole box: the recovery for a small mistake was a bigger one.
+
+It copies the whole field, which is the honest way — a stroke can lay material down, erase,
+displace what was underneath and apply heat all at once, so there is no small record of
+"what changed" that is not just as big. The copy goes into a buffer allocated once and
+written over. `.slice()` was the first version and measured **2.6ms a snapshot** with 470kB
+of new arrays handed to the collector every stroke; `.set()` into a kept buffer is the same
+copy for **0.02ms**.
+
+Deliberately one level and no redo. Two things happen a moment apart in this box and the
+simulation keeps running underneath, so a deep stack would be a list of scenes that never
+existed at the moment you went back to them. It also refuses rather than guesses across a
+resize: the arrays are a different shape, and putting the old one back bottom-aligned would
+be a guess dressed up as an undo.
+
+## The finds
+
+`FOUND 3/27` in the corner used to be the whole of it. Twenty-four things existed that the
+box would never name, mention again or hint at — a progress bar for a task nobody had been
+told. **Finds** in Tools opens the list: found ones read as what they are (`Lava + Water →
+Obsidian`) and the rest read `Acid — ?`, carrying the material's colour and name and nothing
+else. Eight rows mentioning Acid tell you to go and play with acid without telling you what
+happens when you do. Found ones sort to the top, so it is a record before it is a to-do list.
+
+The twenty-seven are derived from the material table — every melt, boil, set, ash, contact
+reaction and explosion in it — so a material added tomorrow brings its discoveries with it.
+
+**That list and the words for each find used to be two separate derivations** with nothing
+comparing them: this table, and the label written out again at each `found()` call site. The
+count is the denominator of a progress bar, so a drift between them would have had the box
+promising discoveries that did not exist, or hiding ones that did, with a number as the only
+symptom. They are one table now, and the suite plays four scenes and asserts every key they
+raise is in it.
+
 ## Things worth building
 
 Every one of these is checked by `test/matchbox-sim.mjs`. The first four were measured
@@ -287,8 +327,9 @@ from 1854 ticks to 202, and nothing about it looks wrong.
 
 ## Saving
 
-One slot, in the **Tools** drawer. Save asks before replacing an existing save and not
-before the first one — a confirm on a harmless action is what teaches people to tap
+One slot, in the **Scene** drawer with the presets — a save is a scene, which is the more
+honest grouping and is what made room for Finds in Tools without either row reaching nine
+chips. Save asks before replacing an existing save and not before the first one — a confirm on a harmless action is what teaches people to tap
 through the one that is not.
 
 **A save stores what you built, not what the fire was doing.** Every cell comes back
@@ -387,8 +428,8 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 43 checks — the simulation
-node test/matchbox-ui.mjs      # 31 checks — the hand
+node test/matchbox-sim.mjs     # 45 checks — the simulation
+node test/matchbox-ui.mjs      # 36 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
 
