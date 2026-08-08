@@ -1279,7 +1279,7 @@ await check(browser, 'the box kills bugs with what it already had', () => {
   __slab(38, f0-4, 60, f0-2, WATER);
   for (let k=0;k<600;k++) __step(1);
   if (__count(BUG) > wet0*0.2) bad.push(`${__count(BUG)} of ${wet0} bugs survived being poured on`);
-  if (![...finds].some(k => k.startsWith(BUG + ':meets'))) bad.push('drowning did not register as a discovery');
+  if (![...finds].some(k => k.startsWith(BUG + ':drown'))) bad.push('drowning did not register as a discovery');
 
   // Acid, because acid eats cells and a bug is a cell.
   __wipe(); __floor();
@@ -1406,21 +1406,24 @@ await check(browser, 'the box kills moths with what it already had', () => {
   if (__count(MOTH)) bad.push('a moth walled in with a match held on it did not burn');
   if (__count(ASH) <= ash0) bad.push('a burned moth left nothing behind');
 
-  /* Water, through its own `meets` row, which also earns it a discovery.
-     Poured *beside* them rather than over them: `put` replaces whatever is in the cell, so
-     slabbing water across where the moths are standing deletes them without any reaction
-     happening at all — which measured as ten dead moths and no discovery, and looked for
-     all the world like the reaction being broken. */
+  /* Water, which takes a moment now rather than firing on contact, so the scene has to
+     hold them in it: a sealed tank, and the moths placed into the water last.
+     Two ways this scene has been wrong before. Slabbing water *across* standing moths
+     deleted them outright — `put` replaces whatever is in the cell — which measured as ten
+     dead moths and no discovery and looked exactly like the rule being broken. Then three
+     water cells dabbed around each moth measured as ten *survivors*, because the water ran
+     off down the floor within a tick and the moths simply flew away from it. */
   __wipe(); __floor();
+  const tx = (W/2)|0;
+  __slab(tx-16, f0-12, tx+16, f0-1, WATER);
+  __slab(tx-17, f0-13, tx+17, f0-13, STONE);
+  __slab(tx-17, f0-12, tx-17, f0-1, STONE);
+  __slab(tx+17, f0-12, tx+17, f0-1, STONE);
   let wet0 = 0;
-  for (let k=0;k<10;k++){
-    const x = 40 + k*6;
-    put(x, f0-6, MOTH); wet0++;
-    put(x-1, f0-6, WATER); put(x+1, f0-6, WATER); put(x, f0-7, WATER);
-  }
+  for (let k=0;k<10;k++){ put(tx-14 + k*3, f0-6, MOTH); wet0++; }
   for (let k=0;k<600;k++) __step(1);
-  if (__count(MOTH) > wet0*0.3) bad.push(`${__count(MOTH)} of ${wet0} moths survived being surrounded by water`);
-  if (![...finds].some(k => k.startsWith(MOTH + ':meets'))) bad.push('drowning did not register as a discovery');
+  if (__count(MOTH) > wet0*0.3) bad.push(`${__count(MOTH)} of ${wet0} moths survived being sealed into water`);
+  if (![...finds].some(k => k.startsWith(MOTH + ':drown'))) bad.push('drowning did not register as a discovery');
   return bad.length ? bad.join('; ') : null;
 });
 
@@ -1516,6 +1519,68 @@ await check(browser, 'the room can kill a tank of fish, hot or cold', () => {
   if (__count(WATER)) bad.push(`the tank did not actually freeze — ${__count(WATER)} cells of water left`);
 
   setRoomTo('Normal');
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* Dying takes a moment, for all three of them, and that is the point of this check.
+
+   Drowning used to be a `meets` row, which fires the instant two cells touch — so a bug
+   that so much as brushed the surface of a puddle was gone with nothing to see, and a
+   stranded fish lay perfectly still for three and a half seconds and then vanished.
+   Reported from the phone as wanting a few seconds and some flapping, which is right: a
+   creature is worth a moment. */
+await check(browser, 'a creature somewhere it cannot live takes a moment about it', () => {
+  const bad = [];
+  const f = H-6, cx = (W/2)|0;
+
+  // A stranded fish throws itself about rather than lying there.
+  __wipe(); __floor();
+  put(cx, f-1, FISH);
+  let hops = 0, died = -1, last = null;
+  const seen = new Set();
+  for (let k=1;k<=900;k++){
+    __step(1);
+    let at = -1;
+    for (let i=0;i<type.length;i++) if (type[i]===FISH) at = i;
+    if (at < 0){ died = k; break; }
+    const p = [at % W, (at / W) | 0];
+    if (last && (p[0]!==last[0] || p[1]!==last[1])) hops++;
+    seen.add(p[0] + ',' + p[1]);
+    last = p;
+  }
+  if (died < 60) bad.push(`a stranded fish was gone in ${died} ticks`);
+  if (died < 0) bad.push('a stranded fish never died at all');
+  if (hops < 10) bad.push(`it moved ${hops} times in ${died} ticks — a fish on a floor flops, it does not lie still`);
+  if (seen.size < 3) bad.push(`it flopped within ${seen.size} cells, which is twitching rather than flopping`);
+
+  /* A bug and a moth in water last long enough to watch, and not the same length of time.
+     The tank has a lid on purpose. A four-deep puddle measured as "a bug never drowns",
+     because the bug walked up to the surface, drew a breath and started the clock again —
+     which is the creature being sensible, not the rule being broken, and the scene not
+     testing what it said it was. Sealed, there is nowhere to surface to. */
+  const under = (t) => {
+    __wipe(); const ff = __floor();
+    __slab(cx-20, ff-10, cx+20, ff-1, WATER);
+    __slab(cx-21, ff-11, cx+21, ff-11, STONE);              // lid
+    __slab(cx-21, ff-10, cx-21, ff-1, STONE);               // and walls, so it stays a tank
+    __slab(cx+21, ff-10, cx+21, ff-1, STONE);
+    put(cx, ff-5, t);
+    for (let k=1;k<=1200;k++){ __step(1); if (!__count(t)) return k; }
+    return -1;
+  };
+  const bug = under(BUG), moth = under(MOTH);
+  for (const [n, ticks] of [['A bug', bug], ['A moth', moth]]){
+    if (ticks < 0) bad.push(`${n} held under water never drowned`);
+    else if (ticks < 45) bad.push(`${n} was gone in ${ticks} ticks — that is instant, not drowning`);
+  }
+  if (bug > 0 && moth > 0 && bug <= moth) bad.push(`a bug lasted ${bug} ticks and a moth ${moth} — the flimsier one should go first`);
+
+  // ...and brushing past water is not a death sentence.
+  __wipe(); const f2 = __floor();
+  __slab(cx-20, f2-2, cx+20, f2-1, WATER);
+  for (let k=0;k<10;k++) put(cx+22+k*3, f2-3, BUG);
+  for (let k=0;k<1800;k++) __step(1);
+  if (__count(BUG) < 4) bad.push(`${10-__count(BUG)} of 10 bugs wandering beside a shallow puddle died in it`);
   return bad.length ? bad.join('; ') : null;
 });
 

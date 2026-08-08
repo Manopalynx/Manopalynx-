@@ -523,8 +523,7 @@ M[VENT]    ={n:'Vent',     ph:3, col:[ 78, 74, 84], ig:9e9, cond:.20, cap:2.4, d
 
    It cannot swim. That is one row, and it costs nothing. */
 M[BUG]     ={n:'Bug',      ph:3, col:[176, 92,132], ig:190, fuel:20, out:1.2, cond:.30, cap:1.0,
-             char:4, ash:ASH, dens:1.1, tough:.6, sparse:.16,
-             meets:[{with:WATER, become:E, tale:'A bug cannot swim'}]};
+             char:4, ash:ASH, dens:1.1, tough:.6, sparse:.16, drown:150};
 /* The bug's opposite, and deliberately so: it flies, and warmth pulls it in rather than
    driving it off. Everything else in this box treats heat as a hazard. One thing that
    treats it as a destination turns a candle into a lure and a fire into a funeral.
@@ -541,8 +540,7 @@ M[BUG]     ={n:'Bug',      ph:3, col:[176, 92,132], ig:190, fuel:20, out:1.2, co
 // swarm was a fuse: one reached the candle, and the fire walked through the whole cloud
 // from body to body, upwards, because each new flame rose and the rest followed it.
 M[MOTH]    ={n:'Moth',     ph:3, col:[214,198,166], ig:120, fuel:8, out:0.1, cond:.28, cap:.7,
-             char:2, ash:ASH, dens:.4, tough:.5, sparse:.10,
-             meets:[{with:WATER, become:E, tale:'A moth cannot swim either'}]};
+             char:2, ash:ASH, dens:.4, tough:.5, sparse:.10, drown:90};
 /* The third one, and the first that lives *inside* something rather than on top of it.
    Water stops being a way to put fires out and becomes a place.
 
@@ -555,7 +553,7 @@ M[MOTH]    ={n:'Moth',     ph:3, col:[214,198,166], ig:120, fuel:8, out:0.1, con
    the tank and the water leaves; freeze it and the water becomes ice; either way there is
    nothing left to breathe. The Room dial is what a fish is really for. */
 M[FISH]    ={n:'Fish',     ph:3, col:[104,168,176], ig:9e9, cond:.42, cap:3.0, dens:1.0,
-             tough:.5, sparse:.14};
+             tough:.5, sparse:.14, air:200};
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
              leak:.02, peak:1500};
 
@@ -737,7 +735,12 @@ ctx.imageSmoothingEnabled = false;
 // `way` is which direction a bug is walking, and it is not in the save on purpose: a
 // heading is state, like a temperature, and a save stores what was built rather than what
 // everything was doing. A loaded bug picks a direction on its first step.
-let W=0, H=0, type, temp, fuel, life, vel, tint, feed, way, img, buf;
+/* `breath` is how long a living thing has been somewhere it cannot survive — a bug under
+   water, a fish out of it. Its own array rather than `life`, which would have been the
+   natural home: react() decays `life` by 6% a tick for anything below its ignition point,
+   so a counter kept there saturates around sixteen and never reaches a threshold of a
+   hundred and fifty. It would simply never have fired. */
+let W=0, H=0, type, temp, fuel, life, vel, tint, feed, way, breath, img, buf;
 
 /* Sizing the grid, and carrying whatever is already in it across.
 
@@ -752,7 +755,7 @@ function build(){
   const nh = Math.max(40, Math.floor(r.height / CELL));
   if (nw === W && nh === H) return;
 
-  const old = W ? { W, H, type, temp, fuel, life, vel, feed, way } : null;
+  const old = W ? { W, H, type, temp, fuel, life, vel, feed, way, breath } : null;
 
   W = nw; H = nh;
   cv.width = W; cv.height = H;
@@ -764,6 +767,7 @@ function build(){
   vel  = new Float32Array(n);
   feed = new Uint8Array(n);
   way  = new Int8Array(n);
+  breath = new Uint8Array(n);
   tint = new Int8Array(n);
   for (let i=0;i<n;i++) tint[i] = (Math.random()*26 - 13)|0;
   img = ctx.createImageData(W,H);
@@ -780,7 +784,7 @@ function build(){
         const i = y*W + x, j = oy*old.W + x;
         type[i] = old.type[j]; temp[i] = old.temp[j];
         fuel[i] = old.fuel[j]; life[i] = old.life[j]; vel[i] = old.vel[j];
-        feed[i] = old.feed[j]; way[i]  = old.way[j];
+        feed[i] = old.feed[j]; way[i]  = old.way[j]; breath[i] = old.breath[j];
       }
     }
   }
@@ -822,6 +826,7 @@ function put(x,y,t){
   // and not what happens to be picked now.
   feed[i] = t===VENT ? ventFeed : 0;
   way[i]  = 0;
+  breath[i] = 0;
   temp[i] = M[t] && M[t].t0 !== undefined ? M[t].t0 : AMBIENT;
 }
 
@@ -834,6 +839,7 @@ function become(x,y,t){
   vel[i]  = 0;
   feed[i] = 0;
   way[i]  = 0;
+  breath[i] = 0;
 }
 
 /* ============================================================ movement
@@ -872,6 +878,7 @@ function swap(a,b){
   // payload the first time something does move one.
   let g=feed[a]; feed[a]=feed[b]; feed[b]=g;
   let d=way[a];  way[a]=way[b];   way[b]=d;
+  let e=breath[a]; breath[a]=breath[b]; breath[b]=e;
 }
 
 function denser(a,b){                  // can a displace b?
@@ -1521,12 +1528,39 @@ function moveMoth(i, x, y){
 }
 
 const FISH_STEP = 5;     // ticks a fish takes between swimming one cell
-const FISH_AIR  = 200;   // ...and how long it lasts out of water. Three and a bit seconds,
-                         // which is long enough to see it flop and short enough to matter.
+const FISH_FLOP = .22;   // ...and how often a stranded one throws itself somewhere. It used
+                         // to lie perfectly still for three and a half seconds and then
+                         // vanish, which is not what a fish on a floor looks like.
 const FISH_HOT  = 40;    // water this warm kills it, well before the water itself boils.
                          // Without it the Warm setting on the room dial is a fish's problem
                          // only at 100 degrees, and nothing between here and there means
                          // anything at all.
+const BREATH_BACK = 4;   // breath recovered per tick out of the water, against one lost per
+                         // tick in it — so surfacing pays, but only while you keep doing it.
+
+/* Something that breathes air, in water. It used to be a `meets` row, which fires the
+   instant the two touch — so a bug that so much as brushed the surface was simply gone,
+   with nothing to see. A creature is worth a moment.
+
+   What counts as being in the water is the cell *above*, not any cell touching. Counting
+   all four neighbours drowned 7 of 10 bugs walking along a dry floor with a puddle beside
+   them: they were never in it, they were stood next to it. Under the surface is the thing
+   that stops you breathing, and it is one lookup rather than four.
+
+   Returns true if it has just died, so the caller stops handling it. */
+function drowning(i, x, y, m){
+  const wet = inb(x, y-1) && type[idx(x, y-1)] === WATER;
+  // Getting a breath back is quicker than losing one, but it is not instant. Zeroing the
+  // clock the moment a cell reaches air made anything that could surface immortal: a bug
+  // in a four-deep puddle walked up, drew one tick of air, and started again from nothing,
+  // for as long as you cared to watch. A creature that can keep surfacing still lives — it
+  // just has to keep doing it.
+  if (!wet){ breath[i] = Math.max(0, breath[i] - BREATH_BACK); return false; }
+  if (++breath[i] < m.drown) return false;      // still struggling
+  found(type[i] + ':drown', `${m.n} drowns`);
+  become(x, y, E);
+  return true;
+}
 
 function moveFish(i, x, y){
   // In water, or not, which is the only question a fish has. Diagonals count: a fish in
@@ -1541,13 +1575,22 @@ function moveFish(i, x, y){
   }
 
   if (!wet){
-    // Out of water. It falls if there is anywhere to fall to, and it is on a clock.
-    if (walkable(x, y+1)){ life[i] += 1; swap(i, idx(x, y+1)); return; }
-    if (++life[i] > FISH_AIR) become(x, y, E);
+    // Out of water, on a clock, and not going quietly. It falls if there is anywhere to
+    // fall to, and otherwise throws itself about until the clock runs out.
+    if (walkable(x, y+1)){ breath[i]++; swap(i, idx(x, y+1)); return; }
+    if (++breath[i] > M[FISH].air){
+      found(FISH + ':air', `${M[FISH].n} cannot breathe air`);
+      become(x, y, E); return;
+    }
+    if (Math.random() < FISH_FLOP){
+      const hop = [[0,-1],[1,-1],[-1,-1],[1,0],[-1,0]];
+      const [dx,dy] = hop[(Math.random()*hop.length)|0];
+      if (walkable(x+dx, y+dy)) swap(i, idx(x+dx, y+dy));
+    }
     return;
   }
 
-  life[i] = 0;
+  breath[i] = 0;
   // Water it can survive. Hot water is still water, and is still fatal.
   if (temp[i] > FISH_HOT){ become(x, y, E); return; }
 
@@ -1583,12 +1626,16 @@ function moveLife(){
     const kind = type[i];
     // burned, eaten, drowned or dried out since the list was taken
     if (kind !== BUG && kind !== MOTH && kind !== FISH) continue;
+    if (kind === FISH){ moveFish(i, i % W, (i / W) | 0); continue; }
+
+    const mx = i % W, my = (i / W) | 0;
+    if (drowning(i, mx, my, M[kind])) continue;
+
     if (kind === MOTH){
-      if (Math.random() * MOTH_STEP < 1) moveMoth(i, i % W, (i / W) | 0);
+      if (Math.random() * MOTH_STEP < 1) moveMoth(i, mx, my);
       continue;
     }
-    if (kind === FISH){ moveFish(i, i % W, (i / W) | 0); continue; }
-    const x = i % W, y = (i / W) | 0;
+    const x = mx, y = my;
 
     // Falls, because nothing else will do it: a bug is a static solid so that it does not
     // trickle down a slope like a powder, which means gravity is this pass's job.
@@ -2293,7 +2340,7 @@ actsEl.appendChild(findBtn);
 
 function wipeAll(){
   type.fill(E); temp.fill(AMBIENT); fuel.fill(0); life.fill(0); vel.fill(0); feed.fill(0);
-  way.fill(0);
+  way.fill(0); breath.fill(0);
   raining = 0;
 }
 function sSlab(x0,y0,x1,y1,t){
@@ -2742,11 +2789,12 @@ function snapshot(what){
     const n = W*H;
     undoBuf = { W, H, type:new Uint8Array(n), temp:new Float32Array(n),
                 fuel:new Float32Array(n), life:new Float32Array(n),
-                vel:new Float32Array(n), feed:new Uint8Array(n), way:new Int8Array(n) };
+                vel:new Float32Array(n), feed:new Uint8Array(n), way:new Int8Array(n),
+                breath:new Uint8Array(n) };
   }
   undoBuf.type.set(type); undoBuf.temp.set(temp); undoBuf.fuel.set(fuel);
   undoBuf.life.set(life); undoBuf.vel.set(vel);   undoBuf.feed.set(feed);
-  undoBuf.way.set(way);
+  undoBuf.way.set(way); undoBuf.breath.set(breath);
   undoHas = true;
   undoLabel = what;
   if (undoBtn) undoBtn.disabled = false;
@@ -2762,7 +2810,7 @@ function undo(){
     say('The box changed size — nothing to go back to', true); return;
   }
   type.set(u.type); temp.set(u.temp); fuel.set(u.fuel);
-  life.set(u.life); vel.set(u.vel); feed.set(u.feed); way.set(u.way);
+  life.set(u.life); vel.set(u.vel); feed.set(u.feed); way.set(u.way); breath.set(u.breath);
   undoHas = false;
   if (undoBtn) undoBtn.disabled = true;
   say(`Undid ${undoLabel}`, true);
@@ -2963,6 +3011,9 @@ const FINDS = (() => {
     if (m.meets) m.meets.forEach((row,r) =>
       add(t, 'meets'+r, row.tale || `${m.n} + ${M[row.with].n} → ${M[row.become].n}`));
     if (m.eats)  add(t, 'eats', `${m.n} eats through things`);
+    // Two ways of being somewhere you cannot be, and both are worth finding out about.
+    if (m.drown !== undefined) add(t, 'drown', `${m.n} drowns`);
+    if (m.air   !== undefined) add(t, 'air',   `${m.n} cannot breathe air`);
     if (m.ph===0 && m.out !== undefined) add(t, 'burst', `${m.n} goes off`);
   }
   return list;

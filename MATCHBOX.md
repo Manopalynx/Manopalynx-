@@ -128,7 +128,8 @@ A material is described by a handful of numbers. The ones that matter:
 | `peak` | as hot as burning alone can drive it, where that differs |
 | `span` `leak` | how a gas stops being there: a clock, or only by escaping |
 | `sparse` | how thinly the brush lays it down, for things that are alive |
-| `feed` `way` (per cell) | what a vent pours, and which way a bug is walking |
+| `drown` `air` | how many ticks a living thing lasts in the wrong one of the two |
+| `feed` `way` `breath` (per cell) | what a vent pours, which way a bug is walking, and how long it has been somewhere it cannot survive |
 
 `ig` and `char` together are what make the tray more than fourteen colours. The match
 is at 780°C, which is hotter than every ignition point in the table, so on temperature
@@ -283,8 +284,9 @@ does not dawdle.
 **It is a cell, like everything else, and that is the whole design decision.** As a cell it
 inherits the box for nothing: it has a temperature, so fire kills it through the same
 ignition rule that burns straw; acid eats it because acid eats cells; it saves and loads
-with no new format; and its one reaction — it cannot swim — is a single `meets` row, which
-also gets it an entry in the finds list without a line of code written for it.
+with no new format; and the one thing it cannot do — swim — is a single number in its row
+of the table, `drown`, which also gets it an entry in the finds list without a line of code
+written for it.
 
 As an object in a separate list none of that would come free, and all of it would be new
 code of the kind this file keeps shipping: rules that read perfectly and never fire.
@@ -400,9 +402,13 @@ inside fifteen seconds, all twelve still there after a minute, and not one of th
 ended up with no water touching it. On dry stone a fish flops and is gone in **3.4
 seconds**.
 
-**Almost none of it is written for it.** It does not burn, so it has no `ig`, which leaves
-`life` free to count the only clock a fish has — how long it has been out of water, which is
-the same thing `life` means everywhere else. Boil the tank and the water leaves; freeze it
+**Almost none of it is written for it.** The only clock it has — how long it has been out of
+water — is the same `breath` counter a bug uses for the opposite problem, read from the same
+row of the table: `air:200` where a bug has `drown:150`. (It was briefly kept in `life`,
+which was wrong for a reason worth writing down: `react()` decays `life` by 6% a tick below
+the ignition point, so a counter kept there saturates near 16 and never reaches a threshold
+of 150. That was caught by arithmetic before it shipped, which is not how most of the faults
+in this file have been caught.) Boil the tank and the water leaves; freeze it
 and the water becomes ice; either way there is nothing left to be in, and the same clock
 runs out. A 20×10 tank freezes solid and the fish are gone by 60 seconds, a 60×24 by 140 —
 big tanks take longer, which is the model rather than a rule.
@@ -410,6 +416,46 @@ big tanks take longer, which is the model rather than a rule.
 The one figure that *is* written for it is a heat tolerance: water at 40°C kills, well
 before it boils at 100. Without it the Warm setting on the room dial means nothing to a
 fish, and nothing between Normal and boiling does either.
+
+### Dying takes a moment, which is most of what you see
+
+Reported from the phone: a bug that touched water was simply *gone*, and a fish on dry
+stone lay perfectly still for three and a half seconds and then vanished. Both were
+correct — the creature dies in the right place at the right time — and both looked like a
+bug in the program, because the whole of the event happened between two frames.
+
+So the two deaths a creature has of its own are clocks rather than contacts, kept in a
+`breath` counter and read from the material table:
+
+| | field | ticks | what you see |
+|---|---|---|---|
+| Bug under water | `drown:150` | **150** (2.5s) | struggles, and can climb out |
+| Moth under water | `drown:90` | **90** (1.5s) | the flimsier one goes first |
+| Fish out of water | `air:200` | **~201** (3.4s) | **42–67 flops** across 11–19 cells |
+
+The fish figure was already 3.4 seconds before any of this. What changed is that it now
+spends them throwing itself about instead of lying there, which is the same death and a
+completely different thing to watch.
+
+**Two mistakes in the drowning rule, both found by measurement and neither by reading it.**
+
+*Instant recovery.* Zeroing the clock the moment a cell touched air made anything that
+could reach the surface immortal — a bug in a four-deep puddle walked up, drew one tick of
+air, and started again from nothing, for as long as you cared to watch. It now recovers 4
+per tick against 1 lost, so surfacing genuinely pays but only while you keep doing it: of
+three bugs dropped into an open four-deep puddle, **two drowned at 150 ticks and one kept
+its head up for the full minute**. That is the behaviour worth having, and it is why the
+check now uses a sealed tank — a puddle with a surface was measuring the bug's judgement,
+not the rule.
+
+*Any neighbour counting as water.* Being *beside* a puddle is not drowning, and counting
+all four neighbours killed **7 of 10** bugs walking along a dry floor with water alongside
+them. What stops you breathing is being under the surface, so the test is the cell directly
+above — one lookup instead of four, and **10 of 10** now live through thirty seconds of it.
+
+Both of these read perfectly well in the source. The first presented as "a bug never
+drowns" and the second as "bugs drown for no reason", and in both cases my first instinct
+was that the scene was wrong rather than the rule.
 
 ### The one that got past everything
 
@@ -482,15 +528,17 @@ be a guess dressed up as an undo.
 
 ## The finds
 
-`FOUND 3/27` in the corner used to be the whole of it. Twenty-four things existed that the
+`FOUND 3/32` in the corner used to be the whole of it. Twenty-nine things existed that the
 box would never name, mention again or hint at — a progress bar for a task nobody had been
 told. **Finds** in Tools opens the list: found ones read as what they are (`Lava + Water →
 Obsidian`) and the rest read `Acid — ?`, carrying the material's colour and name and nothing
 else. Eight rows mentioning Acid tell you to go and play with acid without telling you what
 happens when you do. Found ones sort to the top, so it is a record before it is a to-do list.
 
-The twenty-seven are derived from the material table — every melt, boil, set, ash, contact
-reaction and explosion in it — so a material added tomorrow brings its discoveries with it.
+The thirty-two are derived from the material table — every melt, boil, set, ash, contact
+reaction, explosion, drowning and suffocation in it — so a material added tomorrow brings
+its discoveries with it. The three creatures added five between them and no new derivation
+code: a `drown` or an `air` field is enough.
 
 **That list and the words for each find used to be two separate derivations** with nothing
 comparing them: this table, and the label written out again at each `found()` call site. The
@@ -647,7 +695,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 60 checks — the simulation
+node test/matchbox-sim.mjs     # 61 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
