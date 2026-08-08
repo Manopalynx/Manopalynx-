@@ -125,17 +125,31 @@
   /* ---- tray ---- */
   .tray{flex:none;padding:7px 8px 9px;display:flex;flex-direction:column;gap:6px}
   .row{display:flex;gap:5px;flex-wrap:wrap}
+  /* The two rows of chips never wrap, and that is load-bearing rather than tidy.
+     Wrapping made the tray taller, and the tray is above the stage, so the scene moved
+     under your finger — reported from the phone twice over: the Fuel drawer pushing
+     Rubber onto a line of its own and stretching it the width of the screen, and Clear
+     growing to "Clear — sure?" mid-confirm, which reflowed the row, wrapped Load, and
+     shifted the whole box up by ~86px between the tap that asked and the tap that
+     answered.
+     `flex:1 1 0` is the other half: every chip in a row is the same width whatever its
+     label says, so text can change length without moving anything at all. */
+  #mats,.tabs{flex-wrap:nowrap}
   .chip{
-    flex:1 1 auto;min-width:0;padding:7px 4px 6px;border:1.5px solid var(--card-dark);
+    flex:1 1 0;min-width:0;overflow:hidden;padding:7px 4px 6px;border:1.5px solid var(--card-dark);
     background:rgba(255,255,255,.13);border-radius:3px;cursor:pointer;
-    font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.05em;color:var(--ink);
+    font-family:'Space Mono',monospace;font-size:var(--chipfs,9.5px);letter-spacing:.02em;color:var(--ink);
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
     text-transform:uppercase;min-height:32px;   /* a fingertip, not a pixel */
   }
   .chip:focus-visible{outline:2px solid var(--phos);outline-offset:1px}
   .chip .sw{width:100%;height:6px;border-radius:1px}
+  /* A label that no longer fits is clipped with an ellipsis rather than widening its
+     chip. Cosmetic where the old behaviour was structural: the worst case now is a
+     shortened word, not a scene that jumps. */
+  .chip .lb{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .chip[aria-pressed="true"]{background:var(--ink);color:var(--pale);border-color:var(--ink)}
-  .chip.act{flex:0 0 auto;padding:7px 10px 6px}
+  .chip.act{padding:7px 4px 6px}
   .chip.danger[aria-pressed="true"]{background:var(--phos);border-color:var(--phos);color:#fff}
 
   .tabs{gap:4px}
@@ -158,7 +172,12 @@
 
   @media (max-height:700px){
     .word{font-size:21px} .strip{height:44px} .tray{padding:7px 8px 9px;gap:6px}
-    .chip{font-size:9px;padding:5px 3px 4px}
+    /* Padding only. This used to set font-size:9px as well, which beat
+       `font-size:var(--chipfs)` on specificity and quietly switched the label fitting
+       off on exactly the short screens that need it most — measured at 375x667, five
+       labels clipped with the fitting doing nothing at all, while the same page at
+       393x852 fitted them fine. */
+    .chip{padding:5px 3px 4px}
   }
   @media (prefers-reduced-motion:reduce){ .head.lit{animation:none} }
 </style>
@@ -1370,10 +1389,15 @@ function chipFor(t){
   b.setAttribute('aria-pressed', String(tool===t));
   b.dataset.t = t;
   const c = M[t].col;
-  b.innerHTML = `<span class="sw" style="background:rgb(${c[0]},${c[1]},${c[2]})"></span>${M[t].n}`;
+  b.innerHTML = `<span class="sw" style="background:rgb(${c[0]},${c[1]},${c[2]})"></span>` +
+                `<span class="lb">${M[t].n}</span>`;
   b.addEventListener('click', ()=>setTool(t));
   return b;
 }
+
+// The label lives in its own span so it can be clipped, and so the buttons that change
+// what they say mid-confirm change the text without disturbing anything around it.
+function chipLabel(b, text){ b.querySelector('.lb').textContent = text; }
 let openDrawer = 0;
 
 // The two drawers that hold buttons rather than materials, and where those buttons
@@ -1388,7 +1412,39 @@ function showDrawer(n){
   if (holder) while (holder.firstChild) matsEl.appendChild(holder.firstChild);
   else g.items.forEach(t => matsEl.appendChild(chipFor(t)));
   tabsEl.querySelectorAll('.tab').forEach((b,i) => b.setAttribute('aria-pressed', String(i===n)));
+  fitLabels();
 }
+
+/* Shrink the type until the longest label in the open drawer fits, and no further.
+
+   A fixed size cannot be right for every drawer: Wet has four chips and 91px each, Fuel
+   has eight and 43px, and Magnesium is nine characters. Measured at a fixed 9.5px, a
+   393pt phone clipped Powder, Rubber and Magnesium.
+
+   It measures rather than guesses because the thing being measured is not knowable from
+   here. The tray is laid out in whatever font arrived: Space Mono if the network was
+   there, some other monospace if it was not, and they are different widths. That is not
+   a hypothetical — the suite blocks the network to stay offline, so every check written
+   about this tray had been measuring the fallback, which is exactly why "no drawer needs
+   a second row" passed while the phone in hand was wrapping. Asking the browser what it
+   actually rendered is the only answer that survives not knowing.
+
+   Layout no longer depends on the outcome. Chips are equal-width whatever the type does,
+   so this only decides how much of a word you can read. */
+function fitLabels(){
+  const labels = [...matsEl.querySelectorAll('.lb')];
+  if (!labels.length) return;
+  const clipped = () => labels.some(l => l.scrollWidth > l.clientWidth + 0.5);
+  for (let px = 9.5; px >= 7; px -= 0.5){
+    matsEl.style.setProperty('--chipfs', px + 'px');
+    if (!clipped()) return;
+  }
+}
+
+// The webfont lands after first paint, and it is wider than the fallback it replaces,
+// so whatever fitted a moment ago may not any more.
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitLabels);
+addEventListener('resize', fitLabels);
 
 // Buttons live in their holder while their drawer is shut, so they keep their identity
 // and their listeners rather than being rebuilt — a Clear or a Save that is halfway
@@ -1408,16 +1464,21 @@ GROUPS.forEach((g,i) => {
   tabsEl.appendChild(b);
 });
 
-function actionChip(labelName, fn, danger){
+// `act` is a stable handle that survives the label changing — the suite locates Clear
+// and Save by it, because finding a button by the words on it stops working the moment
+// those words are the thing under test.
+function actionChip(labelName, fn, danger, act){
   const b = document.createElement('button');
   b.className = 'chip act' + (danger ? ' danger' : '');
   b.type = 'button';
-  b.textContent = labelName;
+  b.innerHTML = '<span class="lb"></span>';
+  chipLabel(b, labelName);
+  if (act) b.dataset.act = act;
   b.setAttribute('aria-pressed','false');
   b.addEventListener('click', fn);
   return b;
 }
-const eraseBtn = actionChip('Erase', ()=>setTool('erase'));
+const eraseBtn = actionChip('Erase', ()=>setTool('erase'), false, 'erase');
 actsEl.appendChild(eraseBtn);
 
 /* Clear asks first. It wipes everything, it cannot be undone, and it used to do that
@@ -1438,20 +1499,25 @@ const clearBtn = actionChip('Clear', ()=>{
     return;
   }
   clearArmed = Date.now() + CLEAR_WINDOW;
-  clearBtn.textContent = 'Clear — sure?';
+  // 'Sure?' rather than 'Clear — sure?'. The long version was two and a half times the
+  // width of the word it replaced, and with chips sized to their content that reflowed
+  // the whole row. The sentence belongs in the readout, which has room for it and does
+  // not move anything by changing.
+  chipLabel(clearBtn, 'Sure?');
   clearBtn.setAttribute('aria-pressed', 'true');
+  say('Clear the whole box?', true);
   clearTimeout(clearTimer);
   clearTimer = setTimeout(disarmClear, CLEAR_WINDOW);
-}, true);
+}, true, 'clear');
 
 function disarmClear(){
   clearArmed = 0;
   clearTimeout(clearTimer);
-  clearBtn.textContent = 'Clear';
+  chipLabel(clearBtn, 'Clear');
   clearBtn.setAttribute('aria-pressed', 'false');
 }
 actsEl.appendChild(clearBtn);
-actsEl.appendChild(actionChip('Rain', ()=>{ raining = RAIN_TICKS; }));
+actsEl.appendChild(actionChip('Rain', ()=>{ raining = RAIN_TICKS; }, false, 'rain'));
 
 /* A false-colour view of the temperature field. The model is the whole point of this
    box and almost none of it is visible: a log at 280°C and a log at 20°C look the
@@ -1460,7 +1526,7 @@ actsEl.appendChild(actionChip('Rain', ()=>{ raining = RAIN_TICKS; }));
 const heatBtn = actionChip('Heat', ()=>{
   heatView = !heatView;
   heatBtn.setAttribute('aria-pressed', String(heatView));
-});
+}, false, 'heat');
 actsEl.appendChild(heatBtn);
 
 /* ============================================================ scenes
@@ -1645,7 +1711,7 @@ let saveArmed = 0, saveTimer = 0;
 function disarmSave(){
   saveArmed = 0;
   clearTimeout(saveTimer);
-  saveBtn.textContent = 'Save';
+  chipLabel(saveBtn, 'Save');
   saveBtn.setAttribute('aria-pressed','false');
 }
 
@@ -1656,7 +1722,7 @@ const saveBtn = actionChip('Save', ()=>{
   // is not.
   if (localStorage.getItem(STORE_KEY) && Date.now() >= saveArmed){
     saveArmed = Date.now() + CLEAR_WINDOW;
-    saveBtn.textContent = 'Save — replace?';
+    chipLabel(saveBtn, 'Replace?');
     saveBtn.setAttribute('aria-pressed','true');
     clearTimeout(saveTimer);
     saveTimer = setTimeout(disarmSave, CLEAR_WINDOW);
@@ -1672,7 +1738,7 @@ const saveBtn = actionChip('Save', ()=>{
   if (ok && localStorage.getItem(STORE_KEY) !== text) ok = false;
   disarmSave();
   say(ok ? `Saved  ·  ${(text.length/1024).toFixed(1)}kB` : 'The save did not stick — storage is full or blocked', true);
-}, true);
+}, true, 'save');
 
 const loadBtn = actionChip('Load', ()=>{
   if (!storageWorks()){ say('This browser will not store anything', true); return; }
@@ -1688,7 +1754,7 @@ const loadBtn = actionChip('Load', ()=>{
   drawn = true;
   hintEl.style.opacity = 0;
   say(missing.length ? `Loaded  ·  ${missing.length} unknown left out` : 'Loaded', true);
-});
+}, false, 'load');
 
 actsEl.appendChild(saveBtn);
 actsEl.appendChild(loadBtn);
@@ -1696,7 +1762,8 @@ actsEl.appendChild(loadBtn);
 // Scene chips live in their own holder for the same reason the tools do: a Save that
 // is halfway through asking must not be rebuilt out from under itself.
 const scenesEl = document.createElement('div');
-SCENES.forEach(s => scenesEl.appendChild(actionChip(s.name, ()=>loadScene(s))));
+SCENES.forEach(s => scenesEl.appendChild(
+  actionChip(s.name, ()=>loadScene(s), false, 'scene-' + s.name.toLowerCase())));
 
 showDrawer(0);
 
