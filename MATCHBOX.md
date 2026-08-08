@@ -127,6 +127,7 @@ A material is described by a handful of numbers. The ones that matter:
 | `tough` | how many bites acid needs to get through it |
 | `peak` | as hot as burning alone can drive it, where that differs |
 | `span` `leak` | how a gas stops being there: a clock, or only by escaping |
+| `sparse` | how thinly the brush lays it down, for things that are alive |
 | `feed` `way` (per cell) | what a vent pours, and which way a bug is walking |
 
 `ig` and `char` together are what make the tray more than fourteen colours. The match
@@ -313,6 +314,29 @@ and a chance of stopping for a moment (6%). Same energy, completely different cr
 rather than commuting across the box. The check counts changes of mind rather than
 distance, because distance was never the problem — remove the turn and it reports "it
 changed direction 1 times in twenty seconds — that is a patrol, not a wander".
+
+### The one that got past everything
+
+Reported from the phone with two screenshots thirty seconds apart and nothing changed:
+tapped bugs sat where they landed and did not move at all. The hunch that came with it —
+that a tap makes a pile and they catch on each other — pointed straight at the real fault,
+which was worse.
+
+**The bottom of the box did not count as something to stand on.** A step needs footing
+ahead-and-below; for a bug on the last row of the grid that cell is off the grid, `inb`
+says no, and so it could never take one. Not slowly, not sometimes — never.
+
+Every scene in both suites stood its bugs on a stone floor six rows up, where there is
+always a real cell underneath. Clear the box and tap, which is what anybody does first, and
+you are in the one case nothing had covered. Reverting the fix reproduces the screenshots
+exactly: a span of 84 cells, unchanged after thirty seconds. Both suites now put bugs on
+the bare floor of the box and watch them spread.
+
+The pile half of the hunch was right too, and is fixed separately: a material can ask to be
+painted sparsely, and a bug asks for 16%. Thirty bugs in a heap is not thirty bugs, it is
+one lump of which only the edge can move — and a scatter is what a handful of insects looks
+like anyway. `Box` and `Line` still lay down every cell, because a deliberate rectangle of
+bugs should be a rectangle of bugs.
 
 ### The two traps, both of which were hit
 
@@ -525,7 +549,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 52 checks — the simulation
+node test/matchbox-sim.mjs     # 53 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```

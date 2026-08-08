@@ -1132,6 +1132,29 @@ await check(browser, 'a bug is moved once a tick, not once per cell it lands on'
   return bad.length ? bad.join('; ') : null;
 });
 
+/* On the floor of the box itself, which is the case every check here had missed.
+
+   Every scene in this suite stands its bugs on a stone floor six rows up, where there is
+   always a real cell underneath them. Clear the box and tap, which is what anybody
+   actually does, and they land on the last row of the grid — and a step needs footing
+   ahead-and-below, which off the bottom of the grid `inb` refuses to grant. So they could
+   not take a single step. Thirty seconds of sitting still, reported from the phone, with a
+   full suite of passing checks behind it. */
+await check(browser, 'bugs walk on the floor of the box, not only on things put in it', () => {
+  __wipe();                                   // deliberately no floor: the bare grid
+  const cx = (W/2)|0;
+  for (let k=0;k<12;k++) put(cx-30+k*5, H-1, BUG);
+  const xs = () => { const o=[]; for (let i=0;i<type.length;i++) if (type[i]===BUG) o.push(i%W); return o; };
+  const before = xs();
+  const span0 = Math.max(...before) - Math.min(...before);
+  for (let k=0;k<1800;k++) __step(1);
+  const after = xs();
+  if (after.length !== before.length) return `${before.length} bugs on the box floor became ${after.length}`;
+  const span1 = Math.max(...after) - Math.min(...after);
+  if (span1 <= span0 + 4) return `they spanned ${span0} cells and after thirty seconds span ${span1} — nothing standing on the floor of the box is walking`;
+  return null;
+});
+
 /* Wandering, as distinct from travelling, and the difference is the whole of whether it
    reads as a creature.
 

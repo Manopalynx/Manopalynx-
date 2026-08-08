@@ -964,10 +964,13 @@ console.log('\n— the first thing that is alive —');
 
 await check('a bug drawn on the stage walks about on its own', async p => {
   await pick(p, 'bug');
-  await p.evaluate(() => { wipeAll(); const f = H-6;
-    for (let x=0;x<W;x++) for (let y=f;y<H;y++) put(x,y,STONE); });
+  // An empty box and a tap, which is what anybody does first — and deliberately without a
+  // stone floor laid down for them. Bugs landing on the last row of the grid could not
+  // move at all until the bottom of the box counted as something to stand on, and this
+  // check used to put a floor under them and so never saw it.
+  await p.evaluate(() => wipeAll());
   const s = await stageBox(p);
-  await p.mouse.click(s.x + s.width*0.5, s.y + s.height*0.7);
+  await p.mouse.click(s.x + s.width*0.5, s.y + s.height*0.9);
   const placed = await p.evaluate(() => __count(BUG));
   if (!placed) return 'the tap put no bugs in the box';
 
