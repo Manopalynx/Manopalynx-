@@ -184,7 +184,12 @@
      label says, so text can change length without moving anything at all. */
   #mats,.tabs{flex-wrap:nowrap}
   .chip{
-    flex:1 1 0;min-width:0;overflow:hidden;padding:7px 4px 6px;border:1.5px solid var(--card-dark);
+    /* max-width so a drawer with one thing in it does not stretch that one thing across
+       the whole screen. That is the shape of the very first complaint about this tray —
+       Rubber alone on a wrapped row, full width — and a Life drawer holding a single
+       creature would have reproduced it exactly, at 377px. Every chip is capped the same,
+       so widths within a row still match and nothing can move by changing its label. */
+    flex:1 1 0;min-width:0;max-width:112px;overflow:hidden;padding:7px 4px 6px;border:1.5px solid var(--card-dark);
     background:rgba(255,255,255,.13);border-radius:3px;cursor:pointer;
     font-family:'Space Mono',monospace;font-size:var(--chipfs,9.5px);letter-spacing:.02em;color:var(--ink);
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
@@ -308,7 +313,7 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
       COAL=9, GREEN=10, STONE=11, STEEL=12, WATER=13, ICE=14, SAND=15,
       FIRE=16, SMOKE=17, STEAM=18, EMBER=19, ASH=20,
       LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24,
-      THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31;
+      THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31, BUG=32;
 
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
@@ -501,6 +506,24 @@ M[VENT]    ={n:'Vent',     ph:3, col:[ 78, 74, 84], ig:9e9, cond:.20, cap:2.4, d
 // `leak` instead of `span`: it does not fade on a clock, it escapes at the top of the box
 // and only while it is touching it. Contained, it keeps. See the two-ways-out note in
 // react() for why those are different things.
+/* The first thing in here that is alive, and it is a cell like everything else.
+
+   That is the whole design decision. As a cell it inherits the box: it has a temperature,
+   so fire kills it through the same rule that burns straw; acid eats it because acid eats
+   cells; it saves and loads with no new format; and its one reaction is a `meets` row, so
+   it adds its own entry to the finds list without a line of code. As an object in a
+   separate list none of that would come free, and every bit of it would be new code of the
+   kind this file keeps shipping — rules that read perfectly and never fire.
+
+   `ig` 190 and `char` 4: it catches easily and quickly, because the interesting thing
+   about a creature in this box is that it is the softest thing in it. `fuel` 20 so it goes
+   out fast and leaves ash. `dens` and `ph:3` because it is not a powder and does not
+   trickle — everything it does about gravity and walking is in moveLife().
+
+   It cannot swim. That is one row, and it costs nothing. */
+M[BUG]     ={n:'Bug',      ph:3, col:[176, 92,132], ig:190, fuel:20, out:1.2, cond:.30, cap:1.0,
+             char:4, ash:ASH, dens:1.1, tough:.6,
+             meets:[{with:WATER, become:E, tale:'A bug cannot swim'}]};
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
              leak:.02, peak:1500};
 
@@ -518,6 +541,7 @@ const GROUPS = [
   { name:'Wet',   items:[WATER, OIL, ICE, ACID] },
   { name:'Solid', items:[STONE, STEEL, SAND, WAX, GLASS, OBSIDIAN] },
   { name:'Hot',   items:[LAVA, MOLTEN, EMBER, THERMITE, MAGNES, GAS, VENT] },
+  { name:'Life',  items:[BUG] },
   { name:'Scene', items:'scenes' },
   { name:'Tools', items:'tools' },
 ];
@@ -555,6 +579,7 @@ SAVE_KEY[LAVA]='lava';        SAVE_KEY[GLASS]='glass';      SAVE_KEY[MOLTEN]='st
 SAVE_KEY[OBSIDIAN]='obsidian';SAVE_KEY[THERMITE]='thermite';SAVE_KEY[MAGNES]='magnesium';
 SAVE_KEY[RUBBER]='rubber';    SAVE_KEY[MRUBBER]='rubber-molten';
 SAVE_KEY[ACID]='acid';        SAVE_KEY[GAS]='gas';           SAVE_KEY[VENT]='vent';
+SAVE_KEY[BUG]='bug';
 
 const TYPE_OF_KEY = new Map(SAVE_KEY.map((k,t) => [k,t]));
 
@@ -677,7 +702,10 @@ ctx.imageSmoothingEnabled = false;
 // and it is zero everywhere else. Its own array rather than a spare field on an
 // existing one, because overloading `fuel` to sometimes mean "a material index" is the
 // kind of shortcut that reads fine and goes wrong in the dark.
-let W=0, H=0, type, temp, fuel, life, vel, tint, feed, img, buf;
+// `way` is which direction a bug is walking, and it is not in the save on purpose: a
+// heading is state, like a temperature, and a save stores what was built rather than what
+// everything was doing. A loaded bug picks a direction on its first step.
+let W=0, H=0, type, temp, fuel, life, vel, tint, feed, way, img, buf;
 
 /* Sizing the grid, and carrying whatever is already in it across.
 
@@ -692,7 +720,7 @@ function build(){
   const nh = Math.max(40, Math.floor(r.height / CELL));
   if (nw === W && nh === H) return;
 
-  const old = W ? { W, H, type, temp, fuel, life, vel, feed } : null;
+  const old = W ? { W, H, type, temp, fuel, life, vel, feed, way } : null;
 
   W = nw; H = nh;
   cv.width = W; cv.height = H;
@@ -703,6 +731,7 @@ function build(){
   life = new Float32Array(n);
   vel  = new Float32Array(n);
   feed = new Uint8Array(n);
+  way  = new Int8Array(n);
   tint = new Int8Array(n);
   for (let i=0;i<n;i++) tint[i] = (Math.random()*26 - 13)|0;
   img = ctx.createImageData(W,H);
@@ -719,7 +748,7 @@ function build(){
         const i = y*W + x, j = oy*old.W + x;
         type[i] = old.type[j]; temp[i] = old.temp[j];
         fuel[i] = old.fuel[j]; life[i] = old.life[j]; vel[i] = old.vel[j];
-        feed[i] = old.feed[j];
+        feed[i] = old.feed[j]; way[i]  = old.way[j];
       }
     }
   }
@@ -760,6 +789,7 @@ function put(x,y,t){
   // `feed` itself immediately after, because a saved vent pours what it was saved with
   // and not what happens to be picked now.
   feed[i] = t===VENT ? ventFeed : 0;
+  way[i]  = 0;
   temp[i] = M[t] && M[t].t0 !== undefined ? M[t].t0 : AMBIENT;
 }
 
@@ -771,6 +801,7 @@ function become(x,y,t){
   life[i] = 0;
   vel[i]  = 0;
   feed[i] = 0;
+  way[i]  = 0;
 }
 
 /* ============================================================ movement
@@ -808,6 +839,7 @@ function swap(a,b){
   // It is here because "should never" is how a cell ends up carrying somebody else's
   // payload the first time something does move one.
   let g=feed[a]; feed[a]=feed[b]; feed[b]=g;
+  let d=way[a];  way[a]=way[b];   way[b]=d;
 }
 
 function denser(a,b){                  // can a displace b?
@@ -1230,6 +1262,89 @@ function ventPush(x, y, what){
     if (type[j] === E){ put(xx, yy, what); return true; }
   }
   return false;
+}
+
+/* One tick of the world, in one place.
+
+   The suites used to spell the passes out themselves — `moveFalling(); moveRising();
+   diffuse(); react();` — which is fine right up to the moment a fifth pass is added, at
+   which point every check silently measures a box where creatures do not move. Neither
+   the page nor the harness would say a word about it. Now there is one definition and
+   the harness calls it. */
+/* ============================================================ life
+
+   Everything alive moves here, and it is its own pass for one reason: **a creature that
+   walks sideways would otherwise be processed twice in a tick.** `react()` walks x
+   ascending, so a bug that steps right lands on a cell the loop has not reached yet and
+   gets another go — and another, and it crosses the box in a single frame. The falling
+   pass has the same problem and solves it by walking bottom-up, which only works because
+   things fall one way. A creature goes both ways.
+
+   So the list of who is alive is taken *before* anybody moves. Each one is then processed
+   exactly once wherever it ended up, and the guard is simply checking it is still what it
+   was — the thing it is standing next to may have burned it in the meantime. */
+
+const PANIC_AT   = 55;   // °C at which a bug stops wandering and starts leaving
+const BUG_STEP   = 7;    // ticks between wandering steps...
+const BUG_FLEE   = 2;    // ...and between panicking ones. It is not fast, it is frightened.
+
+// Something to stand on: anything that is not air and not a gas.
+const footing = (x,y) => inb(x,y) && type[idx(x,y)] !== E && M[type[idx(x,y)]].ph !== 0;
+const walkable = (x,y) => inb(x,y) && (type[idx(x,y)] === E || M[type[idx(x,y)]].ph === 0);
+
+function moveLife(){
+  const alive = [];
+  for (let i=0;i<type.length;i++) if (type[i] === BUG) alive.push(i);
+  if (!alive.length) return;
+
+  for (const i of alive){
+    if (type[i] !== BUG) continue;          // burned, eaten or drowned since the list
+    const x = i % W, y = (i / W) | 0;
+
+    // Falls, because nothing else will do it: a bug is a static solid so that it does not
+    // trickle down a slope like a powder, which means gravity is this pass's job.
+    if (walkable(x, y+1)){ swap(i, idx(x, y+1)); continue; }
+
+    const hot = temp[i] >= PANIC_AT;
+    const every = hot ? BUG_FLEE : BUG_STEP;
+    /* A chance per tick rather than a fixed phase, and the reason is that a bug has no
+       fixed anything to take a phase from. The first version staggered on the cell index
+       — `(tick + i) % every` — which is what the vents use, and vents do not move. A bug's
+       index changes every time it steps, so the phase moved with it and the throttle
+       stopped throttling: measured, one bug crossed seventy-one cells in a hundred ticks
+       against the fourteen it was supposed to manage.
+       A dice roll has no identity to lose, gives the right average, and has the side
+       benefit the fixed phase was reaching for anyway — they do not march in step. */
+    if (Math.random() * every >= 1) continue;
+
+    let dir = way[i] || (Math.random() < .5 ? 1 : -1);
+
+    // Panicking is not random: it goes whichever way is cooler. This is the whole of the
+    // behaviour that makes a cell read as alive — it notices, and it leaves.
+    if (hot){
+      const l = inb(x-1,y) ? temp[idx(x-1,y)] : Infinity;
+      const r = inb(x+1,y) ? temp[idx(x+1,y)] : Infinity;
+      dir = l < r ? -1 : 1;
+    }
+
+    // Ahead, or up one step, or turn round. Climbing a single cell is what lets it get out
+    // of a dip instead of pacing the bottom of one forever.
+    if (walkable(x+dir, y) && footing(x+dir, y+1)){
+      way[i] = dir; swap(i, idx(x+dir, y));
+    } else if (walkable(x+dir, y-1) && footing(x+dir, y)){
+      way[i] = dir; swap(i, idx(x+dir, y-1));
+    } else {
+      way[i] = -dir;
+    }
+  }
+}
+
+function simTick(){
+  moveFalling();
+  moveRising();
+  moveLife();
+  diffuse();
+  react();
 }
 
 let tick = 0;
@@ -1883,6 +1998,7 @@ actsEl.appendChild(findBtn);
 
 function wipeAll(){
   type.fill(E); temp.fill(AMBIENT); fuel.fill(0); life.fill(0); vel.fill(0); feed.fill(0);
+  way.fill(0);
   raining = 0;
 }
 function sSlab(x0,y0,x1,y1,t){
@@ -2331,10 +2447,11 @@ function snapshot(what){
     const n = W*H;
     undoBuf = { W, H, type:new Uint8Array(n), temp:new Float32Array(n),
                 fuel:new Float32Array(n), life:new Float32Array(n),
-                vel:new Float32Array(n), feed:new Uint8Array(n) };
+                vel:new Float32Array(n), feed:new Uint8Array(n), way:new Int8Array(n) };
   }
   undoBuf.type.set(type); undoBuf.temp.set(temp); undoBuf.fuel.set(fuel);
   undoBuf.life.set(life); undoBuf.vel.set(vel);   undoBuf.feed.set(feed);
+  undoBuf.way.set(way);
   undoHas = true;
   undoLabel = what;
   if (undoBtn) undoBtn.disabled = false;
@@ -2350,7 +2467,7 @@ function undo(){
     say('The box changed size — nothing to go back to', true); return;
   }
   type.set(u.type); temp.set(u.temp); fuel.set(u.fuel);
-  life.set(u.life); vel.set(u.vel); feed.set(u.feed);
+  life.set(u.life); vel.set(u.vel); feed.set(u.feed); way.set(u.way);
   undoHas = false;
   if (undoBtn) undoBtn.disabled = true;
   say(`Undid ${undoLabel}`, true);
@@ -2500,10 +2617,7 @@ function frame(now){
         if (type[idx(x,0)]===E) put(x,0,WATER);
       }
     }
-    moveFalling();
-    moveRising();
-    diffuse();
-    react();
+    simTick();
   }
   heatView ? drawHeat() : draw();
   frameMs += (performance.now() - t0 - frameMs) * .05;
