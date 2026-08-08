@@ -871,6 +871,123 @@ await check(browser, 'every fuel in the tray can be lit, every inert one cannot'
   return bad.length ? bad.join('; ') : null;
 });
 
+console.log('\n— the room, and the vent —');
+
+/* The room is the number the whole box relaxes toward, so turning it up has to actually
+   set things alight rather than just recolour the readout. The ladder is the point: what
+   goes at 230 is not what goes at 480. */
+await check(browser, 'turning the room up lights things that nothing touched', () => {
+  const bad = [];
+  // The room is set FIRST, before anything is built. `__wipe` fills the field with the
+  // current AMBIENT and `put` gives a material with no `t0` the current AMBIENT too, so
+  // setting it afterwards leaves the floor at whatever the previous run used — measured,
+  // it left a stone floor at −30 under a 20°C room and froze five cells of the water
+  // standing on it, which reads exactly like the page freezing water at room temperature.
+  const run = (i) => {
+    roomAt = i; AMBIENT = ROOMS[i].t;
+    __wipe();
+    const f = __floor(); const cx = (W/2)|0;
+    __slab(cx-12, f-9, cx+11, f-1, PAPER);
+    __slab(cx+16, f-5, cx+26, f-1, WATER);
+    const paper0 = __count(PAPER), water0 = __count(WATER);
+    for (let k=0;k<2400;k++) __step(1);
+    return { paperGone: paper0 - __count(PAPER), water: __count(WATER), ice: __count(ICE),
+             water0, nan: __nan() };
+  };
+  const cold = run(0);                                   // Freezing, -30
+  if (cold.nan) bad.push('a freezing room produced a NaN temperature');
+  if (cold.ice < cold.water0 * 0.5) bad.push(`Freezing froze ${cold.ice} of ${cold.water0} water cells — the label says it freezes`);
+  if (cold.paperGone) bad.push(`${cold.paperGone} paper cells burned in a freezing room`);
+
+  const room = run(2);                                   // Room, 20
+  if (room.paperGone) bad.push(`${room.paperGone} paper cells burned at room temperature with nothing touching them`);
+  if (room.ice) bad.push(`${room.ice} cells of ice appeared at 20°C`);
+
+  const oven = run(4);                                   // Oven, 230
+  if (oven.paperGone < 100) bad.push(`an oven burned ${oven.paperGone} of ${room.water0 && ''}${216} paper cells`);
+  if (oven.water) bad.push(`${oven.water} water cells survived an oven`);
+  if (oven.nan) bad.push('an oven produced a NaN temperature');
+
+  // Put it back, so a check that runs after this one gets the room it expects.
+  roomAt = 2; AMBIENT = ROOMS[2].t;
+  return bad.length ? bad.join('; ') : null;
+});
+
+await check(browser, 'every room setting says something true about itself', () => {
+  const bad = [];
+  if (ROOMS[roomAt].t !== AMBIENT) bad.push(`the readout would say ${ROOMS[roomAt].t}° while the box is at ${AMBIENT}°`);
+  // The tells name materials and thresholds; this checks the two that are checkable
+  // against the table rather than against a simulation run.
+  for (const r of ROOMS){
+    if (/water freezes/.test(r.tell) && !(r.t <= M[WATER].cool))
+      bad.push(`"${r.n}" claims water freezes at ${r.t}°, and water freezes at ${M[WATER].cool}°`);
+    if (/wax runs/.test(r.tell) && !(r.t >= M[WAX].melt))
+      bad.push(`"${r.n}" claims wax runs at ${r.t}°, and wax melts at ${M[WAX].melt}°`);
+  }
+  // Nothing may sit above the ceiling, and the hottest room must leave headroom for a
+  // fire on top of it or the whole model flattens.
+  if (ROOMS[ROOMS.length-1].t >= FLAME_PEAK)
+    bad.push(`the hottest room is ${ROOMS[ROOMS.length-1].t}°, at or above the ${FLAME_PEAK}° a flame can reach`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* The vent, and the rule it exists to satisfy: it has to keep pouring.
+
+   The first version filled an empty neighbour and nothing else, and produced exactly
+   three cells before stopping forever — it collided with the one-deep-film rule in
+   moveFalling, which stops a lone cell of liquid from creeping anywhere, so its own
+   output sat against it and capped it. That failure looked like a working vent for about
+   a second, which is why the count here is taken late rather than early. */
+await check(browser, 'a vent keeps pouring, and pours what it was given', () => {
+  const bad = [];
+  const pour = (mat, ticks) => {
+    __wipe();
+    const f = __floor(); const cx = (W/2)|0;
+    setTool(mat); setTool(VENT);               // pick the material, then the vent
+    put(cx, f-1, VENT);
+    if (feed[idx(cx, f-1)] !== mat) bad.push(`a vent placed after picking ${M[mat].n} holds ${M[feed[idx(cx,f-1)]].n}`);
+    for (let k=0;k<ticks;k++) __step(1);
+    return __count(mat);
+  };
+  const lava = pour(LAVA, 1800);
+  if (lava < 40) bad.push(`a lava vent made ${lava} cells of lava in 30 seconds`);
+  const water = pour(WATER, 900);
+  if (water < 20) bad.push(`a water vent made ${water} cells of water — it is meant to be general`);
+  if (__count(LAVA)) bad.push(`a water vent produced ${__count(LAVA)} cells of lava`);
+
+  // ...and it must not be a tap that cannot be turned off. Sealed in, it stops.
+  __wipe();
+  const f = __floor(); const cx = (W/2)|0;
+  setTool(LAVA); setTool(VENT);
+  put(cx, f-3, VENT);
+  for (const [dx,dy] of [[0,-1],[-1,0],[1,0],[0,1]]) put(cx+dx, f-3+dy, STONE);
+  for (let k=0;k<1200;k++) __step(1);
+  if (__count(LAVA)) bad.push(`a vent sealed in stone still made ${__count(LAVA)} cells of lava`);
+  if (__maxT() > MAX_T) bad.push(`a vent drove the box to ${Math.round(__maxT())}°C, over the ${MAX_T}° ceiling`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+// The thing the vent was actually asked for. A cone is not "some lava exists" — it is
+// lava that ran somewhere and set, so this counts the stone that was not there before.
+await check(browser, 'a vent under a shaft builds a volcano out of its own lava', () => {
+  __wipe();
+  const f = __floor(); const cx = (W/2)|0;
+  for (let d=0; d<18; d++){
+    for (let t=0;t<3;t++){
+      if (inb(cx-4-d+t, f-1-d)) put(cx-4-d+t, f-1-d, STONE);
+      if (inb(cx+4+d-t, f-1-d)) put(cx+4+d-t, f-1-d, STONE);
+    }
+  }
+  setTool(LAVA); setTool(VENT);
+  __slab(cx-1, f-1, cx+1, f-1, VENT);
+  const stone0 = __count(STONE);
+  for (let k=0;k<3000;k++) __step(1);
+  const made = __count(STONE) - stone0;
+  if (__count(LAVA) < 100) return `the shaft held ${__count(LAVA)} cells of lava after 50 seconds`;
+  if (made < 30) return `the pour left ${made} new cells of stone — a volcano is the cone, not the lava`;
+  return null;
+});
+
 console.log('\n— scenes, and getting them back —');
 
 /* The reason this table exists at all, and it is a trap that was live before anything

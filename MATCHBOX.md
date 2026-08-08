@@ -45,7 +45,7 @@ fetched fresh whenever there is a signal — no stale-build trap, and nothing to
 
 ## What is in the box
 
-Twenty materials in the tray and six more the simulation makes for itself: fire,
+Twenty-one materials in the tray and six more the simulation makes for itself: fire,
 smoke, steam, embers, ash and molten wax. Every material is one row of the `M` table
 and nothing else in the file knows any of them by name.
 
@@ -121,11 +121,12 @@ A material is described by a handful of numbers. The ones that matter:
 | `out` | how fiercely |
 | `cond` `cap` | how it carries heat, and how much it takes to warm it |
 | `melt` `boil` | what it turns into, and at what |
-| `cool` `sets` | ...and what a hot liquid turns back into as it loses its heat |
+| `cool` `sets` | ...and what a liquid turns back into as it loses its heat |
 | `meets` | contact rather than temperature: this touching that makes those |
 | `dens` | what sinks through what |
 | `tough` | how many bites acid needs to get through it |
 | `peak` | as hot as burning alone can drive it, where that differs |
+| `feed` (per cell) | what a vent pours — not a table field, one per cell |
 
 `ig` and `char` together are what make the tray more than fourteen colours. The match
 is at 780°C, which is hotter than every ignition point in the table, so on temperature
@@ -143,6 +144,69 @@ Measured, on a bar of each with the match held at one end:
 | Thermite | not from a match at all — 950°C against the match's 780. Use magnesium |
 | Wax | nothing. It needs a wick |
 | Stone, steel, sand, ash, glass, obsidian, acid | nothing at all |
+
+## The room
+
+Six named settings on one chip in **Tools**, stepping round: Freezing, Cold, Normal,
+Warm, Oven, Furnace. It sets `AMBIENT`, which was already the number the whole box
+relaxes toward — gas sheds heat to it every tick, and all four walls do too — so almost
+no new code, and the ignition table turns into a dial:
+
+| | |
+|---|---|
+| −30 Freezing | water freezes |
+| 0 Cold | ice keeps, and water becomes it |
+| 20 Normal | nothing happens on its own |
+| 90 Warm | wax runs, water is nearly boiling |
+| 230 Oven | powder, straw, oil, fuse and paper catch on their own |
+| 480 Furnace | everything but coal and thermite goes by itself |
+
+Measured, 40 seconds with a paper block and a pool of water in the box: Freezing turns
+all 55 water cells to ice and burns nothing; Oven burns all 216 paper cells with nothing
+touching them and boils the water away; Normal does neither.
+
+Named rather than numbered because 170°C is a fact and "straw and paper catch on their
+own" is the reason to turn it there. Turning it only moves the air — everything solid
+comes along by conduction at whatever its own `cond` and `cap` say, which is why a block
+of ice can hold out in an oven for a while.
+
+**Water freezing is new, and it exists because the setting claimed it.** `cool:0,
+sets:ICE` on water, which is the same rule lava already used to become stone rather than
+anything added for it. The coldest setting was labelled "water freezes" and did not
+freeze water — a worse fault than not having the setting.
+
+## The vent
+
+A block that pours whatever you tell it to. Pick a material, then pick **Vent**: "Lava
+then Vent" is a volcano, "Water then Vent" is a spring. The chip wears the colour of what
+it is holding and the readout says it — `Vent · Lava` — because a mode you cannot see is
+a mode you get wrong. What it pours is stored per cell, so two vents in one scene can
+pour different things, and a save carries it.
+
+One general block rather than a lava vent, because the general one cost the same to write
+and the spring and the gas leak came free.
+
+**It pushes rather than fills, and that is the whole design.** The first version put its
+output into an empty neighbour and nothing else, and made exactly three cells before
+stopping forever. It had collided with a rule that is deliberately there: *a one-deep film
+of liquid does not creep*, so that a poured oil trail stays a trail. The vent's lone
+output cells had no more of themselves above or below, so they never moved, sat against
+the vent, cooled, and capped it.
+
+So it walks up the column of its own output and puts the new cell at the top. That is
+where the pressure is in the real thing, and it fixes the film problem as a side effect —
+the second cell gives the first one something to be a pool with, and the pair can flow.
+
+Measured: a lone lava vent on a floor makes 127 cells of lava and 53 of stone in 30
+seconds. A vent under a hollow stone cone fills the shaft, overflows, and leaves **139
+new cells of stone** in 50 seconds — the cone is the point, and lava that never set could
+not have built it. A vent sealed in stone makes nothing at all, which is a plug and is
+allowed.
+
+A vent holds itself at whatever it pours, because a conduit is connected to something and
+a vent at room temperature is a cold spot in the one cell where that is fatal. It is
+`proof` against acid and has no melting point: a source you can destroy with what it
+pours is not a source.
 
 ## Things worth building
 
@@ -289,8 +353,8 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 39 checks — the simulation
-node test/matchbox-ui.mjs      # 24 checks — the hand
+node test/matchbox-sim.mjs     # 43 checks — the simulation
+node test/matchbox-ui.mjs      # 28 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
 

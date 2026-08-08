@@ -583,5 +583,82 @@ await check('a browser that refuses to store says so rather than breaking', asyn
   return null;
 });
 
+console.log('\n— the room and the vent —');
+
+await check('Room steps through its settings and comes back round', async p => {
+  const read = () => p.evaluate(() => ({ at: AMBIENT, name: ROOMS[roomAt].n,
+                                         ro: document.getElementById('ro').textContent,
+                                         gauge: document.getElementById('gauge').textContent }));
+  const start = await read();
+  if (start.at !== 20) return `the box did not start at 20°C but at ${start.at}`;
+  const seen = [start.name];
+  const n = await p.evaluate(() => ROOMS.length);
+  for (let i = 0; i < n; i++) {
+    await press(p, 'room');
+    const now = await read();
+    seen.push(now.name);
+    if (!now.ro.toLowerCase().includes(now.name.toLowerCase()))
+      return `the readout says "${now.ro}" after stepping to ${now.name}`;
+    if (!now.ro.includes(String(now.at))) return `the readout "${now.ro}" never says what ${now.name} actually is`;
+  }
+  const back = await read();
+  if (back.at !== 20) return `${n} presses left the room at ${back.at}°C instead of back at 20`;
+  if (new Set(seen).size !== n) return `stepping ${n} times only visited ${new Set(seen).size} settings: ${seen.join(' ')}`;
+  return null;
+});
+
+await check('the gauge says what the room is set to, not just what the air is', async p => {
+  await press(p, 'room');                                  // off the default, so it shows
+  await p.waitForTimeout(1200);                            // the gauge refreshes on a timer
+  const g = await p.locator('#gauge').textContent();
+  const at = await p.evaluate(() => AMBIENT);
+  if (!/room/i.test(g)) return `the gauge reads "${g}" and never mentions the room`;
+  if (!g.includes(String(at))) return `the gauge reads "${g}" with the room at ${at}°C`;
+  return null;
+});
+
+/* The vent takes its payload from whatever material was picked before it, which is the
+   whole interface for it — so the thing to check is that picking through the actual
+   chips, in two different drawers, sets it. */
+await check('picking a material then Vent gives a vent that pours that material', async p => {
+  await pick(p, 'lava');
+  await pick(p, 'vent');
+  const lava = await p.evaluate(() => ({ feed: M[ventFeed].n, ro: document.getElementById('ro').textContent }));
+  if (lava.feed !== 'Lava') return `picking Lava then Vent left the vent holding ${lava.feed}`;
+  if (!/vent/i.test(lava.ro) || !/lava/i.test(lava.ro))
+    return `the readout says "${lava.ro}" and does not say what the vent will pour`;
+
+  // A material from another drawer, to prove it is not lava-only.
+  await pick(p, 'water');
+  await pick(p, 'vent');
+  const water = await p.evaluate(() => M[ventFeed].n);
+  if (water !== 'Water') return `picking Water then Vent left the vent holding ${water}`;
+
+  // The chip wears the colour of what it holds, so the tray answers the question too.
+  const sw = await p.evaluate(() => {
+    const c = document.querySelector(`#mats .chip[data-t="${VENT}"] .sw`);
+    return c ? getComputedStyle(c).backgroundColor : null;
+  });
+  const want = await p.evaluate(() => { const c = M[WATER].col; return `rgb(${c[0]}, ${c[1]}, ${c[2]})`; });
+  if (sw !== want) return `the vent chip's swatch is ${sw} while it is holding water (${want})`;
+  return null;
+});
+
+await check('a vent drawn on the stage actually pours', async p => {
+  await pick(p, 'lava');
+  await pick(p, 'vent');
+  await p.evaluate(() => { wipeAll(); const f = H-6;
+    for (let x=0;x<W;x++) for (let y=f;y<H;y++) put(x,y,STONE); });
+  const s = await stageBox(p);
+  await p.mouse.click(s.x + s.width*0.5, s.y + s.height*0.82);
+  const vents = await p.evaluate(() => __count(VENT));
+  if (!vents) return 'the tap did not put a vent in the box';
+  await p.waitForTimeout(4000);
+  const made = await p.evaluate(() => __count(LAVA) + __count(STONE));
+  const lava = await p.evaluate(() => __count(LAVA));
+  if (!lava) return `${vents} vents poured nothing in four seconds`;
+  return null;
+});
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

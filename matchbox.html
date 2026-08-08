@@ -241,7 +241,7 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
       COAL=9, GREEN=10, STONE=11, STEEL=12, WATER=13, ICE=14, SAND=15,
       FIRE=16, SMOKE=17, STEAM=18, EMBER=19, ASH=20,
       LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24,
-      THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30;
+      THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31;
 
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
@@ -271,7 +271,14 @@ M[COAL]   = {n:'Coal',     ph:2, col:[ 34, 32, 34], ig:520, fuel:1500,out:3.0, c
 M[GREEN]  = {n:'Green',    ph:3, col:[ 74,104, 54], ig:470, fuel:600, out:1.1, cond:.11, cap:1.9, ash:EMBER, smoky:3.2, char:150, dens:.9};
 M[STONE]  = {n:'Stone',    ph:3, col:[104,100, 94], ig:9e9, cond:.20, cap:2.2, dens:2.6, melt:1250, into:LAVA, tough:3.5};
 M[STEEL]  = {n:'Steel',    ph:3, col:[142,146,152], ig:9e9, cond:.92, cap:1.6, dens:7.8, melt:1400, into:MOLTEN, tough:4.5};
-M[WATER]  = {n:'Water',    ph:1, col:[ 44, 92,132], ig:9e9, cond:.42, cap:6.0, boil:100, into:STEAM, t0:12, dens:1.0};
+// `cool:0, sets:ICE` is water freezing, and it is the same rule lava uses to become
+// stone rather than anything new — a liquid that falls below its `cool` becomes its
+// `sets`. It was missing until the room became adjustable, at which point the coldest
+// setting was labelled "water freezes" and did not freeze water, which is a worse fault
+// than not having the setting at all. Ice melts above 0 and water freezes below it, so
+// there is no temperature where a cell can flip between the two forever.
+M[WATER]  = {n:'Water',    ph:1, col:[ 44, 92,132], ig:9e9, cond:.42, cap:6.0, boil:100, into:STEAM,
+             cool:0, sets:ICE, t0:12, dens:1.0};
 M[ICE]    = {n:'Ice',      ph:2, col:[168,204,222], ig:9e9, cond:.28, cap:3.0, melt:0,   into:WATER, t0:-14, dens:.92, rigid:1, lat:430};
 // Its own latent heat, and a large one: melting ice really does cost far more per
 // unit than melting wax. Sharing the default meant that opening the box up to the
@@ -407,6 +414,23 @@ M[ACID]    ={n:'Acid',     ph:1, col:[132,196, 56], ig:9e9, cond:.24, cap:2.4,
 // a minute of real time per cell to find that out.
 // `tough` is how well a material resists being eaten — how many bites it takes rather
 // than whether acid works on it at all. Without it steel dissolved as fast as paper.
+/* A vent makes matter out of nothing, which everything else in this file refuses to do,
+   and it is worth being clear that this is a building tool rather than a material.
+
+   It is one block that emits whatever you tell it to, rather than a lava vent, because
+   the general one costs the same to write and a water spring and a gas leak come free.
+   What it emits is per cell, in `feed`, so two vents in the same scene can pour
+   different things.
+
+   It only ever fills an *empty* neighbour, and that is what keeps it honest. A vent
+   buried in what it makes simply stops, so nothing floods the box, and a volcano works
+   the way a volcano works: the shaft fills, the lava overflows at the top, runs down the
+   outside, cools into stone, and the cone it leaves behind is what the next pour runs
+   over. Lava that never set could not build that — it would just fill the box like a
+   bath. `proof` and no melting point because a source you can destroy with what it
+   pours is not a source. */
+M[VENT]    ={n:'Vent',     ph:3, col:[ 78, 74, 84], ig:9e9, cond:.20, cap:2.4, dens:9.9,
+             proof:1, tough:9e9};
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
              span:900, peak:1500};
 
@@ -423,7 +447,7 @@ const GROUPS = [
   { name:'Fuel',  items:[WOOD, PAPER, STRAW, FUSE, COAL, GREEN, POWDER, RUBBER] },
   { name:'Wet',   items:[WATER, OIL, ICE, ACID] },
   { name:'Solid', items:[STONE, STEEL, SAND, WAX, GLASS, OBSIDIAN] },
-  { name:'Hot',   items:[LAVA, MOLTEN, EMBER, THERMITE, MAGNES, GAS] },
+  { name:'Hot',   items:[LAVA, MOLTEN, EMBER, THERMITE, MAGNES, GAS, VENT] },
   { name:'Scene', items:'scenes' },
   { name:'Tools', items:'tools' },
 ];
@@ -458,7 +482,7 @@ SAVE_KEY[STEAM]='steam';      SAVE_KEY[EMBER]='ember';      SAVE_KEY[ASH]='ash';
 SAVE_KEY[LAVA]='lava';        SAVE_KEY[GLASS]='glass';      SAVE_KEY[MOLTEN]='steel-molten';
 SAVE_KEY[OBSIDIAN]='obsidian';SAVE_KEY[THERMITE]='thermite';SAVE_KEY[MAGNES]='magnesium';
 SAVE_KEY[RUBBER]='rubber';    SAVE_KEY[MRUBBER]='rubber-molten';
-SAVE_KEY[ACID]='acid';        SAVE_KEY[GAS]='gas';
+SAVE_KEY[ACID]='acid';        SAVE_KEY[GAS]='gas';           SAVE_KEY[VENT]='vent';
 
 const TYPE_OF_KEY = new Map(SAVE_KEY.map((k,t) => [k,t]));
 
@@ -469,7 +493,25 @@ const TYPE_OF_KEY = new Map(SAVE_KEY.map((k,t) => [k,t]));
    must not move them by the same amount. Every place heat changes hands below, it
    is moved as energy and divided by the capacity of whatever receives it. */
 
-const AMBIENT    = 20;    // the room
+/* The room, and it is a `let` because it is worth turning.
+
+   This number was already the one the whole box relaxes toward: gas sheds heat to it
+   every tick through ROOM_LOSS, and all four walls do the same through EDGE_LOSS. Making
+   it adjustable adds almost no code and a great deal of behaviour, because everything
+   else in the file already keys off it — the ignition table turns into a dial:
+
+     below 0  water freezes            210  paper
+        62    wax melts                250  gas
+       100    water boils off          270  rubber
+       150    powder                   300  wood
+       170    straw                    430  magnesium
+       190    oil                      470  green wood
+       200    fuse                     520  coal
+
+   The rendering keys off it too and needs no special case: air only shimmers above
+   AMBIENT+18, and the heat view scales from AMBIENT, so both stay meaningful at any
+   setting rather than washing the picture out at the hot end. */
+let AMBIENT      = 20;
 const CELL       = 3;     // pixels per cell. Three rather than four gives about 1.8×
                           // the cells for the same screen — measured on the device,
                           // a busy scene costs 3.0-4.5ms of work at 4px, against a
@@ -512,6 +554,12 @@ const STEPS      = 1;     // simulation ticks per drawn frame — see frame().
                           // pixels is not a bigger box. Fire covers the same cells
                           // per second it always did, and there are simply more cells
                           // between one side and the other.
+const VENT_EVERY = 10;    // ticks between one vent cell producing anything. Per cell and
+                          // staggered by position, so a wide vent is a fast one and a
+                          // row of them does not pulse in lockstep.
+// Up first: that is what fills a shaft and makes a volcano overflow at the top rather
+// than a puddle creep sideways out of the bottom.
+const VENT_DIRS  = [[0,-1], [-1,0], [1,0], [0,1]];
 const RAIN_TICKS = 420;   // how long a press of Rain keeps raining. At 90 it was a
                           // second and a half, which a fire of any size shrugged off.
 const MATCH_HEAT = 780;   // what the match puts into whatever you touch with it
@@ -553,7 +601,11 @@ const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d', {alpha:false});
 ctx.imageSmoothingEnabled = false;
 
-let W=0, H=0, type, temp, fuel, life, vel, tint, img, buf;
+// `feed` is the vent's payload: for a VENT cell it holds the material that vent emits,
+// and it is zero everywhere else. Its own array rather than a spare field on an
+// existing one, because overloading `fuel` to sometimes mean "a material index" is the
+// kind of shortcut that reads fine and goes wrong in the dark.
+let W=0, H=0, type, temp, fuel, life, vel, tint, feed, img, buf;
 
 /* Sizing the grid, and carrying whatever is already in it across.
 
@@ -568,7 +620,7 @@ function build(){
   const nh = Math.max(40, Math.floor(r.height / CELL));
   if (nw === W && nh === H) return;
 
-  const old = W ? { W, H, type, temp, fuel, life, vel } : null;
+  const old = W ? { W, H, type, temp, fuel, life, vel, feed } : null;
 
   W = nw; H = nh;
   cv.width = W; cv.height = H;
@@ -578,6 +630,7 @@ function build(){
   fuel = new Float32Array(n);
   life = new Float32Array(n);
   vel  = new Float32Array(n);
+  feed = new Uint8Array(n);
   tint = new Int8Array(n);
   for (let i=0;i<n;i++) tint[i] = (Math.random()*26 - 13)|0;
   img = ctx.createImageData(W,H);
@@ -594,6 +647,7 @@ function build(){
         const i = y*W + x, j = oy*old.W + x;
         type[i] = old.type[j]; temp[i] = old.temp[j];
         fuel[i] = old.fuel[j]; life[i] = old.life[j]; vel[i] = old.vel[j];
+        feed[i] = old.feed[j];
       }
     }
   }
@@ -630,6 +684,10 @@ function put(x,y,t){
   fuel[i] = M[t] && M[t].fuel ? M[t].fuel : 0;
   life[i] = 0;
   vel[i]  = 0;
+  // A vent placed by hand pours whatever was last selected. Loading a save assigns
+  // `feed` itself immediately after, because a saved vent pours what it was saved with
+  // and not what happens to be picked now.
+  feed[i] = t===VENT ? ventFeed : 0;
   temp[i] = M[t] && M[t].t0 !== undefined ? M[t].t0 : AMBIENT;
 }
 
@@ -640,6 +698,7 @@ function become(x,y,t){
   fuel[i] = M[t] && M[t].fuel ? M[t].fuel : 0;
   life[i] = 0;
   vel[i]  = 0;
+  feed[i] = 0;
 }
 
 /* ============================================================ movement
@@ -673,6 +732,10 @@ function swap(a,b){
   let l=life[a]; life[a]=life[b]; life[b]=l;
   let h=temp[a]; temp[a]=temp[b]; temp[b]=h;
   let v=vel[a];  vel[a]=vel[b];   vel[b]=v;
+  // A vent is a static solid and never moves, so this line should never do anything.
+  // It is here because "should never" is how a cell ends up carrying somebody else's
+  // payload the first time something does move one.
+  let g=feed[a]; feed[a]=feed[b]; feed[b]=g;
 }
 
 function denser(a,b){                  // can a displace b?
@@ -1054,13 +1117,76 @@ const touchingWater = (x,y) => {
   return false;
 };
 
+/* Where one cell of the vent's output goes.
+
+   The first version of this filled an empty neighbour and nothing else, and it emitted
+   exactly three cells before dying forever — measured, on a bare floor: up, left, right,
+   then never again. It collided with a rule that is deliberately there and correct,
+   documented over in moveFalling: **a one-deep film of liquid does not creep.** A liquid
+   only spreads if it has more of itself directly above or below, so that a poured oil
+   trail stays a trail. The vent's single output cells had neither, so they sat where
+   they landed, cooled, capped the vent, and that was the end of it.
+
+   So a vent pushes rather than fills. Upward first, and through its own output rather
+   than only into a hole: walk up the column of whatever it is pouring and put the new
+   cell at the top of it. That is what a vent does in the world — the pressure is
+   underneath — and it fixes the film problem as a side effect, because the second cell
+   up gives the first one something to be a pool with, and the pair can then flow.
+
+   A shaft therefore fills from the bottom, overflows at the top, and runs down the
+   outside; the run cools into stone and the cone grows. Which is a volcano.
+
+   REACH bounds the walk so a blocked vent costs a fixed scan rather than the height of
+   the box, and so pressure is finite: bury a vent under enough of its own output and it
+   stops, which is a plug, and is allowed. */
+const VENT_REACH = 70;
+
+function ventPush(x, y, what){
+  // Up, through the column it has already made.
+  for (let k=1; k<=VENT_REACH; k++){
+    const yy = y-k;
+    if (!inb(x,yy)) break;
+    const j = idx(x,yy);
+    if (type[j] === E){ put(x, yy, what); return true; }
+    if (type[j] !== what) break;          // something else is in the way: stop pushing
+  }
+  // Otherwise any empty cell beside or below it, so a vent in a wall still bleeds.
+  for (const [dx,dy] of VENT_DIRS){
+    const xx = x+dx, yy = y+dy;
+    if (!inb(xx,yy)) continue;
+    const j = idx(xx,yy);
+    if (type[j] === E){ put(xx, yy, what); return true; }
+  }
+  return false;
+}
+
+let tick = 0;
+
 function react(){
+  tick++;
   for (let y=H-1; y>=0; y--){
     for (let x=0; x<W; x++){
       const i = idx(x,y), t = type[i];
       if (t===E) continue;
       const m = M[t];
       const cap = capOf(t);
+
+      /* ---- a vent pushes out what it was given, into an empty neighbour only.
+         Upward first, because that is the direction that makes a shaft fill and a
+         volcano overflow rather than a puddle spread; then sideways; then down.
+         VENT_EVERY is per cell, so a wide vent is a fast one, which is the control a
+         player already has in the brush. */
+      if (t===VENT){
+        const what = feed[i];
+        if (what){
+          // Held at whatever it pours. A conduit is connected to something, and a vent
+          // sitting at room temperature is a cold spot that sets its own lava solid in
+          // the one cell where that is fatal.
+          if (M[what].t0 !== undefined) temp[i] = M[what].t0;
+          if ((tick % VENT_EVERY) === (i % VENT_EVERY)) ventPush(x, y, what);
+        }
+        continue;                     // it is not fuel, it does not melt, it just sits
+      }
 
       // ---- gases last a while and are then air again, keeping whatever heat is
       //      left in them. (They used to be reset to room temperature on the way
@@ -1382,6 +1508,17 @@ stripEl.addEventListener('keydown', e => {
 
 let tool = WOOD;
 let brush = 3;
+/* What a vent will pour, and how you say so: pick the material, then pick Vent.
+
+   No extra control for it. Selecting any material remembers it here, so "Lava, then
+   Vent" gives a lava vent and "Water, then Vent" gives a spring, using only the two taps
+   you would have made anyway. The vent chip wears the colour of whatever it is holding
+   and the readout spells it out — "Vent · Lava" — because an invisible mode that changes
+   what a button does is a mode you will get wrong.
+
+   Declared here with the rest of the tool state rather than beside setVentFeed, because
+   `put()` and `chipFor()` both read it and both can run before that point. */
+let ventFeed = LAVA;
 let shape = 'free';          // 'free' | 'line' | 'box'
 let anchor = null, ghost = null;   // the two ends of a shape being dragged out
 let heatView = false;        // false-colour the whole grid by temperature
@@ -1396,7 +1533,9 @@ function chipFor(t){
   b.type = 'button';
   b.setAttribute('aria-pressed', String(tool===t));
   b.dataset.t = t;
-  const c = M[t].col;
+  // The vent shows what it is holding rather than its own colour, so the tray answers
+  // "what will this pour?" without being tapped.
+  const c = t === VENT ? M[ventFeed].col : M[t].col;
   b.innerHTML = `<span class="sw" style="background:rgb(${c[0]},${c[1]},${c[2]})"></span>` +
                 `<span class="lb">${M[t].n}</span>`;
   b.addEventListener('click', ()=>setTool(t));
@@ -1505,7 +1644,7 @@ let clearArmed = 0, clearTimer = 0;
 
 const clearBtn = actionChip('Clear', ()=>{
   if (Date.now() < clearArmed){
-    type.fill(E); temp.fill(AMBIENT); fuel.fill(0); life.fill(0); vel.fill(0);
+    wipeAll();
     disarmClear();
     say('Cleared');
     return;
@@ -1535,6 +1674,42 @@ actsEl.appendChild(actionChip('Rain', ()=>{ raining = RAIN_TICKS; }, false, 'rai
    box and almost none of it is visible: a log at 280°C and a log at 20°C look the
    same until one of them catches. This shows the plume, the conduction along a steel
    bar, and the cold shadow under a block of ice. */
+/* The room, as six named settings rather than a slider.
+
+   Named because the number on its own does not tell you anything — 170°C is a fact,
+   "straw and paper catch on their own" is the reason to turn it there. The readout
+   carries both, and it is the readout doing that work rather than the button, because
+   the button has to stay the same size as every other chip in the tray.
+
+   Turning the room only moves the air. Everything solid comes along by conduction, at
+   whatever rate its own `cond` and `cap` say — which is the point, and is why a block of
+   ice can hold out in an oven for a while. Without the nudge to the air the change took
+   seconds to be visible at all, because the air only relaxes toward the room at
+   ROOM_LOSS a tick and everything else waits on the air. */
+const ROOMS = [
+  { n:'Freezing', t:-30, tell:'water freezes' },
+  // 0 freezes water too, and says so. Water sits exactly at the room and rounds under
+  // its own freezing point, so labelling this one "ice keeps" and leaving it there
+  // would have been the same kind of false promise the setting below it started as.
+  { n:'Cold',     t:  0, tell:'ice keeps, and water becomes it' },
+  // 'Normal' rather than 'Room', only because the gauge line reads "room Room 20°C"
+  // otherwise, and a stutter in the one place the setting is displayed is worth a word.
+  { n:'Normal',   t: 20, tell:'nothing happens on its own' },
+  { n:'Warm',     t: 90, tell:'wax runs, water is nearly boiling' },
+  { n:'Oven',     t:230, tell:'powder, straw, oil, fuse and paper catch on their own' },
+  { n:'Furnace',  t:480, tell:'everything but coal and thermite goes by itself' },
+];
+let roomAt = 2;                                  // Room, 20°C
+
+const roomBtn = actionChip('Room', ()=>{
+  roomAt = (roomAt + 1) % ROOMS.length;
+  const r = ROOMS[roomAt];
+  AMBIENT = r.t;
+  for (let i=0;i<type.length;i++) if (type[i]===E) temp[i] = AMBIENT;
+  say(`${r.n} — ${r.t}°C, ${r.tell}`, true);
+}, false, 'room');
+actsEl.appendChild(roomBtn);
+
 const heatBtn = actionChip('Heat', ()=>{
   heatView = !heatView;
   heatBtn.setAttribute('aria-pressed', String(heatView));
@@ -1553,7 +1728,7 @@ actsEl.appendChild(heatBtn);
    squashed one. */
 
 function wipeAll(){
-  type.fill(E); temp.fill(AMBIENT); fuel.fill(0); life.fill(0); vel.fill(0);
+  type.fill(E); temp.fill(AMBIENT); fuel.fill(0); life.fill(0); vel.fill(0); feed.fill(0);
   raining = 0;
 }
 function sSlab(x0,y0,x1,y1,t){
@@ -1678,15 +1853,25 @@ function encodeScene(){
     if (!seen.has(k)){ seen.set(k, keys.length); keys.push(k); }
     return seen.get(k);
   };
-  const runs = [];
-  let prev = idxOf(type[0]), n = 1;
-  for (let i=1;i<type.length;i++){
-    const k = idxOf(type[i]);
-    if (k === prev){ n++; continue; }
-    runs.push(n, prev); prev = k; n = 1;
-  }
-  runs.push(n, prev);
-  return { v:1, w:W, h:H, keys, runs };
+  const rle = read => {
+    const runs = [];
+    let prev = idxOf(read(0)), n = 1;
+    for (let i=1;i<type.length;i++){
+      const k = idxOf(read(i));
+      if (k === prev){ n++; continue; }
+      runs.push(n, prev); prev = k; n = 1;
+    }
+    runs.push(n, prev);
+    return runs;
+  };
+  const runs = rle(i => type[i]);
+  // v2 adds `feed`, which is what each vent pours. It is a second run-length pass over
+  // the same palette rather than a field on the first, because it is zero in all but a
+  // handful of cells and so costs almost nothing encoded on its own. Without it a saved
+  // volcano comes back as a vent that pours nothing, which looks exactly like a vent
+  // that is broken.
+  const vents = rle(i => feed[i]);
+  return { v:2, w:W, h:H, keys, runs, feed: vents };
 }
 
 // Returns the keys it could not place, which is not an error: a save written by a
@@ -1700,12 +1885,18 @@ function decodeScene(s){
     if (TYPE_OF_KEY.has(k)) return TYPE_OF_KEY.get(k);
     missing.push(k); return E;
   });
-  const src = new Uint8Array(s.w * s.h);
-  let p = 0;
-  for (let r=0; r+1<s.runs.length; r+=2){
-    const n = s.runs[r], t = map[s.runs[r+1]];
-    for (let q=0; q<n && p<src.length; q++) src[p++] = t === undefined ? E : t;
-  }
+  const expand = runs => {
+    const out = new Uint8Array(s.w * s.h);
+    let p = 0;
+    for (let r=0; r+1<runs.length; r+=2){
+      const n = runs[r], t = map[runs[r+1]];
+      for (let q=0; q<n && p<out.length; q++) out[p++] = t === undefined ? E : t;
+    }
+    return out;
+  };
+  const src = expand(s.runs);
+  // A v1 save has no vents in it, because vents did not exist when it was written.
+  const srcFeed = Array.isArray(s.feed) ? expand(s.feed) : new Uint8Array(s.w * s.h);
   wipeAll();
   // Bottom-aligned and clipped, the same rule a resize already uses, because the
   // floor is the floor. A scene saved on a taller screen loses its ceiling rather
@@ -1758,7 +1949,7 @@ const loadBtn = actionChip('Load', ()=>{
   if (!text){ say('Nothing saved yet', true); return; }
   let s = null;
   try { s = JSON.parse(text); } catch { s = null; }
-  if (!s || s.v !== 1 || !Array.isArray(s.keys) || !Array.isArray(s.runs) ||
+  if (!s || !(s.v === 1 || s.v === 2) || !Array.isArray(s.keys) || !Array.isArray(s.runs) ||
       !(s.w > 0) || !(s.h > 0)){
     say('That save is damaged', true); return;
   }
@@ -1789,7 +1980,9 @@ const hintEl = document.getElementById('hint');
 let drawn = false;                                 // has anything been drawn yet?
 
 const toolName = () => tool==='match' ? (matchLit > 0 ? 'Flame' : 'Match out')
-                     : tool==='erase' ? 'Erase' : M[tool].n;
+                     : tool==='erase' ? 'Erase'
+                     : tool===VENT    ? `Vent · ${M[ventFeed].n}`
+                     : M[tool].n;
 function say(msg, force){
   if (findFlash > 0 && !force) return;   // a discovery holds the line while it shows
   roEl.textContent = msg;
@@ -1799,8 +1992,16 @@ function sayTool(){
   say(`${toolName()}  ·  brush ${brush}${how}`);
 }
 
+function setVentFeed(t){
+  if (t === VENT || !M[t] || t === E) return;
+  ventFeed = t;
+  const c = M[t].col, chip = matsEl.querySelector('.chip[data-t="' + VENT + '"]');
+  if (chip) chip.querySelector('.sw').style.background = `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
 function setTool(t){
   if (t==='match' && matchLit<=0) return;
+  if (typeof t === 'number') setVentFeed(t);
   tool = t;
   matsEl.querySelectorAll('.chip').forEach(c =>
     c.setAttribute('aria-pressed', String(Number(c.dataset.t)===tool)));
@@ -2047,7 +2248,11 @@ function updateGauge(){
     if (type[i] === E){ airSum += T; airN++; }
   }
   const air = airN ? airSum/airN : AMBIENT;
-  gaugeEl.innerHTML = `air ${Math.round(air)}°C<br><b>peak ${Math.round(peak)}°C</b>` +
+  // The room is shown next to the air because the pair is the interesting reading: the
+  // air is what the box has settled at, the room is what it is settling toward, and the
+  // gap between them is the fire.
+  gaugeEl.innerHTML = `air ${Math.round(air)}°C<br>room ${ROOMS[roomAt].n} ${AMBIENT}°C` +
+                      `<br><b>peak ${Math.round(peak)}°C</b>` +
                       `<br>found ${finds.size}/${ALL_FINDS.length}` +
                       `<br>${frameMs.toFixed(1)}ms work · ${W}×${H}`;
 }
