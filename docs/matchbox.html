@@ -1352,9 +1352,24 @@ const footing = (x,y) => {
   if (x < 0 || x >= W || y < 0) return false;
   if (y >= H) return true;                          // the floor of the box
   const t = type[idx(x,y)];
-  return t !== E && M[t].ph !== 0;
+  return t !== E && M[t].ph !== 0 && M[t].ph !== 1;
 };
 const walkable = (x,y) => inb(x,y) && (type[idx(x,y)] === E || M[type[idx(x,y)]].ph === 0);
+
+/* A liquid is not something to stand on, and that clause in `footing` is the whole of a
+   fault reported from the phone with pictures: a tankful of bugs sat in a neat pink raft on
+   the surface of the water and stayed there. Anything that was not a gas counted as ground,
+   so a bug could walk on water — and a bug on *top* of water never has water above it, so
+   the drowning clock never started at all. Both halves of it read fine.
+
+   Sinking is by density, like everything else that sinks in this box: a bug at 1.1 goes
+   through water at 1.0 and oil at 0.85, and would float on lava at 2.4 — which it is
+   welcome to do for the tick or so it survives at 1200°C. */
+const sinkable = (x,y,t) => {
+  if (!inb(x,y)) return false;
+  const u = type[idx(x,y)];
+  return u !== E && M[u].ph === 1 && (M[t].dens || 1) > (M[u].dens || 1);
+};
 
 /* A moth flies, which means it needs a direction in two dimensions where a bug only ever
    needed left or right. `way` holds one of these eight, plus one, so that nought still
@@ -1638,8 +1653,9 @@ function moveLife(){
     const x = mx, y = my;
 
     // Falls, because nothing else will do it: a bug is a static solid so that it does not
-    // trickle down a slope like a powder, which means gravity is this pass's job.
-    if (walkable(x, y+1)){ swap(i, idx(x, y+1)); continue; }
+    // trickle down a slope like a powder, which means gravity is this pass's job. Through
+    // a liquid as well as through air — a bug that lands in a pond goes under it.
+    if (walkable(x, y+1) || sinkable(x, y+1, kind)){ swap(i, idx(x, y+1)); continue; }
 
     const hot = temp[i] >= PANIC_AT;
     const every = hot ? BUG_FLEE : BUG_STEP;
