@@ -15,6 +15,16 @@
 //     same size and colour as Erase and Rain in the same row.
 //   · any resize rebuilt the grid and reseeded it, so rotating the phone erased what
 //     you had built.
+//   · a drawer that wrapped to two rows made the tray taller and moved the scene, and
+//     Clear growing into "Clear — sure?" did it between the tap that asks and the tap
+//     that confirms.
+//
+// One thing this harness cannot see, and it has already been caught out by it once:
+// **it blocks the network, so the page is laid out in a fallback monospace while a
+// phone gets Space Mono, which is wider.** A one-row check written here passed on a
+// build that was visibly wrapping in the hand. Assert what is true in any font — that
+// nothing moves, that widths within a row match — and never that a particular label
+// fits.
 //
 // Run:  npm i playwright  &&  node test/matchbox-ui.mjs
 
@@ -57,6 +67,10 @@ async function check(name, body) {
 }
 
 const stageBox = p => p.locator('.stage').boundingBox();
+
+// Chip labels live in their own span, and two of them change what they say while they
+// are asking a question, so the text is read from the span rather than the button.
+const labelOf = chip => chip.locator('.lb').textContent();
 
 // Materials live in drawers now, so reaching one means opening the right drawer
 // first — exactly as a thumb would. Hunting for the chip rather than hard-coding
@@ -121,7 +135,9 @@ await check('Clear asks before it wipes the scene', async p => {
   const before = await p.evaluate(() => __cells());
   if (before < 100) return 'the opening scene is empty, so there is nothing to wipe';
   await p.locator('.tab', { hasText: /^tools$/i }).click();
-  const clear = p.locator('#mats .chip', { hasText: /^Clear/ }).first();
+  // Located by data-act, not by the word on it: the armed label is "Sure?", so a
+  // locator that hunts for "Clear" stops resolving at exactly the moment it matters.
+  const clear = p.locator('[data-act="clear"]');
   await clear.click();
   const mid = await p.evaluate(() => __cells());
   if (mid !== before) return `one tap wiped ${before - mid} cells with no confirmation and no undo`;
@@ -134,7 +150,7 @@ await check('Clear asks before it wipes the scene', async p => {
 await check('a Clear left unconfirmed goes back to being harmless', async p => {
   const before = await p.evaluate(() => __cells());
   await p.locator('.tab', { hasText: /^tools$/i }).click();
-  const clear = p.locator('#mats .chip', { hasText: /^Clear/ }).first();
+  const clear = p.locator('[data-act="clear"]');
   await clear.click();
   await p.waitForTimeout(3200);                  // longer than the window to confirm
   await clear.click();                           // this must ask again, not wipe
@@ -349,16 +365,13 @@ await check('the whole tray is reachable without scrolling', async p => {
 });
 
 /* The whole reason the tray is in drawers: one row each, so the tray keeps a fixed
-   height however much goes into it and the stage keeps its room. Nothing was watching
-   that, and adding Save and Load took the Tools drawer to two rows at 320px — 37px off
-   the stage — without a single check going red. Material chips shrink to fit; the
-   action chips in Tools and Scene are `flex:0 0 auto` and do not, so they are the ones
-   that push a row over.
-
-   Pinned at the harness width, which is a current phone. 320px still wraps and is left
-   alone: the Fuel drawer has wrapped there since it had eight materials in it, and a
-   screen that narrow is not what this is played on. */
-await check('no drawer needs a second row at phone width', async p => {
+   height however much goes into it and the stage keeps its room.
+   Both ways of breaking it were reported from the phone rather than found here — the
+   Fuel drawer pushing Rubber onto a line of its own and stretching it the full width,
+   and Clear growing into "Clear — sure?" mid-confirm, which reflowed the row, wrapped
+   Load onto a second line and lifted the whole scene by ~86px between the tap that
+   asked and the tap that answered. */
+await check('no drawer needs a second row', async p => {
   const bad = [];
   const tabs = await p.locator('.tab').count();
   for (let i = 0; i < tabs; i++) {
@@ -367,9 +380,46 @@ await check('no drawer needs a second row at phone width', async p => {
       const name = document.querySelector('.tab[aria-pressed="true"]').textContent;
       const chips = [...document.querySelectorAll('#mats .chip')];
       const tops = new Set(chips.map(c => Math.round(c.getBoundingClientRect().top)));
-      return { name, chips: chips.length, rows: tops.size };
+      const widths = new Set(chips.map(c => Math.round(c.getBoundingClientRect().width)));
+      return { name, chips: chips.length, rows: tops.size, widths: [...widths] };
     });
     if (row.rows > 1) bad.push(`${row.name} wraps its ${row.chips} chips onto ${row.rows} rows`);
+    // Equal widths are what makes a label safe to change: a chip sized to its content
+    // is a chip that resizes the row when its text does.
+    if (row.widths.length > 1) bad.push(`${row.name} has chips of ${row.widths.length} different widths (${row.widths.join(', ')})`);
+  }
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* The defect above, stated as the thing that actually hurt: a button that asks a
+   question must not move the scene while asking it. Sam tapped Clear, the row reflowed,
+   and the box jumped — so the second tap, the one that confirms, landed somewhere
+   different from where the first one did.
+
+   Note what this does NOT depend on: how wide the text is. The suite blocks the network
+   to stay offline and therefore lays the tray out in a fallback monospace, while a phone
+   gets Space Mono, which is wider — which is exactly how the wrap above survived a check
+   written to catch it. Asserting that nothing moves is true in any font. Asserting that
+   a particular label fits would not be. */
+await check('a button that asks a question does not move the scene while asking', async p => {
+  const geom = () => p.evaluate(() => {
+    const r = e => { const b = document.querySelector(e).getBoundingClientRect();
+                     return [Math.round(b.top), Math.round(b.height)]; };
+    return { stage: r('.stage'), tray: r('.tray'), strip: r('#strip') };
+  });
+  const bad = [];
+  for (const act of ['clear', 'save']) {
+    await p.locator('.tab', { hasText: /^tools$/i }).click();
+    const before = await geom();
+    const btn = p.locator(`[data-act="${act}"]`);
+    if (act === 'save') await btn.click();          // first save fills the slot
+    await btn.click();                              // this one asks
+    const label = await labelOf(btn);
+    const after = await geom();
+    if (JSON.stringify(before) !== JSON.stringify(after)) {
+      bad.push(`${act} asking ("${label}") moved the page: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
+    }
+    if (await btn.getAttribute('aria-pressed') !== 'true') bad.push(`${act} did not arm`);
   }
   return bad.length ? bad.join('; ') : null;
 });
@@ -378,22 +428,26 @@ console.log('\n— scenes and saves —');
 
 // `pick` finds material chips; presets and the save buttons are action chips in their
 // own drawers, so they need the same hunt rather than a hard-coded tab index.
-async function press(p, label) {
-  const re = new RegExp('^' + label, 'i');
+// Presets and the save buttons are located by their data-act rather than their label,
+// because two of them change what they say: Clear becomes "Sure?" and Save becomes
+// "Replace?" while they are asking. A locator built from the words on a button cannot
+// follow a button whose words are the thing under test.
+async function press(p, act) {
+  const sel = `[data-act="${act}"]`;
   const tabs = await p.locator('.tab').count();
   for (let i = 0; i < tabs; i++) {
     await p.locator('.tab').nth(i).click();
-    const chip = p.locator('#mats .chip', { hasText: re }).first();
+    const chip = p.locator(sel);
     if (await chip.count() && await chip.isVisible()) { await chip.click(); return chip; }
   }
-  throw new Error(`no button called ${label} in any drawer`);
+  throw new Error(`no button with data-act="${act}" in any drawer`);
 }
 
 await check('a preset puts a scene in the box and takes the hint away', async p => {
   // The box does not start empty — there is an opening scene — so the claim is that
   // the preset replaces it, not that it fills a void.
   const before = await p.evaluate(() => ({ n: __cells(), wax: __count(WAX) }));
-  await press(p, 'Candle');
+  await press(p, 'scene-candle');
   const after = await p.evaluate(() => ({ n: __cells(), wax: __count(WAX) }));
   if (after.n < 200) return `the Candle preset left ${after.n} cells in the box`;
   if (!after.wax) return 'the Candle preset put no wax in the box';
@@ -410,10 +464,10 @@ await check('a preset puts a scene in the box and takes the hint away', async p 
 });
 
 await check('every preset is reachable and none of them leaves the box empty', async p => {
-  const names = await p.evaluate(() => SCENES.map(s => s.name));
+  const names = await p.evaluate(() => SCENES.map(s => s.name.toLowerCase()));
   if (names.length < 4) return `only ${names.length} presets`;
   for (const n of names) {
-    await press(p, n);
+    await press(p, 'scene-' + n);
     const cells = await p.evaluate(() => __cells());
     if (cells < 200) return `${n} put ${cells} cells in the box`;
   }
@@ -424,14 +478,14 @@ await check('every preset is reachable and none of them leaves the box empty', a
 // destroys something that cannot be got back, so it asks — the same two-tap rule Clear
 // uses, and for the same reason.
 await check('Save asks before it replaces a save, but not before the first one', async p => {
-  await press(p, 'Candle');
-  const first = await press(p, 'Save');
-  if (/replace/i.test(await first.textContent())) return 'the very first save asked to replace something';
+  await press(p, 'scene-candle');
+  const first = await press(p, 'save');
+  if (/replace/i.test(await labelOf(first))) return 'the very first save asked to replace something';
   if (!await p.evaluate(() => !!localStorage.getItem(STORE_KEY))) return 'nothing was written';
 
-  await press(p, 'Cut');
-  const again = await press(p, 'Save');
-  if (!/replace/i.test(await again.textContent())) return `a second save went straight through, reading "${await again.textContent()}"`;
+  await press(p, 'scene-cut');
+  const again = await press(p, 'save');
+  if (!/replace/i.test(await labelOf(again))) return `a second save went straight through, reading "${await labelOf(again)}"`;
   if (await again.getAttribute('aria-pressed') !== 'true') return 'the armed Save is not styled as the danger it is';
   return null;
 });
@@ -443,18 +497,18 @@ await check('Save asks before it replaces a save, but not before the first one',
    different" and looked exactly like a broken save format. A candle is wax, wick and
    stone, all static, so the only thing that can change it is the load. */
 await check('a scene saved and loaded through the buttons comes back', async p => {
-  await press(p, 'Candle');
-  await press(p, 'Save');
+  await press(p, 'scene-candle');
+  await press(p, 'save');
   const saved = await p.evaluate(() => Array.from(type));
   await p.waitForTimeout(400);
   const drift = await p.evaluate(a => { let d=0;
     for (let i=0;i<type.length;i++) if (type[i]!==a[i]) d++; return d; }, saved);
   if (drift) return `the scene moved ${drift} cells on its own, so nothing can be concluded from a comparison`;
 
-  await press(p, 'Cut');                          // something else entirely
+  await press(p, 'scene-cut');                          // something else entirely
   const between = await p.evaluate(() => __count(WAX));
   if (between) return `${between} cells of wax survived loading a different preset, so this proves nothing`;
-  await press(p, 'Load');
+  await press(p, 'load');
   const back = await p.evaluate(a => {
     let diff = 0;
     for (let i=0;i<type.length;i++) if (type[i] !== a[i]) diff++;
@@ -466,9 +520,9 @@ await check('a scene saved and loaded through the buttons comes back', async p =
 });
 
 await check('Load with nothing saved says so instead of wiping the scene', async p => {
-  await press(p, 'Candle');
+  await press(p, 'scene-candle');
   const before = await p.evaluate(() => __cells());
-  await press(p, 'Load');
+  await press(p, 'load');
   const after = await p.evaluate(() => __cells());
   if (after !== before) return `Load with an empty slot changed the box from ${before} to ${after} cells`;
   const said = await p.locator('#ro').textContent();
@@ -487,12 +541,12 @@ await check('a browser that refuses to store says so rather than breaking', asyn
     const boom = () => { throw new DOMException('denied', 'SecurityError'); };
     Object.defineProperty(window, 'localStorage', { configurable: true, get: boom });
   });
-  await press(p, 'Candle');
+  await press(p, 'scene-candle');
   const before = await p.evaluate(() => __cells());
-  await press(p, 'Save');
+  await press(p, 'save');
   const afterSave = await p.locator('#ro').textContent();
   if (!/not store/i.test(afterSave)) return `Save said "${afterSave}"`;
-  await press(p, 'Load');
+  await press(p, 'load');
   const afterLoad = await p.locator('#ro').textContent();
   if (!/not store/i.test(afterLoad)) return `Load said "${afterLoad}"`;
   if (await p.evaluate(() => __cells()) !== before) return 'the scene was disturbed by a save that could not happen';

@@ -54,12 +54,44 @@ the tray has a fixed height however much goes into it. A flat tray does not scal
 material added used to cost a slice of the stage, which is the part of the page worth
 having.
 
-That only holds while each drawer fits one row, and nothing was checking it. Adding Save
-and Load took Tools to two rows at 320px and 37px off the stage, silently. Material chips
-shrink to fit; the action chips in Tools and Scene are `flex:0 0 auto` and do not, so
-they are what pushes a row over. `test/matchbox-ui.mjs` now pins one row per drawer at
-phone width. 320px still wraps for Fuel, as it has since Fuel had eight materials in it,
-and is left alone.
+**A drawer never wraps, and every chip in a row is the same width.** Both halves are
+load-bearing rather than tidy. The tray sits above the stage, so a row that wraps makes
+the tray taller and moves the scene — and a chip sized to its own text moves the row
+whenever that text changes.
+
+Both ways of breaking it were reported from the phone rather than found here:
+
+- The Fuel drawer pushed Rubber onto a line of its own and stretched it the full width
+  of the screen.
+- Clear grew into "Clear — sure?" while asking, which reflowed the row, wrapped Load onto
+  a second line and lifted the whole box by ~86px — **between the tap that asks and the
+  tap that confirms**. The second tap lands somewhere the first one was not.
+
+So `#mats` and `.tabs` are `flex-wrap:nowrap`, chips are `flex:1 1 0`, and the labels
+that change while asking got shorter — Clear becomes "Sure?", Save becomes "Replace?",
+with the sentence moved to the readout, which has room for it and moves nothing by
+changing. `test/matchbox-ui.mjs` asserts one row per drawer, equal widths within a row,
+and that arming either button leaves the stage, tray and strip exactly where they were.
+
+### Why the check that existed did not catch it
+
+There *was* a one-row check, written the day before, and it passed on the build that was
+wrapping in Sam's hand. **The suite blocks the network to stay offline, so it lays the
+tray out in whatever monospace the machine has — and the phone gets Space Mono, which is
+wider.** Every claim the suite made about text fitting was a claim about the wrong font.
+
+The fix is not a better measurement, it is a layout that does not depend on the
+measurement. Nothing about the tray's geometry now follows from how wide a word is, so
+"nothing moves" is true in any font. What *is* font-dependent — whether a label is
+readable or clipped — the page now settles for itself at runtime: `fitLabels()` steps the
+chip type down from 9.5px until the longest label in the open drawer fits, and re-runs
+when the webfont lands, because the webfont is wider than the fallback it replaces.
+
+Measured with the real Space Mono served locally, at 375, 393 and 430px: one row
+everywhere, nothing clipped, nothing moves. A first attempt at this clipped five labels
+at 375×667 with the fitting doing nothing at all — `@media (max-height:700px)` set
+`.chip{font-size:9px}`, which beat `font-size:var(--chipfs)` on specificity and switched
+the whole mechanism off on exactly the short screens that need it most.
 
 A material is described by a handful of numbers. The ones that matter:
 
@@ -240,7 +272,7 @@ the glass.
 ```
 npm i playwright
 node test/matchbox-sim.mjs     # 39 checks — the simulation
-node test/matchbox-ui.mjs      # 22 checks — the hand
+node test/matchbox-ui.mjs      # 23 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
 
