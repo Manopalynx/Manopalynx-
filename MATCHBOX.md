@@ -185,8 +185,8 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 18 checks — the simulation
-node test/matchbox-ui.mjs      # 10 checks — the hand
+node test/matchbox-sim.mjs     # 35 checks — the simulation
+node test/matchbox-ui.mjs      # 15 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
 
@@ -239,11 +239,43 @@ The pool recedes below what the wick can reach, the wick goes dry and burns away
 **Ice never falls.** It is a static solid, like stone and wood, so a block of it hangs
 where you put it.
 
-**Thermite has a reach, and thick steel defeats it.** Measured: 10 of 12 columns
-through a two-deep plate, 8 through a three-deep one, and nothing at all through six.
-That is the melt-through rule doing what it should — a hot liquid sinks into a solid it
-is hot enough to melt and stops the moment it has given away enough heat to fall below
-that melting point. Use more thermite, or a thinner plate.
+**Thermite has a reach, and thick steel defeats it.** Measured with a six-deep charge:
+three and four deep always open up (7-9 of 12 columns), six and eight deep never do
+across five runs each, and **five deep is genuinely bimodal** — 0, 9, 0, 0, 11 on
+repeats of the identical scene. A plate exactly at the limit either gets opened or holds
+it, which is worth knowing before reading anything into a single attempt. That is the
+melt-through rule doing what it should — a hot liquid sinks into a solid it is hot
+enough to melt and stops the moment it has given away enough heat to fall below that
+melting point. Use more thermite, or a thinner plate.
+
+**Molten steel had to be given time to be liquid before any of that worked.** Reported
+from the phone as setting too fast, and correctly guessed to be the same fault lava had.
+Traced: one cell in open air fell 1500→1268 in five ticks and had set by tick nine; half
+a 150-cell pool was solid in thirteen. Lava, after its fix, takes 1274 — molten steel was
+the faster of the two by a hundred times, and it is the one that is supposed to run.
+
+Two figures were wrong and a third was a red herring:
+
+- **`cap` 1.5 → 5.0.** The real error rather than a tuning choice. `cap` is heat per unit
+  volume and steel's is close to water's (3.5 against 4.2), so on a scale that puts water
+  at 6.0 steel belongs near 5.0, not a quarter of it.
+- **`t0` 1500 → 1650.** Melting through steel needs `melt + MELT_THRU` = 1460, so 1500
+  left forty degrees of headroom in a cell shedding forty-six a tick. Counted directly:
+  at tick 0, 150 of 150 cells could melt steel; by tick 10, none could. **The
+  melt-through rule was live code that never once fired**, and every test of it passed.
+- **`cool` 1120 → 860.** 1120 already fixed an absurdity — at 1380 the window was twenty
+  degrees wide and a cut froze back into its own hole, leaving the plate thicker than it
+  started — but it did not fix the complaint. This is the same licence lava takes.
+- **`cond` is nearly inert here, which is not what it looked like.** The first pass
+  dropped it .60 → .34 on a theory about the cell touching the plate always being the
+  coldest. Swept across .55/.45/.34 with everything else held, a cell lasted 39/40/41
+  ticks and half a pool 63/61/47 — no trend worth the name, because with `cap` at 5.0 the
+  heat leaves to the room rather than sideways. It is now .55, set for ordering alone:
+  under solid steel's .92, above water's .42. At .34 a liquid metal was conducting worse
+  than water.
+
+After: a cell lasts 65 ticks, half a pool 162-198, all of it 308-327 (5.3s). A/B on the
+identical plate — old figures breached nothing in 23 seconds, new figures holed it at 4s.
 
 ## Performance
 

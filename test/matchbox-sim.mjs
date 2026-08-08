@@ -415,6 +415,67 @@ await check(browser, 'molten steel sets back into steel', () => {
   return null;
 });
 
+// ...but not before it has had a chance to be liquid, which is the half the check above
+// cannot see. It waits 5000 ticks and asks what is left, so molten steel that set in a
+// fifth of a second passed it for as long as the material has existed.
+//
+// Measured on the figures this replaces: one cell in open air fell 1500→1268 in five
+// ticks and had set by tick nine. A pool of 150 was half set by tick thirteen. Lava,
+// after its own fix, takes 1274 — molten steel was the faster of the two by a hundred
+// times, and it is the one that is supposed to run somewhere.
+//
+// A single cell is the measurement rather than the pool, because a pool also spreads,
+// and a spreading pool changes how much of it touches cold floor. One cell in still air
+// is the same scene every run.
+await check(browser, 'molten steel stays liquid long enough to run somewhere', () => {
+  __wipe();
+  put(64, 60, MOLTEN);
+  let gone = -1;
+  for (let k=1;k<=600;k++){
+    __step(1);
+    if (__count(MOLTEN) === 0){ gone = k; break; }
+  }
+  if (gone < 0) return null;                 // still liquid after ten seconds is not this defect
+  if (gone < 40) return `a molten steel cell in open air set after ${gone} ticks (${(gone/60).toFixed(2)}s) — that is hot gravel, not a pour`;
+
+  // And a pool, which is what a cut actually produces. Not the same claim: a cell can
+  // last while a pool still flash-freezes against the floor it lands on.
+  __wipe(); const f = __floor();
+  __slab(50, f-5, 79, f-1, MOLTEN);
+  const n0 = __count(MOLTEN);
+  let half = -1;
+  for (let k=1;k<=600;k++){
+    __step(1);
+    if (half < 0 && __count(MOLTEN) <= n0*0.5){ half = k; break; }
+  }
+  // 120, and the threshold is worth a word because the first attempt at it was 60 and
+  // the measurement was 54-58 — a check placed exactly on top of the number it was
+  // measuring, which failed on two runs out of three and told me nothing when it did.
+  // The figures either side are 13 ticks before the fix and ~185 after, so anything
+  // from about 40 to 150 separates them; 120 sits in the middle of that with room on
+  // both sides rather than balancing on the current value.
+  if (half >= 0 && half < 120) return `half a ${n0}-cell pool of molten steel was solid after ${half} ticks (${(half/60).toFixed(2)}s)`;
+  return null;
+});
+
+// The rule this protects is the one that makes a cut a cut: a hot liquid sinks into a
+// solid it can melt, and only while it is hotter than that solid's melting point plus
+// MELT_THRU. Molten steel used to be born at 1500 against a threshold of 1460, so it
+// had forty degrees of headroom while shedding forty-six a tick. Counted directly: at
+// tick 0, 150 of 150 cells could melt steel; by tick 10, none could. The melt-through
+// branch was live code that never once ran, and every test of it passed anyway.
+//
+// Deliberately not generalised over the table. Lava is born at 1180 and stone melts at
+// 1250, so lava cannot melt through stone and is not meant to — the same claim written
+// for every liquid would fail on the one pair where the answer is correctly no.
+await check(browser, 'molten steel is born hot enough to actually melt steel', () => {
+  const need = M[STEEL].melt + MELT_THRU;
+  const have = M[MOLTEN].t0;
+  if (have <= need) return `molten steel appears at ${have}°C and needs ${need}°C to sink into steel, so it can never cut`;
+  if (have - need < 100) return `only ${have - need}°C of headroom over the ${need}°C needed to cut steel — it loses that in a couple of ticks`;
+  return null;
+});
+
 await check(browser, 'lava sets fire to what it runs into', () => {
   __wipe(); const f = __floor();
   __slab(20, f-1, 79, f-1, STONE);
@@ -494,10 +555,15 @@ await check(browser, 'thermite cuts through a steel plate, and thick steel defea
       __hold(50, pt-1, 3, 300);
     }
     for (let k=0;k<3000;k++) __step(1);
+    // Molten counts as unbreached as well as steel. A column plugged with liquid metal
+    // is not a hole — it is a hole that is about to fill itself in, which is exactly
+    // the failure this check exists to catch. It happens to read the same at tick 3000
+    // because everything has set by then, but only counting STEEL made that an accident
+    // of when the tape measure came out.
     let breached = 0;
     for (let x=44; x<=55; x++){
       let solid = 0;
-      for (let y=pt; y<=pb; y++) if (type[idx(x,y)]===STEEL) solid++;
+      for (let y=pt; y<=pb; y++){ const t = type[idx(x,y)]; if (t===STEEL || t===MOLTEN) solid++; }
       if (solid === 0) breached++;
     }
     return breached;
@@ -508,8 +574,21 @@ await check(browser, 'thermite cuts through a steel plate, and thick steel defea
   const cut = run(3, 6, true);
   if (cut < 5) return `thermite on a three-deep plate breached ${cut} of 12 columns`;
 
-  const thick = run(6, 6, true);
-  if (thick >= cut) return `the same charge breached ${thick} of 12 columns of a six-deep plate against ${cut} of a three-deep — depth means nothing`;
+  // Eight deep, and compared against a fixed bound rather than against `cut`.
+  //
+  // This was `run(6, ...)` tested as `thick >= cut`, and it was flaky: two random draws
+  // compared with each other fails whenever the tail of one crosses the median of the
+  // other. It went off once in a full-suite run reporting 8 breached columns on a
+  // six-deep plate, then passed twelve times in a row on the same scene, which is the
+  // worst way for a check to behave — it is noise wearing the clothes of a finding.
+  //
+  // Measured reach with this charge: three and four deep always breach, six and eight
+  // never do across five runs each, and five deep is genuinely bimodal (0, 9, 0, 0, 11)
+  // — a plate exactly at the limit either gets opened or holds, which is the right
+  // behaviour to have and the wrong thing to assert on. So the check stands on the two
+  // ends that do not move, and leaves the interesting middle alone.
+  const thick = run(8, 6, true);
+  if (thick > 2) return `the same charge breached ${thick} of 12 columns of an eight-deep plate against ${cut} of a three-deep — depth means nothing`;
   return null;
 });
 

@@ -295,12 +295,43 @@ M[LAVA]   = {n:'Lava',     ph:1, col:[198, 76, 20], ig:9e9, cond:.07, cap:6.4, d
              t0:1180, cool:560, sets:STONE, flow:.45, glow:1,
              meets:[{with:WATER, become:OBSIDIAN, they:STEAM}]};
 M[GLASS]  = {n:'Glass',    ph:3, col:[172,204,206], ig:9e9, cond:.18, cap:1.2, dens:2.5, proof:1};
-M[MOLTEN] = {n:'Molten',   ph:1, col:[240,158, 62], ig:9e9, cond:.60, cap:1.5, dens:7.0,
-             // cool 1120, not 1380. Steel melts at 1400, so molten steel that set again at 1380
-// had a liquid window twenty degrees wide: a thermite cut melted straight through a
-// plate and the metal froze back into the hole before it could fall out of it, so the
-// plate ended up thicker than it started. Molten metal has to have time to run.
-             t0:1500, cool:1120, sets:STEEL, flow:.6, glow:1,
+/* Widening the liquid window to 1500→1120 was not enough on its own, because a window
+   is only worth what it takes to cross it. Traced: one molten cell in open air fell
+   1500→1268 in five ticks and had set by tick nine. A pool of 150 was half set in
+   thirteen. Lava, after its fix, takes 1274. Molten steel was the faster of the two by
+   a hundred times, and it is the one that is supposed to run.
+
+   cap 5.0, not 1.5, and this is the real error rather than a tuning choice. `cap` is
+   heat per unit volume, and steel's is close to water's — 3.5 against 4.2 — so on a
+   scale that puts water at 6.0, steel belongs near 5.0, not at a quarter of it. At 1.5
+   a cell had 570° worth of heat to shed before it set; it now has 2650, against lava's
+   3968. Metal should still give up a pour sooner than rock does. It should not lose it
+   inside a fifth of a second.
+
+   t0 1650, not 1500. Melting through steel needs `melt + MELT_THRU` = 1460, so being
+   born at 1500 left forty degrees of cutting headroom in a cell shedding forty-six a
+   tick. Measured against the old figures: at tick 0, 150 of 150 cells could cut steel;
+   by tick 10, none could. The melt-through rule was live code that never fired. A
+   furnace pour is 1600-1650°C, so this is the honest number as well as the working one.
+
+   cool 860, not 1120. Steel freezes at 1400, and 1380 was tried first: that left a
+   liquid window twenty degrees wide, so a cut melted through a plate and froze back
+   into the hole before it could fall out, leaving the plate thicker than it started.
+   1120 fixed the absurdity but not the complaint — half a pool was still solid inside a
+   second. This is the same size of licence lava takes (560, against a basalt solidus
+   near 1000) and it is taken for the same reason: the point of a molten metal is the
+   time it spends being able to go somewhere.
+
+   cond .55, and this one is set for correct ordering rather than for behaviour, because
+   measurement says it barely participates. Swept across .55/.45/.34 with everything else
+   held, a cell in open air lasted 39/40/41 ticks and half a pool 63/61/47 — no trend
+   worth the name. With cap at 5.0 the heat leaves to the room, not sideways into
+   neighbours, so `cool` is the lever and `cond` is nearly inert. It sits just under
+   solid steel's .92 and above water's .42, which is the only defensible place for a
+   liquid metal; an earlier pass had it at .34, i.e. conducting worse than water, on a
+   theory about the interface layer that the sweep above does not support. */
+M[MOLTEN] = {n:'Molten',   ph:1, col:[240,158, 62], ig:9e9, cond:.55, cap:5.0, dens:7.0,
+             t0:1650, cool:860, sets:STEEL, flow:.6, glow:1,
              meets:[{with:WATER, become:STEEL, they:STEAM}]};
 M[OBSIDIAN]={n:'Obsidian', ph:3, col:[ 40, 33, 46], ig:9e9, cond:.19, cap:2.1, dens:2.6, proof:1};
 
