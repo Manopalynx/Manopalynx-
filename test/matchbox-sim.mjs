@@ -1610,6 +1610,60 @@ await check(browser, 'a bug tipped into a pond goes under it rather than standin
   for (let k=0;k<10;k++) put(cx+22+k*3, f2-2, BUG);
   for (let k=0;k<1800;k++) __step(1);
   if (__count(BUG) < 8) bad.push(`${10-__count(BUG)} of 10 bugs drowned wading a one-cell film of water`);
+
+  /* ...and it goes down slowly. Also reported from the phone: once they sank, they sank at
+     exactly the speed they fell through air, so the water may as well not have been there.
+     A ratio rather than an absolute, because the absolute is a tuning number and the thing
+     that has to hold is that a pool slows a creature the way it slows a grain. */
+  const rate = (wet, n) => {
+    __wipe(); const f = __floor();
+    if (wet) __slab(cx-10, f-70, cx+10, f-1, WATER);
+    put(cx, f-68, BUG);
+    let at = -1;
+    for (let i=0;i<type.length;i++) if (type[i]===BUG) at = i;
+    const y0 = (at/W)|0;
+    for (let k=0;k<n;k++) __step(1);
+    at = -1;
+    for (let i=0;i<type.length;i++) if (type[i]===BUG) at = i;
+    if (at < 0) return null;                       // drowned inside the window
+    return ((((at/W)|0) - y0)) / n;                // parenthesised: `|` binds looser than `-`
+  };
+  const air = rate(false, 20), wet = rate(true, 60);
+  if (air === null || wet === null) bad.push('the fall-rate scene lost its bug before it could be timed');
+  else {
+    if (air < 0.9) bad.push(`a bug falls ${air.toFixed(2)} cells a tick through open air, which is not falling`);
+    if (wet > air / 2.5) bad.push(`it sinks at ${wet.toFixed(2)} cells a tick against ${air.toFixed(2)} in air — the water is not slowing it`);
+    if (wet < air / 12) bad.push(`it sinks at ${wet.toFixed(2)} cells a tick, which is hanging in the water rather than sinking through it`);
+  }
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* You could build above a tank and never in one. `paintCell` wrote into empty cells and gas
+   and nothing else, so a fish had to be dropped in from the top and a weight could not be
+   put on the bottom of a pool — while the falling pass displaced that same water all day.
+   A liquid gets out of the way of everything else in this box; the brush was the exception. */
+await check(browser, 'the brush reaches into a tank, and still not through a wall', () => {
+  const bad = [];
+  const cx = (W/2)|0;
+  const into = (t) => {
+    __wipe(); const f = __floor();
+    __slab(cx-20, f-30, cx+20, f-1, WATER);
+    const before = __count(t);
+    const t0 = tool, b0 = brush;
+    tool = t; brush = 3; paintAt(cx, f-15); tool = t0; brush = b0;
+    return __count(t) - before;
+  };
+  for (const [n, t] of [['a fish', FISH], ['sand', SAND], ['a bug', BUG]])
+    if (into(t) < 1) bad.push(`${n} could not be placed inside a tank of water`);
+
+  // The other half. Solids and powders still refuse, or the brush quietly becomes an
+  // eraser and every wall in every scene is one stray thumb from a hole in it.
+  __wipe(); __floor();
+  __slab(cx-4, 20, cx+4, 40, STONE);
+  const stone0 = __count(STONE);
+  const t0 = tool, b0 = brush;
+  tool = SAND; brush = 2; paintAt(cx, 30); tool = t0; brush = b0;
+  if (__count(STONE) < stone0) bad.push(`the brush ate ${stone0 - __count(STONE)} cells of a stone wall`);
   return bad.length ? bad.join('; ') : null;
 });
 

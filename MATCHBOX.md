@@ -438,10 +438,11 @@ The fish figure was already 3.4 seconds before any of this. What changed is that
 spends them throwing itself about instead of lying there, which is the same death and a
 completely different thing to watch.
 
-#### Three mistakes in it, and the third was the one you could see
+#### Four mistakes in it, and only the third was one you could see
 
-None of the three was visible by reading the source, and the first two were found only
-because the third was reported from a phone with pictures.
+Not one of them was visible by reading the source. The first two were found only because the
+third was reported from a phone with pictures, and the fourth was reported the moment the
+third was fixed — each one had been hiding behind the one in front of it.
 
 *Any neighbour counting as water.* Being *beside* a puddle is not drowning, and counting
 all four neighbours killed **7 of 10** bugs walking along a dry floor with water alongside
@@ -472,6 +473,33 @@ walk through it — because the bug ends up standing on the stone with air above
 The check for it tips the reported eighty-four in, and asserts the film case beside it:
 without that second half, "bugs sink" is satisfied by making water lethal on contact again,
 which is where this started.
+
+*And then a fourth: they sank at exactly the speed they fell.* Which reads as a hole in the
+water rather than as water, and was reported from the phone the moment the raft went away.
+A bug goes down **one cell a tick** in the open and **one every 4.1** through a liquid,
+which is about 36 cells in the 150 it has before it drowns — most of the way down a tank.
+The ratio is taken from the falling pass rather than invented: it already slows a grain by
+about six at the surface of a pool, and a creature that sank past sand at a visibly
+different rate would look wrong next to it. It comes out at 4.1 rather than 6 because water
+flowing round the bug opens the odd gap underneath it, and a gap is air.
+
+The check asserts the *ratio* and not the absolute — the absolute is a tuning number, and
+what has to hold is that a pool slows a creature the way it slows a grain.
+
+### You could build above a tank and never in one
+
+`paintCell` wrote into empty cells and gas and nothing else, so a fish had to be dropped in
+from the top and a weight could not be placed on the bottom of a pool — while the falling
+pass displaced that same water all day. A liquid is the one thing in this box that gets out
+of the way of everything else; the brush was the exception to its own rule.
+
+It writes into liquids now. **Solids and powders still refuse**, and that half is checked
+too: without it the brush quietly becomes an eraser, and every wall in every scene is one
+stray thumb away from a hole in it. Erase is one tap.
+
+It *replaces* the liquid rather than pushing it aside, so filling a sealed tank with sand
+leaves you less water than you started with. Displacing properly means finding somewhere for
+it to go, and in a sealed tank there is nowhere.
 
 ### The one that got past everything
 
@@ -711,7 +739,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 62 checks — the simulation
+node test/matchbox-sim.mjs     # 63 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
