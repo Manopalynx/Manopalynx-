@@ -310,10 +310,47 @@ Measured, a lit candle at one end of the box and twelve moths released at the ot
 are at the wick within **three seconds**, and then go one at a time — twelve, nine, six,
 two, one — with the last circling it. Unlit, none of them die.
 
-**It does not dive, it mills about.** Once a moth is warm it stops steering and goes back
-to fluttering, so it gathers at the edge of a fire and blunders in by accident rather than
-flying down the wick on purpose. Without that, all twelve went straight in and were gone
-inside thirteen seconds, which is a worse picture than the one it replaced.
+**It does not dive, it circles.** Within a few cells of a flame it stops closing in and
+goes round it instead, cutting in only now and then by accident — which is the whole of a
+moth. Without that, all twelve went straight in and were gone inside thirteen seconds.
+
+**And it can only see about sixty cells.** That number decides whether a crowd is a swarm
+or a queue, and getting it wrong produced the worst-looking fault of the session.
+
+#### The column, and why five fixes did not fix it
+
+Reported from the phone with pictures: two hundred moths over a lit candle collapsed into a
+solid vertical line above the wick, then burned upward like a fuse.
+
+Five things were changed chasing it, and each one helped slightly, which is the signature of
+tuning rather than diagnosing. Arriving by distance instead of by temperature (a candle's
+heat rises in a narrow plume, so "stop when warm" meant "stop in a thin column"). Fluttering
+instead of freezing when blocked. Beacons only on things that give off light, rather than on
+anything hot — which had included every burning moth. Dropping the moth's burn output to
+0.1, the lowest in the table, so a swarm is not a fuse. Wobbling the aim point, because the
+approach is greedy and diagonal, so a moth closes the gap sideways first and then runs out
+of sideways to go, and from that moment the only move left is straight down the light's own
+column.
+
+All five were real faults. **None of them was the cause.** The cause was the premise: with
+no limit on sight, every moth in the box steers at the one candle in it, and two hundred
+solid bodies converging on a single cell is a traffic jam — which, seen from above, is a
+column. A real moth is drawn to a light near it and the rest carry on with their evening.
+
+Swept, on the reported scene, worst shape at any moment against how many of a dozen released
+nearby still die:
+
+| sight | worst shape | stacked on another | survivors of ~200 | nearby killed |
+|---|---|---|---|---|
+| unlimited | 14 wide × 110 tall | 39% | 0 | 12 of 12 |
+| **60** | fills the box | **1%** | 148 | **12 of 12** |
+| 40 | fills the box | 0% | 178 | 10 of 12 |
+| 25 | fills the box | 1% | 199 | 7 of 12 |
+
+Nothing had been watching the **shape** of them — only how many were alive and roughly
+where — so every check passed on the build that did it. There is one now, and it reports
+"12 wide by 108 tall, 9.0 times taller than wide, 52% stacked — that is a queue" the moment
+the sight limit comes off.
 
 #### Seeing across a room, once for all of them
 
@@ -586,7 +623,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 56 checks — the simulation
+node test/matchbox-sim.mjs     # 57 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```

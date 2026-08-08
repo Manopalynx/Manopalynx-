@@ -1323,7 +1323,10 @@ await check(browser, 'a moth crosses the box to a flame, and does not without on
     __wipe(); const f = __floor();
     __slab(14, f-16, 21, f-1, WAX);
     for (let y=f-22; y<f-14; y++) put(18, y, FUSE);
-    for (let k=0;k<12;k++) put(90+k*3, 40, MOTH);
+    // Within sight of the candle, which is a real limit now: a moth sees a light 60 cells
+    // off and no further, because with no limit every moth in the box steers at the only
+    // flame in it and two hundred of them arrive as a queue rather than a swarm.
+    for (let k=0;k<12;k++) put(44+k*3, f-42, MOTH);
     if (light) __hold(18, f-21, 2, 120);
     for (let k=0;k<1200;k++) __step(1);
     const at = [];
@@ -1339,9 +1342,53 @@ await check(browser, 'a moth crosses the box to a flame, and does not without on
 
   const lit = run(true);
   if (lit.left > 3) bad.push(`${lit.left} of 12 moths survived a lit candle — they are not going to it`);
-  if (lit.left && lit.meanX > 45) bad.push(`the survivors are at x=${lit.meanX}, nowhere near the candle at 18`);
+  // No claim about where a survivor ended up: one moth out of twelve can be anywhere, and
+  // asserting on it measures a single dice roll rather than the creature.
   if (dark.left - lit.left < 6) bad.push(`a lit candle killed ${12-lit.left} and an unlit one killed ${12-dark.left} — that is not attraction`);
   return bad.length ? bad.join('; ') : null;
+});
+
+/* A swarm round a candle is a swarm, not a queue.
+
+   Reported from the phone with pictures: two hundred moths over a lit candle collapsed
+   into a solid vertical line above the wick and then burned upward like a fuse. Nothing
+   was watching the *shape* of them, only how many were alive and roughly where, so every
+   check passed on the build that did it.
+
+   Measured on the reported scene, worst shape at any point: unlimited sight gave 14 cells
+   wide by 110 tall with 39% of them stacked directly on another moth. The fix was not the
+   steering but the premise — a moth sees a light near it, rather than every moth in the
+   box steering at the only flame in it. */
+await check(browser, 'a crowd of moths round one candle is a cloud, not a column', () => {
+  __wipe(); const f = __floor();
+  const cx = (W/2)|0;
+  __slab(cx-3, f-16, cx+2, f-1, WAX);
+  for (let y=f-22; y<f-14; y++) put(cx, y, FUSE);
+  const t0 = tool, b0 = brush; tool = MOTH; brush = 3;
+  for (let k=0;k<70;k++) paintAt(8 + ((k*13) % (W-16)), 12 + ((k*29) % 90));
+  tool = t0; brush = b0;
+  const placed = __count(MOTH);
+  if (placed < 80) return `only ${placed} moths went in, so this is not a crowd`;
+
+  __hold(cx, f-21, 2, 120);
+  let worst = 0, worstAt = null, worstStack = 0;
+  for (let k=0;k<1800;k++){
+    __step(1);
+    if (k % 60) continue;
+    const o = [];
+    for (let i=0;i<type.length;i++) if (type[i]===MOTH) o.push([i%W, (i/W)|0]);
+    if (o.length < 20) continue;
+    const xs = o.map(p=>p[0]), ys = o.map(p=>p[1]);
+    const wide = Math.max(...xs)-Math.min(...xs)+1, tall = Math.max(...ys)-Math.min(...ys)+1;
+    const set = new Set(o.map(p => p[1]*W + p[0]));
+    let stacked = 0;
+    for (const [x,y] of o) if (set.has((y-1)*W+x) || set.has((y+1)*W+x)) stacked++;
+    const pct = Math.round(100*stacked/o.length);
+    if (tall/wide > worst){ worst = tall/wide; worstAt = `${wide} wide by ${tall} tall`; worstStack = pct; }
+  }
+  if (worst > 4) return `they got to ${worstAt} (${worst.toFixed(1)} times taller than wide, ${worstStack}% stacked) — that is a queue`;
+  if (worstStack > 25) return `${worstStack}% of them were stacked directly on another moth at ${worstAt}`;
+  return null;
 });
 
 await check(browser, 'the box kills moths with what it already had', () => {

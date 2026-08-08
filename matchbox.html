@@ -536,7 +536,11 @@ M[BUG]     ={n:'Bug',      ph:3, col:[176, 92,132], ig:190, fuel:20, out:1.2, co
    pass away from it and everything it does is in moveLife(). The cost of that is a moth
    hovering in a sandfall dams it, which is odd and rare and noted here rather than
    solved. */
-M[MOTH]    ={n:'Moth',     ph:3, col:[214,198,166], ig:120, fuel:8, out:0.8, cond:.28, cap:.7,
+// `out` 0.1, which is the lowest in the table by a long way. A moth is a scrap of dust —
+// it should go up and be gone, not throw enough heat to light the moth beside it. At 0.8 a
+// swarm was a fuse: one reached the candle, and the fire walked through the whole cloud
+// from body to body, upwards, because each new flame rose and the rest followed it.
+M[MOTH]    ={n:'Moth',     ph:3, col:[214,198,166], ig:120, fuel:8, out:0.1, cond:.28, cap:.7,
              char:2, ash:ASH, dens:.4, tough:.5, sparse:.10,
              meets:[{with:WATER, become:E, tale:'A moth cannot swim either'}]};
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
@@ -1340,10 +1344,37 @@ const MOTH_DIRS = [[1,0],[1,-1],[0,-1],[-1,-1],[-1,0],[-1,1],[0,1],[1,1]];
 const MOTH_STEP = 3;     // ticks a wingbeat. A moth is quicker than a bug and less steady.
 const MOTH_TURN = .3;    // ...and it wanders off course this often, by one notch of the ring
 const MOTH_WAKE = 14;    // how much warmer than the room a thing has to be to be worth flying at
-const MOTH_SHY  = 45;    // ...and how warm it has to get before it stops closing in. A moth
-                         // circles a light rather than diving down it; this is what makes it
-                         // mill about at the edge of a fire and blunder in now and then,
-                         // instead of twelve of them going straight down the wick at once.
+/* How near it gets before it stops steering and just mills about. A moth circles a light
+   rather than diving down it, and this is what makes it blunder in by accident instead of
+   flying down the wick on purpose.
+
+   Measured in **cells from the flame**, and it used to be measured in how warm the moth
+   had got — which produced the shape in Sam's screenshots: a candle's heat rises in a
+   narrow plume, so the warm region *is* a tall thin column, and moths stopping wherever
+   they became warm stopped in a vertical line above the wick. Being fuel and touching each
+   other, they then burned upwards like a fuse.
+   Distance gives a ring round the flame instead of a chimney over it. */
+const MOTH_NEAR = 7;
+/* How far a moth can see a light, and this is the number that decides whether a swarm is
+   a swarm or a queue.
+
+   With no limit, every moth in the box steers at the one candle in it — and two hundred
+   solid bodies converging on a single cell is a traffic jam, which from above is a column.
+   Reported from the phone as a solid vertical line over the wick that burned upward like a
+   fuse, and it was not the steering that was wrong, it was the premise. A real moth is
+   drawn to a light near it; the rest of them carry on with their evening.
+
+   Swept, with two hundred moths and one candle, worst shape seen against how many of a
+   dozen released a few cells away still die:
+
+       unlimited   14 wide x 110 tall, 39% stacked directly on another   12 of 12 die
+       60          fills the box, 1% stacked                             12 of 12 die
+       40          fills the box, 0% stacked                             10 of 12 die
+       25          fills the box, 1% stacked                              7 of 12 die
+
+   60 removes the column outright and still costs every moth that comes near a flame. */
+const MOTH_SEE = 60;
+const MOTH_DIVE = .06;   // ...and how often, while circling, it forgets itself and cuts in
 
 /* Where the warm things are, worked out once a tick for all of them together.
 
@@ -1373,10 +1404,24 @@ function findBeacons(){
   for (let y=0;y<H;y++){
     const row = ((y/BEACON_BLOCK)|0) * bw, base = y*W;
     for (let x=0;x<W;x++){
-      const T = temp[base+x];
+      const j = base+x, T = temp[j];
       if (T <= lim) continue;
+      /* Only things that give off light, which is what a moth actually steers by, and is
+         the whole of why they used to form a column.
+         Warm air counted before, and the air above a candle is a tall narrow convection
+         plume — so every block up that plume got its own beacon and the moths lined up
+         along the ladder. Reported from the phone as a solid vertical line above the wick
+         that then burned upward like a fuse, and measured at ten cells wide by a hundred
+         and five tall with three quarters of them stacked directly on another.
+         A flame is light. Lava and molten metal are light. Hot air is not. */
+      const t = type[j];
+      // A flame, or something glowing — lava, molten steel. Nothing else, and in
+      // particular not "anything hot enough", which admitted every burning cell in the
+      // box including the moths themselves. A swarm that catches light should not become
+      // the thing the rest of the swarm is steering at.
+      if (t !== FIRE && !(M[t] && M[t].glow)) continue;
       const b = row + ((x/BEACON_BLOCK)|0);
-      if (T > beaconBest.t[b]){ beaconBest.t[b] = T; beaconBest.i[b] = base+x; }
+      if (T > beaconBest.t[b]){ beaconBest.t[b] = T; beaconBest.i[b] = j; }
     }
   }
   beacons.length = 0;
@@ -1392,31 +1437,70 @@ function moveMoth(i, x, y){
   for (let k=0;k<beacons.length;k++){
     const j = beacons[k], jx = j % W, jy = (j / W) | 0;
     const d = Math.abs(jx - x) + Math.abs(jy - y);
+    if (d > MOTH_SEE) continue;
     const score = (temp[j] - AMBIENT) / (1 + d);
     if (score > best){ best = score; bx = jx; by = jy; }
   }
 
-  // Close enough to be warm: stop steering and flutter. It has arrived, and what happens
-  // next is an accident rather than a decision, which is the whole of a moth.
-  if (temp[i] >= AMBIENT + MOTH_SHY) bx = -1;
+  /* Aimed a little to one side of the light, differently each beat.
 
-  if (bx >= 0){
+     Steering straight at it is what built the column. The approach is greedy and
+     diagonal, so a moth closes the gap in x first and then runs out of sideways to go —
+     from that moment `sx` is nought and the only move left is straight down the light's
+     own column. Two hundred moths all do that, arrive in the same column, and queue nose
+     to tail up the box. Measured at eight cells wide by ninety-nine tall.
+
+     A wobble of a few cells on the aim point means the paths never collapse onto one
+     line, so the same two hundred arrive as a cloud. It costs nothing and it is closer to
+     what the flight looks like anyway. */
+  const jx = bx < 0 ? 0 : ((Math.random()*(MOTH_NEAR*2+1))|0) - MOTH_NEAR;
+  const jy = bx < 0 ? 0 : ((Math.random()*(MOTH_NEAR*2+1))|0) - MOTH_NEAR;
+  const sx = Math.sign(bx + jx - x), sy = Math.sign(by + jy - y);
+  const dist = bx < 0 ? -1 : Math.abs(bx - x) + Math.abs(by - y);
+  const step = (list) => {
+    for (const [dx,dy] of list)
+      if ((dx||dy) && walkable(x+dx, y+dy)){ swap(i, idx(x+dx, y+dy)); return true; }
+    return false;
+  };
+
+  if (bx >= 0 && dist <= MOTH_NEAR){
+    /* Arrived: **circle it, do not land on it.**
+
+       This is the behaviour the comments have claimed twice while the code did something
+       else, and both times it made the shape reported from the phone — a solid vertical
+       line of moths above the wick that then burned upward like a fuse.
+
+       Once a swarm is all steering at one cell, the ones that cannot reach it queue along
+       the line of approach; and because a burning moth makes fire, and fire rises, the
+       thing they are steering at climbs — so the queue is dragged up the box, feeding
+       itself. The beacons showed it plainly: fire at y=189, then 165, then 139, well above
+       a wick that never moved. They were following their own dead upwards.
+
+       Going round it instead spreads them over a ring rather than a queue, and `way`'s
+       sign gives each moth its own way round so they do not all revolve in step. */
+    const sense = way[i] < 0 ? -1 : 1;
+    const px = -sy * sense, py = sx * sense;
+    if (Math.random() < MOTH_DIVE){
+      if (step([[sx,sy],[sx,0],[0,sy]])) return;      // ...and now and then, straight in
+    } else if (step([[px,py],[px,0],[0,py]])) return;
+    // Blocked whichever way it tried: flutter, below, so a jam shakes itself apart.
+  } else if (bx >= 0){
     // Towards it, diagonally if it can, straight if it cannot. No hesitation and no
     // sense of danger — that is the entire character of the thing.
-    const sx = Math.sign(bx - x), sy = Math.sign(by - y);
-    for (const [dx,dy] of [[sx,sy],[sx,0],[0,sy]]){
-      if ((dx||dy) && walkable(x+dx, y+dy)){ swap(i, idx(x+dx, y+dy)); return; }
-    }
-    return;
+    if (step([[sx,sy],[sx,0],[0,sy]])) return;
   }
 
   // Nothing worth flying at: flutter, keeping roughly to a heading so the path curves.
-  let d = (way[i] || (1 + ((Math.random()*8)|0))) - 1;
+  // `way` carries two things for a moth: which way it is drifting, in the magnitude, and
+  // which way round it circles a light, in the sign. The sign is picked once and kept, so
+  // a swarm does not all revolve the same way.
+  const sense = way[i] < 0 ? -1 : (way[i] > 0 ? 1 : (Math.random() < .5 ? 1 : -1));
+  let d = (Math.abs(way[i]) || (1 + ((Math.random()*8)|0))) - 1;
   if (Math.random() < MOTH_TURN) d = (d + (Math.random() < .5 ? 1 : 7)) % 8;
   for (let k=0;k<8;k++){
     const [dx,dy] = MOTH_DIRS[(d + k) % 8];
     if (walkable(x+dx, y+dy)){
-      way[i] = ((d + k) % 8) + 1;
+      way[i] = (((d + k) % 8) + 1) * sense;
       swap(i, idx(x+dx, y+dy));
       return;
     }
