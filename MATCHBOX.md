@@ -3,8 +3,9 @@
 A single-file falling-sand box with a heat model under it. Draw materials in the dark,
 strike a match on the strip, and touch what you have built.
 
-`matchbox.html` is the whole thing. No build, no server, no install, no storage — open
-it and it runs. Refreshing loses the scene, which is the point of a matchbox.
+`matchbox.html` is the whole thing. No build, no server, no install — open it and it
+runs. Refreshing loses the scene, which is the point of a matchbox; there is one save
+slot for the times it is not.
 
 ## Running it
 
@@ -48,10 +49,17 @@ Twenty materials in the tray and six more the simulation makes for itself: fire,
 smoke, steam, embers, ash and molten wax. Every material is one row of the `M` table
 and nothing else in the file knows any of them by name.
 
-The tray is in drawers — **Fuel, Wet, Solid, Hot, Tools** — one row at a time, so the
-tray has a fixed height however much goes into it. A flat tray does not scale: every
+The tray is in drawers — **Fuel, Wet, Solid, Hot, Scene, Tools** — one row at a time, so
+the tray has a fixed height however much goes into it. A flat tray does not scale: every
 material added used to cost a slice of the stage, which is the part of the page worth
 having.
+
+That only holds while each drawer fits one row, and nothing was checking it. Adding Save
+and Load took Tools to two rows at 320px and 37px off the stage, silently. Material chips
+shrink to fit; the action chips in Tools and Scene are `flex:0 0 auto` and do not, so
+they are what pushes a row over. `test/matchbox-ui.mjs` now pins one row per drawer at
+phone width. 320px still wraps for Fuel, as it has since Fuel had eight materials in it,
+and is left alone.
 
 A material is described by a handful of numbers. The ones that matter:
 
@@ -116,6 +124,52 @@ failing before the rework — see *What changed* below.
   dry, 2600°C wet.
 - **An acid tank.** Acid eats through most things and wears out doing it — a dozen
   cells per drop. Glass and obsidian are the two it cannot touch.
+
+Six of them are built for you in the **Scene** drawer — Candle, Fuse, Cut, Lava, Acid,
+Gas. None arrives lit, because the match is the whole interaction and a scene that turns
+up already burning has spent it.
+
+They are the scenarios above rather than six pretty ones on purpose, and
+`test/matchbox-sim.mjs` lights each preset and asserts it pays off: the candle stays lit,
+the fuse takes its time, the plate ends up open, the acid eats the steel and not its own
+tank, the pour is still liquid, the gas bangs. **A preset is a promise on a button.**
+Geometry a few cells out builds a perfect-looking scene that cannot do the thing its own
+label says — measured, lifting the wick eight cells clear of the wax drops the candle
+from 1854 ticks to 202, and nothing about it looks wrong.
+
+## Saving
+
+One slot, in the **Tools** drawer. Save asks before replacing an existing save and not
+before the first one — a confirm on a harmless action is what teaches people to tap
+through the one that is not.
+
+**A save stores what you built, not what the fire was doing.** Every cell comes back
+through `put()`, at its own starting temperature with its fuel full, exactly as though
+you had just drawn it. A scene saved halfway through burning comes back unburnt. That
+buys three things: a save is a couple of hundred bytes rather than most of a megabyte,
+because the material layout run-length encodes to almost nothing while a temperature
+field mid-fire has a different number in every cell; it is the same scene every time it
+loads; and it cannot come back subtly wrong, which a rounded temperature field can — four
+degrees of quantisation on the wrong side of an ignition point is a scene that used to
+light and now does not. The whole Cut preset is **220 bytes**.
+
+**Saves are keyed by name, not by position** — materials will be added, and the numbers
+in the `M` table are positions in a list, so inserting one in the middle would turn every
+save ever written into a different scene.
+
+The name it stores is deliberately not the name in the tray, and that is not fussiness.
+**Two pairs of materials share a display name**: `WAX` and `MELT` are both "Wax", `RUBBER`
+and `MRUBBER` are both "Rubber". The obvious reading of "store names, not indices" is
+`M[t].n`, and it would have loaded every puddle of molten wax back as a solid block of
+it — no throw, no warning, just a scene slightly different from the one you saved. So
+`SAVE_KEY` is its own table, the suite asserts it is complete and collision-free, and the
+tray stays free to rename anything it likes.
+
+A save written by a later build can name a material this one has never heard of. Those
+cells are dropped and the count is reported, because losing some of a scene while saying
+so beats refusing all of it, and both beat dropping them silently. A save from a bigger
+screen is clipped bottom-aligned, the same rule a resize already uses: it loses its
+ceiling, never its floor.
 
 ## How the heat works
 
@@ -185,8 +239,8 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 35 checks — the simulation
-node test/matchbox-ui.mjs      # 15 checks — the hand
+node test/matchbox-sim.mjs     # 39 checks — the simulation
+node test/matchbox-ui.mjs      # 22 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
 

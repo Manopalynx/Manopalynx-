@@ -871,6 +871,173 @@ await check(browser, 'every fuel in the tray can be lit, every inert one cannot'
   return bad.length ? bad.join('; ') : null;
 });
 
+console.log('\n— scenes, and getting them back —');
+
+/* The reason this table exists at all, and it is a trap that was live before anything
+   was written against it: two pairs of materials share a display name. WAX and MELT are
+   both 'Wax'; RUBBER and MRUBBER are both 'Rubber'. A save format keyed on `M[t].n` —
+   which is the obvious way to write "store names, not indices" — would have loaded every
+   puddle of molten wax back as a solid block of it. Nothing throws, nothing warns, and
+   the scene is merely slightly wrong.
+
+   So the keys are their own table, and this is what holds them to being a file format:
+   complete, unique, and free to disagree with whatever the tray calls things. */
+await check(browser, 'every material has a save key and no two share one', () => {
+  const bad = [], seen = new Map();
+  for (let t=0; t<M.length; t++){
+    if (!M[t]) continue;
+    const k = SAVE_KEY[t];
+    if (!k){ bad.push(`${M[t].n} (index ${t}) has no save key`); continue; }
+    if (seen.has(k)) bad.push(`${M[t].n} and ${seen.get(k)} both save as "${k}"`);
+    seen.set(k, M[t].n);
+  }
+  if (TYPE_OF_KEY.size !== seen.size) bad.push(`the reverse lookup has ${TYPE_OF_KEY.size} entries for ${seen.size} keys`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+await check(browser, 'a saved scene comes back cell for cell', () => {
+  const bad = [];
+  for (const s of SCENES){
+    loadScene(s);
+    const snap = Uint8Array.from(type);
+    // Through JSON both ways, because that is what a real save is. Handing the object
+    // straight back would not notice a value that cannot survive being stringified.
+    const text = JSON.stringify(encodeScene());
+    __wipe();
+    const missing = decodeScene(JSON.parse(text));
+    if (missing.length){ bad.push(`${s.name}: ${missing.join(', ')} could not be placed`); continue; }
+    let diff = 0;
+    for (let i=0;i<type.length;i++) if (type[i] !== snap[i]) diff++;
+    if (diff) bad.push(`${s.name}: ${diff} cells came back different`);
+    if (text.length > 200000) bad.push(`${s.name}: ${(text.length/1024|0)}kB is too big to keep in localStorage`);
+  }
+  return bad.length ? bad.join('; ') : null;
+});
+
+// A save is a string in storage that anything could have written — an older build, a
+// newer one, or a text editor. None of those may take the page down, and none of them
+// may load as a scene that quietly is not what was saved.
+await check(browser, 'a damaged or foreign save is survived and reported', () => {
+  const bad = [];
+  const tryLoad = (label, obj) => {
+    try { return decodeScene(obj); }
+    catch (e){ bad.push(`${label} threw: ${e.message}`); return null; }
+  };
+  // A material this build has never heard of. Its cells must go, and it must say so.
+  const m = tryLoad('an unknown material', { v:1, w:8, h:8, keys:['no-such-thing'], runs:[64,0] });
+  if (m && !m.includes('no-such-thing')) bad.push(`an unknown material was not reported: ${JSON.stringify(m)}`);
+  if (m && __count(E) !== type.length) bad.push('an unknown material left something in the box');
+
+  // Run lengths that claim far more cells than the grid holds.
+  tryLoad('an overlong run', { v:1, w:4, h:4, keys:['wood'], runs:[9999999,0] });
+  // A run pointing at a palette entry that is not there.
+  tryLoad('a dangling palette index', { v:1, w:4, h:4, keys:['wood'], runs:[16,7] });
+  // An odd number of run values, so the last pair is incomplete.
+  tryLoad('a truncated run list', { v:1, w:4, h:4, keys:['wood'], runs:[4,0,4] });
+  if (__nan()) bad.push('a damaged save left NaN in the temperature field');
+
+  // A save from a bigger screen: it must lose the top, never the floor. Stone on the
+  // bottom row of the save has to still be on the bottom row after loading.
+  __wipe();
+  __slab(0, H-2, W-1, H-1, STONE);
+  const tall = encodeScene();
+  tall.h += 40; tall.runs.unshift(40 * tall.w, tall.keys.indexOf('air'));
+  tryLoad('a save from a taller screen', tall);
+  let floorHeld = true;
+  for (let x=0;x<W;x++) if (type[idx(x,H-1)] !== STONE) floorHeld = false;
+  if (!floorHeld) bad.push('a save from a taller screen did not keep its floor on the floor');
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* Every preset is a scenario the suite already measures somewhere above, and this is
+   what stops that from being a claim. A preset is a promise on a button: geometry that
+   is a few cells out — a wick that does not reach the wax, a plate with no air under it
+   — produces a scene that builds perfectly and cannot be made to do the thing its own
+   label says.
+
+   The match goes to the middle of what it is lighting, because that is where a finger
+   goes. Aiming at the first matching cell instead put it in a corner against a wall and
+   measured the gas room as a fizzle, 33 flames against the 80 it actually makes. */
+await check(browser, 'every preset pays off when you do what its label says', () => {
+  const bad = [];
+  const middle = t => { let sx=0, sy=0, n=0;
+    for (let y=0;y<H;y++) for (let x=0;x<W;x++) if (type[idx(x,y)]===t){ sx+=x; sy+=y; n++; }
+    return n ? [Math.round(sx/n), Math.round(sy/n)] : null; };
+  const edge = (t, pick) => { let best = null;
+    for (let y=0;y<H;y++) for (let x=0;x<W;x++){
+      if (type[idx(x,y)] !== t) continue;
+      if (!best || (pick==='top' ? y<best[1] : x<best[0])) best = [x,y];
+    }
+    return best; };
+  const scene = n => SCENES.find(s => s.name === n);
+
+  // Candle — one touch of the wick tip, then it is on its own.
+  loadScene(scene('Candle'));
+  { const w = edge(FUSE,'top');
+    if (!w) bad.push('Candle has no wick'); else {
+      __hold(w[0], w[1], 2, 120);
+      let alight=0, dark=0;
+      for (let k=0;k<2600;k++){ __step(1); if (__count(FIRE)>0){ alight++; dark=0; } else if (++dark>90) break; }
+      if (alight < 600) bad.push(`Candle stayed lit ${alight} ticks`);
+    } }
+
+  // Fuse — the far end, and it must take its time getting there.
+  loadScene(scene('Fuse'));
+  { const e = edge(FUSE,'left'); const charge = __count(POWDER);
+    if (!e || !charge) bad.push('Fuse is missing its cord or its charge'); else {
+      __hold(e[0], e[1], 2, 90);
+      let firedAt = -1;
+      for (let k=0;k<4000;k++){ __step(1); if (__count(POWDER) < charge*0.9){ firedAt=k; break; } }
+      if (firedAt < 0) bad.push(`Fuse never reached the charge (${__count(POWDER)}/${charge} left)`);
+      else if (firedAt < 200) bad.push(`Fuse fired after ${firedAt} ticks — that is a wire`);
+    } }
+
+  // Cut — the ribbon, not the thermite, and the plate ends up open.
+  loadScene(scene('Cut'));
+  { const m = edge(MAGNES,'top');
+    const cols = new Map();
+    for (let i=0;i<type.length;i++) if (type[i]===STEEL){ const x=i%W; (cols.get(x) || cols.set(x,[]).get(x)).push((i/W)|0); }
+    if (!m || !cols.size) bad.push('Cut is missing its ribbon or its plate'); else {
+      __hold(m[0], m[1], 2, 300);
+      for (let k=0;k<2600;k++) __step(1);
+      let breached = 0;
+      for (const [x, ys] of cols){
+        let solid = 0;
+        for (const y of ys){ const t = type[idx(x,y)]; if (t===STEEL||t===MOLTEN) solid++; }
+        if (!solid) breached++;
+      }
+      if (breached < 3) bad.push(`Cut breached ${breached} of ${cols.size} columns`);
+    } }
+
+  // Acid — it eats what is standing in it, and the tank holds.
+  loadScene(scene('Acid'));
+  { const steel0 = __count(STEEL), glass0 = __count(GLASS);
+    for (let k=0;k<2600;k++) __step(1);
+    if (steel0 - __count(STEEL) < 20) bad.push(`Acid ate ${steel0-__count(STEEL)} of ${steel0} steel cells`);
+    if (glass0 - __count(GLASS) > 0) bad.push(`Acid ate ${glass0-__count(GLASS)} of its own glass tank`); }
+
+  // Lava — a pour you have time to do something with.
+  loadScene(scene('Lava'));
+  { const n0 = __count(LAVA); let half = -1;
+    for (let k=1;k<=1200;k++){ __step(1); if (__count(LAVA) <= n0*0.5){ half=k; break; } }
+    if (half >= 0 && half < 600) bad.push(`Lava was half set after ${half} ticks`); }
+
+  // Gas — gathers, then goes off properly rather than fizzling.
+  loadScene(scene('Gas'));
+  { __step(120);
+    const pooled = __count(GAS);
+    const g = middle(GAS);
+    if (!g) bad.push('Gas dispersed before it could be lit'); else {
+      __hold(g[0], g[1], 3, 12);
+      let peakFire = 0;
+      for (let k=0;k<200;k++){ __step(1); peakFire = Math.max(peakFire, __count(FIRE)); }
+      if (peakFire < 40) bad.push(`Gas made ${peakFire} flames — that is a candle, not a bang`);
+      if (__count(GAS) > pooled*0.4) bad.push(`Gas left ${__count(GAS)} of ${pooled} cells unburned`);
+    } }
+
+  return bad.length ? bad.join('; ') : null;
+});
+
 console.log('\n— it has to stay playable —');
 
 await check(browser, 'a busy scene costs less than a frame', () => {

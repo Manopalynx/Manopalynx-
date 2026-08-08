@@ -348,5 +348,156 @@ await check('the whole tray is reachable without scrolling', async p => {
   return null;
 });
 
+/* The whole reason the tray is in drawers: one row each, so the tray keeps a fixed
+   height however much goes into it and the stage keeps its room. Nothing was watching
+   that, and adding Save and Load took the Tools drawer to two rows at 320px — 37px off
+   the stage — without a single check going red. Material chips shrink to fit; the
+   action chips in Tools and Scene are `flex:0 0 auto` and do not, so they are the ones
+   that push a row over.
+
+   Pinned at the harness width, which is a current phone. 320px still wraps and is left
+   alone: the Fuel drawer has wrapped there since it had eight materials in it, and a
+   screen that narrow is not what this is played on. */
+await check('no drawer needs a second row at phone width', async p => {
+  const bad = [];
+  const tabs = await p.locator('.tab').count();
+  for (let i = 0; i < tabs; i++) {
+    await p.locator('.tab').nth(i).click();
+    const row = await p.evaluate(() => {
+      const name = document.querySelector('.tab[aria-pressed="true"]').textContent;
+      const chips = [...document.querySelectorAll('#mats .chip')];
+      const tops = new Set(chips.map(c => Math.round(c.getBoundingClientRect().top)));
+      return { name, chips: chips.length, rows: tops.size };
+    });
+    if (row.rows > 1) bad.push(`${row.name} wraps its ${row.chips} chips onto ${row.rows} rows`);
+  }
+  return bad.length ? bad.join('; ') : null;
+});
+
+console.log('\n— scenes and saves —');
+
+// `pick` finds material chips; presets and the save buttons are action chips in their
+// own drawers, so they need the same hunt rather than a hard-coded tab index.
+async function press(p, label) {
+  const re = new RegExp('^' + label, 'i');
+  const tabs = await p.locator('.tab').count();
+  for (let i = 0; i < tabs; i++) {
+    await p.locator('.tab').nth(i).click();
+    const chip = p.locator('#mats .chip', { hasText: re }).first();
+    if (await chip.count() && await chip.isVisible()) { await chip.click(); return chip; }
+  }
+  throw new Error(`no button called ${label} in any drawer`);
+}
+
+await check('a preset puts a scene in the box and takes the hint away', async p => {
+  // The box does not start empty — there is an opening scene — so the claim is that
+  // the preset replaces it, not that it fills a void.
+  const before = await p.evaluate(() => ({ n: __cells(), wax: __count(WAX) }));
+  await press(p, 'Candle');
+  const after = await p.evaluate(() => ({ n: __cells(), wax: __count(WAX) }));
+  if (after.n < 200) return `the Candle preset left ${after.n} cells in the box`;
+  if (!after.wax) return 'the Candle preset put no wax in the box';
+  if (before.wax === after.wax) return 'the box looks the same as it did before, so nothing was loaded';
+  // The hint sits over the middle of the scene, which is where the candle is. The fade
+  // is a CSS transition, so this waits it out rather than reading mid-animation and
+  // calling a hint that is on its way out a hint that never left.
+  await p.waitForTimeout(700);
+  const op = await p.evaluate(() => getComputedStyle(document.getElementById('hint')).opacity);
+  if (Number(op) > 0.01) return `the hint is still showing at opacity ${op} over the scene`;
+  const said = await p.locator('#ro').textContent();
+  if (!/wick/i.test(said)) return `the readout says "${said}" and never mentions what to do`;
+  return null;
+});
+
+await check('every preset is reachable and none of them leaves the box empty', async p => {
+  const names = await p.evaluate(() => SCENES.map(s => s.name));
+  if (names.length < 4) return `only ${names.length} presets`;
+  for (const n of names) {
+    await press(p, n);
+    const cells = await p.evaluate(() => __cells());
+    if (cells < 200) return `${n} put ${cells} cells in the box`;
+  }
+  return null;
+});
+
+// Saving into an empty slot cannot lose anything, so it just saves. Replacing a save
+// destroys something that cannot be got back, so it asks — the same two-tap rule Clear
+// uses, and for the same reason.
+await check('Save asks before it replaces a save, but not before the first one', async p => {
+  await press(p, 'Candle');
+  const first = await press(p, 'Save');
+  if (/replace/i.test(await first.textContent())) return 'the very first save asked to replace something';
+  if (!await p.evaluate(() => !!localStorage.getItem(STORE_KEY))) return 'nothing was written';
+
+  await press(p, 'Cut');
+  const again = await press(p, 'Save');
+  if (!/replace/i.test(await again.textContent())) return `a second save went straight through, reading "${await again.textContent()}"`;
+  if (await again.getAttribute('aria-pressed') !== 'true') return 'the armed Save is not styled as the danger it is';
+  return null;
+});
+
+/* Candle rather than Cut, and the snapshot is taken after the save rather than before.
+   Unlike the simulation suite, this harness leaves the box running, so the scene is
+   free to move between one line of the check and the next — and Cut's thermite is a
+   powder, so its pile slumps at the edges. That measured as "24 cells came back
+   different" and looked exactly like a broken save format. A candle is wax, wick and
+   stone, all static, so the only thing that can change it is the load. */
+await check('a scene saved and loaded through the buttons comes back', async p => {
+  await press(p, 'Candle');
+  await press(p, 'Save');
+  const saved = await p.evaluate(() => Array.from(type));
+  await p.waitForTimeout(400);
+  const drift = await p.evaluate(a => { let d=0;
+    for (let i=0;i<type.length;i++) if (type[i]!==a[i]) d++; return d; }, saved);
+  if (drift) return `the scene moved ${drift} cells on its own, so nothing can be concluded from a comparison`;
+
+  await press(p, 'Cut');                          // something else entirely
+  const between = await p.evaluate(() => __count(WAX));
+  if (between) return `${between} cells of wax survived loading a different preset, so this proves nothing`;
+  await press(p, 'Load');
+  const back = await p.evaluate(a => {
+    let diff = 0;
+    for (let i=0;i<type.length;i++) if (type[i] !== a[i]) diff++;
+    return { diff, ro: document.getElementById('ro').textContent };
+  }, saved);
+  if (back.diff) return `${back.diff} cells came back different`;
+  if (!/loaded/i.test(back.ro)) return `the readout says "${back.ro}" rather than confirming the load`;
+  return null;
+});
+
+await check('Load with nothing saved says so instead of wiping the scene', async p => {
+  await press(p, 'Candle');
+  const before = await p.evaluate(() => __cells());
+  await press(p, 'Load');
+  const after = await p.evaluate(() => __cells());
+  if (after !== before) return `Load with an empty slot changed the box from ${before} to ${after} cells`;
+  const said = await p.locator('#ro').textContent();
+  if (!/nothing saved/i.test(said)) return `the readout says "${said}"`;
+  return null;
+});
+
+/* The one that cannot be found by using the page on this machine: a browser that
+   refuses to store. iOS private browsing and file:// in some browsers both throw on
+   `localStorage`, and the throw is on access, not on a missing object — so a check for
+   whether it exists passes and the next line takes the page down.
+   This is the failure the ledger in this repository already shipped once. */
+await check('a browser that refuses to store says so rather than breaking', async p => {
+  await p.evaluate(() => {
+    storeOK = null;                              // forget any earlier answer
+    const boom = () => { throw new DOMException('denied', 'SecurityError'); };
+    Object.defineProperty(window, 'localStorage', { configurable: true, get: boom });
+  });
+  await press(p, 'Candle');
+  const before = await p.evaluate(() => __cells());
+  await press(p, 'Save');
+  const afterSave = await p.locator('#ro').textContent();
+  if (!/not store/i.test(afterSave)) return `Save said "${afterSave}"`;
+  await press(p, 'Load');
+  const afterLoad = await p.locator('#ro').textContent();
+  if (!/not store/i.test(afterLoad)) return `Load said "${afterLoad}"`;
+  if (await p.evaluate(() => __cells()) !== before) return 'the scene was disturbed by a save that could not happen';
+  return null;
+});
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
