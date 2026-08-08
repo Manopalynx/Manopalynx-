@@ -275,8 +275,9 @@ pours is not a source.
 ## The first thing that is alive
 
 A **Bug**, in the Life drawer. It falls, walks along whatever it lands on, climbs a single
-step, and turns round at a wall. Above 55°C it stops wandering and goes whichever way is
-cooler, three times faster.
+step, turns round at a wall, changes its mind now and then, and sometimes just stops.
+Above 55°C it does none of that: it goes whichever way is cooler, three times faster, and
+does not dawdle.
 
 **It is a cell, like everything else, and that is the whole design decision.** As a cell it
 inherits the box for nothing: it has a temperature, so fire kills it through the same
@@ -287,10 +288,31 @@ also gets it an entry in the finds list without a line of code written for it.
 As an object in a separate list none of that would come free, and all of it would be new
 code of the kind this file keeps shipping: rules that read perfectly and never fire.
 
-Measured, sixteen bugs on a floor with a straw fire lit at one end: **five die and eleven
-get away**, the far ones moving from a mean x of 71 to 106 while the fire burns, then
-wandering back once it is out. On the same floor with no fire, all sixteen live. That
-difference is the entire point of them.
+Measured, sixteen bugs on a floor with a straw fire lit at one end: **most get away**,
+running from the heat while it burns and wandering back once it is out. On the same floor
+with no fire, all sixteen live. That difference is the entire point of them.
+
+How many die is genuinely noisy — across five runs of the identical scene it ranged from
+one to five — so the check states the survivors rather than the deaths, and tests the
+certain half separately: a bug walled in with a match held on it burns every time. Giving
+them a proper wander made them *better* at not dying, which is how the death count ended
+up on the noise floor in the first place.
+
+### Wandering is not travelling
+
+Reported from the phone after the first version: they do not move around unless there is a
+flame. They were moving the whole time — 163 cells in twenty seconds — but a bug kept
+whatever heading it started with until something got in the way, so it **turned exactly
+once** in those twenty seconds. Off to the wall, back again. A thing that only ever slides
+one way does not look alive, and beside a panicking one it looks like heat is the only
+thing that moves them.
+
+The fix is a chance of changing its mind (9% a step, so a stretch averages eleven cells)
+and a chance of stopping for a moment (6%). Same energy, completely different creature:
+**169 cells walked, 22 turns, and 44 distinct cells instead of 99.** It meanders a patch
+rather than commuting across the box. The check counts changes of mind rather than
+distance, because distance was never the problem — remove the turn and it reports "it
+changed direction 1 times in twenty seconds — that is a patrol, not a wander".
 
 ### The two traps, both of which were hit
 
@@ -503,7 +525,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 51 checks — the simulation
+node test/matchbox-sim.mjs     # 52 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```

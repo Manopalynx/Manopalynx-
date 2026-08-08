@@ -1132,6 +1132,45 @@ await check(browser, 'a bug is moved once a tick, not once per cell it lands on'
   return bad.length ? bad.join('; ') : null;
 });
 
+/* Wandering, as distinct from travelling, and the difference is the whole of whether it
+   reads as a creature.
+
+   Reported from the phone: they do not move around unless there is a flame. They were in
+   fact moving the whole time — 163 cells in twenty seconds — but a bug kept whatever
+   heading it started with until something got in the way, so it **turned exactly once**
+   in those twenty seconds: off to the wall, back again. A thing that only ever slides one
+   way does not look alive, and next to a panicking one it looks like heat is the only
+   thing that moves them.
+
+   So this counts changes of mind, not distance. Distance was never the problem. */
+await check(browser, 'a bug with nothing wrong wanders rather than commuting', () => {
+  const bad = [];
+  __wipe(); const f = __floor();
+  const cx = (W/2)|0;
+  put(cx, f-1, BUG);
+  let last = cx, lastDir = 0, turns = 0, walked = 0;
+  const seen = new Set([cx]);
+  for (let k=0;k<1200;k++){                     // twenty seconds
+    __step(1);
+    let at = -1;
+    for (let i=0;i<type.length;i++) if (type[i]===BUG) at = i;
+    if (at < 0){ bad.push('it died on a bare floor'); break; }
+    const x = at % W;
+    if (x !== last){
+      const d = Math.sign(x - last);
+      if (lastDir && d !== lastDir) turns++;
+      lastDir = d; walked += Math.abs(x - last); last = x;
+    }
+    seen.add(last);
+  }
+  if (walked < 60) bad.push(`it covered ${walked} cells in twenty seconds — it is barely walking`);
+  if (turns < 6) bad.push(`it changed direction ${turns} times in twenty seconds — that is a patrol, not a wander`);
+  // ...and having changed its mind, it should be somewhere near where it started rather
+  // than parked against a wall.
+  if (seen.size > walked * 0.75) bad.push(`it visited ${seen.size} distinct cells while walking ${walked} — it is going in a straight line`);
+  return bad.length ? bad.join('; ') : null;
+});
+
 /* The whole of what makes a cell read as alive: it notices, and it leaves.
    Tested against a gradient held by hand rather than a fire, because a fire measures how
    hot the fire was. A first attempt held a 520°C wall fourteen cells away for 900 ticks
@@ -1180,18 +1219,29 @@ await check(browser, 'the box kills bugs with what it already had', () => {
   const bad = [];
   const f0 = H-6;
 
-  // Fire, through the same ignition it uses on straw. It leaves ash.
+  // Fire, through the same ignition it uses on straw, tested where it cannot run: walled
+  // in on both sides with a lid over it. Holding a match near a bug that is free to leave
+  // measures the running, not the burning.
+  __wipe(); __floor();
+  const bx = (W/2)|0;
+  put(bx-1, f0-1, STONE); put(bx+1, f0-1, STONE); put(bx, f0-2, STONE);
+  put(bx, f0-1, BUG);
+  const ash0 = __count(ASH);
+  __hold(bx, f0-1, 2, 150);
+  for (let k=0;k<300;k++) __step(1);
+  if (__count(BUG)) bad.push('a bug walled in with a match held on it did not burn');
+  if (__count(ASH) <= ash0) bad.push('a burned bug left nothing behind');
+
+  /* ...and given somewhere to run, most of them take it. Stated as survivors rather than
+     as a death count on purpose: measured across five runs of the identical scene, deaths
+     ranged from one to five, so a threshold on deaths sits on the noise. The claim worth
+     making is that a fire at one end of a floor does not clear the floor. */
   __wipe(); __floor();
   __slab(6, f0-5, 26, f0-1, STRAW);
-  for (let k=0;k<16;k++) put(34+k*5, f0-1, BUG);
-  const lit0 = __count(BUG), ash0 = __count(ASH);
+  for (let k=0;k<16;k++) put(28+k*5, f0-1, BUG);
   __hold(8, f0-2, 2, 40);
   for (let k=0;k<2400;k++) __step(1);
-  const died = lit0 - __count(BUG);
-  if (died < 2) bad.push(`a straw fire beside sixteen bugs killed ${died} of them`);
-  if (__count(ASH) <= ash0) bad.push('nothing was left behind by the ones that burned');
-  // ...and the far ones get away, which is the point of them noticing.
-  if (__count(BUG) < 4) bad.push(`only ${__count(BUG)} of ${lit0} escaped — the panic is not buying them anything`);
+  if (__count(BUG) < 9) bad.push(`only ${__count(BUG)} of 16 got away from a fire at one end of the floor`);
 
   // The same floor with no fire on it, so the number above means something.
   __wipe(); __floor();

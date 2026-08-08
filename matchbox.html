@@ -1287,6 +1287,15 @@ function ventPush(x, y, what){
 const PANIC_AT   = 55;   // °C at which a bug stops wandering and starts leaving
 const BUG_STEP   = 7;    // ticks between wandering steps...
 const BUG_FLEE   = 2;    // ...and between panicking ones. It is not fast, it is frightened.
+/* How often it changes its mind, and this is the difference between a creature and a
+   slider. Without it a bug kept whatever heading it started with until something was in
+   the way: measured over twenty seconds it walked 163 cells and turned exactly **once** —
+   off to the wall, back again. Reported from the phone as not moving around at all unless
+   there was a fire, which is a fair description of a thing that only ever slides one way.
+   At .09 a stretch averages eleven cells, so it wanders a patch instead of commuting. */
+const BUG_TURN   = .09;
+const BUG_IDLE   = .06;  // ...and sometimes it just stops for a moment, which reads alive
+                         // in a way that constant motion does not.
 
 // Something to stand on: anything that is not air and not a gas.
 const footing = (x,y) => inb(x,y) && type[idx(x,y)] !== E && M[type[idx(x,y)]].ph !== 0;
@@ -1325,6 +1334,12 @@ function moveLife(){
       const l = inb(x-1,y) ? temp[idx(x-1,y)] : Infinity;
       const r = inb(x+1,y) ? temp[idx(x+1,y)] : Infinity;
       dir = l < r ? -1 : 1;
+    } else {
+      // Wandering, not commuting. A bug with nothing wrong changes its mind now and then
+      // and sometimes stops altogether; a panicking one does neither, because it knows
+      // exactly where it wants to be and that is anywhere else.
+      if (Math.random() < BUG_TURN) dir = -dir;
+      if (Math.random() < BUG_IDLE){ way[i] = dir; continue; }
     }
 
     // Ahead, or up one step, or turn round. Climbing a single cell is what lets it get out
