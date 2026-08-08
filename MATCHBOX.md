@@ -188,19 +188,34 @@ freeze water — a worse fault than not having the setting.
 
 ## The vent
 
-A block that pours whatever you tell it to. **Tap Vent, then tap a material**: Vent then
-Lava is a volcano, Vent then Water is a spring. Tap Vent again to back out without
-changing anything. The drawers keep working while it waits, so every material is
-reachable and there is no curated shortlist to argue about.
+A block that pours whatever you tell it to. **Tap Vent and a panel opens with every
+material on it**, with the one it is currently holding ticked. Pick one and it closes.
+Cancel, the dark around it, or tapping Vent again all back out without changing anything.
 
-The chip wears the colour of what it is holding and the readout says it — `Vent · Lava`,
-and `Vent — tap a material for it to pour` while it is waiting. What it pours is stored
-per cell, so two vents in one scene can pour different things, and a save carries it.
+The panel is over the *stage*, not in the tray, and that is what makes it possible: a row
+cannot hold twenty-four materials, and the tray is not allowed to change height. An
+absolutely positioned panel inside `.stage` costs no layout at all — measured at 320, 375,
+393 and 430px, opening and closing it leaves the stage, tray, strip and drawer row exactly
+where they were.
 
-The first version took the payload from whatever had been selected *before* it — "Lava,
-then Vent". Same two taps, but backwards from the way anybody says it, and nothing on
-screen told you the first tap had counted. A tool whose behaviour depends on what you
-touched before it is a mode, and an invisible one.
+The list is built from `GROUPS`, so a material added to a drawer is ventable the same day
+and nobody has to remember this file exists. The drawers stay live underneath, so
+answering from the tray works too. The chip wears the colour of what it is holding, and
+what it pours is stored per cell — two vents in one scene can pour different things, and
+a save carries it.
+
+**It took two goes to get this right, and both failures were the same failure.** First it
+took the payload from whatever had been selected *before* it — "Lava, then Vent" — which
+is the same two taps backwards, with nothing on screen to say the first one counted. Then
+it put the tray into a waiting state and said so in the readout, which is small grey text
+in the corner of the scene: reported back as exactly what it was, an invisible mode with a
+caption on it. A control that changes what the next tap means has to show you that it has.
+
+On a small screen the options do not all fit and the panel scrolls, which is where the way
+out can vanish. At 320×568 with the real font, 24 options are 415px of content in a 348px
+panel, and Cancel at the end of the list sat below the fold — with no backdrop left showing
+to tap either, so the only way out was the Escape key on a device that has none. The header
+is pinned, and a check goes and finds a 320px screen to prove it.
 
 One general block rather than a lava vent, because the general one cost the same to write
 and the spring and the gas leak came free.
@@ -373,7 +388,7 @@ the glass.
 ```
 npm i playwright
 node test/matchbox-sim.mjs     # 43 checks — the simulation
-node test/matchbox-ui.mjs      # 28 checks — the hand
+node test/matchbox-ui.mjs      # 31 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
 

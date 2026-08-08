@@ -645,46 +645,129 @@ await check('the gauge says what the room is set to, not just what the air is', 
 /* The vent takes its payload from whatever material was picked before it, which is the
    whole interface for it — so the thing to check is that picking through the actual
    chips, in two different drawers, sets it. */
-/* Tapping Vent asks what it should pour; the next material answers. The order matters
-   and is the whole reason this changed — it used to take the payload from whatever had
-   been selected before it, which is the same two taps backwards and with nothing on
-   screen to say the first one had counted. */
-await check('tapping Vent asks what to pour, and the next material answers', async p => {
-  await pick(p, 'vent');
-  const asking = await p.evaluate(() => ({ asking: ventAsking, ro: document.getElementById('ro').textContent }));
-  if (!asking.asking) return 'tapping Vent did not ask anything';
-  if (!/tap a material/i.test(asking.ro)) return `the readout says "${asking.ro}" and does not say what it is waiting for`;
+/* Tapping Vent has to *show* you the choice.
 
-  // Answered from a different drawer, so the drawers must keep working while it waits.
-  await pick(p, 'water');
-  const done = await p.evaluate(() => ({ feed: M[ventFeed].n, asking: ventAsking, isVent: tool === VENT,
-                                         ro: document.getElementById('ro').textContent }));
-  if (done.feed !== 'Water') return `answering with Water left the vent holding ${done.feed}`;
-  if (done.asking) return 'it was still asking after being answered';
-  if (!done.isVent) return 'answering left the tool as the material rather than the vent';
-  if (!/vent/i.test(done.ro) || !/water/i.test(done.ro)) return `the readout says "${done.ro}"`;
+   Two versions before this did not. The first took the payload from whatever had been
+   selected before it, which is the same two taps backwards with nothing on screen to say
+   the first one counted. The second put the tray into a waiting state and said so in the
+   readout — small grey text in the corner of the scene, which was reported back as
+   exactly what it is: an invisible mode with a caption on it.
 
-  // A second tap backs out and leaves the payload alone.
-  await pick(p, 'vent');
-  await pick(p, 'vent');
-  const out = await p.evaluate(() => ({ feed: M[ventFeed].n, asking: ventAsking }));
-  if (out.asking) return 'tapping Vent twice did not back out';
-  if (out.feed !== 'Water') return `backing out changed the payload to ${out.feed}`;
-
-  // And picking a material when it is NOT asking just picks the material.
-  await pick(p, 'lava');
-  const plain = await p.evaluate(() => ({ feed: M[ventFeed].n, tool: M[tool] ? M[tool].n : String(tool) }));
-  if (plain.feed !== 'Water') return `picking Lava with nothing asking changed the payload to ${plain.feed}`;
-  if (plain.tool !== 'Lava') return `picking Lava selected ${plain.tool}`;
-
-  // The chip wears what it holds, so the tray answers the question too.
-  await p.locator('.tab', { hasText: /^hot$/i }).click();
-  const sw = await p.evaluate(() => {
-    const c = document.querySelector(`#mats .chip[data-t="${VENT}"] .sw`);
-    return c ? getComputedStyle(c).backgroundColor : null;
+   So the panel is the check. It is over the stage rather than in the tray, because
+   twenty-odd materials are not a row and the tray is not allowed to change height. */
+await check('tapping Vent opens a panel of everything it can pour', async p => {
+  const geom = () => p.evaluate(() => {
+    const r = e => { const b = document.querySelector(e).getBoundingClientRect();
+                     return [Math.round(b.top), Math.round(b.height)]; };
+    return JSON.stringify({ stage:r('.stage'), tray:r('.tray'), strip:r('#strip'), mats:r('#mats') });
   });
-  const want = await p.evaluate(() => { const c = M[WATER].col; return `rgb(${c[0]}, ${c[1]}, ${c[2]})`; });
-  if (sw !== want) return `the vent chip's swatch is ${sw} while it holds water (${want})`;
+  const base = await geom();
+  const panel = () => p.evaluate(() => getComputedStyle(document.getElementById('ventPick')).display !== 'none');
+
+  if (await panel()) return 'the panel was already open before anything was tapped';
+  await pick(p, 'vent');
+  if (!await panel()) return 'tapping Vent did not show anything';
+  if (await geom() !== base) return 'opening the panel moved the page';
+
+  // Every material in the tray, and nothing that is not one.
+  const shown = await p.evaluate(() =>
+    [...document.querySelectorAll('#ventGrid button')].map(b => Number(b.dataset.pour)));
+  const want = await p.evaluate(() => {
+    const out = [];
+    for (const g of GROUPS){ if (typeof g.items === 'string') continue;
+      for (const t of g.items) if (t !== VENT) out.push(t); }
+    return out;
+  });
+  if (shown.join() !== want.join()) return `the panel offers ${shown.length} of the ${want.length} materials in the tray`;
+  if (await p.evaluate(() => document.querySelector('#ventPick h2').textContent).then(t => !/pour/i.test(t)))
+    return 'the panel does not say what it is asking';
+
+  // What it is holding is ticked, so it answers "what is it set to?" as well as "change it".
+  const ticked = await p.evaluate(() =>
+    [...document.querySelectorAll('#ventGrid button[aria-pressed="true"]')].map(b => b.querySelector('.lb').textContent));
+  if (ticked.length !== 1 || ticked[0] !== 'Lava') return `the panel ticked ${JSON.stringify(ticked)} rather than the Lava it holds`;
+
+  // Choosing closes it and sets the payload.
+  await p.locator('#ventGrid button', { hasText: /^water$/i }).click();
+  const after = await p.evaluate(() => ({ feed: M[ventFeed].n, asking: ventAsking, isVent: tool === VENT,
+                                          ro: document.getElementById('ro').textContent }));
+  if (await panel()) return 'the panel stayed open after a choice';
+  if (after.feed !== 'Water') return `choosing Water left the vent holding ${after.feed}`;
+  if (!after.isVent) return 'choosing left the tool as something other than the vent';
+  if (!/water/i.test(after.ro)) return `the readout says "${after.ro}"`;
+  if (await geom() !== base) return 'choosing moved the page';
+
+  // Reopening shows the new answer ticked.
+  await pick(p, 'vent');
+  const t2 = await p.evaluate(() =>
+    [...document.querySelectorAll('#ventGrid button[aria-pressed="true"]')].map(b => b.querySelector('.lb').textContent));
+  if (t2.join() !== 'Water') return `reopening ticked ${JSON.stringify(t2)}`;
+  return null;
+});
+
+await check('the vent panel can be left without choosing, three ways', async p => {
+  const panel = () => p.evaluate(() => getComputedStyle(document.getElementById('ventPick')).display !== 'none');
+  const feed  = () => p.evaluate(() => M[ventFeed].n);
+  const was = await feed();
+
+  // Cancel.
+  await pick(p, 'vent');
+  await p.locator('#ventCancel').click();
+  if (await panel()) return 'Cancel did not close the panel';
+  if (await feed() !== was) return `Cancel changed the payload to ${await feed()}`;
+
+  // The dark around it, the way a sheet on a phone behaves.
+  await pick(p, 'vent');
+  const b = await p.locator('#ventPick').boundingBox();
+  await p.mouse.click(b.x + b.width - 12, b.y + b.height - 12);
+  if (await panel()) return 'tapping the backdrop did not close the panel';
+  if (await feed() !== was) return `tapping the backdrop changed the payload to ${await feed()}`;
+
+  // Tapping Vent again.
+  await pick(p, 'vent');
+  await pick(p, 'vent');
+  if (await panel()) return 'tapping Vent twice did not close the panel';
+  if (await feed() !== was) return `tapping Vent twice changed the payload to ${await feed()}`;
+  return null;
+});
+
+/* On a small screen the options do not all fit and the panel scrolls, and that is the
+   case where the way out can disappear. Measured at 320×568 with the real font: 24
+   options are 415px of content in a 348px panel, and with Cancel at the end of the list
+   it sat below the fold — with no backdrop left showing to tap either, so the only way
+   out was the Escape key, on a device that has none. The harness's own viewport is too
+   roomy to catch that, so this check goes and finds the small screen. */
+await check('the way out of the vent panel survives a screen too small for it', async p => {
+  await p.setViewportSize({ width: 320, height: 568 });
+  await p.waitForTimeout(150);
+  await pick(p, 'vent');
+  const r = await p.evaluate(() => {
+    const panel = document.getElementById('ventPick');
+    const cancel = document.getElementById('ventCancel');
+    const pb = panel.getBoundingClientRect(), cb = cancel.getBoundingClientRect();
+    return { scrolls: panel.scrollHeight > panel.clientHeight + 1,
+             inView: cb.top >= pb.top - 1 && cb.bottom <= pb.bottom + 1,
+             tall: Math.round(cb.height) };
+  });
+  if (!r.scrolls) return 'the panel did not overflow at 320×568, so this proves nothing';
+  if (!r.inView) return 'Cancel is outside the visible panel on a screen that has to scroll';
+  if (r.tall < 30) return `Cancel is ${r.tall}px tall — that is not a fingertip`;
+  await p.locator('#ventCancel').click();
+  if (await p.evaluate(() => getComputedStyle(document.getElementById('ventPick')).display !== 'none'))
+    return 'Cancel did not close the panel';
+  return null;
+});
+
+// The panel covers the scene, not the tray, so the drawers stay live underneath it.
+// Answering from there has to work too, or the two halves of the screen disagree.
+await check('the tray still answers while the vent panel is open', async p => {
+  await pick(p, 'vent');
+  await pick(p, 'oil');
+  const r = await p.evaluate(() => ({ feed: M[ventFeed].n, asking: ventAsking, isVent: tool === VENT,
+                                      open: getComputedStyle(document.getElementById('ventPick')).display !== 'none' }));
+  if (r.feed !== 'Oil') return `answering from the tray left the vent holding ${r.feed}`;
+  if (r.open) return 'the panel stayed open after being answered from the tray';
+  if (!r.isVent) return 'answering from the tray left the tool as the material';
   return null;
 });
 

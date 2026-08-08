@@ -96,6 +96,45 @@
     letter-spacing:.1em;color:#7a6650;pointer-events:none;text-transform:uppercase;
     transition:opacity .5s}
 
+  /* ---- what the vent should pour ----
+     Over the stage rather than in the tray, and that placement is the whole reason it
+     is allowed to exist. Twenty-odd materials cannot be a row, and the tray is not
+     permitted to change height — three separate reports of the scene moving under a
+     thumb came from it doing exactly that. An absolutely positioned panel inside
+     .stage costs no layout at all: the tray, the strip and the canvas do not know it
+     is there. */
+  .picker{position:absolute;inset:0;display:none;z-index:3;
+    background:rgba(11,10,9,.86);backdrop-filter:blur(2px);
+    flex-direction:column;overflow:auto}
+  .picker.open{display:flex}
+  /* Pinned, because the way out has to be reachable from wherever you have scrolled to.
+     Measured at 320x568 with the real font: twenty-four options are 441px of content in
+     a 348px panel, so the list scrolls — and with Cancel at the bottom it sat below the
+     fold, with no backdrop left showing to tap either. The only way out was a key on a
+     device that has no keys. */
+  .picker .phead{position:sticky;top:0;flex:none;display:flex;align-items:center;
+    justify-content:space-between;gap:10px;padding:11px 12px 9px;
+    background:rgba(11,10,9,.96)}
+  .picker h2{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--pale);font-weight:400;margin:0}
+  .picker .grid{display:grid;gap:5px;flex:none;padding:0 12px 14px;
+    grid-template-columns:repeat(auto-fill,minmax(74px,1fr))}
+  /* The chips here are their own thing rather than .chip, because .chip is pinned to a
+     fixed 36px and equal widths to keep the tray still, and none of that applies to a
+     panel that is floating over the scene. */
+  .picker button{
+    border:1.5px solid #4a4038;background:rgba(255,255,255,.10);border-radius:3px;
+    color:var(--pale);font-family:'Space Mono',monospace;font-size:9.5px;
+    letter-spacing:.04em;text-transform:uppercase;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:4px;padding:7px 4px 6px;min-height:38px;overflow:hidden;
+  }
+  .picker button .sw{width:100%;height:6px;border-radius:1px;flex:none}
+  .picker button .lb{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .picker button[aria-pressed="true"]{background:var(--pale);color:var(--ink);border-color:var(--pale)}
+  .picker button:focus-visible{outline:2px solid var(--phos);outline-offset:1px}
+  .picker .cancel{flex:none;padding:8px 13px;min-height:34px;white-space:nowrap}
+
   /* ---- striking strip ---- */
   .strip{
     flex:none;height:52px;background:var(--strip);position:relative;cursor:pointer;
@@ -205,6 +244,14 @@
     <div class="readout" id="ro">—</div>
     <div class="gauge" id="gauge"></div>
     <div class="hint" id="hint">Pick a material · draw in the dark</div>
+    <div class="picker" id="ventPick" role="dialog" aria-modal="true"
+         aria-label="What should the vent pour?" hidden>
+      <div class="phead">
+        <h2>What should the vent pour?</h2>
+        <button class="cancel" type="button" id="ventCancel">Cancel</button>
+      </div>
+      <div class="grid" id="ventGrid"></div>
+    </div>
   </div>
 
   <div class="strip" id="strip" role="button" tabindex="0" aria-label="Striking strip — strike a match">
@@ -2037,13 +2084,70 @@ function say(msg, force){
   roEl.textContent = msg;
 }
 function sayTool(){
-  // While the vent is asking, the readout is the only thing on screen saying that the
-  // next tap means something different. It takes the whole line rather than sharing it
-  // with the brush, because it is a question and not a status.
-  if (ventAsking){ say('Vent — tap a material for it to pour', true); return; }
+  // The panel says this now, in full, over the scene. The readout still carries it for
+  // anyone who has the panel open and is looking at the tray instead.
+  if (ventAsking){ say('Vent — pick what it pours', true); return; }
   const how = shape === 'free' ? '' : `  ·  ${shape}`;
   say(`${toolName()}  ·  brush ${brush}${how}`);
 }
+
+/* The panel that asks what the vent should pour.
+
+   The version before this put the tray into a waiting state and said so in the readout,
+   which is a line of small grey text in the top corner of the scene. Reported back, and
+   fairly: you tap Vent, nothing you are looking at changes, and the only thing telling
+   you that the next tap means something different is a caption most people will never
+   read. An invisible mode with a caption is still an invisible mode.
+
+   So it is a panel over the scene with every option on it, and it cannot be missed.
+   Over the scene rather than in the tray because twenty-odd materials are not a row and
+   the tray must not change height.
+
+   The list is built from GROUPS rather than typed out, so a material added to a drawer
+   is ventable the same day and nobody has to remember this file exists. */
+const pickEl   = document.getElementById('ventPick');
+const gridEl   = document.getElementById('ventGrid');
+
+function ventOptions(){
+  const out = [];
+  for (const g of GROUPS){
+    if (typeof g.items === 'string') continue;
+    for (const t of g.items) if (t !== VENT) out.push(t);
+  }
+  return out;
+}
+
+ventOptions().forEach(t => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.dataset.pour = t;
+  const c = M[t].col;
+  b.innerHTML = `<span class="sw" style="background:rgb(${c[0]},${c[1]},${c[2]})"></span>` +
+                `<span class="lb">${M[t].n}</span>`;
+  b.addEventListener('click', ()=>{ setVentFeed(t); closeVentPicker(); sayTool(); });
+  gridEl.appendChild(b);
+});
+
+function openVentPicker(){
+  pickEl.hidden = false;
+  pickEl.classList.add('open');
+  ventAsking = true;
+  gridEl.querySelectorAll('button').forEach(b =>
+    b.setAttribute('aria-pressed', String(Number(b.dataset.pour) === ventFeed)));
+}
+
+function closeVentPicker(){
+  pickEl.classList.remove('open');
+  pickEl.hidden = true;
+  ventAsking = false;
+}
+
+document.getElementById('ventCancel').addEventListener('click', ()=>{ closeVentPicker(); sayTool(); });
+// Tapping the dark around the panel is the other way out, the way every sheet on a
+// phone behaves. Only the backdrop itself — a tap that lands on a button inside has
+// already been dealt with by that button.
+pickEl.addEventListener('click', e => { if (e.target === pickEl){ closeVentPicker(); sayTool(); } });
+addEventListener('keydown', e => { if (e.key === 'Escape' && ventAsking){ closeVentPicker(); sayTool(); } });
 
 function setVentFeed(t){
   if (t === VENT || !M[t] || t === E) return;
@@ -2062,14 +2166,16 @@ function setTool(t){
   // the one place in the tray where a chip does something other than what it says, so
   // the readout says so for as long as it is true.
   if (t === VENT){
-    ventAsking = !ventAsking;
     tool = VENT;
+    ventAsking ? closeVentPicker() : openVentPicker();
   } else if (ventAsking && typeof t === 'number' && t !== E){
+    // The panel covers the scene, not the tray, so the drawers stay reachable while it
+    // is open. Answering from there works as well as answering from the panel.
     setVentFeed(t);
-    ventAsking = false;
+    closeVentPicker();
     tool = VENT;
   } else {
-    ventAsking = false;
+    if (ventAsking) closeVentPicker();
     tool = t;
   }
   // Only the material chips. This used to sweep every chip in the row, which meant
