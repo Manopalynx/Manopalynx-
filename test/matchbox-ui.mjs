@@ -391,6 +391,36 @@ await check('no drawer needs a second row', async p => {
   return bad.length ? bad.join('; ') : null;
 });
 
+/* Same rule, the other way in: changing drawers must not move the scene either.
+   Reported from the phone, with the cause correctly guessed from the screenshots —
+   material chips carry a 6px colour swatch and the gap under it, and the Scene and
+   Tools chips had no swatch at all, so those two drawers were shorter than the other
+   four. A shorter tray is a taller stage, and the whole box slid down on the way into
+   Tools and back up on the way out.
+   This is measured across every drawer rather than against a fixed number, because the
+   claim is that they agree with each other, not that they are any particular height. */
+await check('changing drawers does not move the scene', async p => {
+  const geom = () => p.evaluate(() => {
+    const r = e => { const b = document.querySelector(e).getBoundingClientRect();
+                     return [Math.round(b.top), Math.round(b.height)]; };
+    return { name: document.querySelector('.tab[aria-pressed="true"]').textContent,
+             mats: r('#mats'), stage: r('.stage'), tray: r('.tray'), strip: r('#strip') };
+  });
+  const seen = [];
+  const tabs = await p.locator('.tab').count();
+  for (let i = 0; i < tabs; i++) {
+    await p.locator('.tab').nth(i).click();
+    seen.push(await geom());
+  }
+  const shape = g => JSON.stringify({ mats:g.mats, stage:g.stage, tray:g.tray, strip:g.strip });
+  const odd = seen.filter(g => shape(g) !== shape(seen[0]));
+  if (odd.length) {
+    return `${odd.map(g => g.name.trim()).join(', ')} sit differently from ${seen[0].name.trim()}: ` +
+           odd.map(g => `${g.name.trim()} ${shape(g)}`).join(' | ') + ` vs ${shape(seen[0])}`;
+  }
+  return null;
+});
+
 /* The defect above, stated as the thing that actually hurt: a button that asks a
    question must not move the scene while asking it. Sam tapped Clear, the row reflowed,
    and the box jumped — so the second tap, the one that confirms, landed somewhere

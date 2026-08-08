@@ -140,7 +140,15 @@
     background:rgba(255,255,255,.13);border-radius:3px;cursor:pointer;
     font-family:'Space Mono',monospace;font-size:var(--chipfs,9.5px);letter-spacing:.02em;color:var(--ink);
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
-    text-transform:uppercase;min-height:32px;   /* a fingertip, not a pixel */
+    /* A fixed height, not a minimum, and it is the same in every drawer.
+       Two things were changing it and both moved the scene, because the tray sits above
+       the stage and a shorter tray is a taller stage. Material chips carry a 6px colour
+       swatch and the gap under it and the Scene and Tools chips had none, so those two
+       drawers came out 32px against 36 — reported from the phone as the box sliding on
+       the way into Tools. And the label fitting below shrinks the type to make eight
+       chips fit, which took Fuel to 35px, so the box slid a pixel on the way into Fuel
+       as well. Neither is a thing a height should depend on. 36px is still a fingertip. */
+    text-transform:uppercase;height:36px;
   }
   .chip:focus-visible{outline:2px solid var(--phos);outline-offset:1px}
   .chip .sw{width:100%;height:6px;border-radius:1px}
@@ -177,7 +185,7 @@
        off on exactly the short screens that need it most — measured at 375x667, five
        labels clipped with the fitting doing nothing at all, while the same page at
        393x852 fitted them fine. */
-    .chip{padding:5px 3px 4px}
+    .chip{padding:5px 3px 4px;height:32px}
   }
   @media (prefers-reduced-motion:reduce){ .head.lit{animation:none} }
 </style>
@@ -1471,7 +1479,11 @@ function actionChip(labelName, fn, danger, act){
   const b = document.createElement('button');
   b.className = 'chip act' + (danger ? ' danger' : '');
   b.type = 'button';
-  b.innerHTML = '<span class="lb"></span>';
+  // The empty swatch is not decoration: it is the 6px strip and the gap under it that
+  // every material chip has, kept here so a tool chip is the same height and its label
+  // sits on the same line. Transparent, because a colour swatch on Erase would be
+  // claiming Erase is a material.
+  b.innerHTML = '<span class="sw"></span><span class="lb"></span>';
   chipLabel(b, labelName);
   if (act) b.dataset.act = act;
   b.setAttribute('aria-pressed','false');

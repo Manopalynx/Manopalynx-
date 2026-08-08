@@ -67,11 +67,29 @@ Both ways of breaking it were reported from the phone rather than found here:
   a second line and lifted the whole box by ~86px — **between the tap that asks and the
   tap that confirms**. The second tap lands somewhere the first one was not.
 
-So `#mats` and `.tabs` are `flex-wrap:nowrap`, chips are `flex:1 1 0`, and the labels
-that change while asking got shorter — Clear becomes "Sure?", Save becomes "Replace?",
-with the sentence moved to the readout, which has room for it and moves nothing by
-changing. `test/matchbox-ui.mjs` asserts one row per drawer, equal widths within a row,
-and that arming either button leaves the stage, tray and strip exactly where they were.
+A third way in, reported after the first two were fixed and diagnosed correctly from the
+screenshots: **material chips carry a 6px colour swatch and the gap under it, and the
+Scene and Tools chips had none**, so those two drawers were 32px against everyone else's
+36. Changing drawer changed the tray height, and the box slid down on the way into Tools
+and back up on the way out. Writing the check turned up a second offender in the same
+line — the label fitting below shrinks the type so eight chips fit, which took Fuel to
+35px, so the box moved a pixel on the way into Fuel too.
+
+Chips are now a **fixed** 36px rather than a minimum, so neither the contents nor the
+type size can change the height, and tool chips carry an empty transparent swatch so
+their labels sit on the same line as everything else's. Not a colour swatch: a coloured
+strip on Erase would be claiming Erase is a material.
+
+So `#mats` and `.tabs` are `flex-wrap:nowrap`, chips are `flex:1 1 0` at a fixed height,
+and the labels that change while asking got shorter — Clear becomes "Sure?", Save becomes
+"Replace?", with the sentence moved to the readout, which has room for it and moves
+nothing by changing.
+
+`test/matchbox-ui.mjs` asserts one row per drawer, equal widths within a row, that every
+drawer sits at exactly the same height as every other, and that arming either button
+leaves the stage, tray and strip where they were. The drawer check compares the drawers
+against each other rather than against a number, because the claim is that they agree,
+not that they are any particular size.
 
 ### Why the check that existed did not catch it
 
@@ -272,7 +290,7 @@ the glass.
 ```
 npm i playwright
 node test/matchbox-sim.mjs     # 39 checks — the simulation
-node test/matchbox-ui.mjs      # 23 checks — the hand
+node test/matchbox-ui.mjs      # 24 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
 
