@@ -119,6 +119,15 @@
     text-transform:uppercase;color:var(--pale);font-weight:400;margin:0}
   .picker .grid{display:grid;gap:5px;flex:none;padding:0 12px 14px;
     grid-template-columns:repeat(auto-fill,minmax(74px,1fr))}
+  /* The finds are a list rather than a grid: they are sentences, not swatches, and a
+     sentence in a 74px column is not a sentence. */
+  .picker .list{display:flex;flex-direction:column;gap:3px;flex:none;padding:0 12px 14px}
+  .picker .find{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:3px;
+    background:rgba(255,255,255,.05);font-family:'Space Mono',monospace;font-size:9.5px;
+    letter-spacing:.03em;text-transform:uppercase;color:#8d7f6d;min-height:26px}
+  .picker .find .sw{width:9px;height:9px;border-radius:1px;flex:none}
+  .picker .find.got{color:var(--pale);background:rgba(255,255,255,.11)}
+  .picker .find .tick{margin-left:auto;flex:none;color:#ffb066}
   /* The chips here are their own thing rather than .chip, because .chip is pinned to a
      fixed 36px and equal widths to keep the tray still, and none of that applies to a
      panel that is floating over the scene. */
@@ -198,6 +207,9 @@
   .chip[aria-pressed="true"]{background:var(--ink);color:var(--pale);border-color:var(--ink)}
   .chip.act{padding:7px 4px 6px}
   .chip.danger[aria-pressed="true"]{background:var(--phos);border-color:var(--phos);color:#fff}
+  /* Still the same size when it cannot be used — a chip that shrinks or vanishes when it
+     is disabled would resize the row, which is the one thing the tray must never do. */
+  .chip[disabled]{opacity:.34;cursor:default}
 
   .tabs{gap:4px}
   .tab{
@@ -251,6 +263,14 @@
         <button class="cancel" type="button" id="ventCancel">Cancel</button>
       </div>
       <div class="grid" id="ventGrid"></div>
+    </div>
+    <div class="picker" id="findPick" role="dialog" aria-modal="true"
+         aria-label="What the box can do" hidden>
+      <div class="phead">
+        <h2 id="findTitle">What the box can do</h2>
+        <button class="cancel" type="button" id="findClose">Close</button>
+      </div>
+      <div class="list" id="findList"></div>
     </div>
   </div>
 
@@ -1580,7 +1600,11 @@ let heatView = false;        // false-colour the whole grid by temperature
 
 const tabsEl = document.getElementById('tabs');
 const matsEl = document.getElementById('mats');
-const actsEl = document.createElement('div');   // holds the tool chips between shows
+const actsEl = document.createElement('div');     // holds the tool chips between shows
+// Declared up here with actsEl rather than beside the presets, because Save and Load are
+// appended to it from the saving section further down and a `const` further down than its
+// first use is a dead page rather than a warning.
+const scenesEl = document.createElement('div');   // ...and the scene chips
 
 function chipFor(t){
   const b = document.createElement('button');
@@ -1698,6 +1722,12 @@ function actionChip(labelName, fn, danger, act){
   b.addEventListener('click', fn);
   return b;
 }
+// First in the row, because it is the one you reach for in a hurry. Disabled until
+// there is something to go back to, so it never lies about being able to help.
+const undoBtn = actionChip('Undo', ()=>undo(), false, 'undo');
+undoBtn.disabled = true;
+actsEl.appendChild(undoBtn);
+
 const eraseBtn = actionChip('Erase', ()=>setTool('erase'), false, 'erase');
 actsEl.appendChild(eraseBtn);
 
@@ -1713,6 +1743,7 @@ let clearArmed = 0, clearTimer = 0;
 
 const clearBtn = actionChip('Clear', ()=>{
   if (Date.now() < clearArmed){
+    snapshot('the clear');
     wipeAll();
     disarmClear();
     say('Cleared');
@@ -1737,7 +1768,7 @@ function disarmClear(){
   clearBtn.setAttribute('aria-pressed', 'false');
 }
 actsEl.appendChild(clearBtn);
-actsEl.appendChild(actionChip('Rain', ()=>{ raining = RAIN_TICKS; }, false, 'rain'));
+actsEl.appendChild(actionChip('Rain', ()=>{ snapshot('the rain'); raining = RAIN_TICKS; }, false, 'rain'));
 
 /* A false-colour view of the temperature field. The model is the whole point of this
    box and almost none of it is visible: a log at 280°C and a log at 20°C look the
@@ -1811,6 +1842,9 @@ const heatBtn = actionChip('Heat', ()=>{
   heatBtn.setAttribute('aria-pressed', String(heatView));
 }, false, 'heat');
 actsEl.appendChild(heatBtn);
+
+const findBtn = actionChip('Finds', ()=>openFindPicker(), false, 'finds');
+actsEl.appendChild(findBtn);
 
 /* ============================================================ scenes
 
@@ -1902,6 +1936,7 @@ const SCENES = [
 ];
 
 function loadScene(s){
+  snapshot(`loading ${s.name}`);
   wipeAll();
   s.build();
   drawn = true;
@@ -1967,7 +2002,11 @@ function encodeScene(){
   // volcano comes back as a vent that pours nothing, which looks exactly like a vent
   // that is broken.
   const vents = rle(i => feed[i]);
-  return { v:2, w:W, h:H, keys, runs, feed: vents };
+  // v3 adds the room, by name rather than by index for the same reason the materials are
+  // — the list can grow. Leaving it out was a defect and not a simplification: a volcano
+  // built in a Furnace and loaded back at Normal is not the scene that was saved, it is a
+  // different one doing different things, and nothing about it looks wrong.
+  return { v:3, w:W, h:H, keys, runs, feed: vents, room: ROOMS[roomAt].n };
 }
 
 // Returns the keys it could not place, which is not an error: a save written by a
@@ -1993,6 +2032,15 @@ function decodeScene(s){
   const src = expand(s.runs);
   // A v1 save has no vents in it, because vents did not exist when it was written.
   const srcFeed = Array.isArray(s.feed) ? expand(s.feed) : new Uint8Array(s.w * s.h);
+  // The room goes first, because wipeAll fills the field with the current AMBIENT and
+  // put() hands a material with no `t0` the current AMBIENT too. Setting it afterwards
+  // leaves the floor at the old room's temperature under the new room — measured in the
+  // suite as a stone floor at −30°C freezing the water standing on it in a 20°C room,
+  // which reads exactly like the box freezing water at room temperature.
+  // A save from before v3 has no room in it and keeps whatever is set, which is the only
+  // answer available and is why this says so rather than guessing at 20.
+  const named = ROOMS.findIndex(r => r.n === s.room);
+  if (named >= 0) setRoom(named);
   wipeAll();
   // Bottom-aligned and clipped, the same rule a resize already uses, because the
   // floor is the floor. A scene saved on a taller screen loses its ceiling rather
@@ -2045,24 +2093,29 @@ const loadBtn = actionChip('Load', ()=>{
   if (!text){ say('Nothing saved yet', true); return; }
   let s = null;
   try { s = JSON.parse(text); } catch { s = null; }
-  if (!s || !(s.v === 1 || s.v === 2) || !Array.isArray(s.keys) || !Array.isArray(s.runs) ||
+  if (!s || !(s.v >= 1 && s.v <= 3) || !Array.isArray(s.keys) || !Array.isArray(s.runs) ||
       !(s.w > 0) || !(s.h > 0)){
     say('That save is damaged', true); return;
   }
+  snapshot('the load');
   const missing = decodeScene(s);
   drawn = true;
   hintEl.style.opacity = 0;
   say(missing.length ? `Loaded  ·  ${missing.length} unknown left out` : 'Loaded', true);
 }, false, 'load');
 
-actsEl.appendChild(saveBtn);
-actsEl.appendChild(loadBtn);
+// Save and Load moved out of Tools and in with the presets. A save is a scene, which is
+// the more honest grouping, and it is what makes room for Finds in Tools without either
+// row getting to nine chips. The mis-tap risk that put them in Tools originally — reaching
+// for Gas and hitting Load — is what Undo is for now.
+// Appended after the presets below, so the row reads Candle…Gas, Save, Load.
 
 // Scene chips live in their own holder for the same reason the tools do: a Save that
 // is halfway through asking must not be rebuilt out from under itself.
-const scenesEl = document.createElement('div');
 SCENES.forEach(s => scenesEl.appendChild(
   actionChip(s.name, ()=>loadScene(s), false, 'scene-' + s.name.toLowerCase())));
+scenesEl.appendChild(saveBtn);
+scenesEl.appendChild(loadBtn);
 
 showDrawer(0);
 
@@ -2225,6 +2278,59 @@ brushEl.addEventListener('input', ()=>{
 
 let painting = false, raining = 0;
 
+/* One step of undo, taken before a stroke rather than after it.
+
+   The only way back from a stray drag across a finished build was Clear, which throws
+   away the whole box — so the recovery for a small mistake was a bigger one. On a phone,
+   with a fingertip, that is the difference between building something and giving up.
+
+   A copy of the whole field, which is the honest way to do it: a stroke can put material
+   down, erase, displace what was underneath, and apply heat, so there is no small record
+   of "what changed" that is not just as big. Six arrays over ~30,000 cells is about
+   400kB and one memcpy per stroke — costed below at well under a frame.
+
+   Deliberately one level and no redo. Two things happen a moment apart in this box and
+   the simulation keeps running underneath, so a deep stack would be a list of scenes
+   that never existed at the moment you go back to them. One step covers the mistake you
+   just made, which is the mistake that matters. */
+let undoBuf = null;                 // allocated once and written over
+let undoHas = false;                // ...so this, not the buffer, says whether it holds one
+let undoLabel = '';
+
+/* Written into a buffer that is kept rather than a fresh one each time. `.slice()` was
+   the first version: 470kB of new arrays every stroke, and measured at 2.6ms a snapshot,
+   all of it handed straight to the collector. `.set()` into a buffer allocated once is
+   the same copy without the allocation. */
+function snapshot(what){
+  if (!undoBuf || undoBuf.W !== W || undoBuf.H !== H){
+    const n = W*H;
+    undoBuf = { W, H, type:new Uint8Array(n), temp:new Float32Array(n),
+                fuel:new Float32Array(n), life:new Float32Array(n),
+                vel:new Float32Array(n), feed:new Uint8Array(n) };
+  }
+  undoBuf.type.set(type); undoBuf.temp.set(temp); undoBuf.fuel.set(fuel);
+  undoBuf.life.set(life); undoBuf.vel.set(vel);   undoBuf.feed.set(feed);
+  undoHas = true;
+  undoLabel = what;
+  if (undoBtn) undoBtn.disabled = false;
+}
+
+function undo(){
+  const u = undoBuf;
+  // Refused rather than approximated across a resize. The arrays are a different shape
+  // and putting the old one back bottom-aligned would be a guess dressed as an undo.
+  if (!undoHas || !u){ say('Nothing to undo', true); return; }
+  if (u.W !== W || u.H !== H){
+    undoHas = false; if (undoBtn) undoBtn.disabled = true;
+    say('The box changed size — nothing to go back to', true); return;
+  }
+  type.set(u.type); temp.set(u.temp); fuel.set(u.fuel);
+  life.set(u.life); vel.set(u.vel); feed.set(u.feed);
+  undoHas = false;
+  if (undoBtn) undoBtn.disabled = true;
+  say(`Undid ${undoLabel}`, true);
+}
+
 /* One cell, one rule. Everything that puts material into the box goes through here —
    the brush, a line, a rectangle — so a shape can never quietly behave differently
    from a stroke. */
@@ -2304,6 +2410,10 @@ cv.addEventListener('pointerdown', e=>{
   const [x,y] = toCell(e);
   drawn = true;
   hintEl.style.opacity = 0;
+  // Before the first cell of the stroke, not after it. A line or a box does not touch
+  // the box until release, but the snapshot has to be of the scene as it was when the
+  // finger went down either way.
+  snapshot(tool === 'match' ? 'the flame' : tool === 'erase' ? 'the erase' : 'the stroke');
   if (shape === 'free'){ painting = true; paintAt(x,y); }
   else { anchor = [x,y]; ghost = [x,y]; }
 });
@@ -2388,20 +2498,36 @@ function frame(now){
    Nothing is locked. The reward for finding one is being told you found it and
    watching the count go up — a record of what you have done rather than a gate in
    front of what you have not. */
-const ALL_FINDS = (() => {
+/* Everything the box can be caught doing, with the words for it.
+
+   One table now, where there were two derivations of the same thing: this list, and the
+   labels written out again at each `found()` call site. Nothing compared them, and the
+   count in the corner is the denominator of a progress bar — if they had drifted, the box
+   would have been promising a number of discoveries that did not exist, or hiding some
+   that did. `test/matchbox-sim.mjs` asserts every key a scene can raise is in here.
+
+   The labels are what the panel shows once a thing has been found. Before that it shows
+   the material and a question mark, which is a direction to look in rather than the
+   answer — twenty-seven slots reading "Acid — ?" is a to-do list; twenty-seven reading
+   "Acid eats through things" is a spoiler. */
+const FINDS = (() => {
   const list = [];
+  const add = (t, kind, label) => list.push({ key: t+':'+kind, t, label });
   for (let t=0; t<M.length; t++){
     const m = M[t]; if (!m) continue;
-    if (m.melt !== undefined && m.into  !== undefined) list.push(t+':melt');
-    if (m.boil !== undefined && m.into  !== undefined) list.push(t+':boil');
-    if (m.cool !== undefined && m.sets  !== undefined) list.push(t+':cool');
-    if (m.ash  !== undefined && m.ash   !== E)         list.push(t+':ash');
-    if (m.meets) m.meets.forEach((_,r) => list.push(t+':meets'+r));
-    if (m.eats)  list.push(t+':eats');
-    if (m.ph===0 && m.out !== undefined) list.push(t+':burst');
+    if (m.melt !== undefined && m.into  !== undefined) add(t, 'melt', `${m.n} melts into ${M[m.into].n}`);
+    if (m.boil !== undefined && m.into  !== undefined) add(t, 'boil', `${m.n} boils into ${M[m.into].n}`);
+    if (m.cool !== undefined && m.sets  !== undefined) add(t, 'cool', `${m.n} sets into ${M[m.sets].n}`);
+    if (m.ash  !== undefined && m.ash   !== E)         add(t, 'ash',  `${m.n} burns down to ${M[m.ash].n}`);
+    if (m.meets) m.meets.forEach((row,r) =>
+      add(t, 'meets'+r, row.tale || `${m.n} + ${M[row.with].n} → ${M[row.become].n}`));
+    if (m.eats)  add(t, 'eats', `${m.n} eats through things`);
+    if (m.ph===0 && m.out !== undefined) add(t, 'burst', `${m.n} goes off`);
   }
   return list;
 })();
+
+const FIND_LABEL = new Map(FINDS.map(f => [f.key, f.label]));
 
 const finds = new Set();
 let findFlash = 0;
@@ -2410,8 +2536,56 @@ function found(key, label){
   if (finds.has(key)) return;
   finds.add(key);
   findFlash = 150;                 // hold it on screen for a couple of seconds
-  say(`Found — ${label}`, true);                 // hold it on screen for a couple of seconds
+  say(`Found ${finds.size}/${FINDS.length} — ${label}`, true);
 }
+
+/* The list of them, which the box had no way of showing.
+
+   The corner said "FOUND 3/27" and that was all: twenty-four things existed that it would
+   never name, mention again, or hint at. A counter with no list is a progress bar for a
+   task nobody has been told. This is the same panel as the vent picker — over the stage,
+   costing no layout — and it is the answer to "make it more interesting" rather than any
+   amount of extra material.
+
+   Unfound rows carry the material's colour and its name and nothing else, so the list
+   reads as somewhere to go: eight rows mentioning Acid tell you to go and play with acid,
+   without telling you what happens when you do. */
+const findPickEl  = document.getElementById('findPick');
+const findListEl  = document.getElementById('findList');
+const findTitleEl = document.getElementById('findTitle');
+
+function openFindPicker(){
+  findTitleEl.textContent = `What the box can do — ${finds.size} of ${FINDS.length}`;
+  findListEl.textContent = '';
+  // Found ones first, so the list is a record before it is a to-do list. Within each
+  // half the table's own order, which groups a material's tricks together.
+  const rows = [...FINDS].sort((a,b) => (finds.has(b.key)?1:0) - (finds.has(a.key)?1:0));
+  for (const f of rows){
+    const got = finds.has(f.key);
+    const c = M[f.t].col;
+    const row = document.createElement('div');
+    row.className = 'find' + (got ? ' got' : '');
+    row.dataset.find = f.key;
+    row.dataset.got = String(got);
+    row.innerHTML = `<span class="sw" style="background:rgb(${c[0]},${c[1]},${c[2]})"></span>` +
+                    `<span class="lb">${got ? f.label : M[f.t].n + ' — ?'}</span>` +
+                    (got ? '<span class="tick">✓</span>' : '');
+    findListEl.appendChild(row);
+  }
+  findPickEl.hidden = false;
+  findPickEl.classList.add('open');
+}
+
+function closeFindPicker(){
+  findPickEl.classList.remove('open');
+  findPickEl.hidden = true;
+}
+
+document.getElementById('findClose').addEventListener('click', closeFindPicker);
+findPickEl.addEventListener('click', e => { if (e.target === findPickEl) closeFindPicker(); });
+addEventListener('keydown', e => {
+  if (e.key === 'Escape' && findPickEl.classList.contains('open')) closeFindPicker();
+});
 
 /* What the box is doing as a whole, rather than the one cell under a finger. The air
    figure is the room warming up; the peak is the hottest thing in the box, which is
@@ -2432,7 +2606,7 @@ function updateGauge(){
   // gap between them is the fire.
   gaugeEl.innerHTML = `air ${Math.round(air)}°C<br>room ${ROOMS[roomAt].n} ${AMBIENT}°C` +
                       `<br><b>peak ${Math.round(peak)}°C</b>` +
-                      `<br>found ${finds.size}/${ALL_FINDS.length}` +
+                      `<br>found ${finds.size}/${FINDS.length}` +
                       `<br>${frameMs.toFixed(1)}ms work · ${W}×${H}`;
 }
 
