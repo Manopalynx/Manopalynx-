@@ -41,7 +41,10 @@ const VIEWPORT = { width: 430, height: 900 };   // a large phone, held upright
 // thousand ticks costs milliseconds; `flame` is exactly what paintAt does with the
 // match selected, so "held the match here" in a check means what it means in the hand.
 const HARNESS = `
-  window.__step  = n => { for (let k=0;k<n;k++){ moveFalling(); moveRising(); diffuse(); react(); } };
+  // The page's own definition of a tick, not a copy of it. A harness that spells the
+  // passes out agrees with itself long after it has stopped agreeing with the page —
+  // add a fifth pass and every check here quietly measures a world without it.
+  window.__step  = n => { for (let k=0;k<n;k++) simTick(); };
   window.__count = t => { let n=0; for (let i=0;i<type.length;i++) if (type[i]===t) n++; return n; };
   window.__hot   = (t,T) => { let n=0; for (let i=0;i<type.length;i++) if (type[i]===t && temp[i]>=T) n++; return n; };
   // Actually alight, which is not the same as being over the ignition point: a cell
@@ -1082,6 +1085,150 @@ await check(browser, 'every discovery a scene can raise is in the table behind t
   return bad.length ? bad.join('; ') : null;
 });
 
+console.log('\n— the first thing that is alive —');
+
+await check(browser, 'a bug falls to a surface, stays on it, and stays one bug', () => {
+  __wipe(); const f = __floor();
+  const cx = (W/2)|0;
+  put(cx, f-30, BUG);
+  for (let k=0;k<600;k++) __step(1);
+  if (__count(BUG) !== 1) return `one bug became ${__count(BUG)}`;
+  let at = -1;
+  for (let i=0;i<type.length;i++) if (type[i]===BUG) at = i;
+  const y = (at / W) | 0;
+  if (y !== f-1) return `it settled at row ${y} instead of on the floor at ${f-1}`;
+
+  // Twenty of them, left alone: a fixed population is fixed in both directions.
+  __wipe(); __floor();
+  for (let k=0;k<20;k++) put(10+k*5, f-1, BUG);
+  const n0 = __count(BUG);
+  for (let k=0;k<3000;k++) __step(1);
+  if (__count(BUG) !== n0) return `${n0} bugs became ${__count(BUG)} in fifty seconds with nothing happening to them`;
+  return null;
+});
+
+/* The trap this pass exists to avoid, stated as a speed limit.
+
+   `react()` walks x ascending, so anything that steps right lands on a cell the loop has
+   not reached yet and gets another go — and another. Measured before `moveLife` took its
+   list of who is alive before anybody moved, and before the step throttle stopped keying
+   on the cell index: one bug crossed seventy-one cells in a hundred ticks against the
+   fourteen it should manage. It read as a bug that was simply quick. */
+await check(browser, 'a bug is moved once a tick, not once per cell it lands on', () => {
+  const bad = [];
+  const ticks = 600;
+  __wipe(); const f = __floor();
+  const cx = (W/2)|0;
+  put(cx, f-1, BUG);
+  let far = 0, last = cx;
+  for (let k=0;k<ticks;k++){
+    __step(1);
+    for (let i=0;i<type.length;i++) if (type[i]===BUG){ const x = i%W; far += Math.abs(x-last); last = x; }
+  }
+  // The most it may travel is one cell every BUG_STEP ticks, with room for the dice.
+  const ceiling = ticks / BUG_STEP * 1.6;
+  if (far > ceiling) bad.push(`a calm bug covered ${far} cells in ${ticks} ticks, against a walking pace of about ${Math.round(ticks/BUG_STEP)}`);
+  if (far < 10) bad.push(`it covered ${far} cells — it is not walking at all, so the limit proves nothing`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* The whole of what makes a cell read as alive: it notices, and it leaves.
+   Tested against a gradient held by hand rather than a fire, because a fire measures how
+   hot the fire was. A first attempt held a 520°C wall fourteen cells away for 900 ticks
+   and cooked ten of the twelve bugs, which says nothing about which way they ran. */
+await check(browser, 'a bug runs away from heat rather than wandering into it', () => {
+  const bad = [];
+  const trial = (hotter) => {
+    __wipe(); const f = __floor();
+    const cx = (W/2)|0;
+    put(cx, f-1, BUG);
+    for (let k=0;k<120;k++){
+      let at = -1;
+      for (let i=0;i<type.length;i++) if (type[i]===BUG) at = i;
+      if (at < 0) return 'died';
+      const x = at % W, y = (at / W) | 0;
+      temp[at] = 200;                       // hot enough to panic, held there
+      life[at] = 0;                         // ...and not allowed to char while we watch
+      for (let d=1; d<=6; d++){
+        if (inb(x-d,y)) temp[idx(x-d,y)] = hotter < 0 ? 400 : 30;
+        if (inb(x+d,y)) temp[idx(x+d,y)] = hotter > 0 ? 400 : 30;
+      }
+      __step(1);
+    }
+    let at = -1;
+    for (let i=0;i<type.length;i++) if (type[i]===BUG) at = i;
+    return at < 0 ? 'died' : (at % W) - cx;
+  };
+  const fromLeft = trial(-1), fromRight = trial(1);
+  if (typeof fromLeft !== 'number' || fromLeft < 15) bad.push(`with the heat on its left it moved ${fromLeft} — it should be well to the right`);
+  if (typeof fromRight !== 'number' || fromRight > -15) bad.push(`with the heat on its right it moved ${fromRight} — it should be well to the left`);
+
+  // And it only panics when it is actually hot: cold, it should not be sprinting anywhere.
+  __wipe(); const f = __floor();
+  const cx = (W/2)|0;
+  put(cx, f-1, BUG);
+  for (let k=0;k<120;k++) __step(1);
+  let at = -1;
+  for (let i=0;i<type.length;i++) if (type[i]===BUG) at = i;
+  if (at >= 0 && Math.abs((at % W) - cx) > 40) bad.push(`a bug with nothing wrong covered ${Math.abs((at%W)-cx)} cells in 120 ticks`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* The argument for a creature being a cell, stated as a check: it dies of the things the
+   box already does, and not one line of that is creature code. */
+await check(browser, 'the box kills bugs with what it already had', () => {
+  const bad = [];
+  const f0 = H-6;
+
+  // Fire, through the same ignition it uses on straw. It leaves ash.
+  __wipe(); __floor();
+  __slab(6, f0-5, 26, f0-1, STRAW);
+  for (let k=0;k<16;k++) put(34+k*5, f0-1, BUG);
+  const lit0 = __count(BUG), ash0 = __count(ASH);
+  __hold(8, f0-2, 2, 40);
+  for (let k=0;k<2400;k++) __step(1);
+  const died = lit0 - __count(BUG);
+  if (died < 2) bad.push(`a straw fire beside sixteen bugs killed ${died} of them`);
+  if (__count(ASH) <= ash0) bad.push('nothing was left behind by the ones that burned');
+  // ...and the far ones get away, which is the point of them noticing.
+  if (__count(BUG) < 4) bad.push(`only ${__count(BUG)} of ${lit0} escaped — the panic is not buying them anything`);
+
+  // The same floor with no fire on it, so the number above means something.
+  __wipe(); __floor();
+  for (let k=0;k<16;k++) put(34+k*5, f0-1, BUG);
+  for (let k=0;k<2400;k++) __step(1);
+  if (__count(BUG) !== 16) bad.push(`${16-__count(BUG)} bugs died on a bare floor with nothing happening`);
+
+  // Water, through a `meets` row — one line in the table, and it registers as a find.
+  __wipe(); __floor();
+  for (let k=0;k<10;k++) put(40+k*2, f0-1, BUG);
+  const wet0 = __count(BUG);
+  __slab(38, f0-4, 60, f0-2, WATER);
+  for (let k=0;k<600;k++) __step(1);
+  if (__count(BUG) > wet0*0.2) bad.push(`${__count(BUG)} of ${wet0} bugs survived being poured on`);
+  if (![...finds].some(k => k.startsWith(BUG + ':meets'))) bad.push('drowning did not register as a discovery');
+
+  // Acid, because acid eats cells and a bug is a cell.
+  __wipe(); __floor();
+  for (let k=0;k<10;k++) put(40+k*2, f0-1, BUG);
+  const acid0 = __count(BUG);
+  __slab(38, f0-4, 60, f0-2, ACID);
+  for (let k=0;k<900;k++) __step(1);
+  if (__count(BUG) >= acid0) bad.push(`acid poured over ${acid0} bugs left ${__count(BUG)}`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+await check(browser, 'a box full of bugs still costs less than a frame', () => {
+  __wipe(); const f = __floor();
+  for (let k=0;k<500;k++) put(4+(k%120), f-1-((k/120)|0), BUG);
+  for (let k=0;k<60;k++) __step(1);
+  const t0 = performance.now();
+  for (let k=0;k<200;k++) moveLife();
+  const ms = (performance.now() - t0) / 200;
+  if (ms > 1) return `${ms.toFixed(2)}ms a tick for ${__count(BUG)} bugs, on its own before anything else runs`;
+  return null;
+});
+
 console.log('\n— scenes, and getting them back —');
 
 /* The reason this table exists at all, and it is a trap that was live before anything
@@ -1294,7 +1441,7 @@ await check(browser, 'a busy scene costs less than a frame', () => {
   // single tick plus a draw measured something the page does not do.
   const t0 = performance.now();
   for (let k=0;k<120;k++){
-    for (let s=0; s<STEPS; s++){ moveFalling(); moveRising(); diffuse(); react(); }
+    for (let s=0; s<STEPS; s++) simTick();
     draw();
   }
   const ms = (performance.now() - t0) / 120;

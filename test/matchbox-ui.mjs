@@ -960,5 +960,53 @@ await check('the finds panel can be closed on a screen too small to show it all'
   return null;
 });
 
+console.log('\n— the first thing that is alive —');
+
+await check('a bug drawn on the stage walks about on its own', async p => {
+  await pick(p, 'bug');
+  await p.evaluate(() => { wipeAll(); const f = H-6;
+    for (let x=0;x<W;x++) for (let y=f;y<H;y++) put(x,y,STONE); });
+  const s = await stageBox(p);
+  await p.mouse.click(s.x + s.width*0.5, s.y + s.height*0.7);
+  const placed = await p.evaluate(() => __count(BUG));
+  if (!placed) return 'the tap put no bugs in the box';
+
+  // How far apart they are, not where the middle of them is. A tap puts down a clump and
+  // they wander off both ways, so the mean sits almost exactly still while every one of
+  // them is walking — measured, a clump that went from spanning 62-68 to spanning 9-97
+  // moved its mean from 64.9 to 63.1, and a check on the mean called that "nothing is
+  // walking".
+  const span = () => p.evaluate(() => {
+    const o = []; for (let i=0;i<type.length;i++) if (type[i]===BUG) o.push(i%W);
+    return o.length ? Math.max(...o) - Math.min(...o) : null;
+  });
+  const first = await span();
+  await p.waitForTimeout(4000);
+  const later = await span();
+  if (await p.evaluate(() => __count(BUG)) !== placed) return 'bugs appeared or vanished while nothing was happening';
+  if (later <= first + 6) return `${placed} bugs spanned ${first} cells and now span ${later} — nothing is walking`;
+  return null;
+});
+
+// A single chip must not stretch across the screen, which is the shape of the very first
+// complaint about this tray: Rubber alone on a wrapped row, full width. The Life drawer
+// has one thing in it and would have reproduced it at 377px.
+await check('a drawer with one thing in it does not stretch it across the screen', async p => {
+  const bad = [];
+  const tabs = await p.locator('.tab').count();
+  for (let i = 0; i < tabs; i++) {
+    await p.locator('.tab').nth(i).click();
+    const r = await p.evaluate(() => {
+      const name = document.querySelector('.tab[aria-pressed="true"]').textContent.trim();
+      const chips = [...document.querySelectorAll('#mats .chip')];
+      const row = document.getElementById('mats').getBoundingClientRect().width;
+      return { name, n: chips.length,
+               widest: Math.max(...chips.map(c => Math.round(c.getBoundingClientRect().width))), row: Math.round(row) };
+    });
+    if (r.widest > r.row * 0.5 && r.n < 3) bad.push(`${r.name} has ${r.n} chip(s) and one of them is ${r.widest}px of a ${r.row}px row`);
+  }
+  return bad.length ? bad.join('; ') : null;
+});
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

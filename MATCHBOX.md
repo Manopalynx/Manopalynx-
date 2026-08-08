@@ -45,11 +45,11 @@ fetched fresh whenever there is a signal — no stale-build trap, and nothing to
 
 ## What is in the box
 
-Twenty-one materials in the tray and six more the simulation makes for itself: fire,
+Twenty-two materials in the tray and six more the simulation makes for itself: fire,
 smoke, steam, embers, ash and molten wax. Every material is one row of the `M` table
 and nothing else in the file knows any of them by name.
 
-The tray is in drawers — **Fuel, Wet, Solid, Hot, Scene, Tools** — one row at a time, so
+The tray is in drawers — **Fuel, Wet, Solid, Hot, Life, Scene, Tools** — one row at a time, so
 the tray has a fixed height however much goes into it. A flat tray does not scale: every
 material added used to cost a slice of the stage, which is the part of the page worth
 having.
@@ -127,7 +127,7 @@ A material is described by a handful of numbers. The ones that matter:
 | `tough` | how many bites acid needs to get through it |
 | `peak` | as hot as burning alone can drive it, where that differs |
 | `span` `leak` | how a gas stops being there: a clock, or only by escaping |
-| `feed` (per cell) | what a vent pours — not a table field, one per cell |
+| `feed` `way` (per cell) | what a vent pours, and which way a bug is walking |
 
 `ig` and `char` together are what make the tray more than fourteen colours. The match
 is at 780°C, which is hotter than every ignition point in the table, so on temperature
@@ -271,6 +271,51 @@ A vent holds itself at whatever it pours, because a conduit is connected to some
 a vent at room temperature is a cold spot in the one cell where that is fatal. It is
 `proof` against acid and has no melting point: a source you can destroy with what it
 pours is not a source.
+
+## The first thing that is alive
+
+A **Bug**, in the Life drawer. It falls, walks along whatever it lands on, climbs a single
+step, and turns round at a wall. Above 55°C it stops wandering and goes whichever way is
+cooler, three times faster.
+
+**It is a cell, like everything else, and that is the whole design decision.** As a cell it
+inherits the box for nothing: it has a temperature, so fire kills it through the same
+ignition rule that burns straw; acid eats it because acid eats cells; it saves and loads
+with no new format; and its one reaction — it cannot swim — is a single `meets` row, which
+also gets it an entry in the finds list without a line of code written for it.
+
+As an object in a separate list none of that would come free, and all of it would be new
+code of the kind this file keeps shipping: rules that read perfectly and never fire.
+
+Measured, sixteen bugs on a floor with a straw fire lit at one end: **five die and eleven
+get away**, the far ones moving from a mean x of 71 to 106 while the fire burns, then
+wandering back once it is out. On the same floor with no fire, all sixteen live. That
+difference is the entire point of them.
+
+### The two traps, both of which were hit
+
+**A creature that walks sideways gets processed twice in a tick.** `react()` walks x
+ascending, so anything stepping right lands on a cell the loop has not reached and gets
+another go. The falling pass has the same problem and solves it by walking bottom-up, which
+works only because things fall one way. So `moveLife()` takes the list of who is alive
+*before* anybody moves, and each is processed once wherever it ends up.
+
+**The step throttle keyed on the cell index, and a bug's index moves with it.** That is how
+the vents stagger, and vents do not go anywhere. Measured: one bug crossed **seventy-one
+cells in a hundred ticks** against the fourteen it was supposed to manage, and it simply
+read as a quick bug. It is a dice roll now — no identity to lose, the right average, and
+they do not march in step. `test/matchbox-sim.mjs` holds it to a speed limit, which fails
+at 216 cells against a pace of 86 if the old throttle comes back.
+
+### One tick, defined once
+
+Adding a fifth pass is what made this matter: the suites used to spell the passes out
+themselves, so a new one would have meant every check silently measuring a box where
+creatures do not move — with neither the page nor the harness saying a word. There is a
+`simTick()` now and the harness calls it.
+
+Cost: **2.31ms a frame with no bugs and 2.34ms with five hundred.** The pass itself is
+0.067ms empty and 0.09ms with five hundred in the box.
 
 ## Undo
 
@@ -458,8 +503,8 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 46 checks — the simulation
-node test/matchbox-ui.mjs      # 36 checks — the hand
+node test/matchbox-sim.mjs     # 51 checks — the simulation
+node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
 
