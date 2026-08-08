@@ -1584,6 +1584,35 @@ await check(browser, 'a creature somewhere it cannot live takes a moment about i
   return bad.length ? bad.join('; ') : null;
 });
 
+/* Reported from the phone with pictures, and the only reason the drowning clock looked
+   broken: eighty-four bugs tipped into a tank sat in a neat pink raft on the surface and
+   stayed there. `footing` counted anything that was not a gas, so water was something to
+   stand on — and a bug standing on top of water never has water above it, so it never
+   started drowning. Nothing here was visible by reading either half. */
+await check(browser, 'a bug tipped into a pond goes under it rather than standing on it', () => {
+  const bad = [];
+  const cx = (W/2)|0;
+
+  __wipe(); const f = __floor();
+  __slab(cx-24, f-60, cx-24, f-1, GLASS);            // a tank, so it cannot run away
+  __slab(cx+24, f-60, cx+24, f-1, GLASS);
+  __slab(cx-23, f-56, cx+23, f-1, WATER);
+  for (let y=0;y<6;y++) for (let x=cx-20;x<=cx+20;x+=3) put(x, f-62-y*2, BUG);
+  const n = __count(BUG);
+  if (n < 60) return `the scene only placed ${n} bugs, so it is not the reported one`;
+  for (let k=0;k<1200;k++) __step(1);
+  if (__count(BUG)) bad.push(`${__count(BUG)} of ${n} bugs were still afloat after twenty seconds`);
+
+  // A film you can stand in the bottom of is a puddle to wade, not a drowning. Without
+  // this, "bugs sink" is satisfied by making all water lethal on contact again.
+  __wipe(); const f2 = __floor();
+  __slab(cx-20, f2-1, cx+20, f2-1, WATER);
+  for (let k=0;k<10;k++) put(cx+22+k*3, f2-2, BUG);
+  for (let k=0;k<1800;k++) __step(1);
+  if (__count(BUG) < 8) bad.push(`${10-__count(BUG)} of 10 bugs drowned wading a one-cell film of water`);
+  return bad.length ? bad.join('; ') : null;
+});
+
 await check(browser, 'a box full of living things still costs less than a frame', () => {
   const bad = [];
   const bench = (t, n) => {

@@ -276,8 +276,9 @@ pours is not a source.
 
 ## The first thing that is alive
 
-A **Bug**, in the Life drawer. It falls, walks along whatever it lands on, climbs a single
-step, turns round at a wall, changes its mind now and then, and sometimes just stops.
+A **Bug**, in the Life drawer. It falls, walks along whatever solid it lands on — and sinks
+through anything it is heavier than, so a pond is not a floor — climbs a single step, turns
+round at a wall, changes its mind now and then, and sometimes just stops.
 Above 55°C it does none of that: it goes whichever way is cooler, three times faster, and
 does not dawdle.
 
@@ -437,25 +438,40 @@ The fish figure was already 3.4 seconds before any of this. What changed is that
 spends them throwing itself about instead of lying there, which is the same death and a
 completely different thing to watch.
 
-**Two mistakes in the drowning rule, both found by measurement and neither by reading it.**
+#### Three mistakes in it, and the third was the one you could see
 
-*Instant recovery.* Zeroing the clock the moment a cell touched air made anything that
-could reach the surface immortal — a bug in a four-deep puddle walked up, drew one tick of
-air, and started again from nothing, for as long as you cared to watch. It now recovers 4
-per tick against 1 lost, so surfacing genuinely pays but only while you keep doing it: of
-three bugs dropped into an open four-deep puddle, **two drowned at 150 ticks and one kept
-its head up for the full minute**. That is the behaviour worth having, and it is why the
-check now uses a sealed tank — a puddle with a surface was measuring the bug's judgement,
-not the rule.
+None of the three was visible by reading the source, and the first two were found only
+because the third was reported from a phone with pictures.
 
 *Any neighbour counting as water.* Being *beside* a puddle is not drowning, and counting
 all four neighbours killed **7 of 10** bugs walking along a dry floor with water alongside
 them. What stops you breathing is being under the surface, so the test is the cell directly
-above — one lookup instead of four, and **10 of 10** now live through thirty seconds of it.
+above — one lookup instead of four.
 
-Both of these read perfectly well in the source. The first presented as "a bug never
-drowns" and the second as "bugs drown for no reason", and in both cases my first instinct
-was that the scene was wrong rather than the rule.
+*Instant recovery.* Zeroing the clock the moment a cell touched air made anything that
+could reach air immortal — one tick of it and the whole 150 started again. It recovers 4 a
+tick against 1 lost now, so getting your head up genuinely pays but only while you keep
+doing it. This is what lets a bug walk out of a shallow puddle and live: **7 to 9 of 10**
+survive thirty seconds of wandering beside one, which is neither all nor none, and it is
+noisy on purpose.
+
+*A liquid counting as ground.* And this was the one on the screen. `footing` accepted
+anything that was not a gas, so **water was something a bug could stand on** — and a bug
+standing on water never has water above it, so the clock never started. Eighty-four bugs
+tipped into a tank sat in a neat pink raft on the surface and stayed there indefinitely.
+Both halves read perfectly well: the drowning rule was right, the walking rule was right,
+and together they made a bug that walks on water.
+
+A liquid is not footing now, and a creature sinks through anything it is denser than —
+`dens:1.1` against water's 1.0, by the same rule that sinks everything else in this box.
+Measured on the reported scene: **84 of 84 gone within twenty seconds**, in a steady stream
+of about fourteen per 150 ticks as each layer reaches the water and starts its clock. A
+one-cell film on the floor is still a puddle to wade rather than a drowning — **10 of 10**
+walk through it — because the bug ends up standing on the stone with air above it.
+
+The check for it tips the reported eighty-four in, and asserts the film case beside it:
+without that second half, "bugs sink" is satisfied by making water lethal on contact again,
+which is where this started.
 
 ### The one that got past everything
 
@@ -695,7 +711,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 61 checks — the simulation
+node test/matchbox-sim.mjs     # 62 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
