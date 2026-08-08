@@ -585,25 +585,50 @@ await check('a browser that refuses to store says so rather than breaking', asyn
 
 console.log('\n— the room and the vent —');
 
-await check('Room steps through its settings and comes back round', async p => {
-  const read = () => p.evaluate(() => ({ at: AMBIENT, name: ROOMS[roomAt].n,
-                                         ro: document.getElementById('ro').textContent,
-                                         gauge: document.getElementById('gauge').textContent }));
-  const start = await read();
-  if (start.at !== 20) return `the box did not start at 20°C but at ${start.at}`;
-  const seen = [start.name];
-  const n = await p.evaluate(() => ROOMS.length);
-  for (let i = 0; i < n; i++) {
-    await press(p, 'room');
-    const now = await read();
-    seen.push(now.name);
-    if (!now.ro.toLowerCase().includes(now.name.toLowerCase()))
-      return `the readout says "${now.ro}" after stepping to ${now.name}`;
-    if (!now.ro.includes(String(now.at))) return `the readout "${now.ro}" never says what ${now.name} actually is`;
-  }
-  const back = await read();
-  if (back.at !== 20) return `${n} presses left the room at ${back.at}°C instead of back at 20`;
-  if (new Set(seen).size !== n) return `stepping ${n} times only visited ${new Set(seen).size} settings: ${seen.join(' ')}`;
+/* Tapping Room must show the settings rather than step to the next one, and it must do
+   it in the row the tray already has — the picker is not allowed to be the one thing
+   that moves the scene after three rounds of stopping everything else from doing it. */
+await check('tapping Room offers the settings instead of stepping through them', async p => {
+  const geom = () => p.evaluate(() => {
+    const r = e => { const b = document.querySelector(e).getBoundingClientRect();
+                     return [Math.round(b.top), Math.round(b.height)]; };
+    return JSON.stringify({ mats:r('#mats'), stage:r('.stage'), tray:r('.tray'), strip:r('#strip') });
+  });
+  const labels = () => p.evaluate(() =>
+    [...document.querySelectorAll('#mats .chip')].map(c => c.querySelector('.lb').textContent));
+
+  const base = await geom();
+  if (await p.evaluate(() => AMBIENT) !== 20) return 'the box did not start at 20°C';
+
+  await press(p, 'room');
+  const offered = await labels();
+  const want = await p.evaluate(() => ROOMS.map(r => r.n));
+  if (offered.join('|') !== want.join('|')) return `the picker offered ${offered.join(', ')} rather than ${want.join(', ')}`;
+  if (await geom() !== base) return 'opening the picker moved the page';
+
+  // One tap on any of them, from anywhere in the list — not a walk to get there.
+  await p.locator('[data-act="room-furnace"]').click();
+  const at = await p.evaluate(() => AMBIENT);
+  const hottest = await p.evaluate(() => ROOMS[ROOMS.length-1].t);
+  if (at !== hottest) return `one tap on the last setting left the room at ${at}°C, not ${hottest}`;
+  if (await geom() !== base) return 'choosing a setting moved the page';
+
+  // ...and it hands the row back rather than staying open.
+  const after = await labels();
+  if (after.join('|') === want.join('|')) return 'the picker stayed open after a choice was made';
+  if (!after.some(l => /room/i.test(l))) return `it returned to ${after.join(', ')} rather than the drawer Room lives in`;
+
+  // Reopening shows where you are.
+  await press(p, 'room');
+  const ticked = await p.evaluate(() => [...document.querySelectorAll('#mats .chip[data-room]')]
+    .filter(c => c.getAttribute('aria-pressed') === 'true').map(c => c.querySelector('.lb').textContent));
+  if (ticked.length !== 1 || ticked[0] !== 'Furnace') return `reopening ticked ${JSON.stringify(ticked)}`;
+
+  // Leaving by a tab has to give the buttons back, not lose them.
+  await p.locator('.tab', { hasText: /^fuel$/i }).click();
+  await p.locator('.tab', { hasText: /^tools$/i }).click();
+  const back = await labels();
+  if (!back.some(l => /^room$/i.test(l))) return `Tools came back as ${back.join(', ')}`;
   return null;
 });
 
@@ -620,33 +645,52 @@ await check('the gauge says what the room is set to, not just what the air is', 
 /* The vent takes its payload from whatever material was picked before it, which is the
    whole interface for it — so the thing to check is that picking through the actual
    chips, in two different drawers, sets it. */
-await check('picking a material then Vent gives a vent that pours that material', async p => {
-  await pick(p, 'lava');
+/* Tapping Vent asks what it should pour; the next material answers. The order matters
+   and is the whole reason this changed — it used to take the payload from whatever had
+   been selected before it, which is the same two taps backwards and with nothing on
+   screen to say the first one had counted. */
+await check('tapping Vent asks what to pour, and the next material answers', async p => {
   await pick(p, 'vent');
-  const lava = await p.evaluate(() => ({ feed: M[ventFeed].n, ro: document.getElementById('ro').textContent }));
-  if (lava.feed !== 'Lava') return `picking Lava then Vent left the vent holding ${lava.feed}`;
-  if (!/vent/i.test(lava.ro) || !/lava/i.test(lava.ro))
-    return `the readout says "${lava.ro}" and does not say what the vent will pour`;
+  const asking = await p.evaluate(() => ({ asking: ventAsking, ro: document.getElementById('ro').textContent }));
+  if (!asking.asking) return 'tapping Vent did not ask anything';
+  if (!/tap a material/i.test(asking.ro)) return `the readout says "${asking.ro}" and does not say what it is waiting for`;
 
-  // A material from another drawer, to prove it is not lava-only.
+  // Answered from a different drawer, so the drawers must keep working while it waits.
   await pick(p, 'water');
-  await pick(p, 'vent');
-  const water = await p.evaluate(() => M[ventFeed].n);
-  if (water !== 'Water') return `picking Water then Vent left the vent holding ${water}`;
+  const done = await p.evaluate(() => ({ feed: M[ventFeed].n, asking: ventAsking, isVent: tool === VENT,
+                                         ro: document.getElementById('ro').textContent }));
+  if (done.feed !== 'Water') return `answering with Water left the vent holding ${done.feed}`;
+  if (done.asking) return 'it was still asking after being answered';
+  if (!done.isVent) return 'answering left the tool as the material rather than the vent';
+  if (!/vent/i.test(done.ro) || !/water/i.test(done.ro)) return `the readout says "${done.ro}"`;
 
-  // The chip wears the colour of what it holds, so the tray answers the question too.
+  // A second tap backs out and leaves the payload alone.
+  await pick(p, 'vent');
+  await pick(p, 'vent');
+  const out = await p.evaluate(() => ({ feed: M[ventFeed].n, asking: ventAsking }));
+  if (out.asking) return 'tapping Vent twice did not back out';
+  if (out.feed !== 'Water') return `backing out changed the payload to ${out.feed}`;
+
+  // And picking a material when it is NOT asking just picks the material.
+  await pick(p, 'lava');
+  const plain = await p.evaluate(() => ({ feed: M[ventFeed].n, tool: M[tool] ? M[tool].n : String(tool) }));
+  if (plain.feed !== 'Water') return `picking Lava with nothing asking changed the payload to ${plain.feed}`;
+  if (plain.tool !== 'Lava') return `picking Lava selected ${plain.tool}`;
+
+  // The chip wears what it holds, so the tray answers the question too.
+  await p.locator('.tab', { hasText: /^hot$/i }).click();
   const sw = await p.evaluate(() => {
     const c = document.querySelector(`#mats .chip[data-t="${VENT}"] .sw`);
     return c ? getComputedStyle(c).backgroundColor : null;
   });
   const want = await p.evaluate(() => { const c = M[WATER].col; return `rgb(${c[0]}, ${c[1]}, ${c[2]})`; });
-  if (sw !== want) return `the vent chip's swatch is ${sw} while it is holding water (${want})`;
+  if (sw !== want) return `the vent chip's swatch is ${sw} while it holds water (${want})`;
   return null;
 });
 
 await check('a vent drawn on the stage actually pours', async p => {
-  await pick(p, 'lava');
   await pick(p, 'vent');
+  await pick(p, 'lava');
   await p.evaluate(() => { wipeAll(); const f = H-6;
     for (let x=0;x<W;x++) for (let y=f;y<H;y++) put(x,y,STONE); });
   const s = await stageBox(p);

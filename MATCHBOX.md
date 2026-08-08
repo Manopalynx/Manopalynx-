@@ -147,8 +147,9 @@ Measured, on a bar of each with the match held at one end:
 
 ## The room
 
-Six named settings on one chip in **Tools**, stepping round: Freezing, Cold, Normal,
-Warm, Oven, Furnace. It sets `AMBIENT`, which was already the number the whole box
+Tap **Room** in Tools and the six settings appear in the same row — Freezing, Cold,
+Normal, Warm, Oven, Furnace — with the one you are on ticked. Pick any of them in one
+tap and the row hands itself back. It sets `AMBIENT`, which was already the number the whole box
 relaxes toward — gas sheds heat to it every tick, and all four walls do too — so almost
 no new code, and the ignition table turns into a dial:
 
@@ -166,7 +167,17 @@ all 55 water cells to ice and burns nothing; Oven burns all 216 paper cells with
 touching them and boils the water away; Normal does neither.
 
 Named rather than numbered because 170°C is a fact and "straw and paper catch on their
-own" is the reason to turn it there. Turning it only moves the air — everything solid
+own" is the reason to turn it there.
+
+It stepped to the next setting on each tap to begin with, and that was reported as
+clunky, correctly: the settings are invisible until you have been through them all, and
+Furnace back to Normal is five taps one way and none the other. A picker costs nothing
+here because six chips is one row, which is the size of every drawer — it borrows the
+row the tray already keeps clear, so opening it moves nothing. Measured at 375, 393 and
+430px with the real Space Mono: one row, no clipping, and the stage, tray and strip stay
+exactly where they were.
+
+Turning it only moves the air — everything solid
 comes along by conduction at whatever its own `cond` and `cap` say, which is why a block
 of ice can hold out in an oven for a while.
 
@@ -177,11 +188,19 @@ freeze water — a worse fault than not having the setting.
 
 ## The vent
 
-A block that pours whatever you tell it to. Pick a material, then pick **Vent**: "Lava
-then Vent" is a volcano, "Water then Vent" is a spring. The chip wears the colour of what
-it is holding and the readout says it — `Vent · Lava` — because a mode you cannot see is
-a mode you get wrong. What it pours is stored per cell, so two vents in one scene can
-pour different things, and a save carries it.
+A block that pours whatever you tell it to. **Tap Vent, then tap a material**: Vent then
+Lava is a volcano, Vent then Water is a spring. Tap Vent again to back out without
+changing anything. The drawers keep working while it waits, so every material is
+reachable and there is no curated shortlist to argue about.
+
+The chip wears the colour of what it is holding and the readout says it — `Vent · Lava`,
+and `Vent — tap a material for it to pour` while it is waiting. What it pours is stored
+per cell, so two vents in one scene can pour different things, and a save carries it.
+
+The first version took the payload from whatever had been selected *before* it — "Lava,
+then Vent". Same two taps, but backwards from the way anybody says it, and nothing on
+screen told you the first tap had counted. A tool whose behaviour depends on what you
+touched before it is a mode, and an invisible one.
 
 One general block rather than a lava vent, because the general one cost the same to write
 and the spring and the gas leak came free.

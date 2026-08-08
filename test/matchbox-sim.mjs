@@ -943,9 +943,9 @@ await check(browser, 'a vent keeps pouring, and pours what it was given', () => 
   const pour = (mat, ticks) => {
     __wipe();
     const f = __floor(); const cx = (W/2)|0;
-    setTool(mat); setTool(VENT);               // pick the material, then the vent
+    setTool(VENT); setTool(mat);               // tap the vent, then answer with a material
     put(cx, f-1, VENT);
-    if (feed[idx(cx, f-1)] !== mat) bad.push(`a vent placed after picking ${M[mat].n} holds ${M[feed[idx(cx,f-1)]].n}`);
+    if (feed[idx(cx, f-1)] !== mat) bad.push(`a vent told to pour ${M[mat].n} holds ${M[feed[idx(cx,f-1)]].n}`);
     for (let k=0;k<ticks;k++) __step(1);
     return __count(mat);
   };
@@ -958,7 +958,7 @@ await check(browser, 'a vent keeps pouring, and pours what it was given', () => 
   // ...and it must not be a tap that cannot be turned off. Sealed in, it stops.
   __wipe();
   const f = __floor(); const cx = (W/2)|0;
-  setTool(LAVA); setTool(VENT);
+  setTool(VENT); setTool(LAVA);
   put(cx, f-3, VENT);
   for (const [dx,dy] of [[0,-1],[-1,0],[1,0],[0,1]]) put(cx+dx, f-3+dy, STONE);
   for (let k=0;k<1200;k++) __step(1);
@@ -978,7 +978,7 @@ await check(browser, 'a vent under a shaft builds a volcano out of its own lava'
       if (inb(cx+4+d-t, f-1-d)) put(cx+4+d-t, f-1-d, STONE);
     }
   }
-  setTool(LAVA); setTool(VENT);
+  setTool(VENT); setTool(LAVA);
   __slab(cx-1, f-1, cx+1, f-1, VENT);
   const stone0 = __count(STONE);
   for (let k=0;k<3000;k++) __step(1);
