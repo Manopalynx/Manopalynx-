@@ -314,7 +314,7 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
       FIRE=16, SMOKE=17, STEAM=18, EMBER=19, ASH=20,
       LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24,
       THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31, BUG=32,
-      MOTH=33;
+      MOTH=33, FISH=34;
 
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
@@ -543,6 +543,19 @@ M[BUG]     ={n:'Bug',      ph:3, col:[176, 92,132], ig:190, fuel:20, out:1.2, co
 M[MOTH]    ={n:'Moth',     ph:3, col:[214,198,166], ig:120, fuel:8, out:0.1, cond:.28, cap:.7,
              char:2, ash:ASH, dens:.4, tough:.5, sparse:.10,
              meets:[{with:WATER, become:E, tale:'A moth cannot swim either'}]};
+/* The third one, and the first that lives *inside* something rather than on top of it.
+   Water stops being a way to put fires out and becomes a place.
+
+   It does not burn — it is wet — so it has no `ig`, and that leaves `life` free to count
+   the only clock a fish has: how long it has been out of water. Which is the same thing
+   `life` means everywhere else in this file, a cell counting how long it has been in the
+   predicament it is in.
+
+   Everything else about it falls out of the box rather than being written for it. Boil
+   the tank and the water leaves; freeze it and the water becomes ice; either way there is
+   nothing left to breathe. The Room dial is what a fish is really for. */
+M[FISH]    ={n:'Fish',     ph:3, col:[104,168,176], ig:9e9, cond:.42, cap:3.0, dens:1.0,
+             tough:.5, sparse:.14};
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
              leak:.02, peak:1500};
 
@@ -560,7 +573,7 @@ const GROUPS = [
   { name:'Wet',   items:[WATER, OIL, ICE, ACID] },
   { name:'Solid', items:[STONE, STEEL, SAND, WAX, GLASS, OBSIDIAN] },
   { name:'Hot',   items:[LAVA, MOLTEN, EMBER, THERMITE, MAGNES, GAS, VENT] },
-  { name:'Life',  items:[BUG, MOTH] },
+  { name:'Life',  items:[BUG, MOTH, FISH] },
   { name:'Scene', items:'scenes' },
   { name:'Tools', items:'tools' },
 ];
@@ -598,7 +611,7 @@ SAVE_KEY[LAVA]='lava';        SAVE_KEY[GLASS]='glass';      SAVE_KEY[MOLTEN]='st
 SAVE_KEY[OBSIDIAN]='obsidian';SAVE_KEY[THERMITE]='thermite';SAVE_KEY[MAGNES]='magnesium';
 SAVE_KEY[RUBBER]='rubber';    SAVE_KEY[MRUBBER]='rubber-molten';
 SAVE_KEY[ACID]='acid';        SAVE_KEY[GAS]='gas';           SAVE_KEY[VENT]='vent';
-SAVE_KEY[BUG]='bug';          SAVE_KEY[MOTH]='moth';
+SAVE_KEY[BUG]='bug';          SAVE_KEY[MOTH]='moth';         SAVE_KEY[FISH]='fish';
 
 const TYPE_OF_KEY = new Map(SAVE_KEY.map((k,t) => [k,t]));
 
@@ -1507,12 +1520,60 @@ function moveMoth(i, x, y){
   }
 }
 
+const FISH_STEP = 5;     // ticks a fish takes between swimming one cell
+const FISH_AIR  = 200;   // ...and how long it lasts out of water. Three and a bit seconds,
+                         // which is long enough to see it flop and short enough to matter.
+const FISH_HOT  = 40;    // water this warm kills it, well before the water itself boils.
+                         // Without it the Warm setting on the room dial is a fish's problem
+                         // only at 100 degrees, and nothing between here and there means
+                         // anything at all.
+
+function moveFish(i, x, y){
+  // In water, or not, which is the only question a fish has. Diagonals count: a fish in
+  // the corner of a tank is still in the tank.
+  let wet = 0, pick = -1, n = 0;
+  for (const [dx,dy] of MOTH_DIRS){
+    const xx = x+dx, yy = y+dy;
+    if (!inb(xx,yy)) continue;
+    if (type[idx(xx,yy)] !== WATER) continue;
+    wet++;
+    if (Math.random() < 1/++n) pick = idx(xx,yy);   // one of them, uniformly
+  }
+
+  if (!wet){
+    // Out of water. It falls if there is anywhere to fall to, and it is on a clock.
+    if (walkable(x, y+1)){ life[i] += 1; swap(i, idx(x, y+1)); return; }
+    if (++life[i] > FISH_AIR) become(x, y, E);
+    return;
+  }
+
+  life[i] = 0;
+  // Water it can survive. Hot water is still water, and is still fatal.
+  if (temp[i] > FISH_HOT){ become(x, y, E); return; }
+
+  if (Math.random() * FISH_STEP >= 1) return;
+  /* Swimming is a swap with the water, not a move into a hole in it — which is the whole
+     of what this creature adds. A tank is full; there is nothing to move into. */
+  let d = (Math.abs(way[i]) || (1 + ((Math.random()*8)|0))) - 1;
+  if (Math.random() < .18) d = (d + (Math.random() < .5 ? 1 : 7)) % 8;
+  for (let k=0;k<8;k++){
+    const [dx,dy] = MOTH_DIRS[(d + k) % 8];
+    const xx = x+dx, yy = y+dy;
+    if (inb(xx,yy) && type[idx(xx,yy)] === WATER){
+      way[i] = ((d + k) % 8) + 1;
+      swap(i, idx(xx,yy));
+      return;
+    }
+  }
+  if (pick >= 0) swap(i, pick);
+}
+
 function moveLife(){
   const alive = [];
   let anyMoth = false;
   for (let i=0;i<type.length;i++){
     const t = type[i];
-    if (t === BUG || t === MOTH){ alive.push(i); if (t === MOTH) anyMoth = true; }
+    if (t === BUG || t === MOTH || t === FISH){ alive.push(i); if (t === MOTH) anyMoth = true; }
   }
   if (!alive.length) return;
   // One pass for all of them, and only when there is something that cares.
@@ -1520,11 +1581,13 @@ function moveLife(){
 
   for (const i of alive){
     const kind = type[i];
-    if (kind !== BUG && kind !== MOTH) continue;   // burned, eaten or drowned since the list
+    // burned, eaten, drowned or dried out since the list was taken
+    if (kind !== BUG && kind !== MOTH && kind !== FISH) continue;
     if (kind === MOTH){
       if (Math.random() * MOTH_STEP < 1) moveMoth(i, i % W, (i / W) | 0);
       continue;
     }
+    if (kind === FISH){ moveFish(i, i % W, (i / W) | 0); continue; }
     const x = i % W, y = (i / W) | 0;
 
     // Falls, because nothing else will do it: a bug is a static solid so that it does not

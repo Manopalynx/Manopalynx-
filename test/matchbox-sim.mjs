@@ -1428,6 +1428,97 @@ await check(browser, 'the box kills moths with what it already had', () => {
 // themselves are a full pass over the grid. Both are bounded — one pass however many
 // moths there are, and the beacons are capped by dicing the box into blocks — but bounded
 // is a claim and this is the measurement.
+/* A fish lives inside a material rather than on top of one, which is the whole of what it
+   adds — and the boundary is where that goes wrong, so the check is about the boundary. */
+await check(browser, 'fish stay in the water, and spread through it', () => {
+  __wipe(); const f = __floor();
+  const cx = (W/2)|0;
+  __slab(cx-30, f-26, cx-30, f-1, GLASS);
+  __slab(cx+29, f-26, cx+29, f-1, GLASS);
+  __slab(cx-29, f-24, cx+28, f-1, WATER);
+  for (let k=0;k<12;k++) put(cx-24+k*4, f-12, FISH);
+  const n0 = __count(FISH);
+  const spread = () => {
+    const o=[]; for (let i=0;i<type.length;i++) if (type[i]===FISH) o.push([i%W,(i/W)|0]);
+    if (!o.length) return { n:0, tall:0 };
+    const ys = o.map(p=>p[1]);
+    return { n:o.length, tall: Math.max(...ys)-Math.min(...ys)+1 };
+  };
+  if (spread().tall !== 1) return 'they did not start in a line, so spreading proves nothing';
+  for (let k=0;k<2400;k++) __step(1);
+  const now = spread();
+  if (now.n !== n0) return `${n0} fish in a sealed tank became ${now.n}`;
+  if (now.tall < 8) return `they spread over ${now.tall} rows of a 24-row tank — they are not using it`;
+  // ...and not one of them out in the air. A fish that can leave the water is not a fish.
+  let dry = 0;
+  for (let i=0;i<type.length;i++){
+    if (type[i] !== FISH) continue;
+    const x = i%W, y = (i/W)|0;
+    let wet = 0;
+    for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]])
+      if (inb(x+dx,y+dy) && type[idx(x+dx,y+dy)]===WATER) wet++;
+    if (!wet) dry++;
+  }
+  if (dry) return `${dry} fish ended up with no water touching them inside a full tank`;
+  return null;
+});
+
+await check(browser, 'a fish out of water dies, and one in it does not', () => {
+  const bad = [];
+  __wipe(); const f = __floor();
+  const cx = (W/2)|0;
+  put(cx, f-1, FISH);
+  let died = -1;
+  for (let k=1;k<=900;k++){ __step(1); if (!__count(FISH)){ died = k; break; } }
+  if (died < 0) bad.push('a fish left on dry stone was still alive after fifteen seconds');
+  else if (died < 60) bad.push(`it died after ${died} ticks — that is not flopping, that is vanishing`);
+
+  __wipe(); __floor();
+  __slab(cx-10, f-10, cx+10, f-1, WATER);
+  put(cx, f-5, FISH);
+  for (let k=0;k<900;k++) __step(1);
+  if (!__count(FISH)) bad.push('a fish in a pool of water died anyway');
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* The room dial is what a fish is really for, and neither of these needed a rule written
+   for it. Hot water kills before it boils; a frozen tank kills because there is no water
+   left to be in, which is the same clock as being dropped on the floor. */
+await check(browser, 'the room can kill a tank of fish, hot or cold', () => {
+  const bad = [];
+  const tank = () => {
+    __wipe(); const f = __floor();
+    const cx = (W/2)|0;
+    __slab(cx-11, f-12, cx-11, f-1, GLASS);
+    __slab(cx+10, f-12, cx+10, f-1, GLASS);
+    __slab(cx-10, f-10, cx+9, f-1, WATER);
+    for (let k=0;k<8;k++) put(cx-8+k*2, f-5, FISH);
+    return __count(FISH);
+  };
+  const setRoomTo = (name) => {
+    const i = ROOMS.findIndex(r => r.n === name);
+    roomAt = i; AMBIENT = ROOMS[i].t;
+    for (let k=0;k<type.length;k++) if (type[k]===E) temp[k] = AMBIENT;
+  };
+
+  setRoomTo('Normal');
+  const n0 = tank();
+  for (let k=0;k<3600;k++) __step(1);
+  if (__count(FISH) !== n0) bad.push(`${n0-__count(FISH)} of ${n0} fish died in a tank at room temperature`);
+
+  setRoomTo('Normal'); tank(); setRoomTo('Oven');
+  for (let k=0;k<3600;k++) __step(1);
+  if (__count(FISH)) bad.push(`${__count(FISH)} fish survived an oven`);
+
+  setRoomTo('Normal'); tank(); setRoomTo('Freezing');
+  for (let k=0;k<6000;k++) __step(1);
+  if (__count(FISH)) bad.push(`${__count(FISH)} fish survived a tank that froze solid`);
+  if (__count(WATER)) bad.push(`the tank did not actually freeze — ${__count(WATER)} cells of water left`);
+
+  setRoomTo('Normal');
+  return bad.length ? bad.join('; ') : null;
+});
+
 await check(browser, 'a box full of living things still costs less than a frame', () => {
   const bad = [];
   const bench = (t, n) => {
@@ -1444,6 +1535,15 @@ await check(browser, 'a box full of living things still costs less than a frame'
   if (bugs > 1) bad.push(`${bugs.toFixed(2)}ms a tick for 500 bugs`);
   const moths = bench(MOTH, 500);
   if (moths > 2) bad.push(`${moths.toFixed(2)}ms a tick for 500 moths with a fire lit`);
+  // Fish need water to be in, so they get their own scene rather than the shared one.
+  __wipe(); const f2 = __floor();
+  __slab(4, f2-40, W-5, f2-1, WATER);
+  for (let k=0;k<500;k++) put(6+(k%120), f2-30-((k/120)|0), FISH);
+  for (let k=0;k<60;k++) __step(1);
+  const t1 = performance.now();
+  for (let k=0;k<200;k++) moveLife();
+  const fish = (performance.now() - t1) / 200;
+  if (fish > 1) bad.push(`${fish.toFixed(2)}ms a tick for ${__count(FISH)} fish`);
   return bad.length ? bad.join('; ') : null;
 });
 

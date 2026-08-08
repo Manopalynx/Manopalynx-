@@ -45,7 +45,7 @@ fetched fresh whenever there is a signal — no stale-build trap, and nothing to
 
 ## What is in the box
 
-Twenty-three materials in the tray and six more the simulation makes for itself: fire,
+Twenty-four materials in the tray and six more the simulation makes for itself: fire,
 smoke, steam, embers, ash and molten wax. Every material is one row of the `M` table
 and nothing else in the file knows any of them by name.
 
@@ -389,6 +389,28 @@ rather than commuting across the box. The check counts changes of mind rather th
 distance, because distance was never the problem — remove the turn and it reports "it
 changed direction 1 times in twenty seconds — that is a patrol, not a wander".
 
+### The fish, which lives inside something
+
+The first two live *on* the world. A **Fish** lives *in* it: it swims by swapping with the
+water rather than moving into a gap in it, because a tank is full and there is nothing to
+move into. Water stops being a way to put fires out and becomes a place.
+
+Measured: twelve fish started in a line across a 58×24 tank spread over the whole of it
+inside fifteen seconds, all twelve still there after a minute, and not one of them ever
+ended up with no water touching it. On dry stone a fish flops and is gone in **3.4
+seconds**.
+
+**Almost none of it is written for it.** It does not burn, so it has no `ig`, which leaves
+`life` free to count the only clock a fish has — how long it has been out of water, which is
+the same thing `life` means everywhere else. Boil the tank and the water leaves; freeze it
+and the water becomes ice; either way there is nothing left to be in, and the same clock
+runs out. A 20×10 tank freezes solid and the fish are gone by 60 seconds, a 60×24 by 140 —
+big tanks take longer, which is the model rather than a rule.
+
+The one figure that *is* written for it is a heat tolerance: water at 40°C kills, well
+before it boils at 100. Without it the Warm setting on the room dial means nothing to a
+fish, and nothing between Normal and boiling does either.
+
 ### The one that got past everything
 
 Reported from the phone with two screenshots thirty seconds apart and nothing changed:
@@ -507,6 +529,8 @@ failing before the rework — see *What changed* below.
   dry, 2600°C wet.
 - **An acid tank.** Acid eats through most things and wears out doing it — a dozen
   cells per drop. Glass and obsidian are the two it cannot touch.
+- **A fish tank, and then the room dial.** Glass walls, water, fish. Then turn the room to
+  Oven or Freezing and watch what happens to something that can only live in the middle.
 
 Six of them are built for you in the **Scene** drawer — Candle, Fuse, Cut, Lava, Acid,
 Gas. None arrives lit, because the match is the whole interaction and a scene that turns
@@ -623,7 +647,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 57 checks — the simulation
+node test/matchbox-sim.mjs     # 60 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
