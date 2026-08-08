@@ -522,7 +522,7 @@ M[VENT]    ={n:'Vent',     ph:3, col:[ 78, 74, 84], ig:9e9, cond:.20, cap:2.4, d
 
    It cannot swim. That is one row, and it costs nothing. */
 M[BUG]     ={n:'Bug',      ph:3, col:[176, 92,132], ig:190, fuel:20, out:1.2, cond:.30, cap:1.0,
-             char:4, ash:ASH, dens:1.1, tough:.6,
+             char:4, ash:ASH, dens:1.1, tough:.6, sparse:.16,
              meets:[{with:WATER, become:E, tale:'A bug cannot swim'}]};
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
              leak:.02, peak:1500};
@@ -1298,7 +1298,23 @@ const BUG_IDLE   = .06;  // ...and sometimes it just stops for a moment, which r
                          // in a way that constant motion does not.
 
 // Something to stand on: anything that is not air and not a gas.
-const footing = (x,y) => inb(x,y) && type[idx(x,y)] !== E && M[type[idx(x,y)]].ph !== 0;
+/* Something to stand on, and **the bottom of the box counts**.
+
+   It did not, and that is the whole of why bugs tapped into an empty box sat there for
+   thirty seconds without moving. A bug resting on the last row asks what is under it, the
+   answer is off the grid, `inb` says no, and a step needs footing ahead-and-below — so it
+   could never take one. Every check written for this stood its bugs on a stone floor six
+   rows up, where there is always a real cell underneath, so not one of them went near the
+   case you get by clearing the box and tapping.
+
+   Things fall to the bottom of this box and stop, which is the floor doing its job. A
+   creature standing on that floor is standing on something. */
+const footing = (x,y) => {
+  if (x < 0 || x >= W || y < 0) return false;
+  if (y >= H) return true;                          // the floor of the box
+  const t = type[idx(x,y)];
+  return t !== E && M[t].ph !== 0;
+};
 const walkable = (x,y) => inb(x,y) && (type[idx(x,y)] === E || M[type[idx(x,y)]].ph === 0);
 
 function moveLife(){
@@ -2508,7 +2524,14 @@ function paintCell(x, y, solid){
     // it: measured, a "solid" rectangle came out 1986 cells of a 2156-cell box, and
     // a wall with eight per cent holes is not a wall — water runs through it, and
     // the next shape you draw fills the gaps with whatever it is made of.
-    if (solid || Math.random() < .92) put(x,y,tool);
+    /* ...except for things that are alive, which a material's own `sparse` asks for. A
+       tap with the brush covers about thirty cells, and thirty bugs in a heap is not
+       thirty bugs — it is one lump, of which only the edge can move, and it reads exactly
+       like a creature that does not work. A scatter is also simply what a handful of
+       insects looks like. `solid` still overrides it: a Box or a Line is a deliberate
+       edge, and asking for a rectangle of bugs should give a rectangle of bugs. */
+    const density = !solid && M[tool] && M[tool].sparse !== undefined ? M[tool].sparse : .92;
+    if (solid || Math.random() < density) put(x,y,tool);
   }
 }
 
