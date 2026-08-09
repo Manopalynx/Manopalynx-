@@ -962,8 +962,10 @@ await check('the finds panel can be closed on a screen too small to show it all'
 
 console.log('\n— the first thing that is alive —');
 
-await check('a bug drawn on the stage walks about on its own', async p => {
-  await pick(p, 'bug');
+await check('a worm drawn on the stage walks about on its own', async p => {
+  // The tray label, not the code name: this creature is `BUG` in the source and Worm on the
+  // chip, and a check that hunts by label has to follow the label.
+  await pick(p, 'worm');
   // An empty box and a tap, which is what anybody does first — and deliberately without a
   // stone floor laid down for them. Bugs landing on the last row of the grid could not
   // move at all until the bottom of the box counted as something to stand on, and this
@@ -972,7 +974,7 @@ await check('a bug drawn on the stage walks about on its own', async p => {
   const s = await stageBox(p);
   await p.mouse.click(s.x + s.width*0.5, s.y + s.height*0.9);
   const placed = await p.evaluate(() => __count(BUG));
-  if (!placed) return 'the tap put no bugs in the box';
+  if (!placed) return 'the tap put no worms in the box';
 
   // How far apart they are, not where the middle of them is. A tap puts down a clump and
   // they wander off both ways, so the mean sits almost exactly still while every one of
@@ -986,8 +988,8 @@ await check('a bug drawn on the stage walks about on its own', async p => {
   const first = await span();
   await p.waitForTimeout(4000);
   const later = await span();
-  if (await p.evaluate(() => __count(BUG)) !== placed) return 'bugs appeared or vanished while nothing was happening';
-  if (later <= first + 6) return `${placed} bugs spanned ${first} cells and now span ${later} — nothing is walking`;
+  if (await p.evaluate(() => __count(BUG)) !== placed) return 'worms appeared or vanished while nothing was happening';
+  if (later <= first + 6) return `${placed} worms spanned ${first} cells and now span ${later} — nothing is walking`;
   return null;
 });
 

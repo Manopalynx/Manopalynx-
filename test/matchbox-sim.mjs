@@ -1885,11 +1885,11 @@ await check(browser, 'a grub that has eaten enough becomes a pupa, and a pupa be
 /* Every fire in this box left a floor of ash and embers that nothing ever touched again.
    Measured before this existed: a scene with a log, a pond and one tap of each creature
    stopped changing after sixty seconds, and the ash from the first minute was still sitting
-   there at three. A woodlouse eats it.
+   there at three. An ash bug eats it.
 
    The claim worth checking is not that it eats ash — that is one line — but that it eats
    *what fire leaves* and nothing else, and that the list is derived rather than typed. */
-await check(browser, 'a woodlouse clears what a fire left, and only that', () => {
+await check(browser, 'an ash bug clears what a fire left, and only that', () => {
   const bad = [];
   const cx = (W/2)|0;
 
@@ -1904,43 +1904,87 @@ await check(browser, 'a woodlouse clears what a fire left, and only that', () =>
   __wipe(); let f = __floor();
   __slab(cx-25, f-6, cx+25, f-1, ASH);
   const a0 = __count(ASH);
-  for (let k=0;k<4;k++) put(cx-15+k*6, f-7, LOUSE);
+  for (let k=0;k<4;k++) put(cx-15+k*6, f-7, ASHBUG);
   for (let k=0;k<3600;k++) __step(1);
-  if (__count(ASH) > a0 * 0.15) bad.push(`four woodlice left ${__count(ASH)} of ${a0} cells of ash after a minute`);
-  if (__count(LOUSE) !== 4) bad.push(`four woodlice on cold ash became ${__count(LOUSE)}`);
+  if (__count(ASH) > a0 * 0.15) bad.push(`four ash bugs left ${__count(ASH)} of ${a0} cells of ash after a minute`);
+  if (__count(ASHBUG) !== 4) bad.push(`four ash bugs on cold ash became ${__count(ASHBUG)}`);
 
   // ...and everything that is not leftovers survives them.
   for (const t of [STONE, WOOD, SAND, COAL, STRAW]){
     __wipe(); f = __floor();
     __slab(cx-14, f-12, cx+14, f-1, t);
-    for (let k=0;k<6;k++) put(cx-8+k*3, f-13, LOUSE);
+    for (let k=0;k<6;k++) put(cx-8+k*3, f-13, ASHBUG);
     const n0 = __count(t);
     for (let k=0;k<3000;k++) __step(1);
-    if (__count(t) < n0) bad.push(`woodlice ate ${n0 - __count(t)} cells of ${M[t].n}`);
+    if (__count(t) < n0) bad.push(`ash bugs ate ${n0 - __count(t)} cells of ${M[t].n}`);
   }
 
   /* The whole of the design, and none of it is written for it: an ember is hot, so a
-     woodlouse walking into a fresh burn panics and leaves on the bug's own machinery, and
+     ash bug walking into a fresh burn panics and leaves on the bug's own machinery, and
      burns if it stays. It can only clear a fire once the fire has gone out. Two scenes, the
-     same in every way but when the woodlice arrive. */
+     same in every way but when the ash bugs arrive. */
   const sendIn = (wait) => {
     __wipe(); const ff = __floor();
     __slab(cx-20, ff-24, cx+20, ff-1, WOOD);
     __hold(cx, ff-25, 2, 250);
     for (let k=0;k<wait;k++) __step(1);
     const debris = __count(ASH) + __count(EMBER), hot = Math.round(__maxT());
-    for (let k=0;k<8;k++) put(cx-10+k*3, ff-26, LOUSE);
+    for (let k=0;k<8;k++) put(cx-10+k*3, ff-26, ASHBUG);
     for (let k=0;k<3600;k++) __step(1);
-    return { hot, debris, lice: __count(LOUSE), after: __count(ASH) + __count(EMBER) };
+    return { hot, debris, lice: __count(ASHBUG), after: __count(ASH) + __count(EMBER) };
   };
   const early = sendIn(1800), late = sendIn(12000);
-  if (early.lice > 2) bad.push(`${early.lice} of 8 woodlice walked into a burn at ${early.hot}°C and lived`);
-  if (early.after < early.debris) bad.push('woodlice cleared a fire that was still going');
+  if (early.lice > 2) bad.push(`${early.lice} of 8 ash bugs walked into a burn at ${early.hot}°C and lived`);
+  if (early.after < early.debris) bad.push('ash bugs cleared a fire that was still going');
   if (late.lice < 6) bad.push(`only ${late.lice} of 8 survived a burn that had cooled to ${late.hot}°C`);
   if (late.after > late.debris * 0.4)
     bad.push(`they left ${late.after} of ${late.debris} cells of a cold burn after a minute`);
 
-  if (![...finds].some(k => k === LOUSE + ':graze')) bad.push('clearing up did not register as a discovery');
+  if (![...finds].some(k => k === ASHBUG + ':graze')) bad.push('clearing up did not register as a discovery');
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* Eating debris and *looking* for debris are two different verbs, and for a day only one of
+   them was written: reported from the phone as "they don't seem to seek the ash, or look
+   like they do at least". They walked a bug's walk and ate whatever they bumped into.
+
+   Both sides, and against a bug in the identical scene. One side alone passes on a creature
+   that simply drifts one way — which is exactly what the first fix did, and it measured as
+   working because the pile happened to be on the side it drifted toward. */
+await check(browser, 'an ash bug goes to the ash rather than stumbling into it', () => {
+  const bad = [];
+  const mid = (t) => { let s=0,n=0; for (let i=0;i<type.length;i++) if (type[i]===t){ s+=i%W; n++; }
+                       return n ? s/n : null; };
+  const towards = (t, where) => {
+    __wipe(); const f = __floor();
+    if (where < 0) __slab(4, f-6, 28, f-1, ASH);
+    else           __slab(W-29, f-6, W-5, f-1, ASH);
+    for (let k=0;k<8;k++) put(((W/2)|0)-8+k*2, f-1, t);
+    const start = mid(t);
+    for (let k=0;k<2400;k++) __step(1);
+    const end = mid(t);
+    if (end === null) return null;
+    return { moved: end - start, left: __count(t) };
+  };
+  const gain = {};
+  for (const t of [ASHBUG, BUG]){
+    let sum = 0;
+    for (const where of [-1, 1]){
+      const r = towards(t, where);
+      if (!r){ bad.push(`the ${M[t].n.toLowerCase()}s all died on the way`); sum = null; break; }
+      const toward = r.moved * where;                  // + is toward the pile, whichever side
+      if (t === ASHBUG && toward < 15)
+        bad.push(`ash on the ${where < 0 ? 'left' : 'right'} and the ash bugs moved ${Math.round(toward)} cells toward it — they are not looking for it`);
+      sum += toward;
+    }
+    if (sum !== null) gain[t] = sum / 2;
+  }
+  /* Averaging the two sides is the point of running both. A random walk drifts, and one run
+     of a bug drifted 35 cells — enough to beat the ash bug's 31 on that side and fail a
+     comparison of magnitudes. Signed toward-the-pile and averaged, the drift cancels and
+     only the seeking survives: measured 39 for an ash bug against 2 for a bug. */
+  if (gain[ASHBUG] !== undefined && gain[BUG] !== undefined && gain[ASHBUG] < gain[BUG] + 12)
+    bad.push(`ash bugs closed ${Math.round(gain[ASHBUG])} cells on the ash and bugs closed ${Math.round(gain[BUG])} — that is the same walk`);
   return bad.length ? bad.join('; ') : null;
 });
 
@@ -1983,7 +2027,7 @@ console.log('\n— scenes, and getting them back —');
 
    So the keys are their own table, and this is what holds them to being a file format:
    complete, unique, and free to disagree with whatever the tray calls things. */
-await check(browser, 'every material has a save key and no two share one', () => {
+await check(browser, 'every material has a save key, no two share one, and a rename does not break a save', () => {
   const bad = [], seen = new Map();
   for (let t=0; t<M.length; t++){
     if (!M[t]) continue;
@@ -1993,6 +2037,28 @@ await check(browser, 'every material has a save key and no two share one', () =>
     seen.set(k, M[t].n);
   }
   if (TYPE_OF_KEY.size !== seen.size) bad.push(`the reverse lookup has ${TYPE_OF_KEY.size} entries for ${seen.size} keys`);
+
+  /* A key is allowed to disagree with the label — that is the entire reason this table is
+     separate — but a *save* must still round-trip after a rename. The tray called one
+     creature a Woodlouse for an afternoon and an Ash bug after it, and the original creature
+     is now a Worm; a scene written before either would be unreadable if the keys had
+     followed the labels. So: write one cell of everything, read it back, and compare types
+     rather than names. */
+  __wipe();
+  const all = [];
+  for (let t=1; t<M.length; t++) if (M[t] && SAVE_KEY[t]) all.push(t);
+  const spot = (k) => idx(2 + (k % (W-4)), 2 + ((k / (W-4)) | 0));
+  all.forEach((t, k) => { const i = spot(k); put(i % W, (i / W) | 0, t); });
+  const before = all.map((t, k) => type[spot(k)]);
+  const text = JSON.stringify(encodeScene());
+  __wipe();
+  const missing = decodeScene(JSON.parse(text));
+  if (missing.length) bad.push(`${missing.join(', ')} could not be placed on the way back`);
+  all.forEach((t, k) => {
+    const was = before[k], now = type[spot(k)];
+    if (was !== now)
+      bad.push(`${M[was].n} saved as "${SAVE_KEY[was]}" and came back as ${M[now] ? M[now].n : now}`);
+  });
   return bad.length ? bad.join('; ') : null;
 });
 

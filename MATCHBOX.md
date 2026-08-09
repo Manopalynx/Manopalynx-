@@ -135,9 +135,10 @@ A material is described by a handful of numbers. The ones that matter:
 | `peak` | as hot as burning alone can drive it, where that differs |
 | `span` `leak` | how a gas stops being there: a clock, or only by escaping |
 | `sparse` | how thinly the brush lays it down |
+| `n` | what the tray calls it, which is deliberately not what a save calls it |
 | `alive` | this is a creature — keeps it off a grub's menu, whether or not a brush made it |
 | `chew` `pupa` | ticks a grub takes per cell, and how many cells before it seals up |
-| `graze` | ticks a woodlouse takes per mouthful of what fire left behind |
+| `graze` | ticks an ash bug takes per mouthful of what fire left behind |
 | `hatch` `becomes` | how long a life stage lasts, and what it turns into |
 | `drown` `air` | how many ticks a living thing lasts in the wrong one of the two |
 | `feed` `way` `breath` (per cell) | what a vent pours, which way a bug is walking, and how long it has been somewhere it cannot survive |
@@ -553,7 +554,7 @@ grubs on a bare floor stayed six grubs through a minute of it — pupation is a 
 tunnelling, not a timer, and the check states that separately because a timer would look
 identical for the first half-minute.
 
-### The woodlouse, which is interested in what has already happened
+### The ash bug, which is interested in what has already happened
 
 Pupation cost the box something, and it was spotted from the phone rather than here: with
 the grub growing up and flying off, **nothing lives in solid material any more.** The
@@ -571,7 +572,7 @@ Bugs are still walking at three minutes and fish still swimming; the wood is fro
 minute on. And the same is true of every fire ever lit in this box — the ash and the embers
 sit there for as long as the tab is open, and nothing has ever touched them.
 
-A **Woodlouse** eats them. It walks like a bug and grazes what it passes, and what counts as
+An **Ash bug** eats them. It walks like a worm and grazes what it passes, and what counts as
 food is derived rather than listed:
 
 ```js
@@ -584,23 +585,23 @@ for (let t=0; t<M.length; t++){
 
 Anything some material burns down to. The filter is the half worth reading: three `ash`
 targets are not things to be eaten — `E`, which is nothing at all; `SMOKE`, which is a gas
-and already gone; and `MOLTEN`, because thermite burns down to molten steel and a woodlouse
+and already gone; and `MOLTEN`, because thermite burns down to molten steel and an ash bug
 grazing on that is not the picture. Gas and liquid are the test, so the next fuel that burns
 down to a liquid is excluded without anybody remembering to.
 
 **Grazing deliberately does not stop it walking**, which is the one place it differs from
-the grub. A grub at a face of food stays put and tunnels. A woodlouse doing the same would
+the grub. A grub at a face of food stays put and tunnels. An ash bug doing the same would
 sit in an ash field clearing a circle around itself, which is not foraging. It eats what it
 is passing and keeps going. Measured, four of them — about one tap — take a 306-cell ash
 field to 3 in a minute; one takes it to 148.
 
 #### Its one constraint is inherited, which is why it is the right one
 
-**An ember is hot.** A woodlouse that walks into a fresh burn heats up, panics and leaves on
+**An ember is hot.** An ash bug that walks into a fresh burn heats up, panics and leaves on
 exactly the machinery the bug already has, and burns if it stays. So it can only clear a
 fire once the fire has gone out — and not one line of that is written for it.
 
-Eight woodlice released into the same burnt log at different times:
+Eight ash bugs released into the same burnt log at different times:
 
 | released | box still at | survivors | debris after another minute |
 |---|---|---|---|
@@ -617,6 +618,68 @@ would have made the pond matter for something other than putting fires out. It i
 wrong, and obviously so once stated: **fire dries everything**, so a creature that needs
 water could not live in the one place it exists to clean up. The constraint would have
 fought the creature. The heat one costs nothing and says the same thing better.
+
+#### It did not look for the ash, it walked into it
+
+Reported the next morning: *"they don't seem to seek the ash, or look like they do at
+least."* They did not. **Eating debris and *looking* for debris are two different verbs, and
+only one of them had been written** — the rest was a worm's random walk with a mouth on it.
+
+An ash bug walks a floor, so the question is only ever left or right, which makes this one
+number per column rather than a beacon per block. One pass fills the tally and every ash bug
+in the box reads it — the same bargain the moths get, one grid scan a tick however many
+there are, and none at all when there are none.
+
+**The first attempt measured as working and was not.** It counted debris within reach of the
+creature itself, which cost the same per creature and told you almost nothing: at a reach of
+16 on a box 131 cells wide, an ash bug released across the room from a pile could not smell
+it. Eight of them, with the ash on the *left*, drifted **+10 to the right**. It only looked
+right when the pile happened to be on the side the walk drifted toward, which is why the
+check now runs both sides.
+
+| ash on the | before | after |
+|---|---|---|
+| left | **+10**, away from it | **−46** |
+| right | +33 | +33 |
+
+Range was the whole fault; the count was never the point. It is 60 columns now — the same
+number as the moth's sight, and for the same reason: far enough to read as purpose, short
+enough that it still has to find the pile rather than being issued with its position.
+
+**The check averages the two sides**, and that is not tidiness. A random walk drifts, and one
+run of a worm drifted 35 cells — enough to beat the ash bug's 31 on that side and fail a
+comparison of magnitudes. Signed toward-the-pile and averaged over both sides, the drift
+cancels and only the seeking survives: **39 cells for an ash bug against 2 for a worm.**
+
+And it dawdles where the food is: `ASHBUG_FEED` 22 ticks between steps with something under
+its nose, against a worm's 7. A grub at a face of food stops entirely and tunnels; an ash bug
+slows down and keeps going, which is the difference between mining and foraging.
+
+### Two renames, and why the save keys did not follow
+
+The tray called this creature a **Woodlouse** for an afternoon. It was the wrong name and
+wrong in the more confusing direction: **it does not eat wood — the grub does.** A woodlouse
+that never touches wood, standing next to a grub that eats nothing else, is the pair the
+wrong way round. It is an **Ash bug** now, which says what it does without needing the
+zoology. And the original creature — `BUG` in the source since it was the only one — is a
+**Worm** on the tray.
+
+**The save keys did not change, and that is the whole reason they exist.**
+
+```js
+SAVE_KEY[ASHBUG]='woodlouse';
+```
+
+A scene saved before either rename still loads, because the key was never the label. Changing
+it here to match would have broken exactly the saves this table exists to protect. The check
+now writes one cell of every material, round-trips it through `JSON`, and compares **types
+rather than names** — so a future rename is free, and a key that quietly follows a label is
+caught.
+
+The code still says `BUG` where the tray says Worm. That is deliberate rather than pending:
+the creature walks on top of things and climbs, which is more insect than worm, so the
+rename belongs with whatever behaviour change makes it a worm — not with a diff that touches
+fifty comments explaining a walk that has not changed.
 
 ### Dying takes a moment, which is most of what you see
 
@@ -978,7 +1041,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 67 checks — the simulation
+node test/matchbox-sim.mjs     # 68 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
