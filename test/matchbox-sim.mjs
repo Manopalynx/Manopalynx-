@@ -547,6 +547,54 @@ await check(browser, 'nothing in the tray is indestructible except the thing tha
 /* And the behaviour behind it, because a melting point in the table is a claim about the
    table and not about the box. Thermite is lit with a magnesium ribbon rather than a match,
    which is the whole of why this was reported as broken. */
+/* Reported from the phone with pictures of the same charge on steel and on wood: through
+   the steel in a clean plume, and on the wood just sitting there setting light to it and
+   waiting for the fire to do the work.
+
+   A liquid could sink into anything it could *melt* and nothing it could *burn*, and wood
+   has no melting point, so it was outside the rule entirely. Molten iron at 2500°C does not
+   wait for a wooden floor.
+
+   Depth over time rather than a breach flag, because a breach flag says nothing about the
+   difference between cutting and smouldering — and because the first version of this probe
+   started its clock after the 300-tick hold and reported "breached at tick 1" for everything
+   that worked. */
+await check(browser, 'a charge cuts down through what it can burn, not only what it can melt', () => {
+  const bad = [];
+  const cx = (W/2)|0, THICK = 16;
+  const cut = (t) => {
+    __wipe(); const f = H-46;
+    __slab(cx-20, f, cx+20, f+THICK-1, t);
+    __slab(cx-6, f-6, cx+6, f-1, THERMITE);
+    __slab(cx-4, f-8, cx+3, f-7, MAGNES);
+    const depth = () => {
+      let best = 0;
+      for (let x=cx-20;x<=cx+20;x++){
+        let d = 0;
+        for (let y=f;y<f+THICK;y++){ if (type[idx(x,y)] === t) break; d++; }
+        if (d > best) best = d;
+      }
+      return best;
+    };
+    let k = 0;
+    const run = (n) => { for (let j=0;j<n;j++){ if (k < 150) __flame(cx-1, f-7, 3); __step(1); k++; } };
+    run(600);  const at10 = depth();
+    run(1800); return { at10, at40: depth() };
+  };
+  // Measured 16 of 16 by ten seconds for both, against 0 and 0 before the rule existed.
+  for (const t of [WOOD, GREEN]){
+    const r = cut(t);
+    if (r.at10 < THICK)
+      bad.push(`a lit charge on ${M[t].n} was ${r.at10} of ${THICK} cells deep after ten seconds`);
+  }
+  /* The other half, and it is the half that keeps the rule honest: thick steel still
+     defeats it. The cut is self-limiting because the liquid cools as it works, and a rule
+     that went through everything would have taken that away. */
+  const steel = cut(STEEL);
+  if (steel.at40 >= THICK) bad.push(`a charge went clean through ${THICK} cells of steel — thick steel is meant to defeat it`);
+  return bad.length ? bad.join('; ') : null;
+});
+
 await check(browser, 'thermite cuts glass and obsidian, once it is actually lit', () => {
   const bad = [];
   const cx = (W/2)|0;

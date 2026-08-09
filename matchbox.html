@@ -845,6 +845,14 @@ const MAX_T      = 2600;  // nothing in the box gets hotter than this. It has to
                           // that would quietly make it ordinary.
 const MELT_HARD  = 500;  // only solids that melt at least this hot can be sunk into
 const MELT_THRU  = 60;   // ...and only by a liquid this far over their melting point
+const BURN_THRU  = 700;  /* and the same again for things that burn rather than melt: a
+                            liquid this far over a fuel's ignition point goes straight down
+                            through it instead of sitting on top setting light to it.
+                            Large on purpose. At `ig + 60`, molten wax at 600°C would cut
+                            through a wooden table, and burning oil would cut through the
+                            log it was running over. At 700 it takes lava (1180) or molten
+                            metal to do it, which is the picture: something glowing, not
+                            something merely alight. */
 const ACID_BITE  = .012; // chance an acid cell takes a bite in a tick. At .18 it went
                          // through half of a six-deep wall in four tenths of a second,
                          // which is not corrosion, it is a hole appearing.
@@ -1100,8 +1108,19 @@ function moveFalling(){
         // with either of them in scope a candle's pool burrowed straight down through
         // the candle and away from its own wick. The candle went from ~1150 ticks to
         // 453 with no margin, and 600 with a margin alone.
-        if (mb.ph===3 && mb.melt >= MELT_HARD && temp[ci] > mb.melt + MELT_THRU){
-          become(cx, cy+1, mb.into);
+        /* Two ways down, and for a long time there was only one. Reported from the phone
+           with pictures of the same charge on steel and on wood: through the steel in a
+           clean plume, and on the wood just sitting there setting light to it and waiting.
+           Molten iron at 2500°C does not wait for a wooden floor to burn — it goes through
+           it. A liquid could sink into anything it could *melt* and nothing it could
+           *burn*, and wood has no melting point, so it was outside the rule entirely. */
+        const canMelt = mb.melt !== undefined && mb.melt >= MELT_HARD
+                        && temp[ci] > mb.melt + MELT_THRU;
+        const canBurn = mb.fuel > 0 && mb.ig < 9e9 && temp[ci] > mb.ig + BURN_THRU;
+        if (mb.ph===3 && (canMelt || canBurn)){
+          // What is left behind is what that material leaves when it burns, so a cut
+          // through a log fills with embers rather than inventing anything.
+          become(cx, cy+1, canMelt ? mb.into : (mb.ash !== undefined ? mb.ash : E));
           swap(ci, b);
           continue;
         }

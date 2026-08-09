@@ -133,6 +133,7 @@ A material is described by a handful of numbers. The ones that matter:
 | `dens` | what sinks through what |
 | `tough` | how many bites acid needs to get through it |
 | `peak` | as hot as burning alone can drive it, where that differs |
+| `MELT_THRU` `BURN_THRU` | how far over a melting or an ignition point a liquid must be to sink through |
 | `span` `leak` | how a gas stops being there: a clock, or only by escaping |
 | `sparse` | how thinly the brush lays it down |
 | `n` | what the tray calls it, which is deliberately not what a save calls it |
@@ -1076,6 +1077,38 @@ it. Sand → glass → lava → stone is at least a coherent family.
 artefact worth naming: stone melts to lava and lava sets back to stone, so the count is a
 round trip. Obsidian and glass melt one way.)
 
+#### And then the other half: it could melt through, but not burn through
+
+Reported next, with pictures of the same charge on steel and on wood: through the steel in
+a clean plume, and on the wood just sitting there setting light to it and waiting for the
+fire to do the work.
+
+**A liquid could sink into anything it could *melt* and nothing it could *burn*.** Wood has
+no melting point, so it was outside the melt-through rule entirely — and molten iron at
+2500°C does not wait for a wooden floor. Depth of the hole in a plate sixteen cells thick,
+timed from the moment the ribbon is lit:
+
+| plate | 5s | 10s | 20s | 40s |
+|---|---|---|---|---|
+| Wood, before | 0 | 0 | 8 | 16 |
+| **Wood, after** | **16** | 16 | 16 | 16 |
+| Green, before | 0 | 0 | 2 | **7 — never through** |
+| **Green, after** | **16** | 16 | 16 | 16 |
+| Steel | 0 | 2 | 1 | 0 — unchanged |
+| Stone | 0 | 16 | 16 | 16 — unchanged |
+
+Green also ends with **more** of its plate left than before — 505 cells against 471 — which
+is the point: a narrow hole rather than the whole slab smouldering away.
+
+`BURN_THRU` is 700, and it is large on purpose. At the melt rule's margin of 60, molten wax
+at 600°C would cut through a wooden table and burning oil would cut through the log it was
+running over. At 700 it takes lava at 1180 or molten metal to do it — something glowing,
+rather than something merely alight.
+
+**Thick steel still defeats a charge**, and the check asserts that alongside: the cut is
+self-limiting because the liquid cools as it works, and a rule that went through everything
+would have taken that away.
+
 #### The check is a table read, and that is the point
 
 There was already a check that every melting point is *reachable*. Its complement was
@@ -1333,7 +1366,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 74 checks — the simulation
+node test/matchbox-sim.mjs     # 75 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
