@@ -1028,6 +1028,57 @@ await check(browser, 'a vent keeps pouring, and pours what it was given', () => 
   return bad.length ? bad.join('; ') : null;
 });
 
+/* Reported from the phone: "the vent only works for lava, molten and water while under any
+   liquid". `ventPush` wrote into empty cells and nothing else, so a submerged vent was
+   plugged — and the three that appeared to work were not exceptions to that, they were a
+   vent shoving its own output up a column of itself, plus lava quenching into obsidian and
+   steam and leaving gaps to push into.
+
+   Counting the payload is what makes a working vent read as a dead one here: lava under
+   water is obsidian within a tick and molten sets to steel. So this counts everything that
+   is neither the pool, the floor, nor the vent — anything at all that was not there. */
+await check(browser, 'a vent buried in a liquid still pours', () => {
+  const bad = [];
+  const cx = (W/2)|0;
+  const pour = (payload, fill) => {
+    __wipe();
+    const f = H-6;
+    __slab(0, f, W-1, H-1, GLASS);            // glass, not stone, so a stone vent counts
+    __slab(cx-16, f-30, cx+16, f-1, fill);
+    put(cx, f-1, VENT); feed[idx(cx, f-1)] = payload;
+    for (let k=0;k<400;k++) __step(1);
+    let made = 0;
+    for (let i=0;i<type.length;i++){
+      const t = type[i];
+      if (t !== E && t !== VENT && t !== GLASS && t !== fill) made++;
+    }
+    return made;
+  };
+  /* One of each phase, because `yields` is a function of phase and nothing else — a
+     powder, a solid, a gas, a liquid, a hot liquid that reacts with the pool it is in, and
+     something alive. Naming twenty materials would measure the same five answers. */
+  for (const t of [SAND, STONE, GAS, ACID, LAVA, BUG]){
+    const n = M[t].n;
+    for (const [where, fill] of [['water', WATER], ['oil', OIL]]){
+      const made = pour(t, fill);
+      if (made < 5) bad.push(`a vent pouring ${n} under ${where} made ${made} cells of anything in 400 ticks`);
+    }
+  }
+
+  /* And the other half, or "a vent pours into anything" is satisfied by a vent that eats
+     walls. Sealed in stone it still stops, which is the plug the design asks for. */
+  __wipe();
+  const f = __floor();
+  setTool(VENT); setTool(LAVA);
+  put(cx, f-3, VENT);
+  for (const [dx,dy] of [[0,-1],[-1,0],[1,0],[0,1]]) put(cx+dx, f-3+dy, STONE);
+  const stone0 = __count(STONE);
+  for (let k=0;k<1200;k++) __step(1);
+  if (__count(LAVA)) bad.push(`a vent sealed in stone made ${__count(LAVA)} cells of lava`);
+  if (__count(STONE) < stone0) bad.push(`a sealed vent ate ${stone0 - __count(STONE)} cells of its own plug`);
+  return bad.length ? bad.join('; ') : null;
+});
+
 // The thing the vent was actually asked for. A cone is not "some lava exists" — it is
 // lava that ran somewhere and set, so this counts the stone that was not there before.
 await check(browser, 'a vent under a shaft builds a volcano out of its own lava', () => {

@@ -486,16 +486,55 @@ flowing round the bug opens the odd gap underneath it, and a gap is air.
 The check asserts the *ratio* and not the absolute — the absolute is a tuning number, and
 what has to hold is that a pool slows a creature the way it slows a grain.
 
-### You could build above a tank and never in one
+### Nothing could arrive inside a liquid
 
-`paintCell` wrote into empty cells and gas and nothing else, so a fish had to be dropped in
-from the top and a weight could not be placed on the bottom of a pool — while the falling
-pass displaced that same water all day. A liquid is the one thing in this box that gets out
-of the way of everything else; the brush was the exception to its own rule.
+Two reports, a day apart, that turned out to be one fault written twice.
 
-It writes into liquids now. **Solids and powders still refuse**, and that half is checked
-too: without it the brush quietly becomes an eraser, and every wall in every scene is one
-stray thumb away from a hole in it. Erase is one tap.
+`paintCell` wrote into empty cells and gas and nothing else, so you could build *above* a
+tank and never in one: a fish had to be dropped in from the top, and a weight could not be
+placed on the bottom of a pool. And `ventPush` wrote into empty cells and nothing else, so a
+vent buried in a liquid was plugged — reported from the phone as *"the vent only works for
+lava, molten and water while under any liquid"*.
+
+**Those three were not exceptions to the rule, which is the part worth writing down.** A
+water vent under water works because a vent shoves its own output up a column of itself, and
+its own material is not something it has to displace. A lava vent under water works because
+lava quenches into obsidian and steam on contact, and steam leaves gaps behind it — so it
+was pushing into holes it had made by accident. The rule was broken for all of them; three
+happened to have a way round it, and that is exactly the shape of thing that makes a
+measurement disagree with a hand.
+
+There is one function now, asked by both:
+
+```js
+const yields = (t) => t === E || M[t].ph === 0 || M[t].ph === 1;
+```
+
+`denser` is the other question and a different one — it is about a cell already in the box
+moving under gravity, so it weighs the two against each other. Nothing is falling here, so
+there is nothing to weigh.
+
+Measured, a vent buried in a pool, counting everything it made in 400 ticks that was neither
+the pool nor the floor:
+
+| pouring | in water, before | after | in oil, before | after |
+|---|---|---|---|---|
+| Sand | **0** | 40 | **0** | 40 |
+| Wood | **0** | 40 | **0** | 40 |
+| Gas | **0** | 27 | **0** | 25 |
+| Acid | **0** | 40 | **0** | 40 |
+| Lava | 8 | 5 | 20 | 62 |
+
+Lava is the one that already had a number, and that is the accident above rather than a
+working vent. Counting the *payload* would have reported all of this wrongly in the other
+direction: lava under water is obsidian within a tick and molten sets to steel, so a working
+vent reads as a dead one unless you count everything that was not there before.
+
+**Both halves are checked.** Solids and powders still refuse, for the brush and the vent
+alike: without that, the brush quietly becomes an eraser and every wall is one stray thumb
+from a hole in it, and a vent sealed in stone eats its way out instead of stopping. A vent
+that can be plugged is a design decision — bury one under enough of its own output and it
+stops — and "a vent pours into anything" is otherwise satisfied by a vent that eats walls.
 
 It *replaces* the liquid rather than pushing it aside, so filling a sealed tank with sand
 leaves you less water than you started with. Displacing properly means finding somewhere for
@@ -739,7 +778,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 63 checks — the simulation
+node test/matchbox-sim.mjs     # 64 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
