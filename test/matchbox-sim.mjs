@@ -1725,6 +1725,10 @@ await check(browser, 'the brush reaches into a tank, and still not through a wal
 await check(browser, 'a grub cuts galleries through a log rather than a crater in it', () => {
   const bad = [];
   const cx = (W/2)|0;
+  /* Grubs, pupae and moths together, because a grub that has eaten thirty cells is not a
+     grub any more. Counting `GRUB` alone was right for exactly one day and then reported
+     "8 of 8 grubs ate each other" about eight grubs that had simply grown up. */
+  const living = () => __count(GRUB) + __count(PUPA) + __count(MOTH);
   const gnaw = (n, ticks) => {
     __wipe(); const f = __floor();
     __slab(cx-20, f-30, cx+20, f-1, WOOD);
@@ -1734,13 +1738,13 @@ await check(browser, 'a grub cuts galleries through a log rather than a crater i
     let x1=1e9,x2=-1e9,y1=1e9,y2=-1e9,holes=0;
     for (let y=f-30;y<=f-1;y++) for (let x=cx-20;x<=cx+20;x++)
       if (type[idx(x,y)] === E){ holes++; if(x<x1)x1=x; if(x>x2)x2=x; if(y<y1)y1=y; if(y>y2)y2=y; }
-    return { eaten: w0 - __count(WOOD), alive: __count(GRUB), holes,
+    return { eaten: w0 - __count(WOOD), alive: living(), holes,
              reach: holes ? Math.max(x2-x1+1, y2-y1+1) : 0 };
   };
 
   const one = gnaw(1, 1800);
   if (one.eaten < 12) bad.push(`one grub ate ${one.eaten} cells of a log in thirty seconds`);
-  if (one.alive !== 1) bad.push(`one grub in a log became ${one.alive}`);
+  if (one.alive !== 1) bad.push(`one grub in a log became ${one.alive} living things`);
   /* A compact blob of area A spans about sqrt(A). A tunnel spans far more than that, and
      the ratio is the only way to say "gallery" rather than "hole" in a number. Measured at
      46 cells across 20 rows, which is 2.9× — the threshold is well under that on purpose,
@@ -1771,10 +1775,10 @@ await check(browser, 'a grub cuts galleries through a log rather than a crater i
   __slab(cx-14, f-20, cx+14, f-1, WOOD);
   for (let k=0;k<8;k++) put(cx-10+k*2, f-10, BUG);
   for (let k=0;k<8;k++) put(cx-10+k*2, f-12, GRUB);
-  const bugs0 = __count(BUG), grubs0 = __count(GRUB);
+  const bugs0 = __count(BUG), grubs0 = living();
   for (let k=0;k<3000;k++) __step(1);
   if (__count(BUG) < bugs0) bad.push(`${bugs0 - __count(BUG)} of ${bugs0} bugs were eaten by the grubs beside them`);
-  if (__count(GRUB) < grubs0) bad.push(`${grubs0 - __count(GRUB)} of ${grubs0} grubs ate each other`);
+  if (living() < grubs0) bad.push(`${grubs0 - living()} of ${grubs0} grubs ate each other`);
 
   // Out of the wood it is a creature like the others: it crawls, and it burns.
   __wipe(); const f2 = __floor();
@@ -1786,11 +1790,95 @@ await check(browser, 'a grub cuts galleries through a log rather than a crater i
   __wipe(); const f3 = __floor();
   __slab(cx-20, f3-20, cx+20, f3-1, WOOD);
   for (let k=0;k<8;k++) put(cx-10+k*3, f3-10, GRUB);
-  const lit0 = __count(GRUB);
+  const lit0 = living();
   __hold(cx, f3-21, 2, 250);
   for (let k=0;k<2500;k++) __step(1);
-  if (__count(GRUB) > lit0 * 0.3) bad.push(`${__count(GRUB)} of ${lit0} grubs sat out a burning log`);
+  // Living things of any stage: a grub that pupated and hatched on the way is still alive,
+  // and counting grubs alone would have called that a death.
+  if (living() > lit0 * 0.3) bad.push(`${living()} of ${lit0} grubs sat out a burning log`);
   if (![...finds].some(k => k.startsWith(GRUB + ':chew'))) bad.push('eating a log did not register as a discovery');
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* The grub and the moth turn out to be the same animal at two ages. Thirty cells eaten and
+   it seals itself up; five seconds later a moth comes out and goes looking for a flame.
+
+   The claim that matters is not that it happens but that it happens *once per grub*: the box
+   has no way to make a creature, and this must not become one. So this counts the sum of
+   the three forms rather than any one of them. */
+await check(browser, 'a grub that has eaten enough becomes a pupa, and a pupa becomes a moth', () => {
+  const bad = [];
+  const cx = (W/2)|0;
+
+  __wipe(); let f = __floor();
+  __slab(cx-24, f-40, cx+24, f-1, WOOD);
+  put(cx, f-20, GRUB);
+  let pupatedAt = -1, hatchedAt = -1, most = 0;
+  for (let k=1;k<=4000;k++){
+    __step(1);
+    const g = __count(GRUB), p = __count(PUPA), m = __count(MOTH);
+    if (p && pupatedAt < 0) pupatedAt = k;
+    if (m && hatchedAt < 0) hatchedAt = k;
+    if (g + p + m > most) most = g + p + m;
+    if (hatchedAt > 0) break;
+  }
+  if (pupatedAt < 0) bad.push('a grub left in a log for a minute never pupated');
+  if (hatchedAt < 0) bad.push('nothing came out of the pupa');
+  if (most > 1) bad.push(`one grub was ${most} living things at once`);
+  // The hatch is a fixed clock, so it is worth stating rather than bounding loosely.
+  if (pupatedAt > 0 && hatchedAt > 0 && Math.abs((hatchedAt - pupatedAt) - M[PUPA].hatch) > 3)
+    bad.push(`the pupa took ${hatchedAt - pupatedAt} ticks to open against a hatch of ${M[PUPA].hatch}`);
+
+  // Six in, six out. Not five, and emphatically not seven.
+  __wipe(); f = __floor();
+  __slab(cx-24, f-40, cx+24, f-1, WOOD);
+  for (let k=0;k<6;k++) put(cx-15+k*6, f-20, GRUB);
+  const n0 = __count(GRUB);
+  for (let k=0;k<8000;k++) __step(1);
+  const sum = __count(GRUB) + __count(PUPA) + __count(MOTH);
+  if (sum !== n0) bad.push(`${n0} grubs became ${sum} living things — ${__count(GRUB)} grubs, ${__count(PUPA)} pupae, ${__count(MOTH)} moths`);
+  if (!__count(MOTH)) bad.push(`${n0} grubs in a log for two minutes produced no moths at all`);
+
+  // A grub with nothing to eat is a grub forever. Pupation is a reward for the tunnelling,
+  // not a timer, and a timer would look identical for the first half-minute.
+  __wipe(); f = __floor();
+  for (let k=0;k<6;k++) put(cx-8+k*3, f-1, GRUB);
+  const bare = __count(GRUB);
+  for (let k=0;k<4000;k++) __step(1);
+  if (__count(GRUB) !== bare) bad.push(`${bare} grubs on a bare floor became ${__count(GRUB)} — they pupated with nothing to eat`);
+  if (__count(PUPA) || __count(MOTH)) bad.push('a grub that ate nothing still turned into something');
+
+  // A sealed grub is the most helpless thing in the box, and must read that way.
+  const kill = (how) => {
+    __wipe(); const ff = __floor();
+    __slab(cx-10, ff-12, cx+10, ff-1, how === 'fire' ? WOOD : E);
+    for (let k=0;k<6;k++) put(cx-6+k*2, ff-6, PUPA);
+    const p0 = __count(PUPA);
+    if (how === 'fire') __hold(cx, ff-13, 2, 200);
+    else __slab(cx-10, ff-10, cx+10, ff-1, WATER);
+    for (let k=0;k<900;k++) __step(1);
+    return { p0, left: __count(PUPA), moths: __count(MOTH) };
+  };
+  for (const how of ['fire', 'water']){
+    const r = kill(how);
+    if (r.left) bad.push(`${r.left} of ${r.p0} pupae survived ${how}`);
+    if (r.moths) bad.push(`${r.moths} moths hatched out of pupae killed by ${how}`);
+  }
+
+  /* And grubs do not eat them, which is the reason `alive` exists as a field. It used to be
+     `!M[t].sparse` — the same answer by accident, because every creature came out of a
+     brush and so had a `sparse`. A pupa is made rather than placed and has none. */
+  __wipe(); f = __floor();
+  __slab(cx-14, f-16, cx+14, f-1, WOOD);
+  for (let k=0;k<6;k++) put(cx-8+k*3, f-8, PUPA);
+  for (let k=0;k<6;k++) put(cx-8+k*3, f-10, GRUB);
+  const p0 = __count(PUPA);
+  for (let k=0;k<250;k++) __step(1);      // short of the hatch clock, so any loss is teeth
+  if (__count(PUPA) < p0) bad.push(`grubs ate ${p0 - __count(PUPA)} of ${p0} pupae beside them`);
+
+  for (const t of [GRUB, PUPA])
+    if (![...finds].some(k => k === t + ':becomes'))
+      bad.push(`${M[t].n} turning into ${M[M[t].becomes].n} did not register as a discovery`);
   return bad.length ? bad.join('; ') : null;
 });
 

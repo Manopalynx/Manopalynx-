@@ -314,7 +314,7 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
       FIRE=16, SMOKE=17, STEAM=18, EMBER=19, ASH=20,
       LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24,
       THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31, BUG=32,
-      MOTH=33, FISH=34, GRUB=35;
+      MOTH=33, FISH=34, GRUB=35, PUPA=36;
 
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
@@ -523,7 +523,7 @@ M[VENT]    ={n:'Vent',     ph:3, col:[ 78, 74, 84], ig:9e9, cond:.20, cap:2.4, d
 
    It cannot swim. That is one row, and it costs nothing. */
 M[BUG]     ={n:'Bug',      ph:3, col:[176, 92,132], ig:190, fuel:20, out:1.2, cond:.30, cap:1.0,
-             char:4, ash:ASH, dens:1.1, tough:.6, sparse:.16, drown:150};
+             char:4, ash:ASH, dens:1.1, tough:.6, sparse:.16, drown:150, alive:1};
 /* The bug's opposite, and deliberately so: it flies, and warmth pulls it in rather than
    driving it off. Everything else in this box treats heat as a hazard. One thing that
    treats it as a destination turns a candle into a lure and a fire into a funeral.
@@ -540,7 +540,7 @@ M[BUG]     ={n:'Bug',      ph:3, col:[176, 92,132], ig:190, fuel:20, out:1.2, co
 // swarm was a fuse: one reached the candle, and the fire walked through the whole cloud
 // from body to body, upwards, because each new flame rose and the rest followed it.
 M[MOTH]    ={n:'Moth',     ph:3, col:[214,198,166], ig:120, fuel:8, out:0.1, cond:.28, cap:.7,
-             char:2, ash:ASH, dens:.4, tough:.5, sparse:.10, drown:90};
+             char:2, ash:ASH, dens:.4, tough:.5, sparse:.10, drown:90, alive:1};
 /* The third one, and the first that lives *inside* something rather than on top of it.
    Water stops being a way to put fires out and becomes a place.
 
@@ -553,7 +553,7 @@ M[MOTH]    ={n:'Moth',     ph:3, col:[214,198,166], ig:120, fuel:8, out:0.1, con
    the tank and the water leaves; freeze it and the water becomes ice; either way there is
    nothing left to breathe. The Room dial is what a fish is really for. */
 M[FISH]    ={n:'Fish',     ph:3, col:[104,168,176], ig:9e9, cond:.42, cap:3.0, dens:1.0,
-             tough:.5, sparse:.14, air:200};
+             tough:.5, sparse:.14, air:200, alive:1};
 /* The fourth, and the first that *removes* material. Everything alive so far reacts to the
    box; this one rearranges it. Put a grub in a log and come back to a log with galleries
    cut through it, and then hold a match to what is left.
@@ -566,7 +566,28 @@ M[FISH]    ={n:'Fish',     ph:3, col:[104,168,176], ig:9e9, cond:.42, cap:3.0, d
    Slower than a bug in the open and slower still while eating, because the interesting
    thing about it is the shape it leaves behind, and a fast one just deletes the log. */
 M[GRUB]    ={n:'Grub',     ph:3, col:[228,198,186], ig:200, fuel:24, out:1.0, cond:.26, cap:1.1,
-             char:5, ash:ASH, dens:1.1, tough:.6, sparse:.13, drown:120, chew:67};
+             char:5, ash:ASH, dens:1.1, tough:.6, sparse:.13, drown:120, alive:1,
+             chew:67, pupa:30, becomes:PUPA};
+/* What a grub is for, in the end. Thirty cells eaten and it stops, seals itself up, and
+   five seconds later a moth comes out — so the creature that eats the log and the creature
+   that flies into the candle are the same animal at two ages, and a scene can now run from
+   one to the other without you touching it.
+
+   The population is still fixed, and exactly: one grub in, one moth out. That was the
+   condition for adding it at all — the box has no way to make a creature, and this is not
+   one, it is the same cell wearing a different row of the table.
+
+   It is `made, never placed`: no `sparse`, and not in the tray. `alive:1` keeps it off the
+   grubs' menu, which is the reason that field exists rather than `edible` borrowing
+   `sparse` — a pupa never comes out of a brush, so `sparse` would have been a lie about it
+   and grubs would have eaten their own chrysalises.
+
+   It cannot move, and does not try to. A chrysalis hanging in the gallery its grub cut is
+   what one looks like. `ig` 170 and `char` 3, because a sealed grub is the most helpless
+   thing in the box, and `drown` because being underwater is no better sealed in than out. */
+M[PUPA]    ={n:'Pupa',     ph:3, col:[186,124, 70], ig:170, fuel:16, out:0.9, cond:.24, cap:1.0,
+             char:3, ash:ASH, dens:1.1, tough:.5, drown:100, alive:1,
+             hatch:300, becomes:MOTH};
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
              leak:.02, peak:1500};
 
@@ -623,7 +644,7 @@ SAVE_KEY[OBSIDIAN]='obsidian';SAVE_KEY[THERMITE]='thermite';SAVE_KEY[MAGNES]='ma
 SAVE_KEY[RUBBER]='rubber';    SAVE_KEY[MRUBBER]='rubber-molten';
 SAVE_KEY[ACID]='acid';        SAVE_KEY[GAS]='gas';           SAVE_KEY[VENT]='vent';
 SAVE_KEY[BUG]='bug';          SAVE_KEY[MOTH]='moth';         SAVE_KEY[FISH]='fish';
-SAVE_KEY[GRUB]='grub';
+SAVE_KEY[GRUB]='grub';        SAVE_KEY[PUPA]='pupa';
 
 const TYPE_OF_KEY = new Map(SAVE_KEY.map((k,t) => [k,t]));
 
@@ -1674,10 +1695,16 @@ const GRUB_TURN = .14;   // how often it picks a new direction to cut in
 
 /* What a grub will eat: solid enough to tunnel through, and made of something that would
    burn. Both halves are read off the food's own row, so a fuel added tomorrow is on the
-   menu with nothing written here — and `sparse`, which is already the table's mark of
-   something alive, keeps the other creatures off it. A grub that ate grubs would be a
-   population rule, and the population is meant to be whatever you put in the box. */
-const edible = (t) => t !== E && M[t].fuel > 0 && M[t].ph !== 0 && M[t].ph !== 1 && !M[t].sparse;
+   menu with nothing written here — and `alive` keeps the other creatures off it. A grub
+   that ate grubs would be a population rule, and the population is meant to be whatever you
+   put in the box.
+
+   This used to read `!M[t].sparse`, which was the same answer by accident: `sparse` is how
+   thinly the brush lays a thing down, and every creature had one because every creature
+   came out of the brush. The pupa does not — it is made, never placed — so it has no
+   `sparse`, and grubs would have eaten their own chrysalises. `alive` says the thing it
+   means. */
+const edible = (t) => t !== E && M[t].fuel > 0 && M[t].ph !== 0 && M[t].ph !== 1 && !M[t].alive;
 
 /* A bite, and the move into what was just eaten, are one action — which is what makes a
    tunnel rather than a hole: the cell it came from is left empty behind it.
@@ -1699,10 +1726,21 @@ function grubEat(i, x, y){
     const j = idx(xx,yy), tj = type[j];
     if (!edible(tj)) continue;
     if (Math.random() * M[type[i]].chew < 1){
-      found(type[i] + ':chew', `${M[type[i]].n} eats its way through ${M[tj].n}`);
+      const m = M[type[i]];
+      found(type[i] + ':chew', `${m.n} eats its way through ${M[tj].n}`);
       become(xx, yy, E);
       way[i] = dir + 1;
       swap(i, j);
+      /* Meals, counted in `vel`. A creature is a static solid, and the falling pass only
+         ever touches the velocity of a liquid or a powder, so the field is free — and
+         `put` and `become` already zero it, which is exactly the reset wanted when this
+         cell stops being a grub. It is not in the save file, so a scene reloaded mid-meal
+         starts its count again; five seconds of a hatch clock is not worth a format. */
+      const meals = ++vel[j];
+      if (m.pupa !== undefined && meals >= m.pupa){
+        found(type[j] + ':becomes', `${m.n} turns into ${M[m.becomes].n}`);
+        become(xx, yy, m.becomes);
+      }
     }
     return true;
   }
@@ -1714,7 +1752,9 @@ function moveLife(){
   let anyMoth = false;
   for (let i=0;i<type.length;i++){
     const t = type[i];
-    if (t === BUG || t === MOTH || t === FISH || t === GRUB){ alive.push(i); if (t === MOTH) anyMoth = true; }
+    if (t === BUG || t === MOTH || t === FISH || t === GRUB || t === PUPA){
+      alive.push(i); if (t === MOTH) anyMoth = true;
+    }
   }
   if (!alive.length) return;
   // One pass for all of them, and only when there is something that cares.
@@ -1723,11 +1763,24 @@ function moveLife(){
   for (const i of alive){
     const kind = type[i];
     // burned, eaten, drowned or dried out since the list was taken
-    if (kind !== BUG && kind !== MOTH && kind !== FISH && kind !== GRUB) continue;
+    if (kind !== BUG && kind !== MOTH && kind !== FISH && kind !== GRUB && kind !== PUPA) continue;
     if (kind === FISH){ moveFish(i, i % W, (i / W) | 0); continue; }
 
     const mx = i % W, my = (i / W) | 0;
     if (drowning(i, mx, my, M[kind])) continue;
+
+    /* A pupa is alive and does nothing, which is the whole of it — it belongs in this pass
+       rather than in `react()` because everything else that is alive is here, not because
+       it moves. The clock is `vel` again, free for the same reason it is free for a grub's
+       meals, and zeroed by `become` on the way in. */
+    if (kind === PUPA){
+      const m = M[kind];
+      if (++vel[i] >= m.hatch){
+        found(kind + ':becomes', `${m.n} turns into ${M[m.becomes].n}`);
+        become(mx, my, m.becomes);
+      }
+      continue;
+    }
 
     if (kind === MOTH){
       if (Math.random() * MOTH_STEP < 1) moveMoth(i, mx, my);
@@ -3134,6 +3187,8 @@ const FINDS = (() => {
       add(t, 'meets'+r, row.tale || `${m.n} + ${M[row.with].n} → ${M[row.become].n}`));
     if (m.eats)  add(t, 'eats', `${m.n} eats through things`);
     if (m.chew)  add(t, 'chew', `${m.n} eats its way through things`);
+    // One rule, both ends of a life: a grub filling up, and what it opens into.
+    if (m.becomes !== undefined) add(t, 'becomes', `${m.n} turns into ${M[m.becomes].n}`);
     // Two ways of being somewhere you cannot be, and both are worth finding out about.
     if (m.drown !== undefined) add(t, 'drown', `${m.n} drowns`);
     if (m.air   !== undefined) add(t, 'air',   `${m.n} cannot breathe air`);

@@ -46,15 +46,15 @@ fetched fresh whenever there is a signal — no stale-build trap, and nothing to
 ## What is in the box
 
 Twenty-nine chips in the tray — twenty-four materials, four living things and the vent — and
-six more the simulation makes and never lets you place: fire, smoke, steam, ash, molten wax
-and molten rubber. Every one of them is one row of the `M` table and nothing else in the
+seven more the simulation makes and never lets you place: fire, smoke, steam, ash, the pupa,
+molten wax and molten rubber. Every one of them is one row of the `M` table and nothing else in the
 file knows any of them by name.
 
-(That count was stale before the grub was added to it, and the first attempt at fixing it
-said four rather than six, because the probe I counted with deduplicated by display name and
-both molten forms share theirs with the solid they came from — `WAX` and `MELT` are both
-"Wax". The same collision once made a saved scene load molten wax as solid, which is why
-saves key on `SAVE_KEY` and not on the name.)
+(This count has been wrong twice. It was stale before the grub was added to it, and the
+first attempt at fixing it undercounted the made-only list, because the probe I counted with
+deduplicated by display name and both molten forms share theirs with the solid they came
+from — `WAX` and `MELT` are both "Wax". The same collision once made a saved scene load
+molten wax as solid, which is why saves key on `SAVE_KEY` and not on the name.)
 
 The tray is in drawers — **Fuel, Wet, Solid, Hot, Life, Scene, Tools** — one row at a time, so
 the tray has a fixed height however much goes into it. A flat tray does not scale: every
@@ -134,8 +134,10 @@ A material is described by a handful of numbers. The ones that matter:
 | `tough` | how many bites acid needs to get through it |
 | `peak` | as hot as burning alone can drive it, where that differs |
 | `span` `leak` | how a gas stops being there: a clock, or only by escaping |
-| `sparse` | how thinly the brush lays it down, and the table's mark of something alive |
-| `chew` | ticks a grub takes to get through one cell of whatever it is in |
+| `sparse` | how thinly the brush lays it down |
+| `alive` | this is a creature — keeps it off a grub's menu, whether or not a brush made it |
+| `chew` `pupa` | ticks a grub takes per cell, and how many cells before it seals up |
+| `hatch` `becomes` | how long a life stage lasts, and what it turns into |
 | `drown` `air` | how many ticks a living thing lasts in the wrong one of the two |
 | `feed` `way` `breath` (per cell) | what a vent pours, which way a bug is walking, and how long it has been somewhere it cannot survive |
 
@@ -495,9 +497,60 @@ Everything else about it is inherited and none of it is new code: fire kills it 
 burning log), it drowns at `drown:120`, acid eats it, it saves and loads, and eating earns
 its own line in the finds list because `chew` is in the table.
 
-**It has no appetite limit**, which is a decision rather than an oversight: left alone long
-enough, grubs will reduce every fuel in the box to tunnels and then to nothing. The number
-of them is the control, and it is in your hand.
+#### And then it pupates
+
+**The grub and the moth are the same animal at two ages.** Thirty cells eaten and it stops,
+seals itself into the gallery it cut, and five seconds later a moth comes out and goes
+looking for a flame. So a scene can now run from a log to a candle without you touching it:
+grubs in the wood, a wick at the far end, and wait.
+
+Measured, one grub in a 49×40 log: **pupates at tick 1616** (27 seconds) and **hatches
+exactly 300 ticks later**, which is `hatch:300` doing what it says.
+
+**One grub in, one moth out, and the check counts the sum rather than any one form.** That
+was the condition for adding this at all — the box has no way to make a creature, and
+pupation must not become one. Six grubs in a log for two minutes: six moths, and the sum of
+grubs + pupae + moths never left six at any point.
+
+| | field | |
+|---|---|---|
+| `pupa:30` | on the grub | cells eaten before it seals up |
+| `hatch:300` | on the pupa | ticks before it opens |
+| `becomes:` | on both | what each one turns into |
+
+`becomes` is one derivation and it produces both entries in the finds list — *Grub turns into
+Pupa*, *Pupa turns into Moth* — so a fifth creature with a life stage brings its own.
+
+**Two counters and no new array.** Meals and the hatch clock both live in `vel`, which is
+free because a creature is a static solid and the falling pass only ever touches the
+velocity of a liquid or a powder — and `put` and `become` already zero it, which is exactly
+the reset wanted when a cell stops being a grub. It is not in the save file, so a scene
+reloaded mid-meal counts again from nothing; five seconds of a hatch clock is not worth a
+format version.
+
+**A pupa is *made, never placed*.** It is not in the tray and has no `sparse` — and that is
+what turned up a fault in the grub written the day before. `edible` read `!M[t].sparse`,
+which had been the right answer for the wrong reason: every creature had a `sparse` because
+every creature came out of a brush. A pupa does not, so **grubs would have eaten their own
+chrysalises**. There is an `alive:1` on all five rows now, and `edible` asks that instead —
+a field that says the thing it means rather than one that happened to correlate.
+
+**And it broke a check by being right.** The grub check counted `GRUB` and asserted the
+number held, which was correct for exactly one day: eight grubs in a log for fifty seconds
+now grow up, so it reported *"8 of 8 grubs ate each other"* about eight grubs that had simply
+pupated. Every count in that check is `grubs + pupae + moths` now. Worth recording because
+the failure message was confident, specific and completely wrong about the cause — the check
+was measuring a proxy for "alive" that had quietly stopped meaning it.
+
+Everything else it inherits: fire kills all six of six sealed in a burning log, water drowns
+all six, and it saves and loads like anything else. It does not fall, and a chrysalis hanging
+in the gallery its grub cut is what one looks like.
+
+**It still has no appetite limit**, which is a decision rather than an oversight: a grub that
+never finds thirty cells never pupates, and grubs that do keep eating until they do. Six
+grubs on a bare floor stayed six grubs through a minute of it — pupation is a reward for the
+tunnelling, not a timer, and the check states that separately because a timer would look
+identical for the first half-minute.
 
 ### Dying takes a moment, which is most of what you see
 
@@ -692,14 +745,14 @@ be a guess dressed up as an undo.
 
 ## The finds
 
-`FOUND 3/35` in the corner used to be the whole of it. Thirty-two things existed that the
+`FOUND 3/39` in the corner used to be the whole of it. Thirty-six things existed that the
 box would never name, mention again or hint at — a progress bar for a task nobody had been
 told. **Finds** in Tools opens the list: found ones read as what they are (`Lava + Water →
 Obsidian`) and the rest read `Acid — ?`, carrying the material's colour and name and nothing
 else. Eight rows mentioning Acid tell you to go and play with acid without telling you what
 happens when you do. Found ones sort to the top, so it is a record before it is a to-do list.
 
-The thirty-five are derived from the material table — every melt, boil, set, ash, contact
+The thirty-nine are derived from the material table — every melt, boil, set, ash, contact
 reaction, explosion, drowning and suffocation in it — so a material added tomorrow brings
 its discoveries with it. The three creatures added five between them and no new derivation
 code: a `drown` or an `air` field is enough.
@@ -859,7 +912,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 65 checks — the simulation
+node test/matchbox-sim.mjs     # 66 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
