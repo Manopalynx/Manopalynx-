@@ -2181,14 +2181,48 @@ await check(browser, 'moss creeps over damp surfaces, and will not grow without 
   if (far > 50 + M[MOSS].damp + 12)
     bad.push(`moss reached column ${far} from a pond ending at 50, with damp ${M[MOSS].damp}`);
 
-  // It burns where a flame touches it. It does not carry fire far, and does not shield wood.
+  // Heat kills it, well below anything catching light.
   __wipe(); f = __floor();
   __slab(20, f-8, 69, f-1, MOSS);
   const n0 = __count(MOSS);
   __hold(40, f-4, 3, 600);
   for (let k=0;k<1200;k++) __step(1);
   if (n0 - __count(MOSS) < 20) bad.push(`a match held in a slab of moss took out ${n0 - __count(MOSS)} of ${n0} cells`);
+  if (![...finds].some(k => k === MOSS + ':wither')) bad.push('drying out did not register as a discovery');
   if (![...finds].some(k => k === MOSS + ':spread')) bad.push('spreading did not register as a discovery');
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* Moss used to burn like any other soft fuel, which made a loop nobody designed and nobody
+   could see: moss burns down to ash, moss grows on ash, that moss burns. Reported from the
+   phone as moss expanding with the ash and containing it.
+
+   The number is the thing. **A fire cannot leave more ash than there was fuel to make it.**
+   That is true of every material in the table and was quietly false of one — measured on a
+   mossy build with one arm lit, 480 cells of wood burnt and 1714 cells of ash on the floor.
+   The scene was manufacturing matter, and nothing in the suite would ever have said so. */
+await check(browser, 'a fire cannot leave more ash behind than it had fuel', () => {
+  const bad = [];
+  const cx = (W/2)|0, f = H-4;
+  __wipe();
+  __slab(cx-14, f-70, cx+14, f, SAND);              // a tower, and two arms with water in
+  __slab(cx-38, f-52, cx-18, f-6, WOOD);
+  __slab(cx-34, f-48, cx-22, f-10, WATER);
+  __slab(cx+18, f-58, cx+40, f-4, WOOD);
+  __slab(cx+22, f-54, cx+36, f-8, WATER);
+  for (let y=f-72; y<=f; y++) for (let x=2; x<W-2; x++)
+    if (type[idx(x,y)] === E && rooted(x, y, MOSS) && damp(x, y, M[MOSS].damp)) put(x, y, MOSS);
+  const moss0 = __count(MOSS), wood0 = __count(WOOD);
+  if (moss0 < 300) return `the scene only grew ${moss0} cells of moss, so it is not the reported one`;
+  __hold(cx-28, f-30, 3, 400);
+  for (let k=0;k<9000;k++) __step(1);
+  const burnt = wood0 - __count(WOOD), left = __count(ASH) + __count(EMBER);
+  if (burnt < 100) return `only ${burnt} cells of wood burnt, so the scene proves nothing`;
+  /* Wood leaves an ember or an ash for each cell and nothing else in this build leaves any,
+     so the ceiling is the fuel itself with a little room for rounding. It came out at 3.5x
+     the ceiling before moss stopped burning. */
+  if (left > burnt * 1.2)
+    bad.push(`${burnt} cells of wood burnt and left ${left} cells of ash — the scene made ${left - burnt} from nowhere`);
   return bad.length ? bad.join('; ') : null;
 });
 

@@ -141,6 +141,7 @@ A material is described by a handful of numbers. The ones that matter:
 | `graze` | ticks an ash bug takes per mouthful of what fire left behind |
 | `carries` | this one picks loose grains up and heaps them somewhere else |
 | `spread` `damp` | ticks between growing a cell, and how far water may be for it to try |
+| `wither` | dies at this temperature, instead of ever reaching an ignition point |
 | `roots` | the brush may only put this where it could actually live |
 | `hatch` `becomes` | how long a life stage lasts, and what it turns into |
 | `drown` `air` | how many ticks a living thing lasts in the wrong one of the two |
@@ -808,7 +809,7 @@ Three things keep the exception from eating the file:
   the air.
 - **It only spreads where there is water within `damp` cells**, so a scene decides how much
   of it there can be.
-- **It burns**, so a match clears patches and what grows back grows from the edges.
+- **It dies of heat** well below anything catching light, so a fire clears it.
 
 Measured: one cell on a wall standing in water becomes **38 in three minutes** and climbs
 **17 rows**. The same wall dry stays **one cell** for as long as you watch it — and the
@@ -861,13 +862,53 @@ enough to "is there water in this scene at all". Measured on a log beside a pond
 brushed cells become 61 at a reach of 20 and **102 at 40** — the difference between a coating
 and something you can watch appear.
 
-#### What it does not do
+#### It withers rather than burns, and a fire was making matter out of nothing
 
-It **does not carry fire** — a match held in a slab of moss takes out around 90 of 400 cells
-and the flame travels about three cells past where it was held, against a straw film's twelve.
-And it **does not shield what is under it**: a moss cover over a wooden block burned 610 of
-610 cells, exactly as the bare block did. I measured that hoping for a fire-break and there
-is not one, so there is no claim of one.
+Reported from the phone: *"when a fire occurs and ash is produced the moss expands with the
+ash and contains it."* The guess that came with it — that moss should not grow on ash — was
+pointing at a real loop, and measuring it found a bigger one underneath.
+
+**Moss burned down to ash. Moss grows on ash. That moss burned.** On a mossy build with one
+arm lit: **480 cells of wood burnt, and 1714 cells of ash on the floor afterwards.** Three
+and a half times as much ash as there was fuel. The scene was manufacturing matter, and
+nothing in the suite would ever have said so.
+
+Three candidates, same scene, same fire, same 480 cells of wood consumed:
+
+| | ash left | moss after |
+|---|---|---|
+| as it was | **1714** | 872 |
+| will not root on ash or embers | 973 | 845 |
+| **withers at 70°C** | **480** | 900 |
+
+The reported fix — don't grow on ash — halves it and no more, because the loop has another
+turn in it: moss also colonises what the fire *exposes*. Withering cuts it at the source. At
+480 the ceiling is exactly one ash per cell of wood, which is what every other material in
+the box has always done.
+
+So `ig`, `fuel`, `out`, `char` and `ash` came **off** the moss row rather than being left
+there unreachable. The life pass runs before `react()`, so a moss cell crossing 70°C is dead
+before anything looks at its ignition point — and a field that can never fire is the single
+thing this file has shipped most often by accident.
+
+**A quiet scene is unchanged:** 966 cells before the change, 955 after, and a brushed log
+beside a pond still goes 16 → 102. Withering costs nothing until something is hot.
+
+The check is the general form rather than a moss one: **a fire cannot leave more ash than it
+had fuel.** That is true of every material in the table and was quietly false of one.
+
+#### What it still does not do
+
+It **does not carry fire** — a match in a slab travels about three cells past where it was
+held, against a straw film's twelve. And it **does not shield what is under it**: a moss cover
+over a wooden block burned 610 of 610 cells, exactly as the bare block did. I measured that
+hoping for a fire-break and there is not one, so there is no claim of one.
+
+And **the shell does not simply give way.** Moss round a fire settles at 66–76°C, right on the
+wither point: it dies back from 875 cells to 811 and then grows again to about 948. That is an
+equilibrium rather than a runaway, and it is why a burning mossy shell still reads as
+containing what is inside it. Moss is a static solid, so a film of it does hold back a pile of
+ash — which is inherent to it being something you can build with, not a separate bug.
 
 #### The damp scan, and why it is cheap
 
@@ -1235,7 +1276,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 71 checks — the simulation
+node test/matchbox-sim.mjs     # 72 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
