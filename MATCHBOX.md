@@ -45,7 +45,7 @@ fetched fresh whenever there is a signal — no stale-build trap, and nothing to
 
 ## What is in the box
 
-Thirty-one chips in the tray — twenty-four materials, six living things and the vent — and
+Thirty-two chips in the tray — twenty-four materials, seven living things and the vent — and
 seven more the simulation makes and never lets you place: fire, smoke, steam, ash, the pupa,
 molten wax and molten rubber. Every one of them is one row of the `M` table and nothing else in the
 file knows any of them by name.
@@ -140,6 +140,7 @@ A material is described by a handful of numbers. The ones that matter:
 | `chew` `pupa` | ticks a grub takes per cell, and how many cells before it seals up |
 | `graze` | ticks an ash bug takes per mouthful of what fire left behind |
 | `carries` | this one picks loose grains up and heaps them somewhere else |
+| `spread` `damp` | ticks between growing a cell, and how far water may be for it to try |
 | `hatch` `becomes` | how long a life stage lasts, and what it turns into |
 | `drown` `air` | how many ticks a living thing lasts in the wrong one of the two |
 | `feed` `way` `breath` (per cell) | what a vent pours, which way a bug is walking, and how long it has been somewhere it cannot survive |
@@ -792,6 +793,57 @@ floor after a fire and stone is the wall you built. Nobody has reported confusin
 check asserting a standard the box has never met would be a failing test about a problem
 nobody has. Creatures cannot lean on context — they move, and they mix.
 
+### The moss, which is the exception
+
+The seventh, and **the one that breaks the rule the other six were built to keep.** Every
+creature so far conserves its own number — what you put in the box is what is in the box, and
+pupation was allowed only because one grub goes in and one moth comes out. Moss multiplies.
+That is the whole of what it adds and it is worth exactly one exception, because a box where
+nothing can ever increase has no way to show you growth.
+
+Three things keep the exception from eating the file:
+
+- **It only spreads onto a surface**, so it creeps over what you built rather than filling
+  the air.
+- **It only spreads where there is water within `damp` cells**, so a scene decides how much
+  of it there can be.
+- **It burns**, so a match clears patches and what grows back grows from the edges.
+
+Measured: one cell on a wall standing in water becomes **38 in three minutes** and climbs
+**17 rows**. The same wall dry stays **one cell** for as long as you watch it.
+
+#### The clause that is the whole rule
+
+The surface test may not count *other moss*. That reads perfectly and is completely wrong:
+anchoring on itself means that after the first cell moss never needs a real surface again.
+Measured on the pillar before this clause — **1219 cells, of which 1175 were touching nothing
+but each other.** It was a fog with a stone in it.
+
+```js
+held = u !== E && u !== type[i] && M[u].ph !== 0 && M[u].ph !== 1;
+```
+
+With `u !== type[i]` it is a coating one cell thick, which is what moss is: 38 cells on the
+same pillar, and **none** of them floating.
+
+That also costs it most of its bulk, and the dials moved to pay for it — `spread` 70 → 40 and
+`damp` 9 → 20. At the old values a tap of eight cells grew to nine, which is not something
+you would notice happening.
+
+#### What it does not do
+
+It **does not carry fire** — a match held in a slab of moss takes out around 90 of 400 cells
+and the flame travels about three cells past where it was held, against a straw film's twelve.
+And it **does not shield what is under it**: a moss cover over a wooden block burned 610 of
+610 cells, exactly as the bare block did. I measured that hoping for a fire-break and there
+is not one, so there is no claim of one.
+
+#### The damp scan, and why it is cheap
+
+`damp()` sweeps a square around a cell, which would be the most expensive thing in the file if
+every moss cell did it every tick. The spread roll comes **first**, so at `spread` 40 only
+about one cell in forty ever pays for a scan. Order of operations is the whole optimisation.
+
 ### Dying takes a moment, which is most of what you see
 
 Reported from the phone: a bug that touched water was simply *gone*, and a fish on dry
@@ -985,14 +1037,14 @@ be a guess dressed up as an undo.
 
 ## The finds
 
-`FOUND 3/45` in the corner used to be the whole of it. Forty-two things existed that the
+`FOUND 3/47` in the corner used to be the whole of it. Forty-four things existed that the
 box would never name, mention again or hint at — a progress bar for a task nobody had been
 told. **Finds** in Tools opens the list: found ones read as what they are (`Lava + Water →
 Obsidian`) and the rest read `Acid — ?`, carrying the material's colour and name and nothing
 else. Eight rows mentioning Acid tell you to go and play with acid without telling you what
 happens when you do. Found ones sort to the top, so it is a record before it is a to-do list.
 
-The forty-five are derived from the material table — every melt, boil, set, ash, contact
+The forty-seven are derived from the material table — every melt, boil, set, ash, contact
 reaction, explosion, drowning and suffocation in it — so a material added tomorrow brings
 its discoveries with it. The three creatures added five between them and no new derivation
 code: a `drown` or an `air` field is enough.
@@ -1152,7 +1204,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 70 checks — the simulation
+node test/matchbox-sim.mjs     # 71 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```

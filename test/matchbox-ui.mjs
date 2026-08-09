@@ -963,17 +963,17 @@ await check('the finds panel can be closed on a screen too small to show it all'
 console.log('\n— the first thing that is alive —');
 
 await check('a worm drawn on the stage walks about on its own', async p => {
-  // The tray label, not the code name: this creature is `BUG` in the source and Worm on the
+  // The tray label, not the code name: this creature is `WORM` in the source and Worm on the
   // chip, and a check that hunts by label has to follow the label.
   await pick(p, 'worm');
   // An empty box and a tap, which is what anybody does first — and deliberately without a
-  // stone floor laid down for them. Bugs landing on the last row of the grid could not
+  // stone floor laid down for them. Worms landing on the last row of the grid could not
   // move at all until the bottom of the box counted as something to stand on, and this
   // check used to put a floor under them and so never saw it.
   await p.evaluate(() => wipeAll());
   const s = await stageBox(p);
   await p.mouse.click(s.x + s.width*0.5, s.y + s.height*0.9);
-  const placed = await p.evaluate(() => __count(BUG));
+  const placed = await p.evaluate(() => __count(WORM));
   if (!placed) return 'the tap put no worms in the box';
 
   // How far apart they are, not where the middle of them is. A tap puts down a clump and
@@ -982,13 +982,13 @@ await check('a worm drawn on the stage walks about on its own', async p => {
   // moved its mean from 64.9 to 63.1, and a check on the mean called that "nothing is
   // walking".
   const span = () => p.evaluate(() => {
-    const o = []; for (let i=0;i<type.length;i++) if (type[i]===BUG) o.push(i%W);
+    const o = []; for (let i=0;i<type.length;i++) if (type[i]===WORM) o.push(i%W);
     return o.length ? Math.max(...o) - Math.min(...o) : null;
   });
   const first = await span();
   await p.waitForTimeout(4000);
   const later = await span();
-  if (await p.evaluate(() => __count(BUG)) !== placed) return 'worms appeared or vanished while nothing was happening';
+  if (await p.evaluate(() => __count(WORM)) !== placed) return 'worms appeared or vanished while nothing was happening';
   if (later <= first + 6) return `${placed} worms spanned ${first} cells and now span ${later} — nothing is walking`;
   return null;
 });

@@ -313,8 +313,8 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
       COAL=9, GREEN=10, STONE=11, STEEL=12, WATER=13, ICE=14, SAND=15,
       FIRE=16, SMOKE=17, STEAM=18, EMBER=19, ASH=20,
       LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24,
-      THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31, BUG=32,
-      MOTH=33, FISH=34, GRUB=35, PUPA=36, ASHBUG=37, ANT=38;
+      THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31, WORM=32,
+      MOTH=33, FISH=34, GRUB=35, PUPA=36, ASHBUG=37, ANT=38, MOSS=39;
 
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
@@ -509,10 +509,13 @@ M[VENT]    ={n:'Vent',     ph:3, col:[ 78, 74, 84], ig:9e9, cond:.20, cap:2.4, d
 // react() for why those are different things.
 /* The first thing in here that is alive, and it is a cell like everything else.
 
-   The tray calls it a **Worm**; the code has said `BUG` since it was the only creature in
-   the box, and renaming it is a job for whenever its behaviour changes to match — it walks
-   on top of things and climbs, which is more insect than worm. `SAVE_KEY` is what keeps the
-   two apart safely, and it is why nothing here has ever had to care what the tray says.
+   It is a **Worm**, and it was a `BUG` in here for a while after the tray stopped saying so.
+   The mismatch was never about saves — `SAVE_KEY` handles those — it was that renaming it
+   touches fifty comments explaining a walk that has not changed. It reads oddly enough to
+   ask about, so it is one word everywhere now.
+
+   Which leaves the honest note it was standing in for: **this thing walks on top of surfaces
+   and climbs a step, which is more insect than worm.** The name is ahead of the behaviour.
 
    That is the whole design decision. As a cell it inherits the box: it has a temperature,
    so fire kills it through the same rule that burns straw; acid eats it because acid eats
@@ -526,9 +529,9 @@ M[VENT]    ={n:'Vent',     ph:3, col:[ 78, 74, 84], ig:9e9, cond:.20, cap:2.4, d
    about a creature in this box is that it is the softest thing in it. `fuel` 20 so it goes
    out fast and leaves ash. `dens` and `ph:3` because it is not a powder and does not
    trickle — everything it does about gravity and walking is in moveLife(). */
-M[BUG]     ={n:'Worm',     ph:3, col:[176, 92,132], ig:190, fuel:20, out:1.2, cond:.30, cap:1.0,
+M[WORM]     ={n:'Worm',     ph:3, col:[176, 92,132], ig:190, fuel:20, out:1.2, cond:.30, cap:1.0,
              char:4, ash:ASH, dens:1.1, tough:.6, sparse:.16, drown:150, alive:1};
-/* The bug's opposite, and deliberately so: it flies, and warmth pulls it in rather than
+/* The worm's opposite, and deliberately so: it flies, and warmth pulls it in rather than
    driving it off. Everything else in this box treats heat as a hazard. One thing that
    treats it as a destination turns a candle into a lure and a fire into a funeral.
 
@@ -567,7 +570,7 @@ M[FISH]    ={n:'Fish',     ph:3, col:[ 84,160,168], ig:9e9, cond:.42, cap:3.0, d
    enough to tunnel through, and made of something that would burn — so a fuel added
    tomorrow is on the menu without a line written here.
 
-   Slower than a bug in the open and slower still while eating, because the interesting
+   Slower than a worm in the open and slower still while eating, because the interesting
    thing about it is the shape it leaves behind, and a fast one just deletes the log. */
 M[GRUB]    ={n:'Grub',     ph:3, col:[220,248,196], ig:200, fuel:24, out:1.0, cond:.26, cap:1.1,
              char:5, ash:ASH, dens:1.1, tough:.6, sparse:.13, drown:120, alive:1,
@@ -629,6 +632,23 @@ M[ASHBUG]  ={n:'Ash bug', ph:3, col:[124,136,184], ig:210, fuel:18, out:1.0, con
    carry is still carrying when the scene comes back. */
 M[ANT]     ={n:'Ant',      ph:3, col:[136, 44, 44], ig:200, fuel:18, out:1.1, cond:.30, cap:1.0,
              char:4, ash:ASH, dens:1.1, tough:.6, sparse:.14, drown:130, alive:1, carries:1};
+/* The seventh, and **the one that breaks the rule the other six were built to keep.**
+
+   Every creature so far conserves its own number: what you put in the box is what is in the
+   box, and the pupa was allowed only because one grub goes in and one moth comes out. Moss
+   multiplies. That is the whole of what it adds and it is worth exactly one exception,
+   because a box where nothing can ever increase has no way to show you growth.
+
+   Three things keep the exception from eating the file. It only spreads onto a surface, so
+   it creeps over what you built rather than filling the air. It only spreads where there is
+   water within `damp` cells, so a scene decides how much of it there can be. And it burns
+   easily — `ig` 210 and a low `fuel` — so a match undoes a minute of it, and what grows back
+   grows from the edges that survived.
+
+   `spread` is ticks per attempt as a dice roll, like every other pace in here. */
+M[MOSS]    ={n:'Moss',     ph:3, col:[ 92,152, 96], ig:210, fuel:26, out:1.0, cond:.14, cap:1.2,
+             char:6, ash:ASH, dens:.9, tough:.5, sparse:.30, alive:1,
+             spread:40, damp:20};
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
              leak:.02, peak:1500};
 
@@ -646,7 +666,7 @@ const GROUPS = [
   { name:'Wet',   items:[WATER, OIL, ICE, ACID] },
   { name:'Solid', items:[STONE, STEEL, SAND, WAX, GLASS, OBSIDIAN] },
   { name:'Hot',   items:[LAVA, MOLTEN, EMBER, THERMITE, MAGNES, GAS, VENT] },
-  { name:'Life',  items:[BUG, MOTH, FISH, GRUB, ASHBUG, ANT] },
+  { name:'Life',  items:[WORM, MOTH, FISH, GRUB, ASHBUG, ANT, MOSS] },
   { name:'Scene', items:'scenes' },
   { name:'Tools', items:'tools' },
 ];
@@ -684,14 +704,16 @@ SAVE_KEY[LAVA]='lava';        SAVE_KEY[GLASS]='glass';      SAVE_KEY[MOLTEN]='st
 SAVE_KEY[OBSIDIAN]='obsidian';SAVE_KEY[THERMITE]='thermite';SAVE_KEY[MAGNES]='magnesium';
 SAVE_KEY[RUBBER]='rubber';    SAVE_KEY[MRUBBER]='rubber-molten';
 SAVE_KEY[ACID]='acid';        SAVE_KEY[GAS]='gas';           SAVE_KEY[VENT]='vent';
-SAVE_KEY[BUG]='bug';          SAVE_KEY[MOTH]='moth';         SAVE_KEY[FISH]='fish';
+SAVE_KEY[WORM]='worm';        SAVE_KEY[MOTH]='moth';         SAVE_KEY[FISH]='fish';
 SAVE_KEY[GRUB]='grub';        SAVE_KEY[PUPA]='pupa';
-/* Still 'woodlouse', and that is the whole point of this table being separate from the
-   display names. The tray called it a Woodlouse for an afternoon and now calls it an Ash
-   bug; a scene saved under the old name still loads, because the key was never the name.
-   Changing it here to match the label would break exactly the saves this table exists to
-   protect. */
-SAVE_KEY[ASHBUG]='woodlouse'; SAVE_KEY[ANT]='ant';
+/* These are allowed to disagree with the tray, and that is the whole point of the table
+   being separate: a display name can change without a saved scene noticing.
+
+   What that buys is that a rename is never *forced* to break saves — not that a key may
+   never be tidied. This one read 'woodlouse' for a day, left over from before the tray
+   called it an Ash bug, and it was changed here while nothing in the world depended on it.
+   Once a save exists that anybody minds losing, the rule bites and these stop moving. */
+SAVE_KEY[ASHBUG]='ash-bug';   SAVE_KEY[ANT]='ant';         SAVE_KEY[MOSS]='moss';
 
 const TYPE_OF_KEY = new Map(SAVE_KEY.map((k,t) => [k,t]));
 
@@ -814,10 +836,10 @@ ctx.imageSmoothingEnabled = false;
 // and it is zero everywhere else. Its own array rather than a spare field on an
 // existing one, because overloading `fuel` to sometimes mean "a material index" is the
 // kind of shortcut that reads fine and goes wrong in the dark.
-// `way` is which direction a bug is walking, and it is not in the save on purpose: a
+// `way` is which direction a worm is walking, and it is not in the save on purpose: a
 // heading is state, like a temperature, and a save stores what was built rather than what
-// everything was doing. A loaded bug picks a direction on its first step.
-/* `breath` is how long a living thing has been somewhere it cannot survive — a bug under
+// everything was doing. A loaded worm picks a direction on its first step.
+/* `breath` is how long a living thing has been somewhere it cannot survive — a worm under
    water, a fish out of it. Its own array rather than `life`, which would have been the
    natural home: react() decays `life` by 6% a tick for anything below its ignition point,
    so a counter kept there saturates around sixteen and never reaches a threshold of a
@@ -1412,7 +1434,7 @@ function ventPush(x, y, what){
 
    Everything alive moves here, and it is its own pass for one reason: **a creature that
    walks sideways would otherwise be processed twice in a tick.** `react()` walks x
-   ascending, so a bug that steps right lands on a cell the loop has not reached yet and
+   ascending, so a worm that steps right lands on a cell the loop has not reached yet and
    gets another go — and another, and it crosses the box in a single frame. The falling
    pass has the same problem and solves it by walking bottom-up, which only works because
    things fall one way. A creature goes both ways.
@@ -1421,11 +1443,11 @@ function ventPush(x, y, what){
    exactly once wherever it ended up, and the guard is simply checking it is still what it
    was — the thing it is standing next to may have burned it in the meantime. */
 
-const PANIC_AT   = 55;   // °C at which a bug stops wandering and starts leaving
+const PANIC_AT   = 55;   // °C at which a worm stops wandering and starts leaving
 const BUG_STEP   = 7;    // ticks between wandering steps...
 const BUG_FLEE   = 2;    // ...and between panicking ones. It is not fast, it is frightened.
 /* How often it changes its mind, and this is the difference between a creature and a
-   slider. Without it a bug kept whatever heading it started with until something was in
+   slider. Without it a worm kept whatever heading it started with until something was in
    the way: measured over twenty seconds it walked 163 cells and turned exactly **once** —
    off to the wall, back again. Reported from the phone as not moving around at all unless
    there was a fire, which is a fair description of a thing that only ever slides one way.
@@ -1437,10 +1459,10 @@ const BUG_IDLE   = .06;  // ...and sometimes it just stops for a moment, which r
 // Something to stand on: anything that is not air and not a gas.
 /* Something to stand on, and **the bottom of the box counts**.
 
-   It did not, and that is the whole of why bugs tapped into an empty box sat there for
-   thirty seconds without moving. A bug resting on the last row asks what is under it, the
+   It did not, and that is the whole of why worms tapped into an empty box sat there for
+   thirty seconds without moving. A worm resting on the last row asks what is under it, the
    answer is off the grid, `inb` says no, and a step needs footing ahead-and-below — so it
-   could never take one. Every check written for this stood its bugs on a stone floor six
+   could never take one. Every check written for this stood its worms on a stone floor six
    rows up, where there is always a real cell underneath, so not one of them went near the
    case you get by clearing the box and tapping.
 
@@ -1455,12 +1477,12 @@ const footing = (x,y) => {
 const walkable = (x,y) => inb(x,y) && (type[idx(x,y)] === E || M[type[idx(x,y)]].ph === 0);
 
 /* A liquid is not something to stand on, and that clause in `footing` is the whole of a
-   fault reported from the phone with pictures: a tankful of bugs sat in a neat pink raft on
+   fault reported from the phone with pictures: a tankful of worms sat in a neat pink raft on
    the surface of the water and stayed there. Anything that was not a gas counted as ground,
-   so a bug could walk on water — and a bug on *top* of water never has water above it, so
+   so a worm could walk on water — and a worm on *top* of water never has water above it, so
    the drowning clock never started at all. Both halves of it read fine.
 
-   Sinking is by density, like everything else that sinks in this box: a bug at 1.1 goes
+   Sinking is by density, like everything else that sinks in this box: a worm at 1.1 goes
    through water at 1.0 and oil at 0.85, and would float on lava at 2.4 — which it is
    welcome to do for the tick or so it survives at 1200°C. */
 const sinkable = (x,y,t) => {
@@ -1469,12 +1491,12 @@ const sinkable = (x,y,t) => {
   return u !== E && M[u].ph === 1 && (M[t].dens || 1) > (M[u].dens || 1);
 };
 
-/* A moth flies, which means it needs a direction in two dimensions where a bug only ever
+/* A moth flies, which means it needs a direction in two dimensions where a worm only ever
    needed left or right. `way` holds one of these eight, plus one, so that nought still
    means "has not decided yet". Kept in ring order, because turning means stepping round
    the ring by one — which curves a flight path instead of scattering it. */
 const MOTH_DIRS = [[1,0],[1,-1],[0,-1],[-1,-1],[-1,0],[-1,1],[0,1],[1,1]];
-const MOTH_STEP = 3;     // ticks a wingbeat. A moth is quicker than a bug and less steady.
+const MOTH_STEP = 3;     // ticks a wingbeat. A moth is quicker than a worm and less steady.
 const MOTH_TURN = .3;    // ...and it wanders off course this often, by one notch of the ring
 const MOTH_WAKE = 14;    // how much warmer than the room a thing has to be to be worth flying at
 /* How near it gets before it stops steering and just mills about. A moth circles a light
@@ -1652,24 +1674,24 @@ const BREATH_BACK = 4;   // breath recovered per tick out of the water, against 
                          // tick in it — so surfacing pays, but only while you keep doing it.
 const SINK_SLOW = 6;     /* one chance in this many, per tick, of going down a cell through a
                             liquid — against a certainty through air. Reported from the
-                            phone: bugs sank at exactly the speed they fell, which reads as
+                            phone: worms sank at exactly the speed they fell, which reads as
                             a hole in the water rather than as water. Six is taken from the
                             falling pass, which already slows a grain by about that much the
                             moment it reaches a pool (DRAG_WET .62 against DRAG_AIR .94), so
                             a creature does not sink at a visibly different rate to the sand
                             beside it.
                             Measured, it comes out at 4.1 ticks per cell rather than 6:
-                            water flowing round the bug opens the odd gap underneath it, and
+                            water flowing round the worm opens the odd gap underneath it, and
                             a gap is air, and it drops straight through that one. Against 1
                             cell a tick in the open, and about 36 cells in the 150 it has
                             before it drowns — which is most of the way down a tank. */
 
 /* Something that breathes air, in water. It used to be a `meets` row, which fires the
-   instant the two touch — so a bug that so much as brushed the surface was simply gone,
+   instant the two touch — so a worm that so much as brushed the surface was simply gone,
    with nothing to see. A creature is worth a moment.
 
    What counts as being in the water is the cell *above*, not any cell touching. Counting
-   all four neighbours drowned 7 of 10 bugs walking along a dry floor with a puddle beside
+   all four neighbours drowned 7 of 10 worms walking along a dry floor with a puddle beside
    them: they were never in it, they were stood next to it. Under the surface is the thing
    that stops you breathing, and it is one lookup rather than four.
 
@@ -1677,7 +1699,7 @@ const SINK_SLOW = 6;     /* one chance in this many, per tick, of going down a c
 function drowning(i, x, y, m){
   const wet = inb(x, y-1) && type[idx(x, y-1)] === WATER;
   // Getting a breath back is quicker than losing one, but it is not instant. Zeroing the
-  // clock the moment a cell reaches air made anything that could surface immortal: a bug
+  // clock the moment a cell reaches air made anything that could surface immortal: a worm
   // in a four-deep puddle walked up, drew one tick of air, and started again from nothing,
   // for as long as you cared to watch. A creature that can keep surfacing still lives — it
   // just has to keep doing it.
@@ -1737,7 +1759,7 @@ function moveFish(i, x, y){
   if (pick >= 0) swap(i, pick);
 }
 
-const GRUB_STEP = 14;    // ticks between crawling steps in the open, against a bug's 7
+const GRUB_STEP = 14;    // ticks between crawling steps in the open, against a worm's 7
 const GRUB_TURN = .14;   // how often it picks a new direction to cut in
 
 /* What a grub will eat: solid enough to tunnel through, and made of something that would
@@ -1803,7 +1825,7 @@ function ashbugGraze(i, x, y){
 /* Which way the food is.
 
    Reported from the phone: "they don't seem to seek the ash, or look like they do at
-   least" — and they did not. They walked a bug's random walk and ate whatever they bumped
+   least" — and they did not. They walked a worm's random walk and ate whatever they bumped
    into. Eating debris and *looking* for debris are two different verbs, and only one of them
    had been written.
 
@@ -1824,6 +1846,55 @@ function findScent(){
   for (let y=0; y<H; y++){
     const row = y*W;
     for (let x=0; x<W; x++) if (LEFTOVER.has(type[row+x])) scentCol[x]++;
+  }
+}
+
+/* Moss, which is the one thing in the box that makes more of itself.
+
+   It creeps rather than fills: a new cell has to be empty, have something solid touching it,
+   and have water within reach. The surface test is what keeps it a coating instead of a fog,
+   and the water test is what keeps a scene in charge of how much of it there can be.
+
+   The damp scan is the expensive part and it is bought cheaply: the spread roll comes first,
+   so at `spread` 70 only about one moss cell in seventy pays for a scan on any given tick. */
+function damp(x, y, r){
+  for (let dy=-r; dy<=r; dy++)
+    for (let dx=-r; dx<=r; dx++){
+      const xx=x+dx, yy=y+dy;
+      if (!inb(xx,yy)) continue;
+      const t = type[idx(xx,yy)];
+      if (t === WATER || t === ICE) return true;
+    }
+  return false;
+}
+
+function mossSpread(i, x, y){
+  const m = M[type[i]];
+  if (Math.random() * m.spread >= 1) return;
+  if (!damp(x, y, m.damp)) return;
+  const from = (Math.random()*8)|0;
+  for (let k=0;k<8;k++){
+    const [dx,dy] = MOTH_DIRS[(from + k) % 8];
+    const xx = x+dx, yy = y+dy;
+    if (!inb(xx,yy) || type[idx(xx,yy)] !== E) continue;
+    /* Onto a surface, not into the air — and the surface may not be more moss. That clause
+       is the whole rule. Counting moss as something to grow on reads perfectly and lets a
+       patch anchor on itself, so after the first cell it needs no real surface ever again:
+       measured on a pillar standing in water, 1219 cells of it, of which **1175 were touching
+       nothing but each other.** It was a fog with a stone in it.
+
+       Excluding moss makes it a coating one cell thick, which is what moss is. */
+    let held = false;
+    for (let d=0; d<8 && !held; d++){
+      const [ex,ey] = MOTH_DIRS[d];
+      if (!inb(xx+ex, yy+ey)) continue;
+      const u = type[idx(xx+ex, yy+ey)];
+      held = u !== E && u !== type[i] && M[u].ph !== 0 && M[u].ph !== 1;
+    }
+    if (!held) continue;
+    found(type[i] + ':spread', `${m.n} spreads`);
+    put(xx, yy, type[i]);
+    return;
   }
 }
 
@@ -1915,7 +1986,7 @@ function ashbugSniff(x){
    tunnel rather than a hole: the cell it came from is left empty behind it.
 
    Whether it gets a bite this tick is a dice roll against `chew` rather than a counter,
-   for the same reason the bug's pace is: a moving cell has no identity to keep a counter
+   for the same reason the worm's pace is: a moving cell has no identity to keep a counter
    in, and its index changes every time it shifts.
 
    Returns true if it is at the face of something edible, bite or no bite — a grub with its
@@ -1957,8 +2028,8 @@ function moveLife(){
   let anyMoth = false, anyAshbug = false;
   for (let i=0;i<type.length;i++){
     const t = type[i];
-    if (t === BUG || t === MOTH || t === FISH || t === GRUB || t === PUPA || t === ASHBUG
-        || t === ANT){
+    if (t === WORM || t === MOTH || t === FISH || t === GRUB || t === PUPA || t === ASHBUG
+        || t === ANT || t === MOSS){
       alive.push(i);
       if (t === MOTH)  anyMoth  = true;
       if (t === ASHBUG) anyAshbug = true;
@@ -1972,11 +2043,14 @@ function moveLife(){
   for (const i of alive){
     const kind = type[i];
     // burned, eaten, drowned or dried out since the list was taken
-    if (kind !== BUG && kind !== MOTH && kind !== FISH && kind !== GRUB
-        && kind !== PUPA && kind !== ASHBUG && kind !== ANT) continue;
+    if (kind !== WORM && kind !== MOTH && kind !== FISH && kind !== GRUB
+        && kind !== PUPA && kind !== ASHBUG && kind !== ANT && kind !== MOSS) continue;
     if (kind === FISH){ moveFish(i, i % W, (i / W) | 0); continue; }
 
     const mx = i % W, my = (i / W) | 0;
+    // Moss does not move, does not drown — it lives on wet rock — and does not walk, so it
+    // takes none of the rest of this pass.
+    if (kind === MOSS){ mossSpread(i, mx, my); continue; }
     if (drowning(i, mx, my, M[kind])) continue;
 
     /* A pupa is alive and does nothing, which is the whole of it — it belongs in this pass
@@ -1997,7 +2071,7 @@ function moveLife(){
       continue;
     }
     // Eating comes first and, when there is anything to eat, instead of everything else.
-    // Out of the wood a grub falls and walks exactly like a bug, only slower, so the rest
+    // Out of the wood a grub falls and walks exactly like a worm, only slower, so the rest
     // of this is shared rather than copied.
     if (kind === GRUB && grubEat(i, mx, my)) continue;
     // An ash bug eats and then carries on walking, so this is not a `continue`. Nor does an
@@ -2007,9 +2081,9 @@ function moveLife(){
     if (kind === ANT) antWork(i, mx, my);
     const x = mx, y = my;
 
-    // Falls, because nothing else will do it: a bug is a static solid so that it does not
+    // Falls, because nothing else will do it: a worm is a static solid so that it does not
     // trickle down a slope like a powder, which means gravity is this pass's job. Through
-    // a liquid as well as through air — a bug that lands in a pond goes under it — but not
+    // a liquid as well as through air — a worm that lands in a pond goes under it — but not
     // at the same speed, or the pond may as well not be there.
     if (walkable(x, y+1)){ swap(i, idx(x, y+1)); continue; }
     if (sinkable(x, y+1, kind)){
@@ -2025,11 +2099,11 @@ function moveLife(){
     const every = hot   ? BUG_FLEE
                 : feeding ? ASHBUG_FEED               // an ash bug in food dawdles in it
                 : kind === GRUB ? GRUB_STEP : BUG_STEP;
-    /* A chance per tick rather than a fixed phase, and the reason is that a bug has no
+    /* A chance per tick rather than a fixed phase, and the reason is that a worm has no
        fixed anything to take a phase from. The first version staggered on the cell index
-       — `(tick + i) % every` — which is what the vents use, and vents do not move. A bug's
+       — `(tick + i) % every` — which is what the vents use, and vents do not move. A worm's
        index changes every time it steps, so the phase moved with it and the throttle
-       stopped throttling: measured, one bug crossed seventy-one cells in a hundred ticks
+       stopped throttling: measured, one worm crossed seventy-one cells in a hundred ticks
        against the fourteen it was supposed to manage.
        A dice roll has no identity to lose, gives the right average, and has the side
        benefit the fixed phase was reaching for anyway — they do not march in step. */
@@ -2044,14 +2118,14 @@ function moveLife(){
       const r = inb(x+1,y) ? temp[idx(x+1,y)] : Infinity;
       dir = l < r ? -1 : 1;
     } else {
-      /* An ash bug has somewhere to be, which is the difference between it and a bug — but
+      /* An ash bug has somewhere to be, which is the difference between it and a worm — but
          not every step, or it stops being an animal and becomes an errand. One step in five
          is its own, which is enough to make it look like it is searching rather than being
          steered, and not enough to stop it arriving. */
       const scent = kind === ASHBUG ? ashbugSniff(x) : 0;
       if (scent && Math.random() < ASHBUG_NOSE) dir = scent;
       else {
-        // Wandering, not commuting. A bug with nothing wrong changes its mind now and then
+        // Wandering, not commuting. A worm with nothing wrong changes its mind now and then
         // and sometimes stops altogether; a panicking one does neither, because it knows
         // exactly where it wants to be and that is anywhere else.
         if (Math.random() < BUG_TURN) dir = -dir;
@@ -3244,11 +3318,11 @@ function paintCell(x, y, solid){
     // a wall with eight per cent holes is not a wall — water runs through it, and
     // the next shape you draw fills the gaps with whatever it is made of.
     /* ...except for things that are alive, which a material's own `sparse` asks for. A
-       tap with the brush covers about thirty cells, and thirty bugs in a heap is not
-       thirty bugs — it is one lump, of which only the edge can move, and it reads exactly
+       tap with the brush covers about thirty cells, and thirty worms in a heap is not
+       thirty worms — it is one lump, of which only the edge can move, and it reads exactly
        like a creature that does not work. A scatter is also simply what a handful of
        insects looks like. `solid` still overrides it: a Box or a Line is a deliberate
-       edge, and asking for a rectangle of bugs should give a rectangle of bugs. */
+       edge, and asking for a rectangle of worms should give a rectangle of worms. */
     const density = !solid && M[tool] && M[tool].sparse !== undefined ? M[tool].sparse : .92;
     if (solid || Math.random() < density) put(x,y,tool);
   }
@@ -3421,6 +3495,7 @@ const FINDS = (() => {
     if (m.chew)  add(t, 'chew', `${m.n} eats its way through things`);
     if (m.graze) add(t, 'graze', `${m.n} clears away what fire leaves behind`);
     if (m.carries) add(t, 'carry', `${m.n} carries loose grains about and heaps them up`);
+    if (m.spread) add(t, 'spread', `${m.n} spreads over damp surfaces`);
     // One rule, both ends of a life: a grub filling up, and what it opens into.
     if (m.becomes !== undefined) add(t, 'becomes', `${m.n} turns into ${M[m.becomes].n}`);
     // Two ways of being somewhere you cannot be, and both are worth finding out about.

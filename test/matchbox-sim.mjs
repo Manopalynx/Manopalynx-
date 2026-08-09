@@ -160,7 +160,7 @@ await check(browser, 'a candle stays lit and eats its own wax', () => {
   //
   // It used to be ~1800, and that figure was inflated: the candle was living on heat
   // from flames that were only that hot because convection was leaking upward without
-  // limit — the same bug that put a lava scene at 3774°C against a 1650°C ceiling.
+  // limit — the same worm that put a lava scene at 3774°C against a 1650°C ceiling.
   // Bounding it cost the candle a third of its life, honestly.
   if (alight < 800) return `the flame survived ${alight} of 3000 ticks after the match left`;
 
@@ -1057,7 +1057,7 @@ await check(browser, 'a vent buried in a liquid still pours', () => {
   /* One of each phase, because `yields` is a function of phase and nothing else — a
      powder, a solid, a gas, a liquid, a hot liquid that reacts with the pool it is in, and
      something alive. Naming twenty materials would measure the same five answers. */
-  for (const t of [SAND, STONE, GAS, ACID, LAVA, BUG]){
+  for (const t of [SAND, STONE, GAS, ACID, LAVA, WORM]){
     const n = M[t].n;
     for (const [where, fill] of [['water', WATER], ['oil', OIL]]){
       const made = pour(t, fill);
@@ -1138,23 +1138,23 @@ await check(browser, 'every discovery a scene can raise is in the table behind t
 
 console.log('\n— the first thing that is alive —');
 
-await check(browser, 'a bug falls to a surface, stays on it, and stays one bug', () => {
+await check(browser, 'a worm falls to a surface, stays on it, and stays one worm', () => {
   __wipe(); const f = __floor();
   const cx = (W/2)|0;
-  put(cx, f-30, BUG);
+  put(cx, f-30, WORM);
   for (let k=0;k<600;k++) __step(1);
-  if (__count(BUG) !== 1) return `one bug became ${__count(BUG)}`;
+  if (__count(WORM) !== 1) return `one worm became ${__count(WORM)}`;
   let at = -1;
-  for (let i=0;i<type.length;i++) if (type[i]===BUG) at = i;
+  for (let i=0;i<type.length;i++) if (type[i]===WORM) at = i;
   const y = (at / W) | 0;
   if (y !== f-1) return `it settled at row ${y} instead of on the floor at ${f-1}`;
 
   // Twenty of them, left alone: a fixed population is fixed in both directions.
   __wipe(); __floor();
-  for (let k=0;k<20;k++) put(10+k*5, f-1, BUG);
-  const n0 = __count(BUG);
+  for (let k=0;k<20;k++) put(10+k*5, f-1, WORM);
+  const n0 = __count(WORM);
   for (let k=0;k<3000;k++) __step(1);
-  if (__count(BUG) !== n0) return `${n0} bugs became ${__count(BUG)} in fifty seconds with nothing happening to them`;
+  if (__count(WORM) !== n0) return `${n0} worms became ${__count(WORM)} in fifty seconds with nothing happening to them`;
   return null;
 });
 
@@ -1163,44 +1163,44 @@ await check(browser, 'a bug falls to a surface, stays on it, and stays one bug',
    `react()` walks x ascending, so anything that steps right lands on a cell the loop has
    not reached yet and gets another go — and another. Measured before `moveLife` took its
    list of who is alive before anybody moved, and before the step throttle stopped keying
-   on the cell index: one bug crossed seventy-one cells in a hundred ticks against the
-   fourteen it should manage. It read as a bug that was simply quick. */
-await check(browser, 'a bug is moved once a tick, not once per cell it lands on', () => {
+   on the cell index: one worm crossed seventy-one cells in a hundred ticks against the
+   fourteen it should manage. It read as a worm that was simply quick. */
+await check(browser, 'a worm is moved once a tick, not once per cell it lands on', () => {
   const bad = [];
   const ticks = 600;
   __wipe(); const f = __floor();
   const cx = (W/2)|0;
-  put(cx, f-1, BUG);
+  put(cx, f-1, WORM);
   let far = 0, last = cx;
   for (let k=0;k<ticks;k++){
     __step(1);
-    for (let i=0;i<type.length;i++) if (type[i]===BUG){ const x = i%W; far += Math.abs(x-last); last = x; }
+    for (let i=0;i<type.length;i++) if (type[i]===WORM){ const x = i%W; far += Math.abs(x-last); last = x; }
   }
   // The most it may travel is one cell every BUG_STEP ticks, with room for the dice.
   const ceiling = ticks / BUG_STEP * 1.6;
-  if (far > ceiling) bad.push(`a calm bug covered ${far} cells in ${ticks} ticks, against a walking pace of about ${Math.round(ticks/BUG_STEP)}`);
+  if (far > ceiling) bad.push(`a calm worm covered ${far} cells in ${ticks} ticks, against a walking pace of about ${Math.round(ticks/BUG_STEP)}`);
   if (far < 10) bad.push(`it covered ${far} cells — it is not walking at all, so the limit proves nothing`);
   return bad.length ? bad.join('; ') : null;
 });
 
 /* On the floor of the box itself, which is the case every check here had missed.
 
-   Every scene in this suite stands its bugs on a stone floor six rows up, where there is
+   Every scene in this suite stands its worms on a stone floor six rows up, where there is
    always a real cell underneath them. Clear the box and tap, which is what anybody
    actually does, and they land on the last row of the grid — and a step needs footing
    ahead-and-below, which off the bottom of the grid `inb` refuses to grant. So they could
    not take a single step. Thirty seconds of sitting still, reported from the phone, with a
    full suite of passing checks behind it. */
-await check(browser, 'bugs walk on the floor of the box, not only on things put in it', () => {
+await check(browser, 'worms walk on the floor of the box, not only on things put in it', () => {
   __wipe();                                   // deliberately no floor: the bare grid
   const cx = (W/2)|0;
-  for (let k=0;k<12;k++) put(cx-30+k*5, H-1, BUG);
-  const xs = () => { const o=[]; for (let i=0;i<type.length;i++) if (type[i]===BUG) o.push(i%W); return o; };
+  for (let k=0;k<12;k++) put(cx-30+k*5, H-1, WORM);
+  const xs = () => { const o=[]; for (let i=0;i<type.length;i++) if (type[i]===WORM) o.push(i%W); return o; };
   const before = xs();
   const span0 = Math.max(...before) - Math.min(...before);
   for (let k=0;k<1800;k++) __step(1);
   const after = xs();
-  if (after.length !== before.length) return `${before.length} bugs on the box floor became ${after.length}`;
+  if (after.length !== before.length) return `${before.length} worms on the box floor became ${after.length}`;
   const span1 = Math.max(...after) - Math.min(...after);
   if (span1 <= span0 + 4) return `they spanned ${span0} cells and after thirty seconds span ${span1} — nothing standing on the floor of the box is walking`;
   return null;
@@ -1210,24 +1210,24 @@ await check(browser, 'bugs walk on the floor of the box, not only on things put 
    reads as a creature.
 
    Reported from the phone: they do not move around unless there is a flame. They were in
-   fact moving the whole time — 163 cells in twenty seconds — but a bug kept whatever
+   fact moving the whole time — 163 cells in twenty seconds — but a worm kept whatever
    heading it started with until something got in the way, so it **turned exactly once**
    in those twenty seconds: off to the wall, back again. A thing that only ever slides one
    way does not look alive, and next to a panicking one it looks like heat is the only
    thing that moves them.
 
    So this counts changes of mind, not distance. Distance was never the problem. */
-await check(browser, 'a bug with nothing wrong wanders rather than commuting', () => {
+await check(browser, 'a worm with nothing wrong wanders rather than commuting', () => {
   const bad = [];
   __wipe(); const f = __floor();
   const cx = (W/2)|0;
-  put(cx, f-1, BUG);
+  put(cx, f-1, WORM);
   let last = cx, lastDir = 0, turns = 0, walked = 0;
   const seen = new Set([cx]);
   for (let k=0;k<1200;k++){                     // twenty seconds
     __step(1);
     let at = -1;
-    for (let i=0;i<type.length;i++) if (type[i]===BUG) at = i;
+    for (let i=0;i<type.length;i++) if (type[i]===WORM) at = i;
     if (at < 0){ bad.push('it died on a bare floor'); break; }
     const x = at % W;
     if (x !== last){
@@ -1248,16 +1248,16 @@ await check(browser, 'a bug with nothing wrong wanders rather than commuting', (
 /* The whole of what makes a cell read as alive: it notices, and it leaves.
    Tested against a gradient held by hand rather than a fire, because a fire measures how
    hot the fire was. A first attempt held a 520°C wall fourteen cells away for 900 ticks
-   and cooked ten of the twelve bugs, which says nothing about which way they ran. */
-await check(browser, 'a bug runs away from heat rather than wandering into it', () => {
+   and cooked ten of the twelve worms, which says nothing about which way they ran. */
+await check(browser, 'a worm runs away from heat rather than wandering into it', () => {
   const bad = [];
   const trial = (hotter) => {
     __wipe(); const f = __floor();
     const cx = (W/2)|0;
-    put(cx, f-1, BUG);
+    put(cx, f-1, WORM);
     for (let k=0;k<120;k++){
       let at = -1;
-      for (let i=0;i<type.length;i++) if (type[i]===BUG) at = i;
+      for (let i=0;i<type.length;i++) if (type[i]===WORM) at = i;
       if (at < 0) return 'died';
       const x = at % W, y = (at / W) | 0;
       temp[at] = 200;                       // hot enough to panic, held there
@@ -1269,7 +1269,7 @@ await check(browser, 'a bug runs away from heat rather than wandering into it', 
       __step(1);
     }
     let at = -1;
-    for (let i=0;i<type.length;i++) if (type[i]===BUG) at = i;
+    for (let i=0;i<type.length;i++) if (type[i]===WORM) at = i;
     return at < 0 ? 'died' : (at % W) - cx;
   };
   const fromLeft = trial(-1), fromRight = trial(1);
@@ -1279,32 +1279,32 @@ await check(browser, 'a bug runs away from heat rather than wandering into it', 
   // And it only panics when it is actually hot: cold, it should not be sprinting anywhere.
   __wipe(); const f = __floor();
   const cx = (W/2)|0;
-  put(cx, f-1, BUG);
+  put(cx, f-1, WORM);
   for (let k=0;k<120;k++) __step(1);
   let at = -1;
-  for (let i=0;i<type.length;i++) if (type[i]===BUG) at = i;
-  if (at >= 0 && Math.abs((at % W) - cx) > 40) bad.push(`a bug with nothing wrong covered ${Math.abs((at%W)-cx)} cells in 120 ticks`);
+  for (let i=0;i<type.length;i++) if (type[i]===WORM) at = i;
+  if (at >= 0 && Math.abs((at % W) - cx) > 40) bad.push(`a worm with nothing wrong covered ${Math.abs((at%W)-cx)} cells in 120 ticks`);
   return bad.length ? bad.join('; ') : null;
 });
 
 /* The argument for a creature being a cell, stated as a check: it dies of the things the
    box already does, and not one line of that is creature code. */
-await check(browser, 'the box kills bugs with what it already had', () => {
+await check(browser, 'the box kills worms with what it already had', () => {
   const bad = [];
   const f0 = H-6;
 
   // Fire, through the same ignition it uses on straw, tested where it cannot run: walled
-  // in on both sides with a lid over it. Holding a match near a bug that is free to leave
+  // in on both sides with a lid over it. Holding a match near a worm that is free to leave
   // measures the running, not the burning.
   __wipe(); __floor();
   const bx = (W/2)|0;
   put(bx-1, f0-1, STONE); put(bx+1, f0-1, STONE); put(bx, f0-2, STONE);
-  put(bx, f0-1, BUG);
+  put(bx, f0-1, WORM);
   const ash0 = __count(ASH);
   __hold(bx, f0-1, 2, 150);
   for (let k=0;k<300;k++) __step(1);
-  if (__count(BUG)) bad.push('a bug walled in with a match held on it did not burn');
-  if (__count(ASH) <= ash0) bad.push('a burned bug left nothing behind');
+  if (__count(WORM)) bad.push('a worm walled in with a match held on it did not burn');
+  if (__count(ASH) <= ash0) bad.push('a burned worm left nothing behind');
 
   /* ...and given somewhere to run, most of them take it. Stated as survivors rather than
      as a death count on purpose: measured across five runs of the identical scene, deaths
@@ -1312,33 +1312,33 @@ await check(browser, 'the box kills bugs with what it already had', () => {
      making is that a fire at one end of a floor does not clear the floor. */
   __wipe(); __floor();
   __slab(6, f0-5, 26, f0-1, STRAW);
-  for (let k=0;k<16;k++) put(28+k*5, f0-1, BUG);
+  for (let k=0;k<16;k++) put(28+k*5, f0-1, WORM);
   __hold(8, f0-2, 2, 40);
   for (let k=0;k<2400;k++) __step(1);
-  if (__count(BUG) < 9) bad.push(`only ${__count(BUG)} of 16 got away from a fire at one end of the floor`);
+  if (__count(WORM) < 9) bad.push(`only ${__count(WORM)} of 16 got away from a fire at one end of the floor`);
 
   // The same floor with no fire on it, so the number above means something.
   __wipe(); __floor();
-  for (let k=0;k<16;k++) put(34+k*5, f0-1, BUG);
+  for (let k=0;k<16;k++) put(34+k*5, f0-1, WORM);
   for (let k=0;k<2400;k++) __step(1);
-  if (__count(BUG) !== 16) bad.push(`${16-__count(BUG)} bugs died on a bare floor with nothing happening`);
+  if (__count(WORM) !== 16) bad.push(`${16-__count(WORM)} worms died on a bare floor with nothing happening`);
 
   // Water, through a `meets` row — one line in the table, and it registers as a find.
   __wipe(); __floor();
-  for (let k=0;k<10;k++) put(40+k*2, f0-1, BUG);
-  const wet0 = __count(BUG);
+  for (let k=0;k<10;k++) put(40+k*2, f0-1, WORM);
+  const wet0 = __count(WORM);
   __slab(38, f0-4, 60, f0-2, WATER);
   for (let k=0;k<600;k++) __step(1);
-  if (__count(BUG) > wet0*0.2) bad.push(`${__count(BUG)} of ${wet0} bugs survived being poured on`);
-  if (![...finds].some(k => k.startsWith(BUG + ':drown'))) bad.push('drowning did not register as a discovery');
+  if (__count(WORM) > wet0*0.2) bad.push(`${__count(WORM)} of ${wet0} worms survived being poured on`);
+  if (![...finds].some(k => k.startsWith(WORM + ':drown'))) bad.push('drowning did not register as a discovery');
 
-  // Acid, because acid eats cells and a bug is a cell.
+  // Acid, because acid eats cells and a worm is a cell.
   __wipe(); __floor();
-  for (let k=0;k<10;k++) put(40+k*2, f0-1, BUG);
-  const acid0 = __count(BUG);
+  for (let k=0;k<10;k++) put(40+k*2, f0-1, WORM);
+  const acid0 = __count(WORM);
   __slab(38, f0-4, 60, f0-2, ACID);
   for (let k=0;k<900;k++) __step(1);
-  if (__count(BUG) >= acid0) bad.push(`acid poured over ${acid0} bugs left ${__count(BUG)}`);
+  if (__count(WORM) >= acid0) bad.push(`acid poured over ${acid0} worms left ${__count(WORM)}`);
   return bad.length ? bad.join('; ') : null;
 });
 
@@ -1445,7 +1445,7 @@ await check(browser, 'a crowd of moths round one candle is a cloud, not a column
 await check(browser, 'the box kills moths with what it already had', () => {
   const bad = [];
   const f0 = H-6;
-  // Fire, walled in so it cannot fly off — the same shape of test the bug gets.
+  // Fire, walled in so it cannot fly off — the same shape of test the worm gets.
   __wipe(); __floor();
   const mx = (W/2)|0;
   __slab(mx-1, f0-3, mx+1, f0-3, STONE);
@@ -1575,7 +1575,7 @@ await check(browser, 'the room can kill a tank of fish, hot or cold', () => {
 
 /* Dying takes a moment, for all three of them, and that is the point of this check.
 
-   Drowning used to be a `meets` row, which fires the instant two cells touch — so a bug
+   Drowning used to be a `meets` row, which fires the instant two cells touch — so a worm
    that so much as brushed the surface of a puddle was gone with nothing to see, and a
    stranded fish lay perfectly still for three and a half seconds and then vanished.
    Reported from the phone as wanting a few seconds and some flapping, which is right: a
@@ -1604,9 +1604,9 @@ await check(browser, 'a creature somewhere it cannot live takes a moment about i
   if (hops < 10) bad.push(`it moved ${hops} times in ${died} ticks — a fish on a floor flops, it does not lie still`);
   if (seen.size < 3) bad.push(`it flopped within ${seen.size} cells, which is twitching rather than flopping`);
 
-  /* A bug and a moth in water last long enough to watch, and not the same length of time.
-     The tank has a lid on purpose. A four-deep puddle measured as "a bug never drowns",
-     because the bug walked up to the surface, drew a breath and started the clock again —
+  /* A worm and a moth in water last long enough to watch, and not the same length of time.
+     The tank has a lid on purpose. A four-deep puddle measured as "a worm never drowns",
+     because the worm walked up to the surface, drew a breath and started the clock again —
      which is the creature being sensible, not the rule being broken, and the scene not
      testing what it said it was. Sealed, there is nowhere to surface to. */
   const under = (t) => {
@@ -1619,28 +1619,28 @@ await check(browser, 'a creature somewhere it cannot live takes a moment about i
     for (let k=1;k<=1200;k++){ __step(1); if (!__count(t)) return k; }
     return -1;
   };
-  const bug = under(BUG), moth = under(MOTH);
-  for (const [n, ticks] of [['A bug', bug], ['A moth', moth]]){
+  const worm = under(WORM), moth = under(MOTH);
+  for (const [n, ticks] of [['A worm', worm], ['A moth', moth]]){
     if (ticks < 0) bad.push(`${n} held under water never drowned`);
     else if (ticks < 45) bad.push(`${n} was gone in ${ticks} ticks — that is instant, not drowning`);
   }
-  if (bug > 0 && moth > 0 && bug <= moth) bad.push(`a bug lasted ${bug} ticks and a moth ${moth} — the flimsier one should go first`);
+  if (worm > 0 && moth > 0 && worm <= moth) bad.push(`a worm lasted ${worm} ticks and a moth ${moth} — the flimsier one should go first`);
 
   // ...and brushing past water is not a death sentence.
   __wipe(); const f2 = __floor();
   __slab(cx-20, f2-2, cx+20, f2-1, WATER);
-  for (let k=0;k<10;k++) put(cx+22+k*3, f2-3, BUG);
+  for (let k=0;k<10;k++) put(cx+22+k*3, f2-3, WORM);
   for (let k=0;k<1800;k++) __step(1);
-  if (__count(BUG) < 4) bad.push(`${10-__count(BUG)} of 10 bugs wandering beside a shallow puddle died in it`);
+  if (__count(WORM) < 4) bad.push(`${10-__count(WORM)} of 10 worms wandering beside a shallow puddle died in it`);
   return bad.length ? bad.join('; ') : null;
 });
 
 /* Reported from the phone with pictures, and the only reason the drowning clock looked
-   broken: eighty-four bugs tipped into a tank sat in a neat pink raft on the surface and
+   broken: eighty-four worms tipped into a tank sat in a neat pink raft on the surface and
    stayed there. `footing` counted anything that was not a gas, so water was something to
-   stand on — and a bug standing on top of water never has water above it, so it never
+   stand on — and a worm standing on top of water never has water above it, so it never
    started drowning. Nothing here was visible by reading either half. */
-await check(browser, 'a bug tipped into a pond goes under it rather than standing on it', () => {
+await check(browser, 'a worm tipped into a pond goes under it rather than standing on it', () => {
   const bad = [];
   const cx = (W/2)|0;
 
@@ -1648,19 +1648,19 @@ await check(browser, 'a bug tipped into a pond goes under it rather than standin
   __slab(cx-24, f-60, cx-24, f-1, GLASS);            // a tank, so it cannot run away
   __slab(cx+24, f-60, cx+24, f-1, GLASS);
   __slab(cx-23, f-56, cx+23, f-1, WATER);
-  for (let y=0;y<6;y++) for (let x=cx-20;x<=cx+20;x+=3) put(x, f-62-y*2, BUG);
-  const n = __count(BUG);
-  if (n < 60) return `the scene only placed ${n} bugs, so it is not the reported one`;
+  for (let y=0;y<6;y++) for (let x=cx-20;x<=cx+20;x+=3) put(x, f-62-y*2, WORM);
+  const n = __count(WORM);
+  if (n < 60) return `the scene only placed ${n} worms, so it is not the reported one`;
   for (let k=0;k<1200;k++) __step(1);
-  if (__count(BUG)) bad.push(`${__count(BUG)} of ${n} bugs were still afloat after twenty seconds`);
+  if (__count(WORM)) bad.push(`${__count(WORM)} of ${n} worms were still afloat after twenty seconds`);
 
   // A film you can stand in the bottom of is a puddle to wade, not a drowning. Without
-  // this, "bugs sink" is satisfied by making all water lethal on contact again.
+  // this, "worms sink" is satisfied by making all water lethal on contact again.
   __wipe(); const f2 = __floor();
   __slab(cx-20, f2-1, cx+20, f2-1, WATER);
-  for (let k=0;k<10;k++) put(cx+22+k*3, f2-2, BUG);
+  for (let k=0;k<10;k++) put(cx+22+k*3, f2-2, WORM);
   for (let k=0;k<1800;k++) __step(1);
-  if (__count(BUG) < 8) bad.push(`${10-__count(BUG)} of 10 bugs drowned wading a one-cell film of water`);
+  if (__count(WORM) < 8) bad.push(`${10-__count(WORM)} of 10 worms drowned wading a one-cell film of water`);
 
   /* ...and it goes down slowly. Also reported from the phone: once they sank, they sank at
      exactly the speed they fell through air, so the water may as well not have been there.
@@ -1669,20 +1669,20 @@ await check(browser, 'a bug tipped into a pond goes under it rather than standin
   const rate = (wet, n) => {
     __wipe(); const f = __floor();
     if (wet) __slab(cx-10, f-70, cx+10, f-1, WATER);
-    put(cx, f-68, BUG);
+    put(cx, f-68, WORM);
     let at = -1;
-    for (let i=0;i<type.length;i++) if (type[i]===BUG) at = i;
+    for (let i=0;i<type.length;i++) if (type[i]===WORM) at = i;
     const y0 = (at/W)|0;
     for (let k=0;k<n;k++) __step(1);
     at = -1;
-    for (let i=0;i<type.length;i++) if (type[i]===BUG) at = i;
+    for (let i=0;i<type.length;i++) if (type[i]===WORM) at = i;
     if (at < 0) return null;                       // drowned inside the window
     return ((((at/W)|0) - y0)) / n;                // parenthesised: `|` binds looser than `-`
   };
   const air = rate(false, 20), wet = rate(true, 60);
-  if (air === null || wet === null) bad.push('the fall-rate scene lost its bug before it could be timed');
+  if (air === null || wet === null) bad.push('the fall-rate scene lost its worm before it could be timed');
   else {
-    if (air < 0.9) bad.push(`a bug falls ${air.toFixed(2)} cells a tick through open air, which is not falling`);
+    if (air < 0.9) bad.push(`a worm falls ${air.toFixed(2)} cells a tick through open air, which is not falling`);
     if (wet > air / 2.5) bad.push(`it sinks at ${wet.toFixed(2)} cells a tick against ${air.toFixed(2)} in air — the water is not slowing it`);
     if (wet < air / 12) bad.push(`it sinks at ${wet.toFixed(2)} cells a tick, which is hanging in the water rather than sinking through it`);
   }
@@ -1704,7 +1704,7 @@ await check(browser, 'the brush reaches into a tank, and still not through a wal
     tool = t; brush = 3; paintAt(cx, f-15); tool = t0; brush = b0;
     return __count(t) - before;
   };
-  for (const [n, t] of [['a fish', FISH], ['sand', SAND], ['a bug', BUG]])
+  for (const [n, t] of [['a fish', FISH], ['sand', SAND], ['a worm', WORM]])
     if (into(t) < 1) bad.push(`${n} could not be placed inside a tank of water`);
 
   // The other half. Solids and powders still refuse, or the brush quietly becomes an
@@ -1758,7 +1758,7 @@ await check(browser, 'a grub cuts galleries through a log rather than a crater i
 
   /* It eats what would burn and nothing else, which is a property of the *food's* row
      rather than a list here. Stone, steel and glass are the ones that must survive it, and
-     so must the other creatures — a grub that ate bugs would be a population rule, and the
+     so must the other creatures — a grub that ate worms would be a population rule, and the
      population is meant to be whatever you put in the box. */
   for (const t of [STONE, STEEL, GLASS, OBSIDIAN, SAND]){
     __wipe(); const f = __floor();
@@ -1773,11 +1773,11 @@ await check(browser, 'a grub cuts galleries through a log rather than a crater i
   }
   __wipe(); const f = __floor();
   __slab(cx-14, f-20, cx+14, f-1, WOOD);
-  for (let k=0;k<8;k++) put(cx-10+k*2, f-10, BUG);
+  for (let k=0;k<8;k++) put(cx-10+k*2, f-10, WORM);
   for (let k=0;k<8;k++) put(cx-10+k*2, f-12, GRUB);
-  const bugs0 = __count(BUG), grubs0 = living();
+  const bugs0 = __count(WORM), grubs0 = living();
   for (let k=0;k<3000;k++) __step(1);
-  if (__count(BUG) < bugs0) bad.push(`${bugs0 - __count(BUG)} of ${bugs0} bugs were eaten by the grubs beside them`);
+  if (__count(WORM) < bugs0) bad.push(`${bugs0 - __count(WORM)} of ${bugs0} worms were eaten by the grubs beside them`);
   if (living() < grubs0) bad.push(`${grubs0 - living()} of ${grubs0} grubs ate each other`);
 
   // Out of the wood it is a creature like the others: it crawls, and it burns.
@@ -1920,7 +1920,7 @@ await check(browser, 'an ash bug clears what a fire left, and only that', () => 
   }
 
   /* The whole of the design, and none of it is written for it: an ember is hot, so a
-     ash bug walking into a fresh burn panics and leaves on the bug's own machinery, and
+     ash bug walking into a fresh burn panics and leaves on the worm's own machinery, and
      burns if it stays. It can only clear a fire once the fire has gone out. Two scenes, the
      same in every way but when the ash bugs arrive. */
   const sendIn = (wait) => {
@@ -1946,9 +1946,9 @@ await check(browser, 'an ash bug clears what a fire left, and only that', () => 
 
 /* Eating debris and *looking* for debris are two different verbs, and for a day only one of
    them was written: reported from the phone as "they don't seem to seek the ash, or look
-   like they do at least". They walked a bug's walk and ate whatever they bumped into.
+   like they do at least". They walked a worm's walk and ate whatever they bumped into.
 
-   Both sides, and against a bug in the identical scene. One side alone passes on a creature
+   Both sides, and against a worm in the identical scene. One side alone passes on a creature
    that simply drifts one way — which is exactly what the first fix did, and it measured as
    working because the pile happened to be on the side it drifted toward. */
 await check(browser, 'an ash bug goes to the ash rather than stumbling into it', () => {
@@ -1967,7 +1967,7 @@ await check(browser, 'an ash bug goes to the ash rather than stumbling into it',
     return { moved: end - start, left: __count(t) };
   };
   const gain = {};
-  for (const t of [ASHBUG, BUG]){
+  for (const t of [ASHBUG, WORM]){
     let sum = 0;
     for (const where of [-1, 1]){
       const r = towards(t, where);
@@ -1980,11 +1980,11 @@ await check(browser, 'an ash bug goes to the ash rather than stumbling into it',
     if (sum !== null) gain[t] = sum / 2;
   }
   /* Averaging the two sides is the point of running both. A random walk drifts, and one run
-     of a bug drifted 35 cells — enough to beat the ash bug's 31 on that side and fail a
+     of a worm drifted 35 cells — enough to beat the ash bug's 31 on that side and fail a
      comparison of magnitudes. Signed toward-the-pile and averaged, the drift cancels and
-     only the seeking survives: measured 39 for an ash bug against 2 for a bug. */
-  if (gain[ASHBUG] !== undefined && gain[BUG] !== undefined && gain[ASHBUG] < gain[BUG] + 12)
-    bad.push(`ash bugs closed ${Math.round(gain[ASHBUG])} cells on the ash and bugs closed ${Math.round(gain[BUG])} — that is the same walk`);
+     only the seeking survives: measured 39 for an ash bug against 2 for a worm. */
+  if (gain[ASHBUG] !== undefined && gain[WORM] !== undefined && gain[ASHBUG] < gain[WORM] + 12)
+    bad.push(`ash bugs closed ${Math.round(gain[ASHBUG])} cells on the ash and worms closed ${Math.round(gain[WORM])} — that is the same walk`);
   return bad.length ? bad.join('; ') : null;
 });
 
@@ -2116,6 +2116,70 @@ await check(browser, 'no two things in the box are the same colour, and creature
   return bad.length ? bad.join('; ') : null;
 });
 
+/* The one creature that makes more of itself, which is the rule the other six exist inside.
+   So the checks are mostly about what stops it: it needs a real surface, it needs water
+   within reach, and both of those have to bind or the exception eats the box. */
+await check(browser, 'moss creeps over damp surfaces, and will not grow without either', () => {
+  const bad = [];
+  const cx = (W/2)|0;
+
+  // A wall standing in water. It should climb it, and nothing should end up in mid-air.
+  __wipe(); let f = __floor();
+  __slab(cx-30, f-2, cx+30, f-1, WATER);
+  __slab(cx-1, f-16, cx+1, f-3, STONE);
+  put(cx+2, f-4, MOSS);
+  for (let k=0;k<12000;k++) __step(1);
+  const grew = __count(MOSS);
+  if (grew < 8) bad.push(`one cell of moss on a wet wall became ${grew} in three minutes`);
+  /* Every cell has to be touching something that is not moss. Anchoring on itself reads
+     perfectly and turns moss into a fog: measured before this clause, 1219 cells of which
+     1175 were touching nothing but each other. */
+  let floating = 0;
+  for (let i=0;i<type.length;i++) if (type[i]===MOSS){
+    const x=i%W, y=(i/W)|0; let held = false;
+    for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]])
+      if (inb(x+dx,y+dy)){ const u = type[idx(x+dx,y+dy)];
+        if (u!==E && u!==MOSS && M[u].ph!==0 && M[u].ph!==1) held = true; }
+    if (!held) floating++;
+  }
+  if (floating) bad.push(`${floating} of ${grew} cells of moss were touching nothing but other moss`);
+
+  // The same wall, dry. Nothing at all should happen.
+  __wipe(); f = __floor();
+  __slab(cx-1, f-16, cx+1, f-1, STONE);
+  put(cx+2, f-4, MOSS);
+  for (let k=0;k<12000;k++) __step(1);
+  if (__count(MOSS) !== 1) bad.push(`one cell of moss on a dry wall became ${__count(MOSS)}`);
+
+  /* And it stays near the water rather than crossing the box. The pond is sunk into a
+     hollow rather than poured onto an open floor: poured, it runs along the floor as water
+     does, and it drowned the seeded cell about one run in two — moss with water on every
+     side has no empty neighbour to grow into, so the arm failed reporting "made 1 cells"
+     while the rule it was testing was fine. */
+  __wipe(); f = __floor();
+  // Sunk INTO the floor, which is rows f..H-1 — the first two attempts at this poured the
+  // pond onto row f-1, which is air, so it ran along the surface and drowned the seed.
+  __slab(20, f, 50, f+3, WATER);
+  for (let k=0;k<600;k++) __step(1);                  // let the pond settle before seeding
+  put(54, f-1, MOSS);
+  for (let k=0;k<12000;k++) __step(1);
+  let far = 0;
+  for (let i=0;i<type.length;i++) if (type[i]===MOSS) far = Math.max(far, i%W);
+  if (__count(MOSS) < 5) bad.push(`moss beside a pond made ${__count(MOSS)} cells in three minutes`);
+  if (far > 50 + M[MOSS].damp + 12)
+    bad.push(`moss reached column ${far} from a pond ending at 50, with damp ${M[MOSS].damp}`);
+
+  // It burns where a flame touches it. It does not carry fire far, and does not shield wood.
+  __wipe(); f = __floor();
+  __slab(20, f-8, 69, f-1, MOSS);
+  const n0 = __count(MOSS);
+  __hold(40, f-4, 3, 600);
+  for (let k=0;k<1200;k++) __step(1);
+  if (n0 - __count(MOSS) < 20) bad.push(`a match held in a slab of moss took out ${n0 - __count(MOSS)} of ${n0} cells`);
+  if (![...finds].some(k => k === MOSS + ':spread')) bad.push('spreading did not register as a discovery');
+  return bad.length ? bad.join('; ') : null;
+});
+
 await check(browser, 'a box full of living things still costs less than a frame', () => {
   const bad = [];
   const bench = (t, n) => {
@@ -2128,8 +2192,8 @@ await check(browser, 'a box full of living things still costs less than a frame'
     for (let k=0;k<200;k++) moveLife();
     return (performance.now() - t0) / 200;
   };
-  const bugs = bench(BUG, 500);
-  if (bugs > 1) bad.push(`${bugs.toFixed(2)}ms a tick for 500 bugs`);
+  const worms = bench(WORM, 500);
+  if (worms > 1) bad.push(`${worms.toFixed(2)}ms a tick for 500 worms`);
   const moths = bench(MOTH, 500);
   if (moths > 2) bad.push(`${moths.toFixed(2)}ms a tick for 500 moths with a fire lit`);
   // Fish need water to be in, so they get their own scene rather than the shared one.
@@ -2167,11 +2231,11 @@ await check(browser, 'every material has a save key, no two share one, and a ren
   if (TYPE_OF_KEY.size !== seen.size) bad.push(`the reverse lookup has ${TYPE_OF_KEY.size} entries for ${seen.size} keys`);
 
   /* A key is allowed to disagree with the label — that is the entire reason this table is
-     separate — but a *save* must still round-trip after a rename. The tray called one
-     creature a Woodlouse for an afternoon and an Ash bug after it, and the original creature
-     is now a Worm; a scene written before either would be unreadable if the keys had
-     followed the labels. So: write one cell of everything, read it back, and compare types
-     rather than names. */
+     separate — but a *save* must round-trip whatever either of them says. One creature has
+     been a Woodlouse and then an Ash bug, and the original is now a Worm. So: write one cell
+     of everything, read it back, and compare **types rather than names**. That is the
+     assertion that survives the keys themselves being tidied, which is what happened once it
+     was clear no save anybody minded losing existed yet. */
   __wipe();
   const all = [];
   for (let t=1; t<M.length; t++) if (M[t] && SAVE_KEY[t]) all.push(t);
