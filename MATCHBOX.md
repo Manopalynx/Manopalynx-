@@ -432,7 +432,7 @@ The first three react to the world. A **Grub** rearranges it — the first thing
 *removes* material. Put grubs in a log and come back to a log with galleries cut through it,
 then hold a match to what is left.
 
-**One number does all of it.** `chew:40` is ticks per bite, spent as a dice roll rather than
+**One number does all of it.** `chew:67` is ticks per bite, spent as a dice roll rather than
 a counter, so it needs no state of its own — the same reason the bug's pace is a roll: a
 moving cell has no identity to keep a counter in, and its index changes every time it
 shifts. The bite and the move into what was just eaten are one action, which is what makes
@@ -459,12 +459,32 @@ Measured on a 41×30 log of 1230 cells:
 
 | | eats | what the hole looks like |
 |---|---|---|
-| one grub, 10s | 10 cells | a **3×9** gallery |
-| one grub, 30s | 46 cells | **8×20** — reaching 2.9× further than a blob of that area |
-| four grubs, 60s | 352 cells (**29%**) | across the whole log |
-| twelve grubs, 60s | 894 cells (**73%**) | lace |
+| one grub, 10s | 9 cells | a **3×8** gallery |
+| one grub, 30s | 26 cells | **3×21** — reaching 4× further than a blob of that area |
+| four grubs, 60s | 221 cells (**18%**) | across the whole log |
+| twelve grubs, 60s | 654 cells (**53%**) | lace |
 
 Four is about what one tap gives you, `sparse` being 0.13.
+
+#### `chew` was 40 and is 67, which was reported rather than calculated
+
+"They seem to go through the materials very quickly" — from the phone, and asked for 40%
+slower. The rate is `1/chew`, so 40 ÷ 0.6 = 67, and the arithmetic is the easy half. What it
+is actually worth measuring is that **the slowdown you get is not the slowdown you asked
+for, and how far off depends on how many of them there are:**
+
+| | at `chew:40` | at `chew:67` | slower |
+|---|---|---|---|
+| one grub, 30s | 45 | 26 | **42%** |
+| four grubs, 60s | 355 | 221 | **38%** |
+| twelve grubs, 60s | 883 | 654 | **26%** |
+
+Repeated 8, 5 and 4 times respectively, because one run of a random walk is noise. A lone
+grub gets the full 40% because there is always something to bite. Twelve get 26%, because at
+that density the bite rate has stopped being what limits them — they spend their time
+crossing tunnels that other grubs have already eaten, and looking for fresh food is the
+bottleneck. The dial is honest at the density you actually play at and increasingly
+optimistic above it.
 
 **The check measures the shape, not the count.** A grub that ate a neat sphere out of the
 middle of a log satisfies "it eats wood" completely, and is not the thing. A compact blob of
