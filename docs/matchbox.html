@@ -639,16 +639,28 @@ M[ANT]     ={n:'Ant',      ph:3, col:[136, 44, 44], ig:200, fuel:18, out:1.1, co
    multiplies. That is the whole of what it adds and it is worth exactly one exception,
    because a box where nothing can ever increase has no way to show you growth.
 
-   Three things keep the exception from eating the file. It only spreads onto a surface, so
-   it creeps over what you built rather than filling the air. It only spreads where there is
-   water within `damp` cells, so a scene decides how much of it there can be. And it burns
-   easily — `ig` 210 and a low `fuel` — so a match undoes a minute of it, and what grows back
-   grows from the edges that survived.
+   Three things keep the exception from eating the file. It only spreads onto a surface, so it
+   creeps over what you built rather than filling the air. It only spreads where there is
+   water within `damp` cells, so a scene decides how much of it there can be. And it dies of
+   heat long before anything catches, so a fire clears it.
+
+   **It withers rather than burns, and that is not a detail.** It used to burn like any other
+   soft fuel, which made a loop nobody designed: moss burns down to ash, moss grows on ash,
+   that moss burns. Reported from the phone as moss expanding with the ash and containing it.
+   Measured on a mossy build with one arm lit — **480 cells of wood burnt, and 1714 cells of
+   ash on the floor afterwards.** Three and a half times as much ash as there was fuel; the
+   scene was manufacturing matter. With `wither` it is 480, exactly one ash per cell of wood.
+
+   So the burning fields are gone from this row rather than left sitting there unreachable:
+   the life pass runs before `react()`, so a moss cell crossing 70°C is dead before anything
+   ever looks at its ignition point. A field that can never fire is the single thing this
+   file has shipped most often by accident, and leaving `ig` on a row that cannot reach it
+   would be one more.
 
    `spread` is ticks per attempt as a dice roll, like every other pace in here. */
-M[MOSS]    ={n:'Moss',     ph:3, col:[ 92,152, 96], ig:210, fuel:26, out:1.0, cond:.14, cap:1.2,
-             char:6, ash:ASH, dens:.9, tough:.5, sparse:.30, alive:1,
-             spread:40, damp:40, roots:1};
+M[MOSS]    ={n:'Moss',     ph:3, col:[ 92,152, 96], ig:9e9, cond:.14, cap:1.2,
+             dens:.9, tough:.5, sparse:.30, alive:1,
+             spread:40, damp:40, roots:1, wither:70};
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
              leak:.02, peak:1500};
 
@@ -2072,7 +2084,12 @@ function moveLife(){
     const mx = i % W, my = (i / W) | 0;
     // Moss does not move, does not drown — it lives on wet rock — and does not walk, so it
     // takes none of the rest of this pass.
-    if (kind === MOSS){ mossSpread(i, mx, my); continue; }
+    if (kind === MOSS){
+      // Dries out and is gone, leaving nothing — which is the whole point of it: moss that
+      // left ash would grow back on the ash and burn again.
+      if (temp[i] >= M[kind].wither){ found(kind + ':wither', `${M[kind].n} dries out`); become(mx, my, E); continue; }
+      mossSpread(i, mx, my); continue;
+    }
     if (drowning(i, mx, my, M[kind])) continue;
 
     /* A pupa is alive and does nothing, which is the whole of it — it belongs in this pass
@@ -3536,6 +3553,7 @@ const FINDS = (() => {
     if (m.graze) add(t, 'graze', `${m.n} clears away what fire leaves behind`);
     if (m.carries) add(t, 'carry', `${m.n} carries loose grains about and heaps them up`);
     if (m.spread) add(t, 'spread', `${m.n} spreads over damp surfaces`);
+    if (m.wither) add(t, 'wither', `${m.n} dries out in the heat`);
     // One rule, both ends of a life: a grub filling up, and what it opens into.
     if (m.becomes !== undefined) add(t, 'becomes', `${m.n} turns into ${M[m.becomes].n}`);
     // Two ways of being somewhere you cannot be, and both are worth finding out about.
