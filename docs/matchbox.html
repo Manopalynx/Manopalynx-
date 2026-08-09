@@ -401,7 +401,17 @@ M[ASH]    = {n:'Ash',      ph:2, col:[ 96, 92, 88], ig:9e9, cond:.10, cap:.9,  d
 M[LAVA]   = {n:'Lava',     ph:1, col:[198, 76, 20], ig:9e9, cond:.07, cap:6.4, dens:2.4,
              t0:1180, cool:560, sets:STONE, flow:.45, glow:1,
              meets:[{with:WATER, become:OBSIDIAN, they:STEAM}]};
-M[GLASS]  = {n:'Glass',    ph:3, col:[172,204,206], ig:9e9, cond:.18, cap:1.2, dens:2.5, proof:1};
+/* `proof` is against acid and is deliberate — it is what makes a tank worth building. It
+   was also, for a long time, proof against *everything*: no `ig`, and no `melt` either, so
+   there was no temperature at any point on the dial that could touch it. Reported from the
+   phone as thermite not cutting glass; measured at 2600°C with 0 of 102 cells removed.
+
+   1450 is chosen so a lava pour at 1180 still sits in a glass tank, and thermite does not.
+   It melts into lava rather than into a molten glass of its own, which means a window you
+   melt and let set comes back as stone: the box has one silicate melt, not three, and that
+   is the price of it. Sand → glass → lava → stone is at least a coherent family. */
+M[GLASS]  = {n:'Glass',    ph:3, col:[172,204,206], ig:9e9, cond:.18, cap:1.2, dens:2.5,
+             proof:1, melt:1450, into:LAVA};
 /* Widening the liquid window to 1500→1120 was not enough on its own, because a window
    is only worth what it takes to cross it. Traced: one molten cell in open air fell
    1500→1268 in five ticks and had set by tick nine. A pool of 150 was half set in
@@ -440,7 +450,13 @@ M[GLASS]  = {n:'Glass',    ph:3, col:[172,204,206], ig:9e9, cond:.18, cap:1.2, d
 M[MOLTEN] = {n:'Molten',   ph:1, col:[240,158, 62], ig:9e9, cond:.55, cap:5.0, dens:7.0,
              t0:1650, cool:860, sets:STEEL, flow:.6, glow:1,
              meets:[{with:WATER, become:STEEL, they:STEAM}]};
-M[OBSIDIAN]={n:'Obsidian', ph:3, col:[ 40, 33, 46], ig:9e9, cond:.19, cap:2.1, dens:2.6, proof:1};
+/* Volcanic glass — this is literally what the lava in this box turns into when it is
+   quenched, so melting it back into lava is the round trip rather than an invention. Same
+   hole as glass had: 0 of 102 cells removed at 2600°C, because there was no melting point
+   at all. 1250, matching stone, so it is still refractory enough to hold the lava it came
+   from at 1180. */
+M[OBSIDIAN]={n:'Obsidian', ph:3, col:[ 40, 33, 46], ig:9e9, cond:.19, cap:2.1, dens:2.6,
+             proof:1, melt:1250, into:LAVA};
 
 /* Each of these exists because nothing else in the box did the thing it does.
 
@@ -3395,6 +3411,26 @@ function paintAt(cx, cy){
   const m = M[tool];
   if (m && m.damp !== undefined && !damp(cx, cy, m.damp))
     say(`${m.n} needs water within reach — it will not spread here`);
+
+  /* And the other silence of the same kind. A match is 780°C and thermite catches at 950,
+     which is deliberate — you light it with a magnesium ribbon — but holding a flame on it
+     and watching nothing happen looks exactly like thermite being broken. It was reported
+     that way: "the thermite doesn't burn through obsidian, glass, green, wood". Two of those
+     four were a real hole in the table; the other two burn perfectly well once the charge is
+     actually alight.
+
+     Read off the table rather than naming thermite, so the next material with an ignition
+     point above the match says so too. */
+  if (tool === 'match' && matchLit > 0){
+    for (let dy=-brush; dy<=brush; dy++) for (let dx=-brush; dx<=brush; dx++){
+      if (!inb(cx+dx, cy+dy)) continue;
+      const u = M[type[idx(cx+dx, cy+dy)]];
+      if (u && u.fuel > 0 && u.ig > MATCH_HEAT){
+        say(`${u.n} needs more than a match — ${Math.round(u.ig)}°C, and a match is ${MATCH_HEAT}`);
+        return;
+      }
+    }
+  }
 }
 
 /* Lines and rectangles. Drawing a straight wall with a thumb is miserable, and every
