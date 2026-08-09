@@ -45,7 +45,7 @@ fetched fresh whenever there is a signal — no stale-build trap, and nothing to
 
 ## What is in the box
 
-Twenty-nine chips in the tray — twenty-four materials, four living things and the vent — and
+Thirty chips in the tray — twenty-four materials, five living things and the vent — and
 seven more the simulation makes and never lets you place: fire, smoke, steam, ash, the pupa,
 molten wax and molten rubber. Every one of them is one row of the `M` table and nothing else in the
 file knows any of them by name.
@@ -137,6 +137,7 @@ A material is described by a handful of numbers. The ones that matter:
 | `sparse` | how thinly the brush lays it down |
 | `alive` | this is a creature — keeps it off a grub's menu, whether or not a brush made it |
 | `chew` `pupa` | ticks a grub takes per cell, and how many cells before it seals up |
+| `graze` | ticks a woodlouse takes per mouthful of what fire left behind |
 | `hatch` `becomes` | how long a life stage lasts, and what it turns into |
 | `drown` `air` | how many ticks a living thing lasts in the wrong one of the two |
 | `feed` `way` `breath` (per cell) | what a vent pours, which way a bug is walking, and how long it has been somewhere it cannot survive |
@@ -552,6 +553,71 @@ grubs on a bare floor stayed six grubs through a minute of it — pupation is a 
 tunnelling, not a timer, and the check states that separately because a timer would look
 identical for the first half-minute.
 
+### The woodlouse, which is interested in what has already happened
+
+Pupation cost the box something, and it was spotted from the phone rather than here: with
+the grub growing up and flying off, **nothing lives in solid material any more.** The
+measurement is worse than the observation. A log, a pond, a floor, one tap of each creature,
+left running for three minutes:
+
+| seconds | grub | pupa | moth | bug | fish | wood |
+|---|---|---|---|---|---|---|
+| 0 | 6 | 0 | 0 | 6 | 4 | 1464 |
+| 30 | 4 | 2 | 0 | 6 | 4 | 1314 |
+| 60 | 0 | 0 | 6 | 5 | 4 | 1284 |
+| 180 | 0 | 0 | 6 | 2 | 4 | **1284** |
+
+Bugs are still walking at three minutes and fish still swimming; the wood is frozen from one
+minute on. And the same is true of every fire ever lit in this box — the ash and the embers
+sit there for as long as the tab is open, and nothing has ever touched them.
+
+A **Woodlouse** eats them. It walks like a bug and grazes what it passes, and what counts as
+food is derived rather than listed:
+
+```js
+for (let t=0; t<M.length; t++){
+  const m = M[t]; if (!m || m.ash === undefined || m.ash === E) continue;
+  const a = M[m.ash];
+  if (a && a.ph !== 0 && a.ph !== 1) s.add(m.ash);          // ash and embers, today
+}
+```
+
+Anything some material burns down to. The filter is the half worth reading: three `ash`
+targets are not things to be eaten — `E`, which is nothing at all; `SMOKE`, which is a gas
+and already gone; and `MOLTEN`, because thermite burns down to molten steel and a woodlouse
+grazing on that is not the picture. Gas and liquid are the test, so the next fuel that burns
+down to a liquid is excluded without anybody remembering to.
+
+**Grazing deliberately does not stop it walking**, which is the one place it differs from
+the grub. A grub at a face of food stays put and tunnels. A woodlouse doing the same would
+sit in an ash field clearing a circle around itself, which is not foraging. It eats what it
+is passing and keeps going. Measured, four of them — about one tap — take a 306-cell ash
+field to 3 in a minute; one takes it to 148.
+
+#### Its one constraint is inherited, which is why it is the right one
+
+**An ember is hot.** A woodlouse that walks into a fresh burn heats up, panics and leaves on
+exactly the machinery the bug already has, and burns if it stays. So it can only clear a
+fire once the fire has gone out — and not one line of that is written for it.
+
+Eight woodlice released into the same burnt log at different times:
+
+| released | box still at | survivors | debris after another minute |
+|---|---|---|---|
+| 30s after lighting | 1296°C, 30 fires burning | **0 of 8** | 821 → **969**, their own ash |
+| 60s | 1128°C | 5 of 8 | 984 → 634 |
+| 120s | 538°C | 8 of 8 | 984 → 227 |
+| 200s | 185°C | 8 of 8 | 984 → **0** |
+
+The first row is the good one: send them in too early and you have made the mess worse.
+
+**This replaced a damp requirement, and the reason is worth keeping.** The first design had
+it dry out away from water — the exact inverse of the fish, a real new constraint, and it
+would have made the pond matter for something other than putting fires out. It is also
+wrong, and obviously so once stated: **fire dries everything**, so a creature that needs
+water could not live in the one place it exists to clean up. The constraint would have
+fought the creature. The heat one costs nothing and says the same thing better.
+
 ### Dying takes a moment, which is most of what you see
 
 Reported from the phone: a bug that touched water was simply *gone*, and a fish on dry
@@ -745,14 +811,14 @@ be a guess dressed up as an undo.
 
 ## The finds
 
-`FOUND 3/39` in the corner used to be the whole of it. Thirty-six things existed that the
+`FOUND 3/42` in the corner used to be the whole of it. Thirty-nine things existed that the
 box would never name, mention again or hint at — a progress bar for a task nobody had been
 told. **Finds** in Tools opens the list: found ones read as what they are (`Lava + Water →
 Obsidian`) and the rest read `Acid — ?`, carrying the material's colour and name and nothing
 else. Eight rows mentioning Acid tell you to go and play with acid without telling you what
 happens when you do. Found ones sort to the top, so it is a record before it is a to-do list.
 
-The thirty-nine are derived from the material table — every melt, boil, set, ash, contact
+The forty-two are derived from the material table — every melt, boil, set, ash, contact
 reaction, explosion, drowning and suffocation in it — so a material added tomorrow brings
 its discoveries with it. The three creatures added five between them and no new derivation
 code: a `drown` or an `air` field is enough.
@@ -912,7 +978,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 66 checks — the simulation
+node test/matchbox-sim.mjs     # 67 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```

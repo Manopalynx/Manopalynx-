@@ -1882,6 +1882,68 @@ await check(browser, 'a grub that has eaten enough becomes a pupa, and a pupa be
   return bad.length ? bad.join('; ') : null;
 });
 
+/* Every fire in this box left a floor of ash and embers that nothing ever touched again.
+   Measured before this existed: a scene with a log, a pond and one tap of each creature
+   stopped changing after sixty seconds, and the ash from the first minute was still sitting
+   there at three. A woodlouse eats it.
+
+   The claim worth checking is not that it eats ash — that is one line — but that it eats
+   *what fire leaves* and nothing else, and that the list is derived rather than typed. */
+await check(browser, 'a woodlouse clears what a fire left, and only that', () => {
+  const bad = [];
+  const cx = (W/2)|0;
+
+  const menu = [...LEFTOVER].map(t => M[t].n).sort().join(', ');
+  if (menu !== 'Ash, Ember') bad.push(`the leftovers came out as "${menu}"`);
+  // The three that must not be on it, and why each one is a different mistake: nothing at
+  // all, a gas that is already gone, and thermite burning down to molten steel.
+  for (const t of [E, SMOKE, MOLTEN])
+    if (LEFTOVER.has(t)) bad.push(`${M[t].n} counts as something fire left behind`);
+
+  // A cold ash field, and four of them, which is about one tap.
+  __wipe(); let f = __floor();
+  __slab(cx-25, f-6, cx+25, f-1, ASH);
+  const a0 = __count(ASH);
+  for (let k=0;k<4;k++) put(cx-15+k*6, f-7, LOUSE);
+  for (let k=0;k<3600;k++) __step(1);
+  if (__count(ASH) > a0 * 0.15) bad.push(`four woodlice left ${__count(ASH)} of ${a0} cells of ash after a minute`);
+  if (__count(LOUSE) !== 4) bad.push(`four woodlice on cold ash became ${__count(LOUSE)}`);
+
+  // ...and everything that is not leftovers survives them.
+  for (const t of [STONE, WOOD, SAND, COAL, STRAW]){
+    __wipe(); f = __floor();
+    __slab(cx-14, f-12, cx+14, f-1, t);
+    for (let k=0;k<6;k++) put(cx-8+k*3, f-13, LOUSE);
+    const n0 = __count(t);
+    for (let k=0;k<3000;k++) __step(1);
+    if (__count(t) < n0) bad.push(`woodlice ate ${n0 - __count(t)} cells of ${M[t].n}`);
+  }
+
+  /* The whole of the design, and none of it is written for it: an ember is hot, so a
+     woodlouse walking into a fresh burn panics and leaves on the bug's own machinery, and
+     burns if it stays. It can only clear a fire once the fire has gone out. Two scenes, the
+     same in every way but when the woodlice arrive. */
+  const sendIn = (wait) => {
+    __wipe(); const ff = __floor();
+    __slab(cx-20, ff-24, cx+20, ff-1, WOOD);
+    __hold(cx, ff-25, 2, 250);
+    for (let k=0;k<wait;k++) __step(1);
+    const debris = __count(ASH) + __count(EMBER), hot = Math.round(__maxT());
+    for (let k=0;k<8;k++) put(cx-10+k*3, ff-26, LOUSE);
+    for (let k=0;k<3600;k++) __step(1);
+    return { hot, debris, lice: __count(LOUSE), after: __count(ASH) + __count(EMBER) };
+  };
+  const early = sendIn(1800), late = sendIn(12000);
+  if (early.lice > 2) bad.push(`${early.lice} of 8 woodlice walked into a burn at ${early.hot}°C and lived`);
+  if (early.after < early.debris) bad.push('woodlice cleared a fire that was still going');
+  if (late.lice < 6) bad.push(`only ${late.lice} of 8 survived a burn that had cooled to ${late.hot}°C`);
+  if (late.after > late.debris * 0.4)
+    bad.push(`they left ${late.after} of ${late.debris} cells of a cold burn after a minute`);
+
+  if (![...finds].some(k => k === LOUSE + ':graze')) bad.push('clearing up did not register as a discovery');
+  return bad.length ? bad.join('; ') : null;
+});
+
 await check(browser, 'a box full of living things still costs less than a frame', () => {
   const bad = [];
   const bench = (t, n) => {
