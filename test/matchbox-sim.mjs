@@ -1718,6 +1718,82 @@ await check(browser, 'the brush reaches into a tank, and still not through a wal
   return bad.length ? bad.join('; ') : null;
 });
 
+/* The fourth creature, and the first that takes material out of the box rather than
+   reacting to it. What it leaves behind is the point — a log with galleries cut through it
+   is a different thing to burn — so the shape of the hole is what this measures, not the
+   count. A grub that ate a neat sphere out of the middle would satisfy "it eats wood". */
+await check(browser, 'a grub cuts galleries through a log rather than a crater in it', () => {
+  const bad = [];
+  const cx = (W/2)|0;
+  const gnaw = (n, ticks) => {
+    __wipe(); const f = __floor();
+    __slab(cx-20, f-30, cx+20, f-1, WOOD);
+    const w0 = __count(WOOD);
+    for (let k=0;k<n;k++) put(cx-18+k*3, f-15, GRUB);
+    for (let k=0;k<ticks;k++) __step(1);
+    let x1=1e9,x2=-1e9,y1=1e9,y2=-1e9,holes=0;
+    for (let y=f-30;y<=f-1;y++) for (let x=cx-20;x<=cx+20;x++)
+      if (type[idx(x,y)] === E){ holes++; if(x<x1)x1=x; if(x>x2)x2=x; if(y<y1)y1=y; if(y>y2)y2=y; }
+    return { eaten: w0 - __count(WOOD), alive: __count(GRUB), holes,
+             reach: holes ? Math.max(x2-x1+1, y2-y1+1) : 0 };
+  };
+
+  const one = gnaw(1, 1800);
+  if (one.eaten < 12) bad.push(`one grub ate ${one.eaten} cells of a log in thirty seconds`);
+  if (one.alive !== 1) bad.push(`one grub in a log became ${one.alive}`);
+  /* A compact blob of area A spans about sqrt(A). A tunnel spans far more than that, and
+     the ratio is the only way to say "gallery" rather than "hole" in a number. Measured at
+     46 cells across 20 rows, which is 2.9× — the threshold is well under that on purpose,
+     because the path is a random walk and a short one can double back on itself. */
+  if (one.reach < 1.6 * Math.sqrt(one.holes))
+    bad.push(`${one.holes} cells eaten reaching ${one.reach} — that is a crater, not a gallery`);
+
+  const four = gnaw(4, 3600);
+  if (four.eaten < 120) bad.push(`four grubs ate ${four.eaten} cells of a log in a minute`);
+  if (four.eaten > 900) bad.push(`four grubs ate ${four.eaten} of a 1230-cell log in a minute — that is not a log any more`);
+
+  /* It eats what would burn and nothing else, which is a property of the *food's* row
+     rather than a list here. Stone, steel and glass are the ones that must survive it, and
+     so must the other creatures — a grub that ate bugs would be a population rule, and the
+     population is meant to be whatever you put in the box. */
+  for (const t of [STONE, STEEL, GLASS, OBSIDIAN, SAND]){
+    __wipe(); const f = __floor();
+    __slab(cx-14, f-20, cx+14, f-1, t);
+    for (let k=0;k<6;k++) put(cx-8+k*3, f-10, GRUB);
+    // After the grubs are placed, not before: `put` replaces the cell it lands in, so a
+    // baseline taken first reports six cells eaten before a single tick has run — which is
+    // exactly what it did, identically, for all five materials.
+    const n0 = __count(t);
+    for (let k=0;k<3000;k++) __step(1);
+    if (__count(t) < n0) bad.push(`grubs ate ${n0 - __count(t)} cells of ${M[t].n}`);
+  }
+  __wipe(); const f = __floor();
+  __slab(cx-14, f-20, cx+14, f-1, WOOD);
+  for (let k=0;k<8;k++) put(cx-10+k*2, f-10, BUG);
+  for (let k=0;k<8;k++) put(cx-10+k*2, f-12, GRUB);
+  const bugs0 = __count(BUG), grubs0 = __count(GRUB);
+  for (let k=0;k<3000;k++) __step(1);
+  if (__count(BUG) < bugs0) bad.push(`${bugs0 - __count(BUG)} of ${bugs0} bugs were eaten by the grubs beside them`);
+  if (__count(GRUB) < grubs0) bad.push(`${grubs0 - __count(GRUB)} of ${grubs0} grubs ate each other`);
+
+  // Out of the wood it is a creature like the others: it crawls, and it burns.
+  __wipe(); const f2 = __floor();
+  put(cx, f2-1, GRUB);
+  const seen = new Set();
+  for (let k=0;k<1200;k++){ __step(1); for (let i=0;i<type.length;i++) if (type[i]===GRUB) seen.add(i%W); }
+  if (seen.size < 4) bad.push(`a grub on a bare floor visited ${seen.size} columns in twenty seconds — it is not crawling`);
+
+  __wipe(); const f3 = __floor();
+  __slab(cx-20, f3-20, cx+20, f3-1, WOOD);
+  for (let k=0;k<8;k++) put(cx-10+k*3, f3-10, GRUB);
+  const lit0 = __count(GRUB);
+  __hold(cx, f3-21, 2, 250);
+  for (let k=0;k<2500;k++) __step(1);
+  if (__count(GRUB) > lit0 * 0.3) bad.push(`${__count(GRUB)} of ${lit0} grubs sat out a burning log`);
+  if (![...finds].some(k => k.startsWith(GRUB + ':chew'))) bad.push('eating a log did not register as a discovery');
+  return bad.length ? bad.join('; ') : null;
+});
+
 await check(browser, 'a box full of living things still costs less than a frame', () => {
   const bad = [];
   const bench = (t, n) => {

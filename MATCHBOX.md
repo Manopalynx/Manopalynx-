@@ -45,9 +45,16 @@ fetched fresh whenever there is a signal — no stale-build trap, and nothing to
 
 ## What is in the box
 
-Twenty-four materials in the tray and six more the simulation makes for itself: fire,
-smoke, steam, embers, ash and molten wax. Every material is one row of the `M` table
-and nothing else in the file knows any of them by name.
+Twenty-nine chips in the tray — twenty-four materials, four living things and the vent — and
+six more the simulation makes and never lets you place: fire, smoke, steam, ash, molten wax
+and molten rubber. Every one of them is one row of the `M` table and nothing else in the
+file knows any of them by name.
+
+(That count was stale before the grub was added to it, and the first attempt at fixing it
+said four rather than six, because the probe I counted with deduplicated by display name and
+both molten forms share theirs with the solid they came from — `WAX` and `MELT` are both
+"Wax". The same collision once made a saved scene load molten wax as solid, which is why
+saves key on `SAVE_KEY` and not on the name.)
 
 The tray is in drawers — **Fuel, Wet, Solid, Hot, Life, Scene, Tools** — one row at a time, so
 the tray has a fixed height however much goes into it. A flat tray does not scale: every
@@ -127,7 +134,8 @@ A material is described by a handful of numbers. The ones that matter:
 | `tough` | how many bites acid needs to get through it |
 | `peak` | as hot as burning alone can drive it, where that differs |
 | `span` `leak` | how a gas stops being there: a clock, or only by escaping |
-| `sparse` | how thinly the brush lays it down, for things that are alive |
+| `sparse` | how thinly the brush lays it down, and the table's mark of something alive |
+| `chew` | ticks a grub takes to get through one cell of whatever it is in |
 | `drown` `air` | how many ticks a living thing lasts in the wrong one of the two |
 | `feed` `way` `breath` (per cell) | what a vent pours, which way a bug is walking, and how long it has been somewhere it cannot survive |
 
@@ -418,6 +426,59 @@ The one figure that *is* written for it is a heat tolerance: water at 40°C kill
 before it boils at 100. Without it the Warm setting on the room dial means nothing to a
 fish, and nothing between Normal and boiling does either.
 
+### The grub, which takes things out of the box
+
+The first three react to the world. A **Grub** rearranges it — the first thing alive that
+*removes* material. Put grubs in a log and come back to a log with galleries cut through it,
+then hold a match to what is left.
+
+**One number does all of it.** `chew:40` is ticks per bite, spent as a dice roll rather than
+a counter, so it needs no state of its own — the same reason the bug's pace is a roll: a
+moving cell has no identity to keep a counter in, and its index changes every time it
+shifts. The bite and the move into what was just eaten are one action, which is what makes
+a tunnel rather than a hole: the cell it came from is left empty behind it.
+
+**What counts as food is read off the food's own row, not listed here:**
+
+```js
+const edible = (t) => t !== E && M[t].fuel > 0 && M[t].ph !== 0 && M[t].ph !== 1 && !M[t].sparse;
+```
+
+Solid enough to tunnel through, made of something that would burn. That is eleven materials
+today — wood, paper, straw, powder, fuse, coal, green, ember, thermite, magnesium, rubber —
+and a fuel added tomorrow is on the menu with nothing written for it. `sparse` is already
+the table's mark of something alive, so it keeps the other creatures off the menu: a grub
+that ate bugs would be a population rule, and the population is meant to be whatever you put
+in the box.
+
+Out of the wood it falls and walks exactly like a bug, only slower (`GRUB_STEP` 14 against
+7), so none of that is written twice. Panicking is the same speed whatever you are — a grub
+in a burning log is not slow about leaving, it just has further to come.
+
+Measured on a 41×30 log of 1230 cells:
+
+| | eats | what the hole looks like |
+|---|---|---|
+| one grub, 10s | 10 cells | a **3×9** gallery |
+| one grub, 30s | 46 cells | **8×20** — reaching 2.9× further than a blob of that area |
+| four grubs, 60s | 352 cells (**29%**) | across the whole log |
+| twelve grubs, 60s | 894 cells (**73%**) | lace |
+
+Four is about what one tap gives you, `sparse` being 0.13.
+
+**The check measures the shape, not the count.** A grub that ate a neat sphere out of the
+middle of a log satisfies "it eats wood" completely, and is not the thing. A compact blob of
+area *A* spans about √*A*; a gallery spans far more, and that ratio is the only way to say
+"tunnel" in a number.
+
+Everything else about it is inherited and none of it is new code: fire kills it (8 of 8 in a
+burning log), it drowns at `drown:120`, acid eats it, it saves and loads, and eating earns
+its own line in the finds list because `chew` is in the table.
+
+**It has no appetite limit**, which is a decision rather than an oversight: left alone long
+enough, grubs will reduce every fuel in the box to tunnels and then to nothing. The number
+of them is the control, and it is in your hand.
+
 ### Dying takes a moment, which is most of what you see
 
 Reported from the phone: a bug that touched water was simply *gone*, and a fish on dry
@@ -611,14 +672,14 @@ be a guess dressed up as an undo.
 
 ## The finds
 
-`FOUND 3/32` in the corner used to be the whole of it. Twenty-nine things existed that the
+`FOUND 3/35` in the corner used to be the whole of it. Thirty-two things existed that the
 box would never name, mention again or hint at — a progress bar for a task nobody had been
 told. **Finds** in Tools opens the list: found ones read as what they are (`Lava + Water →
 Obsidian`) and the rest read `Acid — ?`, carrying the material's colour and name and nothing
 else. Eight rows mentioning Acid tell you to go and play with acid without telling you what
 happens when you do. Found ones sort to the top, so it is a record before it is a to-do list.
 
-The thirty-two are derived from the material table — every melt, boil, set, ash, contact
+The thirty-five are derived from the material table — every melt, boil, set, ash, contact
 reaction, explosion, drowning and suffocation in it — so a material added tomorrow brings
 its discoveries with it. The three creatures added five between them and no new derivation
 code: a `drown` or an `air` field is enough.
@@ -778,7 +839,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 64 checks — the simulation
+node test/matchbox-sim.mjs     # 65 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
