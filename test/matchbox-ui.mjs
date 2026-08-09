@@ -806,6 +806,14 @@ console.log('\n— undo and the finds —');
 /* The only way back from a stray drag across a finished build used to be Clear, which
    throws away the whole box: the recovery for a small mistake was a bigger one. */
 await check('a stray stroke can be taken back', async p => {
+  /* Stop the world first. This check compares a signature of the whole grid taken before the
+     stroke against the one after undoing it, and the opening scene is *running* — a handful
+     of ticks pass between the measurement and the mouse going down, so the two are of
+     different worlds and the check fails for a reason that has nothing to do with undo.
+     Rare rather than never: it failed about one run in a dozen and always looked like undo
+     being wrong. Undo does not need a live page to be tested; it needs a still one. */
+  await p.evaluate(() => { window.requestAnimationFrame = () => 0; });
+  await p.waitForTimeout(120);                       // let the frame already in flight land
   const sig = () => p.evaluate(() => { let h=0; for (let i=0;i<type.length;i++) h=(h*31+type[i])|0; return h; });
   await p.locator('.tab', { hasText: /^tools$/i }).click();
   const undoBtn = p.locator('[data-act="undo"]');
@@ -972,9 +980,17 @@ await check('a worm drawn on the stage walks about on its own', async p => {
   // check used to put a floor under them and so never saw it.
   await p.evaluate(() => wipeAll());
   const s = await stageBox(p);
-  await p.mouse.click(s.x + s.width*0.5, s.y + s.height*0.9);
+  /* Three taps rather than one, and a floor under how few will do.
+
+     `sparse` is 0.16, so a single tap puts down anything from one worm to eleven — measured
+     across twelve runs of each, on this build and the one before it. With one worm the span
+     is zero and stays zero, so this check failed about one run in three and had done since
+     the day it was written; it only surfaced when the suite started being run repeatedly.
+     A flaky check is worse than no check, because it teaches you to re-run rather than look. */
+  for (const at of [0.42, 0.5, 0.58])
+    await p.mouse.click(s.x + s.width*at, s.y + s.height*0.9);
   const placed = await p.evaluate(() => __count(WORM));
-  if (!placed) return 'the tap put no worms in the box';
+  if (placed < 5) return `three taps put ${placed} worms in the box, which is too few to measure`;
 
   // How far apart they are, not where the middle of them is. A tap puts down a clump and
   // they wander off both ways, so the mean sits almost exactly still while every one of

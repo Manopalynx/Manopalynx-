@@ -2131,18 +2131,30 @@ await check(browser, 'moss creeps over damp surfaces, and will not grow without 
   for (let k=0;k<12000;k++) __step(1);
   const grew = __count(MOSS);
   if (grew < 8) bad.push(`one cell of moss on a wet wall became ${grew} in three minutes`);
-  /* Every cell has to be touching something that is not moss. Anchoring on itself reads
-     perfectly and turns moss into a fog: measured before this clause, 1219 cells of which
-     1175 were touching nothing but each other. */
-  let floating = 0;
+  /* A cushion two deep and no deeper. Stated as a distance to a real surface rather than by
+     asking the page's own `rooted()`, which would only assert that the code agrees with
+     itself — the claim is about the shape, and the shape is what was wrong twice.
+
+     Counting no moss at all made it a film one cell thick, and on a wooden block the brush
+     had already filled every cell that qualified, so it saturated at +22 and looked frozen.
+     Counting any moss made it a fog: 1219 cells on a pillar of which 1175 touched nothing
+     but each other. */
+  const nearSurface = (x, y, r) => {
+    for (let dy=-r; dy<=r; dy++) for (let dx=-r; dx<=r; dx++){
+      if (!inb(x+dx,y+dy)) continue;
+      const u = type[idx(x+dx,y+dy)];
+      if (u!==E && u!==MOSS && M[u].ph!==0 && M[u].ph!==1) return true;
+    }
+    return false;
+  };
+  let adrift = 0, thick = 0;
   for (let i=0;i<type.length;i++) if (type[i]===MOSS){
-    const x=i%W, y=(i/W)|0; let held = false;
-    for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]])
-      if (inb(x+dx,y+dy)){ const u = type[idx(x+dx,y+dy)];
-        if (u!==E && u!==MOSS && M[u].ph!==0 && M[u].ph!==1) held = true; }
-    if (!held) floating++;
+    const x=i%W, y=(i/W)|0;
+    if (!nearSurface(x, y, 2)) adrift++;      // further than a cushion from anything real
+    else if (!nearSurface(x, y, 1)) thick++;  // the second layer, which is allowed
   }
-  if (floating) bad.push(`${floating} of ${grew} cells of moss were touching nothing but other moss`);
+  if (adrift) bad.push(`${adrift} of ${grew} cells of moss were more than two cells from any real surface`);
+  if (thick > grew * 0.6) bad.push(`${thick} of ${grew} cells are second-layer — that is a bush, not a coating`);
 
   // The same wall, dry. Nothing at all should happen.
   __wipe(); f = __floor();

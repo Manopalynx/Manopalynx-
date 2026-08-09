@@ -141,6 +141,7 @@ A material is described by a handful of numbers. The ones that matter:
 | `graze` | ticks an ash bug takes per mouthful of what fire left behind |
 | `carries` | this one picks loose grains up and heaps them somewhere else |
 | `spread` `damp` | ticks between growing a cell, and how far water may be for it to try |
+| `roots` | the brush may only put this where it could actually live |
 | `hatch` `becomes` | how long a life stage lasts, and what it turns into |
 | `drown` `air` | how many ticks a living thing lasts in the wrong one of the two |
 | `feed` `way` `breath` (per cell) | what a vent pours, which way a bug is walking, and how long it has been somewhere it cannot survive |
@@ -810,25 +811,55 @@ Three things keep the exception from eating the file:
 - **It burns**, so a match clears patches and what grows back grows from the edges.
 
 Measured: one cell on a wall standing in water becomes **38 in three minutes** and climbs
-**17 rows**. The same wall dry stays **one cell** for as long as you watch it.
+**17 rows**. The same wall dry stays **one cell** for as long as you watch it — and the
+readout now says why, which it did not at first.
 
-#### The clause that is the whole rule
+#### The clause that is the whole rule, got wrong in both directions
 
-The surface test may not count *other moss*. That reads perfectly and is completely wrong:
-anchoring on itself means that after the first cell moss never needs a real surface again.
-Measured on the pillar before this clause — **1219 cells, of which 1175 were touching nothing
-but each other.** It was a fog with a stone in it.
+What counts as a surface to grow on is the entire creature, and the first two answers were
+both wrong.
 
-```js
-held = u !== E && u !== type[i] && M[u].ph !== 0 && M[u].ph !== 1;
-```
+**Counting other moss** means that after the first cell it never needs a real surface again.
+Measured on a pillar: **1219 cells, of which 1175 were touching nothing but each other.** A
+fog with a stone in it.
 
-With `u !== type[i]` it is a coating one cell thick, which is what moss is: 38 cells on the
-same pillar, and **none** of them floating.
+**Counting no moss at all** makes it a film exactly one cell thick — correct, bounded, and
+almost invisible. On a wooden block the brush had already filled every cell that qualified,
+so it grew by 22 and stopped. Reported from the phone as moss that does not move.
 
-That also costs it most of its bulk, and the dials moved to pay for it — `spread` 70 → 40 and
-`damp` 9 → 20. At the old values a tap of eight cells grew to nine, which is not something
-you would notice happening.
+It counts moss that is *itself* against something real, which gives a cushion **two deep and
+no deeper**: layer two anchors on layer one, and layer three has nothing to anchor to.
+
+The check states that as a distance — no cell further than two from a real surface, and not
+more than 60% of them in the second layer — rather than by asking the page's own `rooted()`,
+which would only assert that the code agrees with itself. The shape is the claim, and the
+shape is what was wrong twice.
+
+#### Two screenshots thirty seconds apart, for the second time
+
+The first pair, months of work ago, was worms that would not walk and turned out to be the
+floor of the box not counting as ground. This pair was moss brushed round a wooden block,
+with no water anywhere in the scene. **The rule was working exactly
+as written and the box said nothing at all about it** — which is the fault the vent had before
+it grew a picker. A rule nobody can see is indistinguishable from a broken one, and this file
+has shipped enough of the second kind to owe the doubt to the first.
+
+Three things came out of it, and two were real defects:
+
+**The brush ignored the surface rule.** A thumb round that block put down 114 cells of which
+**100 were hanging in mid-air**, where nothing could ever happen to them. `roots:1` on the row
+makes the brush ask the same question the spreading does, so what you paint is what can grow —
+19 cells, all of them live.
+
+**Nothing said why.** Painting something with a `damp` field where there is no water now puts
+`Moss needs water within reach — it will not spread here` in the readout. Non-forced, so a
+discovery still takes the line — and when there *is* water the line you get instead is
+`Found 1/47 — Moss spreads`, which answers the question better than the hint does.
+
+**And the reach was too tight to notice.** `damp` 20 → 40 on a box 131 wide, which is near
+enough to "is there water in this scene at all". Measured on a log beside a pond, sixteen
+brushed cells become 61 at a reach of 20 and **102 at 40** — the difference between a coating
+and something you can watch appear.
 
 #### What it does not do
 

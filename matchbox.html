@@ -648,7 +648,7 @@ M[ANT]     ={n:'Ant',      ph:3, col:[136, 44, 44], ig:200, fuel:18, out:1.1, co
    `spread` is ticks per attempt as a dice roll, like every other pace in here. */
 M[MOSS]    ={n:'Moss',     ph:3, col:[ 92,152, 96], ig:210, fuel:26, out:1.0, cond:.14, cap:1.2,
              char:6, ash:ASH, dens:.9, tough:.5, sparse:.30, alive:1,
-             spread:40, damp:20};
+             spread:40, damp:40, roots:1};
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
              leak:.02, peak:1500};
 
@@ -1856,7 +1856,13 @@ function findScent(){
    and the water test is what keeps a scene in charge of how much of it there can be.
 
    The damp scan is the expensive part and it is bought cheaply: the spread roll comes first,
-   so at `spread` 70 only about one moss cell in seventy pays for a scan on any given tick. */
+   so at `spread` 40 only about one moss cell in forty pays for a scan on any given tick.
+
+   `damp` 40 on a box 131 wide is deliberately generous — near enough to "is there water in
+   this scene at all". Measured on a log beside a pond, sixteen brushed cells become 61 at a
+   reach of 20 and 102 at 40, and the difference between those two is whether a coating is
+   something you notice happening. The rule that matters is still the one that bites: no
+   water, no moss, and the readout says so now. */
 function damp(x, y, r){
   for (let dy=-r; dy<=r; dy++)
     for (let dx=-r; dx<=r; dx++){
@@ -1865,6 +1871,36 @@ function damp(x, y, r){
       const t = type[idx(xx,yy)];
       if (t === WATER || t === ICE) return true;
     }
+  return false;
+}
+
+/* Can moss live in this cell? Something solid next to it, or a moss cell that is itself
+   against something solid — which gives a cushion two deep and stops there.
+
+   Both halves are the same fault seen from two sides. Counting *no* moss at all made it a
+   film one cell thick: on a wooden block the brush had already filled every cell that
+   qualified, so it saturated at +22 and looked frozen. Counting *any* moss made it a fog —
+   1219 cells on a pillar of which 1175 touched nothing but each other. Counting moss that is
+   itself anchored is the version with a bottom to it.
+
+   The brush asks this too, which is the other half of what was reported: 100 of the 114
+   cells a thumb put down were hanging in mid-air where nothing could ever happen to them. */
+function rooted(x, y, self){
+  for (let d=0; d<8; d++){
+    const [dx,dy] = MOTH_DIRS[d];
+    const xx=x+dx, yy=y+dy;
+    if (!inb(xx,yy)) continue;
+    const u = type[idx(xx,yy)];
+    if (u === E || M[u].ph === 0 || M[u].ph === 1) continue;
+    if (u !== self) return true;                       // a real surface
+    // moss, which counts only if it has a real surface of its own
+    for (let e=0; e<8; e++){
+      const [ex,ey] = MOTH_DIRS[e];
+      if (!inb(xx+ex, yy+ey)) continue;
+      const v = type[idx(xx+ex, yy+ey)];
+      if (v !== E && v !== self && M[v].ph !== 0 && M[v].ph !== 1) return true;
+    }
+  }
   return false;
 }
 
@@ -1877,21 +1913,7 @@ function mossSpread(i, x, y){
     const [dx,dy] = MOTH_DIRS[(from + k) % 8];
     const xx = x+dx, yy = y+dy;
     if (!inb(xx,yy) || type[idx(xx,yy)] !== E) continue;
-    /* Onto a surface, not into the air — and the surface may not be more moss. That clause
-       is the whole rule. Counting moss as something to grow on reads perfectly and lets a
-       patch anchor on itself, so after the first cell it needs no real surface ever again:
-       measured on a pillar standing in water, 1219 cells of it, of which **1175 were touching
-       nothing but each other.** It was a fog with a stone in it.
-
-       Excluding moss makes it a coating one cell thick, which is what moss is. */
-    let held = false;
-    for (let d=0; d<8 && !held; d++){
-      const [ex,ey] = MOTH_DIRS[d];
-      if (!inb(xx+ex, yy+ey)) continue;
-      const u = type[idx(xx+ex, yy+ey)];
-      held = u !== E && u !== type[i] && M[u].ph !== 0 && M[u].ph !== 1;
-    }
-    if (!held) continue;
+    if (!rooted(xx, yy, type[i])) continue;
     found(type[i] + ':spread', `${m.n} spreads`);
     put(xx, yy, type[i]);
     return;
@@ -3323,6 +3345,12 @@ function paintCell(x, y, solid){
        like a creature that does not work. A scatter is also simply what a handful of
        insects looks like. `solid` still overrides it: a Box or a Line is a deliberate
        edge, and asking for a rectangle of worms should give a rectangle of worms. */
+    /* ...and a thing with `roots` only goes where it could live. Reported from the phone as
+       moss that would not move: a thumb round a wooden block put down 114 cells of which
+       **100 were hanging in mid-air**, which is not a fault in the spreading rule but a
+       hundred cells that were never going to do anything. The brush asks the same question
+       the spreading does, so what you paint is what can grow. */
+    if (M[tool] && M[tool].roots && !rooted(x, y, tool)) return;
     const density = !solid && M[tool] && M[tool].sparse !== undefined ? M[tool].sparse : .92;
     if (solid || Math.random() < density) put(x,y,tool);
   }
@@ -3338,6 +3366,18 @@ function disc(cx, cy, r, solid){
 function paintAt(cx, cy){
   if (tool === 'match' && matchLit <= 0) return;   // a spent match does nothing
   disc(cx, cy, brush);
+  /* Say why nothing is going to happen.
+
+     Reported from the phone with two screenshots thirty seconds apart: moss brushed round a
+     wooden block, no change. The rule was working exactly as written — there was no water in
+     the scene — and the box said nothing at all about it, which is the same fault the vent
+     had before it grew a picker. A rule nobody can see is indistinguishable from a broken
+     one, and this file has shipped enough of the second kind to owe the doubt to the first.
+
+     Non-forced, so a discovery still takes the line. */
+  const m = M[tool];
+  if (m && m.damp !== undefined && !damp(cx, cy, m.damp))
+    say(`${m.n} needs water within reach — it will not spread here`);
 }
 
 /* Lines and rectangles. Drawing a straight wall with a thumb is miserable, and every
