@@ -881,6 +881,20 @@ function swap(a,b){
   let e=breath[a]; breath[a]=breath[b]; breath[b]=e;
 }
 
+/* What gets out of the way of something arriving from nowhere — a brush stroke, a vent's
+   output. A gas and a liquid do; a powder or a solid does not, and that difference is what
+   separates building inside a tank from cutting a hole in a wall.
+
+   `denser` above is the other question and a different one: it is about a cell that is
+   already in the box moving under gravity, so it weighs the two against each other. Nothing
+   is falling here, so there is nothing to weigh.
+
+   The brush and the vent both ask this, in one place, so they cannot drift apart. They had:
+   a vent buried in water was plugged for everything except its own liquid, which only got
+   out because a vent can push up through a column of its own making. Reported from the
+   phone as "the vent only works for lava, molten and water while under any liquid". */
+const yields = (t) => t === E || M[t].ph === 0 || M[t].ph === 1;
+
 function denser(a,b){                  // can a displace b?
   if (b===E) return true;
   const pb = M[b].ph;
@@ -1285,20 +1299,22 @@ const touchingWater = (x,y) => {
 const VENT_REACH = 70;
 
 function ventPush(x, y, what){
-  // Up, through the column it has already made.
+  // Up, through the column it has already made. Its own material is not in the way — that
+  // is the pressure — so that test comes before asking what will move aside, or a vent
+  // would simply overwrite the cell above it and never build a column at all.
   for (let k=1; k<=VENT_REACH; k++){
     const yy = y-k;
     if (!inb(x,yy)) break;
     const j = idx(x,yy);
-    if (type[j] === E){ put(x, yy, what); return true; }
-    if (type[j] !== what) break;          // something else is in the way: stop pushing
+    if (type[j] === what) continue;
+    if (yields(type[j])){ put(x, yy, what); return true; }
+    break;                                // a solid or a powder: stop pushing
   }
-  // Otherwise any empty cell beside or below it, so a vent in a wall still bleeds.
+  // Otherwise beside or below it, so a vent in a wall still bleeds.
   for (const [dx,dy] of VENT_DIRS){
     const xx = x+dx, yy = y+dy;
     if (!inb(xx,yy)) continue;
-    const j = idx(xx,yy);
-    if (type[j] === E){ put(xx, yy, what); return true; }
+    if (yields(type[idx(xx,yy)])){ put(xx, yy, what); return true; }
   }
   return false;
 }
@@ -2866,17 +2882,15 @@ function paintCell(x, y, solid){
     if (type[i]===E && Math.random()<.28) become(x,y,FIRE);
   } else if (tool === 'erase'){
     put(x,y,E);
-  } else if (type[i]===E || M[type[i]].ph===0 || M[type[i]].ph===1){
+  } else if (yields(type[i])){
     /* Into a liquid as well as into air and gas, which it would not do before: you could
        only ever build *above* a tank, never in it, so a fish had to be dropped from the top
-       and a weight could not be placed on the bottom of a pool. A liquid is the one thing
-       in this box that gets out of the way of other things — the falling pass displaces it
-       all day — so a brush that cannot is the odd one out.
+       and a weight could not be placed on the bottom of a pool.
 
        Solids and powders still refuse, and deliberately: painting over a wall you meant to
        draw beside is not a feature, and Erase is one tap away.
 
-       It replaces the water rather than pushing it aside, so filling a sealed tank with
+       It replaces the liquid rather than pushing it aside, so filling a sealed tank with
        sand leaves you less water than you started with. Displacing properly means finding
        somewhere for it to go, and in a sealed tank there is nowhere. */
     // The brush lays down 92% of what it covers, which is what stops a stroke
