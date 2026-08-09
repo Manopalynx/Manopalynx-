@@ -314,7 +314,7 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
       FIRE=16, SMOKE=17, STEAM=18, EMBER=19, ASH=20,
       LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24,
       THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31, BUG=32,
-      MOTH=33, FISH=34;
+      MOTH=33, FISH=34, GRUB=35;
 
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
@@ -554,6 +554,19 @@ M[MOTH]    ={n:'Moth',     ph:3, col:[214,198,166], ig:120, fuel:8, out:0.1, con
    nothing left to breathe. The Room dial is what a fish is really for. */
 M[FISH]    ={n:'Fish',     ph:3, col:[104,168,176], ig:9e9, cond:.42, cap:3.0, dens:1.0,
              tough:.5, sparse:.14, air:200};
+/* The fourth, and the first that *removes* material. Everything alive so far reacts to the
+   box; this one rearranges it. Put a grub in a log and come back to a log with galleries
+   cut through it, and then hold a match to what is left.
+
+   `chew` is the whole of it: ticks per bite, as a dice roll rather than a counter, so it
+   needs no state of its own. What counts as food is read off the food's own row — solid
+   enough to tunnel through, and made of something that would burn — so a fuel added
+   tomorrow is on the menu without a line written here.
+
+   Slower than a bug in the open and slower still while eating, because the interesting
+   thing about it is the shape it leaves behind, and a fast one just deletes the log. */
+M[GRUB]    ={n:'Grub',     ph:3, col:[228,198,186], ig:200, fuel:24, out:1.0, cond:.26, cap:1.1,
+             char:5, ash:ASH, dens:1.1, tough:.6, sparse:.13, drown:120, chew:40};
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
              leak:.02, peak:1500};
 
@@ -571,7 +584,7 @@ const GROUPS = [
   { name:'Wet',   items:[WATER, OIL, ICE, ACID] },
   { name:'Solid', items:[STONE, STEEL, SAND, WAX, GLASS, OBSIDIAN] },
   { name:'Hot',   items:[LAVA, MOLTEN, EMBER, THERMITE, MAGNES, GAS, VENT] },
-  { name:'Life',  items:[BUG, MOTH, FISH] },
+  { name:'Life',  items:[BUG, MOTH, FISH, GRUB] },
   { name:'Scene', items:'scenes' },
   { name:'Tools', items:'tools' },
 ];
@@ -610,6 +623,7 @@ SAVE_KEY[OBSIDIAN]='obsidian';SAVE_KEY[THERMITE]='thermite';SAVE_KEY[MAGNES]='ma
 SAVE_KEY[RUBBER]='rubber';    SAVE_KEY[MRUBBER]='rubber-molten';
 SAVE_KEY[ACID]='acid';        SAVE_KEY[GAS]='gas';           SAVE_KEY[VENT]='vent';
 SAVE_KEY[BUG]='bug';          SAVE_KEY[MOTH]='moth';         SAVE_KEY[FISH]='fish';
+SAVE_KEY[GRUB]='grub';
 
 const TYPE_OF_KEY = new Map(SAVE_KEY.map((k,t) => [k,t]));
 
@@ -1655,12 +1669,52 @@ function moveFish(i, x, y){
   if (pick >= 0) swap(i, pick);
 }
 
+const GRUB_STEP = 14;    // ticks between crawling steps in the open, against a bug's 7
+const GRUB_TURN = .14;   // how often it picks a new direction to cut in
+
+/* What a grub will eat: solid enough to tunnel through, and made of something that would
+   burn. Both halves are read off the food's own row, so a fuel added tomorrow is on the
+   menu with nothing written here — and `sparse`, which is already the table's mark of
+   something alive, keeps the other creatures off it. A grub that ate grubs would be a
+   population rule, and the population is meant to be whatever you put in the box. */
+const edible = (t) => t !== E && M[t].fuel > 0 && M[t].ph !== 0 && M[t].ph !== 1 && !M[t].sparse;
+
+/* A bite, and the move into what was just eaten, are one action — which is what makes a
+   tunnel rather than a hole: the cell it came from is left empty behind it.
+
+   Whether it gets a bite this tick is a dice roll against `chew` rather than a counter,
+   for the same reason the bug's pace is: a moving cell has no identity to keep a counter
+   in, and its index changes every time it shifts.
+
+   Returns true if it is at the face of something edible, bite or no bite — a grub with its
+   mouth full is not also out walking. */
+function grubEat(i, x, y){
+  let d = (Math.abs(way[i]) || (1 + ((Math.random()*8)|0))) - 1;
+  if (Math.random() < GRUB_TURN) d = (d + (Math.random() < .5 ? 1 : 7)) % 8;
+  for (let k=0;k<8;k++){
+    const dir = (d + k) % 8;
+    const [dx,dy] = MOTH_DIRS[dir];
+    const xx = x+dx, yy = y+dy;
+    if (!inb(xx,yy)) continue;
+    const j = idx(xx,yy), tj = type[j];
+    if (!edible(tj)) continue;
+    if (Math.random() * M[type[i]].chew < 1){
+      found(type[i] + ':chew', `${M[type[i]].n} eats its way through ${M[tj].n}`);
+      become(xx, yy, E);
+      way[i] = dir + 1;
+      swap(i, j);
+    }
+    return true;
+  }
+  return false;
+}
+
 function moveLife(){
   const alive = [];
   let anyMoth = false;
   for (let i=0;i<type.length;i++){
     const t = type[i];
-    if (t === BUG || t === MOTH || t === FISH){ alive.push(i); if (t === MOTH) anyMoth = true; }
+    if (t === BUG || t === MOTH || t === FISH || t === GRUB){ alive.push(i); if (t === MOTH) anyMoth = true; }
   }
   if (!alive.length) return;
   // One pass for all of them, and only when there is something that cares.
@@ -1669,7 +1723,7 @@ function moveLife(){
   for (const i of alive){
     const kind = type[i];
     // burned, eaten, drowned or dried out since the list was taken
-    if (kind !== BUG && kind !== MOTH && kind !== FISH) continue;
+    if (kind !== BUG && kind !== MOTH && kind !== FISH && kind !== GRUB) continue;
     if (kind === FISH){ moveFish(i, i % W, (i / W) | 0); continue; }
 
     const mx = i % W, my = (i / W) | 0;
@@ -1679,6 +1733,10 @@ function moveLife(){
       if (Math.random() * MOTH_STEP < 1) moveMoth(i, mx, my);
       continue;
     }
+    // Eating comes first and, when there is anything to eat, instead of everything else.
+    // Out of the wood a grub falls and walks exactly like a bug, only slower, so the rest
+    // of this is shared rather than copied.
+    if (kind === GRUB && grubEat(i, mx, my)) continue;
     const x = mx, y = my;
 
     // Falls, because nothing else will do it: a bug is a static solid so that it does not
@@ -1694,7 +1752,9 @@ function moveLife(){
     }
 
     const hot = temp[i] >= PANIC_AT;
-    const every = hot ? BUG_FLEE : BUG_STEP;
+    // Panicking is the same speed whatever you are: a grub in a burning log is not slow
+    // about leaving it, it just has further to come.
+    const every = hot ? BUG_FLEE : (kind === GRUB ? GRUB_STEP : BUG_STEP);
     /* A chance per tick rather than a fixed phase, and the reason is that a bug has no
        fixed anything to take a phase from. The first version staggered on the cell index
        — `(tick + i) % every` — which is what the vents use, and vents do not move. A bug's
@@ -3073,6 +3133,7 @@ const FINDS = (() => {
     if (m.meets) m.meets.forEach((row,r) =>
       add(t, 'meets'+r, row.tale || `${m.n} + ${M[row.with].n} → ${M[row.become].n}`));
     if (m.eats)  add(t, 'eats', `${m.n} eats through things`);
+    if (m.chew)  add(t, 'chew', `${m.n} eats its way through things`);
     // Two ways of being somewhere you cannot be, and both are worth finding out about.
     if (m.drown !== undefined) add(t, 'drown', `${m.n} drowns`);
     if (m.air   !== undefined) add(t, 'air',   `${m.n} cannot breathe air`);
