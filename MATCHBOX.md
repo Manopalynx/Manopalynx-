@@ -45,7 +45,7 @@ fetched fresh whenever there is a signal — no stale-build trap, and nothing to
 
 ## What is in the box
 
-Thirty chips in the tray — twenty-four materials, five living things and the vent — and
+Thirty-one chips in the tray — twenty-four materials, six living things and the vent — and
 seven more the simulation makes and never lets you place: fire, smoke, steam, ash, the pupa,
 molten wax and molten rubber. Every one of them is one row of the `M` table and nothing else in the
 file knows any of them by name.
@@ -139,6 +139,7 @@ A material is described by a handful of numbers. The ones that matter:
 | `alive` | this is a creature — keeps it off a grub's menu, whether or not a brush made it |
 | `chew` `pupa` | ticks a grub takes per cell, and how many cells before it seals up |
 | `graze` | ticks an ash bug takes per mouthful of what fire left behind |
+| `carries` | this one picks loose grains up and heaps them somewhere else |
 | `hatch` `becomes` | how long a life stage lasts, and what it turns into |
 | `drown` `air` | how many ticks a living thing lasts in the wrong one of the two |
 | `feed` `way` `breath` (per cell) | what a vent pours, which way a bug is walking, and how long it has been somewhere it cannot survive |
@@ -681,6 +682,116 @@ the creature walks on top of things and climbs, which is more insect than worm, 
 rename belongs with whatever behaviour change makes it a worm — not with a diff that touches
 fifty comments explaining a walk that has not changed.
 
+### The ant, which moves the box around
+
+The sixth, and the first that neither adds to the box nor takes from it. An **Ant** picks a
+loose grain up, carries it, and puts it down somewhere else.
+
+**The rule is two lines and the behaviour is in neither of them.** It lifts a grain more
+readily the fewer of its kind are around it, and puts one down more readily the more there
+are:
+
+```js
+if (Math.random() < ANT_TAKE / (1 + n*n))                    // n = same kind, of eight
+if (Math.random() < ANT_KEEP + ANT_DROP * (n*n) / (1 + n*n))
+```
+
+Nothing says where a heap should be, or that heaps are wanted at all. Scattered sand gathers
+into heaps anyway, and sand and ash gather into *separate* heaps, because a grain is only
+ever counted against its own kind. This is the one piece of borrowed cleverness in the file —
+it is the classic ant-sorting rule — and it earns its place because it is the only way a
+creature this simple produces something worth looking at.
+
+Measured on the same fixed scatter across a floor, clumping being the mean number of
+same-kind neighbours per grain:
+
+| | before | after |
+|---|---|---|
+| no ants, two minutes, ×3 | 1.14 | **1.14** every time |
+| ten ants, two minutes, ×5 | 1.14 | **1.80 – 2.41** |
+| mixed sand and ash, fourteen ants, five minutes, ×3 | sand 0.41, ash 0.50 | sand **1.33 – 2.23**, ash **1.93 – 3.00** |
+
+The first row is the control and it is not decoration: sand piles under gravity on its own,
+so "it ended up clumped" measures gravity unless you have run the same scene empty. It gains
+exactly 0.00, three times out of three, which is what makes it worth having.
+
+**Sorting two kinds is much slower than heaping one**, and the check learned that the
+expensive way. At eight ants and ninety seconds the sand's gain ranged 0.15 to 0.95 across
+five runs and the arm failed about one time in three — not flakiness in the box but a
+threshold set from a single lucky measurement. Every grain an ant passes is now only half as
+likely to be the kind it is carrying, so it takes fourteen ants and five minutes before the
+worst run is comfortably clear of the bar.
+
+**What it can lift is read off the grain** — a powder, and not alive — so a powder added
+tomorrow is portable with nothing written for it, and stone, wood, glass, steel and water all
+stayed put through three thousand ticks of six ants standing on them.
+
+**The load lives in `feed`**, the array a vent keeps its payload in. An ant is not a vent, so
+the field is free, and it is already saved and already swapped — an ant put down mid-carry is
+still carrying when the scene comes back. A laden ant draws as half its own colour and half
+its cargo's, so you can see what is being moved and where; a vent shows its payload outright,
+but an ant drawn that way would look like a grain walking and the animal would disappear.
+
+#### Two faults, and one of them wore a good number
+
+*The drop sweep re-rolled its random offset inside the loop*, so it revisited directions and
+skipped others. An ant with exactly one place to put something down would often fail to find
+it. Fixing that alone took the heaping from 0.88 to 2.4.
+
+*And then the good number was the bug.* At `ANT_TAKE .55 / ANT_DROP .40` the heaps measured
+**better** than what shipped — and **seven ants in ten were permanently laden**, with grains
+held rather than heaped. A clumping measurement cannot see that; it looks like success. It
+ships at `.30/.60`, which measures slightly worse and has **one ant in ten** carrying at any
+moment and 71 grains of 72 on the floor. The check now asserts both, because the first number
+alone was satisfied by hoarding.
+
+A panicking ant drops what it is holding, which is both what one would do and the only place
+a grain can leave the box for good: an ant that burns while laden takes its load with it.
+
+### The colours, which were measured after they were reported
+
+Reported from the phone: the moth and the grub were near enough the same colour that a new
+player would wonder why a grub had started flying. **Measuring it found worse.** In CIE76 —
+Lab rather than RGB, because the eye is far more sensitive to lightness than to blue and an
+RGB number says the opposite:
+
+| pair | dE |
+|---|---|
+| **Paper / Moth** | **2.3** |
+| **Wax / Moth** | **3.1** |
+| Stone / Ash | 3.4 |
+| Powder / Smoke | 4.2 |
+| Grub / Wax | 10.7 |
+| Ash bug / Steel | 12.8 |
+
+The moth was the same colour as paper. The reported pair was not even the worst one.
+
+Rather than nudge two entries, the living things were solved as a set: hue bands so each one
+still reads as itself, a floor on separation from every material, a **higher** floor between
+creatures, and among everything that clears both, the candidate closest to what it already
+was. Two earlier objectives were wrong and worth recording — maximising separation gave an
+electric-purple moth at dE 86, and minimising saturation drove the whole set into pastel and
+put the moth and the grub back into two pale pinks.
+
+| | was | is | nearest now |
+|---|---|---|---|
+| Moth | `[214,198,166]` | `[236,196,232]` | Magnesium 22.1 |
+| Grub | `[228,198,186]` | `[220,248,196]` | Wax 22.0 |
+| Fish | `[104,168,176]` | `[84,160,168]` | Steel 22.4 |
+| Pupa | `[186,124,70]` | `[188,116,68]` | Straw 22.3 |
+| Ash bug | `[120,134,160]` | `[124,136,184]` | Water 22.2 |
+| Ant | — | `[136,44,44]` | Ember 23.0 |
+
+Moth to grub is **52.7** now, against roughly ten before.
+
+**The check holds three different bars and the lowest one is an admission.** Two creatures:
+30. A creature and a material: 20. Two materials: 3, which only catches a literal duplicate —
+because the material palette does not meet a higher bar and never has. Twenty-six material
+pairs sit under 12. They are told apart by where they are and what they do; ash is on the
+floor after a fire and stone is the wall you built. Nobody has reported confusing them, and a
+check asserting a standard the box has never met would be a failing test about a problem
+nobody has. Creatures cannot lean on context — they move, and they mix.
+
 ### Dying takes a moment, which is most of what you see
 
 Reported from the phone: a bug that touched water was simply *gone*, and a fish on dry
@@ -874,14 +985,14 @@ be a guess dressed up as an undo.
 
 ## The finds
 
-`FOUND 3/42` in the corner used to be the whole of it. Thirty-nine things existed that the
+`FOUND 3/45` in the corner used to be the whole of it. Forty-two things existed that the
 box would never name, mention again or hint at — a progress bar for a task nobody had been
 told. **Finds** in Tools opens the list: found ones read as what they are (`Lava + Water →
 Obsidian`) and the rest read `Acid — ?`, carrying the material's colour and name and nothing
 else. Eight rows mentioning Acid tell you to go and play with acid without telling you what
 happens when you do. Found ones sort to the top, so it is a record before it is a to-do list.
 
-The forty-two are derived from the material table — every melt, boil, set, ash, contact
+The forty-five are derived from the material table — every melt, boil, set, ash, contact
 reaction, explosion, drowning and suffocation in it — so a material added tomorrow brings
 its discoveries with it. The three creatures added five between them and no new derivation
 code: a `drown` or an `air` field is enough.
@@ -1041,7 +1152,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 68 checks — the simulation
+node test/matchbox-sim.mjs     # 70 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```

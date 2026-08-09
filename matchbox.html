@@ -314,7 +314,7 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
       FIRE=16, SMOKE=17, STEAM=18, EMBER=19, ASH=20,
       LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24,
       THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31, BUG=32,
-      MOTH=33, FISH=34, GRUB=35, PUPA=36, ASHBUG=37;
+      MOTH=33, FISH=34, GRUB=35, PUPA=36, ASHBUG=37, ANT=38;
 
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
@@ -543,7 +543,7 @@ M[BUG]     ={n:'Worm',     ph:3, col:[176, 92,132], ig:190, fuel:20, out:1.2, co
 // it should go up and be gone, not throw enough heat to light the moth beside it. At 0.8 a
 // swarm was a fuse: one reached the candle, and the fire walked through the whole cloud
 // from body to body, upwards, because each new flame rose and the rest followed it.
-M[MOTH]    ={n:'Moth',     ph:3, col:[214,198,166], ig:120, fuel:8, out:0.1, cond:.28, cap:.7,
+M[MOTH]    ={n:'Moth',     ph:3, col:[236,196,232], ig:120, fuel:8, out:0.1, cond:.28, cap:.7,
              char:2, ash:ASH, dens:.4, tough:.5, sparse:.10, drown:90, alive:1};
 /* The third one, and the first that lives *inside* something rather than on top of it.
    Water stops being a way to put fires out and becomes a place.
@@ -556,7 +556,7 @@ M[MOTH]    ={n:'Moth',     ph:3, col:[214,198,166], ig:120, fuel:8, out:0.1, con
    Everything else about it falls out of the box rather than being written for it. Boil
    the tank and the water leaves; freeze it and the water becomes ice; either way there is
    nothing left to breathe. The Room dial is what a fish is really for. */
-M[FISH]    ={n:'Fish',     ph:3, col:[104,168,176], ig:9e9, cond:.42, cap:3.0, dens:1.0,
+M[FISH]    ={n:'Fish',     ph:3, col:[ 84,160,168], ig:9e9, cond:.42, cap:3.0, dens:1.0,
              tough:.5, sparse:.14, air:200, alive:1};
 /* The fourth, and the first that *removes* material. Everything alive so far reacts to the
    box; this one rearranges it. Put a grub in a log and come back to a log with galleries
@@ -569,7 +569,7 @@ M[FISH]    ={n:'Fish',     ph:3, col:[104,168,176], ig:9e9, cond:.42, cap:3.0, d
 
    Slower than a bug in the open and slower still while eating, because the interesting
    thing about it is the shape it leaves behind, and a fast one just deletes the log. */
-M[GRUB]    ={n:'Grub',     ph:3, col:[228,198,186], ig:200, fuel:24, out:1.0, cond:.26, cap:1.1,
+M[GRUB]    ={n:'Grub',     ph:3, col:[220,248,196], ig:200, fuel:24, out:1.0, cond:.26, cap:1.1,
              char:5, ash:ASH, dens:1.1, tough:.6, sparse:.13, drown:120, alive:1,
              chew:67, pupa:30, becomes:PUPA};
 /* What a grub is for, in the end. Thirty cells eaten and it stops, seals itself up, and
@@ -589,7 +589,7 @@ M[GRUB]    ={n:'Grub',     ph:3, col:[228,198,186], ig:200, fuel:24, out:1.0, co
    It cannot move, and does not try to. A chrysalis hanging in the gallery its grub cut is
    what one looks like. `ig` 170 and `char` 3, because a sealed grub is the most helpless
    thing in the box, and `drown` because being underwater is no better sealed in than out. */
-M[PUPA]    ={n:'Pupa',     ph:3, col:[186,124, 70], ig:170, fuel:16, out:0.9, cond:.24, cap:1.0,
+M[PUPA]    ={n:'Pupa',     ph:3, col:[188,116, 68], ig:170, fuel:16, out:0.9, cond:.24, cap:1.0,
              char:3, ash:ASH, dens:1.1, tough:.5, drown:100, alive:1,
              hatch:300, becomes:MOTH};
 /* The fifth, and the only one that is interested in what has already happened. Every fire in
@@ -608,8 +608,27 @@ M[PUPA]    ={n:'Pupa',     ph:3, col:[186,124, 70], ig:170, fuel:16, out:0.9, co
    once the fire has gone out. That was going to be a damp requirement, which would have been
    written, new, and wrong: fire dries everything, so needing water would have kept it out of
    the one place it exists for. */
-M[ASHBUG]  ={n:'Ash bug', ph:3, col:[120,134,160], ig:210, fuel:18, out:1.0, cond:.30, cap:1.1,
+M[ASHBUG]  ={n:'Ash bug', ph:3, col:[124,136,184], ig:210, fuel:18, out:1.0, cond:.30, cap:1.1,
              char:5, ash:ASH, dens:1.2, tough:.8, sparse:.15, drown:140, alive:1, graze:22};
+/* The sixth, and the first that moves the box around rather than adding to it or taking
+   from it. An **Ant** picks a loose grain up, carries it, and puts it down somewhere else.
+
+   **The rule is two lines and the behaviour is not in either of them.** It lifts a grain
+   more readily the fewer of its kind are around it, and puts one down more readily the more
+   there are. Nothing tells it where a heap should be, or that heaps are wanted; scattered
+   sand still gathers into heaps, and sand and ash gather into *separate* heaps, because a
+   grain is only ever counted against its own kind. This is the one piece of borrowed
+   cleverness in the file — it is the classic ant-sorting rule — and it is here because it is
+   the only way a creature this simple produces something you would want to look at.
+
+   `carries` is the marker and the finds entry; `ANT_TAKE` and `ANT_DROP` are the two
+   eagernesses. What it can lift is read off the grain: a powder, and not alive.
+
+   The load lives in `feed`, the array a vent keeps its payload in. An ant is not a vent, so
+   the field is free, and it is already saved and already swapped — an ant put down mid-
+   carry is still carrying when the scene comes back. */
+M[ANT]     ={n:'Ant',      ph:3, col:[136, 44, 44], ig:200, fuel:18, out:1.1, cond:.30, cap:1.0,
+             char:4, ash:ASH, dens:1.1, tough:.6, sparse:.14, drown:130, alive:1, carries:1};
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
              leak:.02, peak:1500};
 
@@ -627,7 +646,7 @@ const GROUPS = [
   { name:'Wet',   items:[WATER, OIL, ICE, ACID] },
   { name:'Solid', items:[STONE, STEEL, SAND, WAX, GLASS, OBSIDIAN] },
   { name:'Hot',   items:[LAVA, MOLTEN, EMBER, THERMITE, MAGNES, GAS, VENT] },
-  { name:'Life',  items:[BUG, MOTH, FISH, GRUB, ASHBUG] },
+  { name:'Life',  items:[BUG, MOTH, FISH, GRUB, ASHBUG, ANT] },
   { name:'Scene', items:'scenes' },
   { name:'Tools', items:'tools' },
 ];
@@ -672,7 +691,7 @@ SAVE_KEY[GRUB]='grub';        SAVE_KEY[PUPA]='pupa';
    bug; a scene saved under the old name still loads, because the key was never the name.
    Changing it here to match the label would break exactly the saves this table exists to
    protect. */
-SAVE_KEY[ASHBUG]='woodlouse';
+SAVE_KEY[ASHBUG]='woodlouse'; SAVE_KEY[ANT]='ant';
 
 const TYPE_OF_KEY = new Map(SAVE_KEY.map((k,t) => [k,t]));
 
@@ -1808,6 +1827,77 @@ function findScent(){
   }
 }
 
+const ANT_TAKE = .30;    // how eagerly it lifts a grain that is on its own...
+const ANT_DROP = .60;    // ...and puts one down where others already are
+const ANT_KEEP = .03;    /* a floor under the drop chance, so a laden ant that never finds a
+                            heap eventually starts one. Without it the classic rule needs a
+                            seed to exist already, and a box of evenly scattered sand has
+                            none — every ant would pick a grain up and carry it forever.
+                            Measured across a sweep: at .55/.40 the heaps are marginally
+                            better and seven ants in ten are permanently laden, which is the
+                            same fault wearing a good number. At .30/.60 one in ten is
+                            carrying at any moment and 71 grains of 72 are on the floor. */
+
+// What an ant will lift: a loose grain, and nothing alive. Read off the grain's own row, so
+// a powder added tomorrow is portable without a line written here.
+const liftable = (t) => t !== E && M[t].ph === 2 && !M[t].alive;
+
+// How many of the eight cells around this one are the same kind. The whole of the sorting
+// is this number: low means take it, high means leave it, and for a carried grain the other
+// way round.
+function likeMe(x, y, t){
+  let n = 0;
+  for (let k=0;k<8;k++){
+    const [dx,dy] = MOTH_DIRS[k];
+    if (inb(x+dx,y+dy) && type[idx(x+dx,y+dy)] === t) n++;
+  }
+  return n;
+}
+
+/* Lift, or put down. Never both in a tick, and neither of them stops it walking — an ant
+   that stood still while it worked would pile everything where it happened to be standing,
+   which is the one shape this must not make. */
+function antWork(i, x, y){
+  const m = M[type[i]], load = feed[i];
+
+  if (load){
+    /* A panicking ant drops what it is holding, which is both what one would do and the
+       only place a grain can leave the box for good: an ant that burns while laden takes
+       its load with it. */
+    const n = likeMe(x, y, load);
+    const p = temp[i] >= PANIC_AT ? 1 : ANT_KEEP + ANT_DROP * (n*n) / (1 + n*n);
+    if (Math.random() >= p) return;
+    // One offset for the whole sweep, not a fresh one each time round: rolling inside the
+    // loop revisits directions and skips others, so an ant with exactly one place to put
+    // something down would often fail to find it and keep hold of the grain.
+    const from = (Math.random()*8)|0;
+    for (let k=0;k<8;k++){
+      const [dx,dy] = MOTH_DIRS[(from + k) % 8];
+      const xx = x+dx, yy = y+dy;
+      if (!inb(xx,yy) || !yields(type[idx(xx,yy)])) continue;
+      put(xx, yy, load);
+      feed[i] = 0;
+      return;
+    }
+    return;
+  }
+
+  for (let k=0;k<8;k++){
+    const [dx,dy] = MOTH_DIRS[k];
+    const xx = x+dx, yy = y+dy;
+    if (!inb(xx,yy)) continue;
+    const j = idx(xx,yy), t = type[j];
+    if (!liftable(t)) continue;
+    const n = likeMe(xx, yy, t);
+    if (Math.random() < ANT_TAKE / (1 + n*n)){
+      found(type[i] + ':carry', `${m.n} picks up ${M[t].n}`);
+      become(xx, yy, E);
+      feed[i] = t;
+    }
+    return;
+  }
+}
+
 // Nearest wins, so an ash bug goes to the pile in front of it rather than the biggest one
 // in the box. A tie is a coin, not a preference for one side.
 function ashbugSniff(x){
@@ -1867,7 +1957,8 @@ function moveLife(){
   let anyMoth = false, anyAshbug = false;
   for (let i=0;i<type.length;i++){
     const t = type[i];
-    if (t === BUG || t === MOTH || t === FISH || t === GRUB || t === PUPA || t === ASHBUG){
+    if (t === BUG || t === MOTH || t === FISH || t === GRUB || t === PUPA || t === ASHBUG
+        || t === ANT){
       alive.push(i);
       if (t === MOTH)  anyMoth  = true;
       if (t === ASHBUG) anyAshbug = true;
@@ -1882,7 +1973,7 @@ function moveLife(){
     const kind = type[i];
     // burned, eaten, drowned or dried out since the list was taken
     if (kind !== BUG && kind !== MOTH && kind !== FISH && kind !== GRUB
-        && kind !== PUPA && kind !== ASHBUG) continue;
+        && kind !== PUPA && kind !== ASHBUG && kind !== ANT) continue;
     if (kind === FISH){ moveFish(i, i % W, (i / W) | 0); continue; }
 
     const mx = i % W, my = (i / W) | 0;
@@ -1909,8 +2000,11 @@ function moveLife(){
     // Out of the wood a grub falls and walks exactly like a bug, only slower, so the rest
     // of this is shared rather than copied.
     if (kind === GRUB && grubEat(i, mx, my)) continue;
-    // An ash bug eats and then carries on walking, so this is not a `continue`.
+    // An ash bug eats and then carries on walking, so this is not a `continue`. Nor does an
+    // ant stop to work: one that stood still while it lifted and dropped would pile
+    // everything where it was standing, which is the one shape this must not make.
     const feeding = kind === ASHBUG && ashbugGraze(i, mx, my);
+    if (kind === ANT) antWork(i, mx, my);
     const x = mx, y = my;
 
     // Falls, because nothing else will do it: a bug is a static solid so that it does not
@@ -2229,6 +2323,13 @@ function draw(){
     } else {
       const c = M[t].col, j = tint[i];
       r=c[0]+j; g=c[1]+j; b=c[2]+j;
+      /* A laden ant is drawn half its own colour and half its cargo's, so you can see what
+         it is carrying and where it is taking it. A vent shows its payload outright; an ant
+         drawn that way would just look like a grain walking, and the animal would vanish. */
+      if (t===ANT && feed[i]){
+        const q = M[feed[i]].col;
+        r=(r+q[0])>>1; g=(g+q[1])>>1; b=(b+q[2])>>1;
+      }
     }
     const T = temp[i];
     if (T > 300 && t!==E && t!==WATER && t!==STEAM){
@@ -3319,6 +3420,7 @@ const FINDS = (() => {
     if (m.eats)  add(t, 'eats', `${m.n} eats through things`);
     if (m.chew)  add(t, 'chew', `${m.n} eats its way through things`);
     if (m.graze) add(t, 'graze', `${m.n} clears away what fire leaves behind`);
+    if (m.carries) add(t, 'carry', `${m.n} carries loose grains about and heaps them up`);
     // One rule, both ends of a life: a grub filling up, and what it opens into.
     if (m.becomes !== undefined) add(t, 'becomes', `${m.n} turns into ${M[m.becomes].n}`);
     // Two ways of being somewhere you cannot be, and both are worth finding out about.

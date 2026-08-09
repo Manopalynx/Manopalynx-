@@ -1988,6 +1988,134 @@ await check(browser, 'an ash bug goes to the ash rather than stumbling into it',
   return bad.length ? bad.join('; ') : null;
 });
 
+/* The rule is two lines and the behaviour is in neither of them: an ant lifts a grain more
+   readily the fewer of its kind are around it, and puts one down more readily the more there
+   are. Nothing says where a heap should be, or that heaps are wanted.
+
+   So the check cannot look for heaps in particular places. It measures how clumped the
+   grains are — the mean number of same-kind neighbours per grain — and compares the same
+   scene with and without ants, because sand piles under gravity on its own and a bare
+   "it ended up clumped" would be measuring gravity. */
+await check(browser, 'ants gather scattered grains into heaps, and sort two kinds apart', () => {
+  const bad = [];
+  const clump = (t) => {
+    let s=0, n=0;
+    for (let i=0;i<type.length;i++) if (type[i]===t){
+      const x=i%W, y=(i/W)|0; let k=0;
+      for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]])
+        if (inb(x+dx,y+dy) && type[idx(x+dx,y+dy)]===t) k++;
+      s+=k; n++;
+    }
+    return n ? s/n : 0;
+  };
+  // A fixed scatter, not a random one: the claim is about the ants, and two runs that start
+  // from different rubble are not comparable.
+  const scatter = () => {
+    __wipe(); const f = __floor();
+    let seed = 11;
+    const rnd = () => (seed = (seed*1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    for (let x=8; x<W-8; x++) if (rnd() < .55) put(x, f-1, SAND);
+    return f;
+  };
+  const run = (ants) => {
+    const f = scatter();
+    const n0 = __count(SAND), c0 = clump(SAND);
+    for (let k=0;k<ants;k++) put(14+k*10, f-3, ANT);
+    for (let k=0;k<7200;k++) __step(1);
+    let held = 0;
+    for (let i=0;i<type.length;i++) if (type[i]===ANT && feed[i]) held++;
+    return { c0, c1: clump(SAND), n0, n: __count(SAND), held, ants: __count(ANT) };
+  };
+  const idle = run(0), busy = run(10);
+  if (Math.abs(idle.c1 - idle.c0) > 0.15)
+    bad.push(`the scatter clumped from ${idle.c0.toFixed(2)} to ${idle.c1.toFixed(2)} with no ants in it — that is gravity, not ants`);
+  // Thresholds from the spread, not from one run. Five runs of this scene gained 0.66 to
+  // 1.27; the control gained exactly 0.00 every time, which is what makes it a control.
+  if (busy.c1 < busy.c0 + 0.4)
+    bad.push(`ten ants took the scatter from ${busy.c0.toFixed(2)} to ${busy.c1.toFixed(2)} — nothing was heaped`);
+  if (busy.ants !== 10) bad.push(`ten ants became ${busy.ants}`);
+
+  /* And they must put things down again. At an earlier setting the heaps measured slightly
+     better and seven ants in ten were permanently laden — the same fault wearing a good
+     number, and invisible to a clumping measurement alone. */
+  if (busy.held > 4) bad.push(`${busy.held} of 10 ants were still holding a grain — they are hoarding, not heaping`);
+  if (busy.n + busy.held < busy.n0)
+    bad.push(`${busy.n0} grains became ${busy.n} on the floor and ${busy.held} carried — ${busy.n0 - busy.n - busy.held} left the box`);
+
+  /* Two kinds go into two heaps, because a grain is only ever counted against its own kind.
+
+     Fourteen ants and five minutes, which is not padding: at eight ants and ninety seconds
+     the sand's gain ranged 0.15 to 0.95 across five runs and this arm failed about one time
+     in three. Sorting two kinds is slower than heaping one — every grain an ant passes is
+     now half as likely to be the kind it is carrying. At this length the gain ran 0.92 to
+     1.82 for sand and 1.43 to 2.50 for ash, so the bars below sit well under the worst run
+     rather than near the average of a handful. */
+  __wipe(); const f = __floor();
+  let seed = 7;
+  const rnd = () => (seed = (seed*1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  for (let x=10; x<W-10; x++){ const r = rnd(); if (r < .25) put(x, f-1, SAND); else if (r < .5) put(x, f-1, ASH); }
+  for (let k=0;k<14;k++) put(16+k*7, f-3, ANT);
+  const s0 = clump(SAND), a0 = clump(ASH);
+  for (let k=0;k<18000;k++) __step(1);
+  if (clump(SAND) < s0 + 0.5) bad.push(`sand went from ${s0.toFixed(2)} to ${clump(SAND).toFixed(2)} in a mixed scatter`);
+  if (clump(ASH)  < a0 + 0.7) bad.push(`ash went from ${a0.toFixed(2)} to ${clump(ASH).toFixed(2)} in a mixed scatter`);
+
+  // Grains only. A creature that could carry a wall away is not an ant.
+  for (const t of [STONE, WOOD, GLASS, WATER, STEEL]){
+    __wipe(); const ff = __floor();
+    __slab(((W/2)|0)-12, ff-10, ((W/2)|0)+12, ff-1, t);
+    for (let k=0;k<6;k++) put(((W/2)|0)-8+k*3, ff-12, ANT);
+    const n0 = __count(t);
+    for (let k=0;k<3000;k++) __step(1);
+    if (__count(t) < n0) bad.push(`ants carried off ${n0 - __count(t)} cells of ${M[t].n}`);
+  }
+  if (![...finds].some(k => k === ANT + ':carry')) bad.push('carrying did not register as a discovery');
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* Reported from the phone: the moth and the grub were near enough the same colour that a
+   new player would wonder why a grub had started flying. Measuring it found worse — the moth
+   was **dE 2.3** from Paper, which is the same colour by any standard anybody uses.
+
+   CIE76 in Lab rather than distance in RGB, because the eye is far more sensitive to
+   lightness than to blue and an RGB number says the opposite. Creatures are held further
+   apart from each other than from materials, because every confusion reported so far has
+   been one creature for another rather than a creature for a wall. */
+await check(browser, 'no two things in the box are the same colour, and creatures least of all', () => {
+  const bad = [];
+  const lab = ([R,G,B]) => {
+    const f = v => { v/=255; return v > .04045 ? Math.pow((v+.055)/1.055, 2.4) : v/12.92; };
+    const r=f(R), g=f(G), b=f(B);
+    let x=(r*.4124+g*.3576+b*.1805)/.95047, y=r*.2126+g*.7152+b*.0722, z=(r*.0193+g*.1192+b*.9505)/1.08883;
+    const k = v => v > .008856 ? Math.cbrt(v) : (7.787*v + 16/116);
+    x=k(x); y=k(y); z=k(z);
+    return [116*y-16, 500*(x-y), 200*(y-z)];
+  };
+  const dE = (a,b) => { const A=lab(a), B=lab(b); return Math.hypot(A[0]-B[0],A[1]-B[1],A[2]-B[2]); };
+  /* Three bars, and the gap between them is deliberate rather than lazy.
+
+     Two creatures: 30. Every confusion reported so far has been one creature for another.
+     A creature and a material: 20 — a moth at dE 2.3 from Paper is the fault that started
+     this, and a creature crosses everything in the box so it cannot rely on context.
+     Two materials: 3, which only catches a literal duplicate.
+
+     That last one is low on purpose and the honest reason is that the material palette does
+     not meet a higher bar and never has: Stone and Ash are 3.4 apart, Powder and Smoke 4.2,
+     Paper and Wax 5.1, Coal and Rubber 5.1. Twenty-six pairs sit under 12. They are told
+     apart by where they are and what they do — ash is on the floor after a fire and stone is
+     the wall you built — and nobody has ever reported confusing them. Asserting a standard
+     here that the box has never met would be a failing check about a problem nobody has. */
+  const shown = [];
+  for (let t=1;t<M.length;t++) if (M[t] && M[t].col) shown.push(t);
+  for (let i=0;i<shown.length;i++) for (let j=i+1;j<shown.length;j++){
+    const a = shown[i], b = shown[j], e = dE(M[a].col, M[b].col);
+    const floor = M[a].alive && M[b].alive ? 30 : (M[a].alive || M[b].alive) ? 20 : 3;
+    if (e < floor)
+      bad.push(`${M[a].n} and ${M[b].n} are ${e.toFixed(1)} apart, under the ${floor} this pair needs`);
+  }
+  return bad.length ? bad.join('; ') : null;
+});
+
 await check(browser, 'a box full of living things still costs less than a frame', () => {
   const bad = [];
   const bench = (t, n) => {
