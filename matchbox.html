@@ -314,7 +314,7 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
       FIRE=16, SMOKE=17, STEAM=18, EMBER=19, ASH=20,
       LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24,
       THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31, WORM=32,
-      MOTH=33, FISH=34, GRUB=35, PUPA=36, ASHBUG=37, ANT=38, MOSS=39;
+      MOTH=33, FISH=34, GRUB=35, PUPA=36, ASHBUG=37, ANT=38, MOSS=39, DIRT=40;
 
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
@@ -373,7 +373,22 @@ M[FIRE]   = {n:'Fire',     ph:0, col:[232,100, 26]};
 M[SMOKE]  = {n:'Smoke',    ph:0, col:[ 58, 54, 50]};
 M[STEAM]  = {n:'Steam',    ph:0, col:[178,182,186]};
 M[EMBER]  = {n:'Ember',    ph:2, col:[ 84, 40, 22], ig:340, fuel:340, out:1.6, cond:.14, cap:1.0, ash:ASH,   char:20, dens:.7};
-M[ASH]    = {n:'Ash',      ph:2, col:[ 96, 92, 88], ig:9e9, cond:.10, cap:.9,  dens:.45};
+/* Wet ash is soil, and that is the second answer to "how do I get rid of ash" — the first
+   being the ash bug, which eats it and leaves nothing. This one turns it into something.
+   The water is absorbed rather than left behind: a cell of ash costs a cell of water, which
+   makes it a trade rather than a tap, and it is what stops one puddle converting a whole
+   burnt-out box. */
+M[ASH]    = {n:'Ash',      ph:2, col:[ 96, 92, 88], ig:9e9, cond:.10, cap:.9,  dens:.45,
+             meets:[{with:WATER, become:DIRT, they:E, tale:'Ash + Water → Dirt'}]};
+/* Soil. It exists so that a fire has somewhere to go other than a floor of grey that stays
+   grey — ash → dirt → (later) something growing in it.
+
+   It does not burn, which would leave it indestructible under the rule two sections down,
+   so it has a melting point: baked hard enough, earth is rock. Acid eats it too, having no
+   `proof`. `ph:2` because soil is loose — it piles, ants can carry it, and moss will root on
+   it the way moss roots on anything that is not a gas or a liquid. */
+M[DIRT]   = {n:'Dirt',     ph:2, col:[100, 88, 56], ig:9e9, cond:.14, cap:1.6, dens:1.5,
+             melt:1150, into:LAVA, tough:1.2};
 
 /* Matter that only exists once something has been hot enough.
 
@@ -544,9 +559,21 @@ M[VENT]    ={n:'Vent',     ph:3, col:[ 78, 74, 84], ig:9e9, cond:.20, cap:2.4, d
    `ig` 190 and `char` 4: it catches easily and quickly, because the interesting thing
    about a creature in this box is that it is the softest thing in it. `fuel` 20 so it goes
    out fast and leaves ash. `dens` and `ph:3` because it is not a powder and does not
-   trickle — everything it does about gravity and walking is in moveLife(). */
-M[WORM]     ={n:'Worm',     ph:3, col:[176, 92,132], ig:190, fuel:20, out:1.2, cond:.30, cap:1.0,
-             char:4, ash:ASH, dens:1.1, tough:.6, sparse:.16, drown:150, alive:1};
+   trickle — everything it does about gravity and walking is in moveLife().
+
+   **And it finally has a verb of its own.** For a long time this was the generic wanderer:
+   it walked, it fled heat, and that was all, which is why it was still called `BUG` in the
+   source after the tray stopped saying so. It composts — `tills` is ticks per turn of a cell
+   of what fire left behind into `soil` — and it burrows through that soil by swapping with
+   it, the way a fish swims rather than the way a grub tunnels, so the ground does not
+   collapse behind it.
+
+   That makes it the grub's opposite in the way the moth is the worm's: **the grub eats
+   structure and the worm makes ground.** It is also the ash bug's opposite — both clear a
+   burn, one by removing it and one by turning it into something. */
+M[WORM]    ={n:'Worm',     ph:3, col:[176, 92,132], ig:190, fuel:20, out:1.2, cond:.30, cap:1.0,
+             char:4, ash:ASH, dens:1.1, tough:.6, sparse:.16, drown:150, alive:1,
+             tills:55, soil:DIRT};
 /* The worm's opposite, and deliberately so: it flies, and warmth pulls it in rather than
    driving it off. Everything else in this box treats heat as a hazard. One thing that
    treats it as a destination turns a candle into a lure and a fire into a funeral.
@@ -692,7 +719,7 @@ M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, 
 const GROUPS = [
   { name:'Fuel',  items:[WOOD, PAPER, STRAW, FUSE, COAL, GREEN, POWDER, RUBBER] },
   { name:'Wet',   items:[WATER, OIL, ICE, ACID] },
-  { name:'Solid', items:[STONE, STEEL, SAND, WAX, GLASS, OBSIDIAN] },
+  { name:'Solid', items:[STONE, STEEL, SAND, DIRT, WAX, GLASS, OBSIDIAN] },
   { name:'Hot',   items:[LAVA, MOLTEN, EMBER, THERMITE, MAGNES, GAS, VENT] },
   { name:'Life',  items:[WORM, MOTH, FISH, GRUB, ASHBUG, ANT, MOSS] },
   { name:'Scene', items:'scenes' },
@@ -742,6 +769,7 @@ SAVE_KEY[GRUB]='grub';        SAVE_KEY[PUPA]='pupa';
    called it an Ash bug, and it was changed here while nothing in the world depended on it.
    Once a save exists that anybody minds losing, the rule bites and these stop moving. */
 SAVE_KEY[ASHBUG]='ash-bug';   SAVE_KEY[ANT]='ant';         SAVE_KEY[MOSS]='moss';
+SAVE_KEY[DIRT]='dirt';
 
 const TYPE_OF_KEY = new Map(SAVE_KEY.map((k,t) => [k,t]));
 
@@ -1807,6 +1835,7 @@ function moveFish(i, x, y){
 }
 
 const GRUB_STEP = 14;    // ticks between crawling steps in the open, against a worm's 7
+const WORM_DIG  = 9;     // ticks a worm takes to move one cell through soil
 const GRUB_TURN = .14;   // how often it picks a new direction to cut in
 
 /* What a grub will eat: solid enough to tunnel through, and made of something that would
@@ -1965,6 +1994,53 @@ function mossSpread(i, x, y){
     put(xx, yy, type[i]);
     return;
   }
+}
+
+/* Composting, and burrowing, which are the worm's two and both read off its row.
+
+   `tills` turns one cell of what fire left behind into `soil` — the same `LEFTOVER` set the
+   ash bug grazes, so a fuel added tomorrow that burns down to something new is compostable
+   with nothing written here. The two creatures are deliberately in competition: the ash bug
+   removes a burn, the worm converts it, and a scene with both gets whichever is nearer.
+
+   Returns whether there is anything to compost within reach, bite or no bite — which is
+   what decides whether it burrows. It does not stop walking either way: a worm that stood
+   still while it worked would leave all its soil in one heap. */
+function wormTill(i, x, y){
+  const m = M[type[i]];
+  let at = -1;
+  const from = (Math.random()*8)|0;
+  for (let k=0;k<8;k++){
+    const [dx,dy] = MOTH_DIRS[(from + k) % 8];
+    const xx = x+dx, yy = y+dy;
+    if (!inb(xx,yy)) continue;
+    if (!LEFTOVER.has(type[idx(xx,yy)])) continue;
+    at = idx(xx,yy); break;
+  }
+  if (at < 0) return false;                       // nothing to work on
+  if (Math.random() * m.tills < 1){
+    found(type[i] + ':till', `${m.n} turns ${M[type[at]].n} into ${M[m.soil].n}`);
+    become(at % W, (at / W) | 0, m.soil);
+  }
+  return true;                                    // at a face of it either way
+}
+
+/* Through the soil rather than over it, by swapping — which is how a fish moves and not how
+   a grub does. A grub eats its way and leaves a gallery; a worm in earth leaves the earth
+   where it was, because a tunnel in something loose would fall in behind it anyway. */
+function wormBurrow(i, x, y){
+  const m = M[type[i]];
+  const from = (Math.random()*8)|0;
+  for (let k=0;k<8;k++){
+    const [dx,dy] = MOTH_DIRS[(from + k) % 8];
+    const xx = x+dx, yy = y+dy;
+    if (!inb(xx,yy)) continue;
+    if (type[idx(xx,yy)] !== m.soil) continue;
+    way[i] = ((from + k) % 8) + 1;
+    swap(i, idx(xx,yy));
+    return true;
+  }
+  return false;
 }
 
 const ANT_TAKE = .30;    // how eagerly it lifts a grain that is on its own...
@@ -2150,9 +2226,22 @@ function moveLife(){
     if (kind === GRUB && grubEat(i, mx, my)) continue;
     // An ash bug eats and then carries on walking, so this is not a `continue`. Nor does an
     // ant stop to work: one that stood still while it lifted and dropped would pile
-    // everything where it was standing, which is the one shape this must not make.
+    // everything where it was standing, which is the one shape this must not make. Nor a
+    // worm, for the same reason — all its soil would end up in one heap.
     const feeding = kind === ASHBUG && ashbugGraze(i, mx, my);
     if (kind === ANT) antWork(i, mx, my);
+    if (kind === WORM){
+      const atWork = wormTill(i, mx, my);
+      /* Burrowing only when there is nothing left to compost, and that clause is the whole
+         difference between a worm and a mole. Without it they bury themselves in their own
+         soil and stop: measured, six worms took a 204-cell ash field to 86 cells of dirt in
+         a minute and then to 79 in three, which is not progress, it is six worms swimming
+         about in the compost they made while the rest of the ash sat there.
+
+         Checked before the fall, because a worm in earth has nothing to fall into. */
+      if (!atWork && type[i] === WORM && Math.random() * WORM_DIG < 1
+          && wormBurrow(i, mx, my)) continue;
+    }
     const x = mx, y = my;
 
     // Falls, because nothing else will do it: a worm is a static solid so that it does not
@@ -3608,6 +3697,7 @@ const FINDS = (() => {
     if (m.graze) add(t, 'graze', `${m.n} clears away what fire leaves behind`);
     if (m.carries) add(t, 'carry', `${m.n} carries loose grains about and heaps them up`);
     if (m.spread) add(t, 'spread', `${m.n} spreads over damp surfaces`);
+    if (m.tills)  add(t, 'till',   `${m.n} turns what fire left into ${M[m.soil].n}`);
     if (m.wither) add(t, 'wither', `${m.n} dries out in the heat`);
     // One rule, both ends of a life: a grub filling up, and what it opens into.
     if (m.becomes !== undefined) add(t, 'becomes', `${m.n} turns into ${M[m.becomes].n}`);

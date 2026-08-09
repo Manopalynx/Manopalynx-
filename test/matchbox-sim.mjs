@@ -1875,8 +1875,16 @@ await check(browser, 'a grub cuts galleries through a log rather than a crater i
   if (one.reach < 1.6 * Math.sqrt(one.holes))
     bad.push(`${one.holes} cells eaten reaching ${one.reach} — that is a crater, not a gallery`);
 
+  /* The floor is read off the table, and it has to be, because four grubs cannot eat more
+     than four times `pupa` before they stop being grubs — 4 × 30 = 120. The bar used to be
+     the literal 120, which is the cap itself: measured twelve times on two builds it comes
+     out at exactly 124 every run, so the check was passing on a four-cell margin over a
+     number it could never exceed, and one run at 117 failed it. Three quarters of the cap
+     leaves room and still catches a grub that has stopped eating. */
   const four = gnaw(4, 3600);
-  if (four.eaten < 120) bad.push(`four grubs ate ${four.eaten} cells of a log in a minute`);
+  const cap = 4 * M[GRUB].pupa;
+  if (four.eaten < cap * 0.75)
+    bad.push(`four grubs ate ${four.eaten} cells of a log in a minute, against a pupation cap of ${cap}`);
   if (four.eaten > 900) bad.push(`four grubs ate ${four.eaten} of a 1230-cell log in a minute — that is not a log any more`);
 
   /* It eats what would burn and nothing else, which is a property of the *food's* row
@@ -2346,6 +2354,97 @@ await check(browser, 'a fire cannot leave more ash behind than it had fuel', () 
      the ceiling before moss stopped burning. */
   if (left > burnt * 1.2)
     bad.push(`${burnt} cells of wood burnt and left ${left} cells of ash — the scene made ${left - burnt} from nowhere`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* Two answers to "how do I get rid of ash", and they are deliberately different: the ash bug
+   removes it, and these turn it into something. Fire → ash → dirt is the first half of a
+   cycle; what grows in the dirt is the other half and comes later. */
+await check(browser, 'wet ash becomes dirt, and a worm makes soil out of a burn', () => {
+  const bad = [];
+  const cx = (W/2)|0;
+
+  // Rain on a burn. The water is absorbed rather than left behind, so it is a trade.
+  __wipe(); let f = __floor();
+  __slab(cx-25, f-4, cx+25, f-1, ASH);
+  const ash0 = __count(ASH);
+  __slab(cx-25, f-9, cx+25, f-6, WATER);
+  const water0 = __count(WATER);
+  for (let k=0;k<2000;k++) __step(1);
+  const made = __count(DIRT), ateAsh = ash0 - __count(ASH), ateWater = water0 - __count(WATER);
+  if (made < 20) bad.push(`water poured on ${ash0} cells of ash made ${made} of dirt`);
+  // One cell of water per cell of ash. If water were left behind, one puddle would convert a
+  // whole burnt-out box and the trade would not be a trade.
+  if (Math.abs(ateWater - ateAsh) > Math.max(6, ateAsh * 0.15))
+    bad.push(`${ateAsh} cells of ash became dirt but ${ateWater} cells of water went — those should match`);
+
+  // Worms, and the control that says it is the worms doing it.
+  const compost = (n, ticks) => {
+    __wipe(); const ff = __floor();
+    __slab(cx-25, ff-4, cx+25, ff-1, ASH);
+    const a0 = __count(ASH);
+    for (let k=0;k<n;k++) put(cx-18+k*6, ff-5, WORM);
+    for (let k=0;k<ticks;k++) __step(1);
+    return { a0, ash: __count(ASH), dirt: __count(DIRT), worms: __count(WORM) };
+  };
+  const idle = compost(0, 3600), busy = compost(6, 3600);
+  if (idle.dirt) bad.push(`${idle.dirt} cells of dirt appeared in an ash field with no worms in it`);
+  if (busy.dirt < 40) bad.push(`six worms made ${busy.dirt} cells of dirt from ${busy.a0} of ash in a minute`);
+  if (busy.worms !== 6) bad.push(`six worms became ${busy.worms}`);
+  if (busy.a0 - busy.ash !== busy.dirt)
+    bad.push(`${busy.a0 - busy.ash} cells of ash went and ${busy.dirt} of dirt arrived — one turns into one`);
+
+  /* And it keeps going. Before burrowing was made the thing a worm does when it has nothing
+     to compost, six worms took the field to 86 cells of dirt in a minute and 79 in three —
+     they had buried themselves in their own soil and were swimming about in it. */
+  const later = compost(6, 10800);
+  if (later.dirt < busy.dirt - 10)
+    bad.push(`six worms made ${busy.dirt} cells of dirt in a minute and ${later.dirt} in three — they stopped working`);
+
+  // Through the soil, not eating it: a worm leaves the ground where it found it.
+  __wipe(); f = __floor();
+  __slab(cx-25, f-14, cx+25, f-1, DIRT);
+  const soil0 = __count(DIRT);
+  put(cx, f-16, WORM);
+  const seen = new Set();
+  for (let k=0;k<3600;k++){
+    __step(1);
+    for (let i=0;i<type.length;i++) if (type[i]===WORM) seen.add(i);
+  }
+  if (__count(DIRT) !== soil0) bad.push(`a worm in ${soil0} cells of soil left ${__count(DIRT)} — it is eating the ground`);
+  if (seen.size < 40) bad.push(`a worm in soil visited ${seen.size} cells in a minute — it is not burrowing`);
+  if (![...finds].some(k => k === WORM + ':till')) bad.push('composting did not register as a discovery');
+  if (![...finds].some(k => k === ASH + ':meets0')) bad.push('wet ash did not register as a discovery');
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* Dirt is a material like any other and has to behave like one, or it is a green-flavoured
+   hole in the table. It also has to stay destructible — soil that does not burn would be
+   indestructible if it had no melting point, which is exactly the fault two sections up. */
+await check(browser, 'dirt piles, does not burn, and can still be got rid of', () => {
+  const bad = [];
+  const cx = (W/2)|0;
+
+  __wipe(); let f = __floor();
+  __slab(cx-6, f-20, cx+6, f-10, DIRT);
+  for (let k=0;k<900;k++) __step(1);
+  let l=1e9, r=-1e9;
+  for (let i=0;i<type.length;i++) if (type[i]===DIRT){ const x=i%W; if(x<l)l=x; if(x>r)r=x; }
+  if (r-l+1 <= 13) bad.push(`a 13-wide column of dirt was still ${r-l+1} wide after fifteen seconds — it is not piling`);
+
+  __wipe(); f = __floor();
+  __slab(cx-10, f-6, cx+10, f-1, DIRT);
+  const d0 = __count(DIRT);
+  __hold(cx, f-4, 3, 600);
+  for (let k=0;k<1200;k++) __step(1);
+  if (__count(DIRT) < d0) bad.push(`${d0 - __count(DIRT)} cells of dirt burned`);
+
+  __wipe(); f = __floor();
+  __slab(cx-10, f-6, cx+10, f-1, DIRT);
+  const a0 = __count(DIRT);
+  __slab(cx-10, f-10, cx+10, f-7, ACID);
+  for (let k=0;k<2500;k++) __step(1);
+  if (__count(DIRT) >= a0) bad.push('acid poured on dirt removed none of it');
   return bad.length ? bad.join('; ') : null;
 });
 

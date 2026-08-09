@@ -45,7 +45,7 @@ fetched fresh whenever there is a signal — no stale-build trap, and nothing to
 
 ## What is in the box
 
-Thirty-two chips in the tray — twenty-four materials, seven living things and the vent — and
+Thirty-three chips in the tray — twenty-five materials, seven living things and the vent — and
 seven more the simulation makes and never lets you place: fire, smoke, steam, ash, the pupa,
 molten wax and molten rubber. Every one of them is one row of the `M` table and nothing else in the
 file knows any of them by name.
@@ -143,6 +143,7 @@ A material is described by a handful of numbers. The ones that matter:
 | `carries` | this one picks loose grains up and heaps them somewhere else |
 | `spread` `damp` | ticks between growing a cell, and how far water may be for it to try |
 | `wither` | dies at this temperature, instead of ever reaching an ignition point |
+| `tills` `soil` | ticks a worm takes to compost one cell of a burn, and what it makes |
 | `roots` | the brush may only put this where it could actually live |
 | `hatch` `becomes` | how long a life stage lasts, and what it turns into |
 | `drown` `air` | how many ticks a living thing lasts in the wrong one of the two |
@@ -917,6 +918,53 @@ ash — which is inherent to it being something you can build with, not a separa
 every moss cell did it every tick. The spread roll comes **first**, so at `spread` 40 only
 about one cell in forty ever pays for a scan. Order of operations is the whole optimisation.
 
+### Dirt, and what the worm turns out to be for
+
+Every fire in this box used to end the same way: a floor of grey that stayed grey. The ash
+bug was the first answer to that — it eats the stuff. **Dirt is the second, and it is the
+opposite kind of answer: it turns the burn into something instead of removing it.**
+
+Two ways to make it, and the second is the Worm finally getting a verb.
+
+**Rain on a burn.** One row in the ash's table:
+
+```js
+meets:[{with:WATER, become:DIRT, they:E, tale:'Ash + Water → Dirt'}]
+```
+
+`they:E` is the load-bearing part. The water is **absorbed**, so a cell of ash costs a cell
+of water — a trade rather than a tap, and it is what stops one puddle converting a whole
+burnt-out box. Measured: 204 cells of ash under 204 of water gives 55 cells of dirt, 55 ash
+gone and 55 water gone. It stalls at the interface as the dirt separates the two, which is
+what mud does.
+
+**Or a worm composts it.** `tills:55` is ticks per cell of what fire left behind turned into
+`soil` — the same derived `LEFTOVER` set the ash bug grazes, so a fuel added tomorrow that
+burns down to something new is compostable with nothing written for it. Six worms take a
+204-cell ash field to **99 cells of dirt in a minute**, and none at all with no worms in it.
+
+**And it burrows**, by swapping with the soil the way a fish swims rather than the way a grub
+tunnels — a gallery cut in something loose would fall in behind it anyway. A worm crossing
+714 cells of soil leaves 714 cells of soil.
+
+So the Worm is the Grub's opposite in the way the Moth is the Worm's: **the grub eats
+structure and the worm makes ground.** It is the ash bug's opposite too — both clear a burn,
+one by deleting it and one by composting it, and a scene with both gets whichever is nearer.
+
+#### The clause that stopped them swimming in their own compost
+
+Burrowing had to become *the thing a worm does when there is nothing to compost*. Without
+that clause they bury themselves: measured, six worms took the field to **86 cells of dirt in
+a minute and 79 in three** — not progress, six worms swimming about in the soil they had made
+while the rest of the ash sat there untouched. With it, 99 in a minute and 104 in three, and
+the worm visits 223 cells of soil instead of 84.
+
+**Dirt is a material and has to behave like one.** It piles (a 13-wide column spreads to 25),
+it does not burn at all, ants carry it, and moss roots on it. It has a melting point of 1150
+into lava — not for realism but because **soil that does not burn and cannot melt would be
+indestructible**, which is precisely the fault caught one section up, and a new material is
+the easiest place in the world to reintroduce it.
+
 ### Dying takes a moment, which is most of what you see
 
 Reported from the phone: a bug that touched water was simply *gone*, and a fish on dry
@@ -1199,14 +1247,14 @@ be a guess dressed up as an undo.
 
 ## The finds
 
-`FOUND 3/47` in the corner used to be the whole of it. Forty-four things existed that the
+`FOUND 3/52` in the corner used to be the whole of it. Forty-nine things existed that the
 box would never name, mention again or hint at — a progress bar for a task nobody had been
 told. **Finds** in Tools opens the list: found ones read as what they are (`Lava + Water →
 Obsidian`) and the rest read `Acid — ?`, carrying the material's colour and name and nothing
 else. Eight rows mentioning Acid tell you to go and play with acid without telling you what
 happens when you do. Found ones sort to the top, so it is a record before it is a to-do list.
 
-The forty-seven are derived from the material table — every melt, boil, set, ash, contact
+The fifty-two are derived from the material table — every melt, boil, set, ash, contact
 reaction, explosion, drowning and suffocation in it — so a material added tomorrow brings
 its discoveries with it. The three creatures added five between them and no new derivation
 code: a `drown` or an `air` field is enough.
@@ -1366,7 +1414,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 75 checks — the simulation
+node test/matchbox-sim.mjs     # 77 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
