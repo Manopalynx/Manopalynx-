@@ -704,8 +704,18 @@ M[ANT]     ={n:'Ant',      ph:3, col:[136, 44, 44], ig:200, fuel:18, out:1.1, co
 M[MOSS]    ={n:'Moss',     ph:3, col:[ 92,152, 96], ig:9e9, cond:.14, cap:1.2,
              dens:.9, tough:.5, sparse:.30, alive:1,
              spread:40, damp:40, roots:1, wither:70};
+/* `chokes` is why this one and not smoke or steam. Gas is the gas that *stays*: it only
+   leaves at the top of the box, so it pools and fills a room, and a creature under it is
+   under it for as long as the room holds.
+
+   Smoke and steam were measured with the same field and it changed nothing anywhere. Four
+   scenes: a fire beside worms on a floor, a fire in a sealed room with worms in it, moths
+   flying up a candle's plume, and worms sealed in gas. The sealed room came out 10 of 10
+   alive with or without it, because smoke rises off a creature standing on a floor faster
+   than a breath clock runs. A rule that fires in none of the scenes anybody builds is the
+   thing this file has shipped most often, so it is not here. */
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
-             leak:.02, peak:1500};
+             leak:.02, peak:1500, chokes:1};
 
 /* The tray, in drawers.
 
@@ -1761,18 +1771,24 @@ const SINK_SLOW = 6;     /* one chance in this many, per tick, of going down a c
                             cell a tick in the open, and about 36 cells in the 150 it has
                             before it drowns — which is most of the way down a tank. */
 
-/* Something that breathes air, in water. It used to be a `meets` row, which fires the
-   instant the two touch — so a worm that so much as brushed the surface was simply gone,
-   with nothing to see. A creature is worth a moment.
+/* Something that breathes air, and what happens when there is none. It used to be a `meets`
+   row, which fires the instant the two touch — so a worm that so much as brushed the surface
+   was simply gone, with nothing to see. A creature is worth a moment.
 
-   What counts as being in the water is the cell *above*, not any cell touching. Counting
-   all four neighbours drowned 7 of 10 worms walking along a dry floor with a puddle beside
-   them: they were never in it, they were stood next to it. Under the surface is the thing
-   that stops you breathing, and it is one lookup rather than four.
+   What counts is the cell *above*, not any cell touching. Counting all four neighbours
+   drowned 7 of 10 worms walking along a dry floor with a puddle beside them: they were never
+   in it, they were stood next to it. Under it is what stops you breathing, and it is one
+   lookup rather than four.
+
+   **Water is not the only thing that is not air.** A gas cloud smothers as surely as a pond,
+   and `breath` already means "how long since this cell could breathe" rather than anything
+   about water — so a gas with `chokes` on its row runs the same clock and only the wording
+   at the end differs.
 
    Returns true if it has just died, so the caller stops handling it. */
 function drowning(i, x, y, m){
-  const wet = inb(x, y-1) && type[idx(x, y-1)] === WATER;
+  const over = inb(x, y-1) ? type[idx(x, y-1)] : E;
+  const wet = over === WATER || (M[over] && M[over].chokes === 1);
   // Getting a breath back is quicker than losing one, but it is not instant. Zeroing the
   // clock the moment a cell reaches air made anything that could surface immortal: a worm
   // in a four-deep puddle walked up, drew one tick of air, and started again from nothing,
@@ -1780,7 +1796,9 @@ function drowning(i, x, y, m){
   // just has to keep doing it.
   if (!wet){ breath[i] = Math.max(0, breath[i] - BREATH_BACK); return false; }
   if (++breath[i] < m.drown) return false;      // still struggling
-  found(type[i] + ':drown', `${m.n} drowns`);
+  const how = over === WATER ? 'drown' : 'choke';
+  found(type[i] + ':' + how,
+        over === WATER ? `${m.n} drowns` : `${m.n} suffocates in ${M[over].n}`);
   become(x, y, E);
   return true;
 }
@@ -1961,20 +1979,32 @@ function damp(x, y, r){
 
    The brush asks this too, which is the other half of what was reported: 100 of the 114
    cells a thumb put down were hanging in mid-air where nothing could ever happen to them. */
+/* `ground` is the surface test on its own: something solid or powdery that is not a gas, not
+   a liquid, and **not alive**.
+
+   That last clause was missing and it was reported from the phone with a picture — a pile of
+   worms with moss growing all over them. A creature is `ph:3`, so it read as a wall.
+
+   Three rules in this file ask a version of this question — what a grub may eat, what an ant
+   may lift, and what moss may grow on — and the first two excluded `alive` from the day they
+   were written. This one did not, and there is no reason for the difference beyond nobody
+   having thought about it. */
+const ground = (t, self) => t !== E && t !== self && !M[t].alive
+                            && M[t].ph !== 0 && M[t].ph !== 1;
+
 function rooted(x, y, self){
   for (let d=0; d<8; d++){
     const [dx,dy] = MOTH_DIRS[d];
     const xx=x+dx, yy=y+dy;
     if (!inb(xx,yy)) continue;
     const u = type[idx(xx,yy)];
-    if (u === E || M[u].ph === 0 || M[u].ph === 1) continue;
-    if (u !== self) return true;                       // a real surface
+    if (ground(u, self)) return true;                  // a real surface
+    if (u !== self) continue;
     // moss, which counts only if it has a real surface of its own
     for (let e=0; e<8; e++){
       const [ex,ey] = MOTH_DIRS[e];
       if (!inb(xx+ex, yy+ey)) continue;
-      const v = type[idx(xx+ex, yy+ey)];
-      if (v !== E && v !== self && M[v].ph !== 0 && M[v].ph !== 1) return true;
+      if (ground(type[idx(xx+ex, yy+ey)], self)) return true;
     }
   }
   return false;
@@ -3703,6 +3733,8 @@ const FINDS = (() => {
     if (m.becomes !== undefined) add(t, 'becomes', `${m.n} turns into ${M[m.becomes].n}`);
     // Two ways of being somewhere you cannot be, and both are worth finding out about.
     if (m.drown !== undefined) add(t, 'drown', `${m.n} drowns`);
+    // The same clock, and a second way to run it out. `breath` was never about water.
+    if (m.drown !== undefined) add(t, 'choke', `${m.n} suffocates in what it cannot breathe`);
     if (m.air   !== undefined) add(t, 'air',   `${m.n} cannot breathe air`);
     if (m.ph===0 && m.out !== undefined) add(t, 'burst', `${m.n} goes off`);
   }

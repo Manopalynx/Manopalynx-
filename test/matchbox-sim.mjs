@@ -2285,6 +2285,26 @@ await check(browser, 'moss creeps over damp surfaces, and will not grow without 
     else if (!nearSurface(x, y, 1)) thick++;  // the second layer, which is allowed
   }
   if (adrift) bad.push(`${adrift} of ${grew} cells of moss were more than two cells from any real surface`);
+
+  /* A creature is not a surface. Reported from the phone with a picture of a heap of worms
+     with moss growing all over them — a creature is `ph:3`, so it read as a wall. Measured
+     on a stone shelf under a deep heap of worms: the moss climbed **35 rows** up the heap,
+     1217 cells of it, 1093 of them nowhere near anything real. Two rows now, and none adrift.
+
+     Three rules ask a version of this question — what a grub may eat, what an ant may lift,
+     what moss may grow on — and the first two excluded `alive` from the day they were
+     written. */
+  __wipe(); const fs = __floor();
+  __slab(cx-30, fs-3, cx+30, fs-1, WATER);
+  __slab(cx-30, fs-9, cx+30, fs-4, STONE);
+  const top = fs-9;
+  for (let k=0;k<150;k++) put(cx-24 + (k % 49), top-1-((k/49)|0), WORM);
+  for (let k=0;k<10;k++) put(cx-20+k*4, top-1, MOSS);
+  for (let k=0;k<7200;k++) __step(1);
+  let climbed = 0;
+  for (let i=0;i<type.length;i++) if (type[i]===MOSS) climbed = Math.max(climbed, top - ((i/W)|0));
+  if (climbed > 3)
+    bad.push(`moss climbed ${climbed} rows above a stone shelf using a heap of worms as scaffolding`);
   if (thick > grew * 0.6) bad.push(`${thick} of ${grew} cells are second-layer — that is a bush, not a coating`);
 
   // The same wall, dry. Nothing at all should happen.
@@ -2445,6 +2465,52 @@ await check(browser, 'dirt piles, does not burn, and can still be got rid of', (
   __slab(cx-10, f-10, cx+10, f-7, ACID);
   for (let k=0;k<2500;k++) __step(1);
   if (__count(DIRT) >= a0) bad.push('acid poured on dirt removed none of it');
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* `breath` was never about water — it counts how long a cell has been somewhere it cannot
+   breathe — so a gas that pools runs the same clock as a pond and only the wording differs.
+
+   Which gases, though, is the half worth measuring. Smoke and steam were tried with the same
+   field and changed nothing anywhere: a fire in a sealed room with worms in it came out 10
+   of 10 alive either way, because smoke rises off a creature on a floor faster than the
+   clock runs. Gas is the one that stays. */
+await check(browser, 'a creature under a gas cloud suffocates, and a fire outside does not do it', () => {
+  const bad = [];
+  const cx = (W/2)|0;
+
+  // A room with a lid, filled with gas, ten worms on the floor of it.
+  __wipe(); let f = __floor();
+  __slab(cx-20, f-20, cx+20, f-20, STONE);
+  __slab(cx-21, f-20, cx-21, f-1, STONE);
+  __slab(cx+21, f-20, cx+21, f-1, STONE);
+  for (let n=0;n<10;n++) put(cx-16+n*4, f-1, WORM);
+  __slab(cx-20, f-19, cx+20, f-2, GAS);
+  const n0 = __count(WORM);
+  let gone = -1;
+  for (let k=1;k<=2400;k++){ __step(1); if (gone < 0 && !__count(WORM)) gone = k; }
+  if (gone < 0) bad.push(`${__count(WORM)} of ${n0} worms sat in a sealed room of gas for forty seconds`);
+  // On the breath clock, not instantly: a creature is worth a moment, same as drowning.
+  else if (gone < M[WORM].drown) bad.push(`the room emptied in ${gone} ticks against a breath of ${M[WORM].drown}`);
+  if (![...finds].some(k => k === WORM + ':choke')) bad.push('suffocating did not register as a discovery');
+
+  /* And the cost, which is the reason smoke is not on the list. An ordinary wood fire with
+     creatures on the floor beside it must not quietly become a gas chamber. */
+  __wipe(); f = __floor();
+  __slab(cx-30, f-12, cx-10, f-1, WOOD);
+  for (let n=0;n<16;n++) put(cx+4+n*3, f-1, WORM);
+  const w0 = __count(WORM);
+  __hold(cx-20, f-13, 3, 250);
+  for (let k=0;k<4000;k++) __step(1);
+  if (__count(WORM) < w0 * 0.7)
+    bad.push(`${w0 - __count(WORM)} of ${w0} worms died on a floor beside a wood fire they never touched`);
+
+  // A creature in clear air is not on a clock at all.
+  __wipe(); f = __floor();
+  for (let n=0;n<10;n++) put(cx-16+n*4, f-1, WORM);
+  const c0 = __count(WORM);
+  for (let k=0;k<3000;k++) __step(1);
+  if (__count(WORM) !== c0) bad.push(`${c0} worms in an empty box became ${__count(WORM)}`);
   return bad.length ? bad.join('; ') : null;
 });
 

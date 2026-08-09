@@ -147,6 +147,7 @@ A material is described by a handful of numbers. The ones that matter:
 | `roots` | the brush may only put this where it could actually live |
 | `hatch` `becomes` | how long a life stage lasts, and what it turns into |
 | `drown` `air` | how many ticks a living thing lasts in the wrong one of the two |
+| `chokes` | a gas you cannot breathe: runs a creature's breath clock the way water does |
 | `feed` `way` `breath` (per cell) | what a vent pours, which way a bug is walking, and how long it has been somewhere it cannot survive |
 
 `ig` and `char` together are what make the tray more than fourteen colours. The match
@@ -965,6 +966,51 @@ into lava — not for realism but because **soil that does not burn and cannot m
 indestructible**, which is precisely the fault caught one section up, and a new material is
 the easiest place in the world to reintroduce it.
 
+### A creature is not a surface
+
+Reported from the phone with a picture: a heap of worms with moss growing all over them. A
+creature is `ph:3`, so it read to `rooted()` as a wall.
+
+**Three rules in this file ask a version of the same question** — what a grub may eat, what
+an ant may lift, what moss may grow on — and the first two excluded `alive` from the day
+they were written. This one did not, and there is no reason for the difference beyond nobody
+having thought about it. It is one shared predicate now:
+
+```js
+const ground = (t, self) => t !== E && t !== self && !M[t].alive
+                            && M[t].ph !== 0 && M[t].ph !== 1;
+```
+
+Measured on a stone shelf with a deep heap of worms standing on it: moss climbed **35 rows**
+up the heap, 1217 cells of it, **1093 of them nowhere near anything real** — the worms were
+scaffolding. Two rows now, which is its own cushion, and none adrift.
+
+### Not being able to breathe, when it is not water
+
+`breath` was never about water. It counts how long a cell has been somewhere it cannot
+breathe, so a gas that pools runs the same clock as a pond and only the wording at the end
+differs — `drowns` or `suffocates in Gas`.
+
+**Which gases is the half worth measuring, and the answer was fewer than expected.** Smoke
+and steam were tried with the same field and changed nothing anywhere. Four scenes, three
+builds:
+
+| | no `chokes` | Gas only | Gas, Smoke and Steam |
+|---|---|---|---|
+| ten worms sealed in a room of gas | **all 10 live** | gone at tick 495–575 | gone at 391–495 |
+| sixteen worms on a floor beside a wood fire | 14–15 live | **16** | 15–16 |
+| ten worms in a *sealed room* with a fire in it | 10 live | 10 live | 8–10 live |
+| twelve moths up a candle's plume | reach the wick | reach the wick | reach the wick |
+
+Smoke rises off a creature standing on a floor faster than a breath clock runs, so marking it
+buys almost nothing and costs the one thing worth protecting — an ordinary fire must not
+quietly become a gas chamber. **A rule that fires in none of the scenes anybody builds is the
+thing this file has shipped most often**, so it is gas alone: the gas that only leaves at the
+top of the box, pools, and fills a room.
+
+The check asserts the cost as well as the effect: worms beside a wood fire, and worms in an
+empty box, both have to come through.
+
 ### Dying takes a moment, which is most of what you see
 
 Reported from the phone: a bug that touched water was simply *gone*, and a fish on dry
@@ -1247,14 +1293,14 @@ be a guess dressed up as an undo.
 
 ## The finds
 
-`FOUND 3/52` in the corner used to be the whole of it. Forty-nine things existed that the
+`FOUND 3/58` in the corner used to be the whole of it. Fifty-five things existed that the
 box would never name, mention again or hint at — a progress bar for a task nobody had been
 told. **Finds** in Tools opens the list: found ones read as what they are (`Lava + Water →
 Obsidian`) and the rest read `Acid — ?`, carrying the material's colour and name and nothing
 else. Eight rows mentioning Acid tell you to go and play with acid without telling you what
 happens when you do. Found ones sort to the top, so it is a record before it is a to-do list.
 
-The fifty-two are derived from the material table — every melt, boil, set, ash, contact
+The fifty-eight are derived from the material table — every melt, boil, set, ash, contact
 reaction, explosion, drowning and suffocation in it — so a material added tomorrow brings
 its discoveries with it. The three creatures added five between them and no new derivation
 code: a `drown` or an `air` field is enough.
@@ -1414,7 +1460,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 77 checks — the simulation
+node test/matchbox-sim.mjs     # 78 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
