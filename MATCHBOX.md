@@ -1038,6 +1038,63 @@ It *replaces* the liquid rather than pushing it aside, so filling a sealed tank 
 leaves you less water than you started with. Displacing properly means finding somewhere for
 it to go, and in a sealed tank there is nowhere.
 
+### Two materials nothing could destroy
+
+Reported from the phone: *"the thermite doesn't burn through obsidian, glass, green, wood as
+far as I can tell but worth doing a sweep."* Half right, and the half that was right was
+worse than the report.
+
+**Glass and Obsidian could not be destroyed by anything, at any temperature, ever.** No
+ignition point, no melting point, and `proof` against acid — three reasonable-looking entries
+that together left no way out. Measured with a lit charge at 2600°C: **0 of 102 cells removed
+for each.**
+
+| | before | after |
+|---|---|---|
+| Obsidian | 0 of 102 | **95 of 102** |
+| Glass | 0 of 102 | **91 of 102** |
+| Green | 102 of 102 | unchanged |
+| Wood | 102 of 102 | unchanged |
+
+Green and wood were never the problem. **The thermite simply was not lit** — it catches at
+950°C and a match is 780, which is deliberate and checked, and you light it with a magnesium
+ribbon. Holding a flame on a charge and watching nothing happen looks exactly like thermite
+being broken, so it now says `Thermite needs more than a match — 950°C, and a match is 780`,
+read off the table rather than naming thermite.
+
+`proof` stays: it is against **acid**, and it is what makes a tank worth building. What it
+should never have been is proof against heat as well.
+
+Obsidian melts at **1250 into lava**, which is the round trip rather than an invention —
+lava quenched in water is where obsidian comes from in the first place. Glass melts at
+**1450**, chosen so a lava pour at 1180 still sits in a glass tank and thermite does not. Both
+melt into lava rather than into a molten glass of their own, so **a window you melt and let
+set comes back as stone**: the box has one silicate melt, not three, and that is the price of
+it. Sand → glass → lava → stone is at least a coherent family.
+
+(Stone appears to survive the same charge — 2 cells of 102 — and that is a measurement
+artefact worth naming: stone melts to lava and lava sets back to stone, so the count is a
+round trip. Obsidian and glass melt one way.)
+
+#### The check is a table read, and that is the point
+
+There was already a check that every melting point is *reachable*. Its complement was
+missing: whether everything has a way out **at all**.
+
+```
+burns || melts || boils || eaten by acid || reacts away
+```
+
+The Vent is the one exemption and it is written down rather than assumed — a source you can
+destroy with what it pours is not a source. Everything else in the tray must satisfy one of
+those five.
+
+Firing thermite, lava, molten steel, acid, a match and a furnace at all twenty-four materials
+is four hundred thousand ticks and several minutes, and I started there before noticing the
+property is decidable from the row. The behavioural check that pairs with it is one scene, not
+twenty-four: a lit charge on glass and on obsidian, plus the deliberate half — a match alone
+still will not do it.
+
 ### The one that got past everything
 
 Reported from the phone with two screenshots thirty seconds apart and nothing changed:
@@ -1276,7 +1333,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 72 checks — the simulation
+node test/matchbox-sim.mjs     # 74 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```

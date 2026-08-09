@@ -510,6 +510,72 @@ await check(browser, 'every melting point in the table is reachable by something
   return null;
 });
 
+/* The complement of the check above, and the one that was missing. That one asks whether
+   every melting point can be reached; this one asks whether everything *has* a way out at
+   all — because a material with no ignition point and no melting point and `proof` against
+   acid is indestructible, and nothing in the table looks wrong when you read it.
+
+   Reported from the phone as thermite not cutting glass. It was not thermite: Glass and
+   Obsidian could not be destroyed by anything, at any temperature, ever. Measured at 2600°C
+   with 0 of 102 cells removed for each.
+
+   A table read rather than a sweep, deliberately. Firing thermite, lava, molten steel, acid,
+   a match and a furnace at all twenty-four materials is four hundred thousand ticks and
+   several minutes; the property is decidable from the row. */
+await check(browser, 'nothing in the tray is indestructible except the thing that is meant to be', () => {
+  // The vent is the exception and it is a design decision, written down: a source you can
+  // destroy with what it pours is not a source.
+  const spared = new Set([VENT]);
+  const bad = [];
+  for (const g of GROUPS){
+    if (!Array.isArray(g.items)) continue;
+    for (const t of g.items){
+      const m = M[t];
+      if (spared.has(t) || m.alive) continue;
+      const burns  = m.fuel > 0 && m.ig < 9e9;
+      const melts  = m.melt !== undefined && m.into !== undefined;
+      const boils  = m.boil !== undefined && m.into !== undefined;
+      const eaten  = !m.proof;
+      const reacts = !!m.meets;
+      if (!(burns || melts || boils || eaten || reacts))
+        bad.push(`${m.n} cannot be burned, melted, boiled, eaten by acid or reacted away — nothing in the box can remove it`);
+    }
+  }
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* And the behaviour behind it, because a melting point in the table is a claim about the
+   table and not about the box. Thermite is lit with a magnesium ribbon rather than a match,
+   which is the whole of why this was reported as broken. */
+await check(browser, 'thermite cuts glass and obsidian, once it is actually lit', () => {
+  const bad = [];
+  const cx = (W/2)|0;
+  const cut = (t, light) => {
+    __wipe(); const f = __floor();
+    __slab(cx-8, f-6, cx+8, f-1, t);
+    const inSlab = () => { let n=0;
+      for (let y=f-6;y<=f-1;y++) for (let x=cx-8;x<=cx+8;x++) if (type[idx(x,y)]===t) n++; return n; };
+    const n0 = inSlab();
+    __slab(cx-8, f-11, cx+8, f-7, THERMITE);
+    if (light) __slab(cx-5, f-13, cx+2, f-12, MAGNES);
+    __hold(light ? cx-2 : cx, light ? f-12 : f-11, 3, 300);
+    let peak = 0;
+    for (let k=0;k<2500;k++){ __step(1); const q = __maxT(); if (q > peak) peak = q; }
+    return { n0, left: inSlab(), peak: Math.round(peak) };
+  };
+  for (const t of [GLASS, OBSIDIAN]){
+    const lit = cut(t, true);
+    if (lit.peak < 2000) bad.push(`the charge on ${M[t].n} only reached ${lit.peak}°C — it did not go off`);
+    else if (lit.left > lit.n0 * 0.4)
+      bad.push(`a lit charge on ${M[t].n} left ${lit.left} of ${lit.n0} cells at ${lit.peak}°C`);
+  }
+  // ...and the half of it that is deliberate: a match alone will not do it.
+  const cold = cut(GLASS, false);
+  if (cold.peak > 1200) bad.push(`a match alone drove the charge to ${cold.peak}°C — it is meant to need magnesium`);
+  if (cold.left < cold.n0) bad.push(`a match alone cut ${cold.n0 - cold.left} cells of glass`);
+  return bad.length ? bad.join('; ') : null;
+});
+
 console.log('\n— the five that were added for a verb nothing else had —');
 
 // Each of these exists because of a gap. The check is that the gap is actually
@@ -1060,8 +1126,17 @@ await check(browser, 'a vent buried in a liquid still pours', () => {
   for (const t of [SAND, STONE, GAS, ACID, LAVA, WORM]){
     const n = M[t].n;
     for (const [where, fill] of [['water', WATER], ['oil', OIL]]){
+      /* A payload the pool destroys on contact never accumulates: lava quenches to obsidian
+         the moment it arrives, so what is standing at the end measures the vent's *rate*
+         rather than its total. One bar tuned to the payloads that pile up was a coin flip
+         for the ones that do not — measured across ten runs of the lava arm on the build
+         before this comment: 4 5 4 5 4 5 4 6 4 4, against a threshold of 5. It then passed
+         five times running while I was checking something else, which is exactly how a bad
+         threshold survives. */
+      const bar = M[t].meets ? 2 : 20;
       const made = pour(t, fill);
-      if (made < 5) bad.push(`a vent pouring ${n} under ${where} made ${made} cells of anything in 400 ticks`);
+      if (made < bar)
+        bad.push(`a vent pouring ${n} under ${where} made ${made} cells of anything in 400 ticks, under the ${bar} this payload needs`);
     }
   }
 
