@@ -314,7 +314,7 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
       FIRE=16, SMOKE=17, STEAM=18, EMBER=19, ASH=20,
       LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24,
       THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31, BUG=32,
-      MOTH=33, FISH=34, GRUB=35, PUPA=36, LOUSE=37;
+      MOTH=33, FISH=34, GRUB=35, PUPA=36, ASHBUG=37;
 
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
@@ -509,20 +509,24 @@ M[VENT]    ={n:'Vent',     ph:3, col:[ 78, 74, 84], ig:9e9, cond:.20, cap:2.4, d
 // react() for why those are different things.
 /* The first thing in here that is alive, and it is a cell like everything else.
 
+   The tray calls it a **Worm**; the code has said `BUG` since it was the only creature in
+   the box, and renaming it is a job for whenever its behaviour changes to match — it walks
+   on top of things and climbs, which is more insect than worm. `SAVE_KEY` is what keeps the
+   two apart safely, and it is why nothing here has ever had to care what the tray says.
+
    That is the whole design decision. As a cell it inherits the box: it has a temperature,
    so fire kills it through the same rule that burns straw; acid eats it because acid eats
-   cells; it saves and loads with no new format; and its one reaction is a `meets` row, so
-   it adds its own entry to the finds list without a line of code. As an object in a
-   separate list none of that would come free, and every bit of it would be new code of the
-   kind this file keeps shipping — rules that read perfectly and never fire.
+   cells; it saves and loads with no new format; and the one thing it cannot do — swim — is
+   a single number in its row, so it adds its own entry to the finds list without a line of
+   code. As an object in a separate list none of that would come free, and every bit of it
+   would be new code of the kind this file keeps shipping — rules that read perfectly and
+   never fire.
 
    `ig` 190 and `char` 4: it catches easily and quickly, because the interesting thing
    about a creature in this box is that it is the softest thing in it. `fuel` 20 so it goes
    out fast and leaves ash. `dens` and `ph:3` because it is not a powder and does not
-   trickle — everything it does about gravity and walking is in moveLife().
-
-   It cannot swim. That is one row, and it costs nothing. */
-M[BUG]     ={n:'Bug',      ph:3, col:[176, 92,132], ig:190, fuel:20, out:1.2, cond:.30, cap:1.0,
+   trickle — everything it does about gravity and walking is in moveLife(). */
+M[BUG]     ={n:'Worm',     ph:3, col:[176, 92,132], ig:190, fuel:20, out:1.2, cond:.30, cap:1.0,
              char:4, ash:ASH, dens:1.1, tough:.6, sparse:.16, drown:150, alive:1};
 /* The bug's opposite, and deliberately so: it flies, and warmth pulls it in rather than
    driving it off. Everything else in this box treats heat as a hazard. One thing that
@@ -591,7 +595,7 @@ M[PUPA]    ={n:'Pupa',     ph:3, col:[186,124, 70], ig:170, fuel:16, out:0.9, co
 /* The fifth, and the only one that is interested in what has already happened. Every fire in
    this box leaves a floor of ash and embers that nothing ever touches again — measured, a
    scene left running for three minutes stops changing after one, and the ash from the first
-   minute is still there. A **Woodlouse** eats it.
+   minute is still there. An **Ash bug** eats it.
 
    `graze` is ticks per mouthful, and what counts as a mouthful is derived rather than
    listed: anything named as some material's `ash`, minus the ones that are not there to be
@@ -599,12 +603,12 @@ M[PUPA]    ={n:'Pupa',     ph:3, col:[186,124, 70], ig:170, fuel:16, out:0.9, co
    something new puts that on the menu with nothing written for it.
 
    **Its one constraint is inherited rather than written, which is why it is the right one.**
-   An ember is hot. A woodlouse that walks into a fresh burn heats up, panics and leaves on
-   exactly the machinery the bug uses, and burns if it stays — so it can only clear a fire
+   An ember is hot. An ash bug that walks into a fresh burn heats up, panics and leaves on
+   exactly the machinery the worm uses, and burns if it stays — so it can only clear a fire
    once the fire has gone out. That was going to be a damp requirement, which would have been
    written, new, and wrong: fire dries everything, so needing water would have kept it out of
    the one place it exists for. */
-M[LOUSE]   ={n:'Woodlouse',ph:3, col:[120,134,160], ig:210, fuel:18, out:1.0, cond:.30, cap:1.1,
+M[ASHBUG]  ={n:'Ash bug', ph:3, col:[120,134,160], ig:210, fuel:18, out:1.0, cond:.30, cap:1.1,
              char:5, ash:ASH, dens:1.2, tough:.8, sparse:.15, drown:140, alive:1, graze:22};
 M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, cap:.45,
              leak:.02, peak:1500};
@@ -623,7 +627,7 @@ const GROUPS = [
   { name:'Wet',   items:[WATER, OIL, ICE, ACID] },
   { name:'Solid', items:[STONE, STEEL, SAND, WAX, GLASS, OBSIDIAN] },
   { name:'Hot',   items:[LAVA, MOLTEN, EMBER, THERMITE, MAGNES, GAS, VENT] },
-  { name:'Life',  items:[BUG, MOTH, FISH, GRUB, LOUSE] },
+  { name:'Life',  items:[BUG, MOTH, FISH, GRUB, ASHBUG] },
   { name:'Scene', items:'scenes' },
   { name:'Tools', items:'tools' },
 ];
@@ -662,7 +666,13 @@ SAVE_KEY[OBSIDIAN]='obsidian';SAVE_KEY[THERMITE]='thermite';SAVE_KEY[MAGNES]='ma
 SAVE_KEY[RUBBER]='rubber';    SAVE_KEY[MRUBBER]='rubber-molten';
 SAVE_KEY[ACID]='acid';        SAVE_KEY[GAS]='gas';           SAVE_KEY[VENT]='vent';
 SAVE_KEY[BUG]='bug';          SAVE_KEY[MOTH]='moth';         SAVE_KEY[FISH]='fish';
-SAVE_KEY[GRUB]='grub';        SAVE_KEY[PUPA]='pupa';        SAVE_KEY[LOUSE]='woodlouse';
+SAVE_KEY[GRUB]='grub';        SAVE_KEY[PUPA]='pupa';
+/* Still 'woodlouse', and that is the whole point of this table being separate from the
+   display names. The tray called it a Woodlouse for an afternoon and now calls it an Ash
+   bug; a scene saved under the old name still loads, because the key was never the name.
+   Changing it here to match the label would break exactly the saves this table exists to
+   protect. */
+SAVE_KEY[ASHBUG]='woodlouse';
 
 const TYPE_OF_KEY = new Map(SAVE_KEY.map((k,t) => [k,t]));
 
@@ -1729,7 +1739,7 @@ const edible = (t) => t !== E && M[t].fuel > 0 && M[t].ph !== 0 && M[t].ph !== 1
 
    The filter is the interesting half. Three `ash` targets are not things to be eaten —
    `E`, which is nothing at all; `SMOKE`, which is a gas and gone; and `MOLTEN`, because
-   thermite burns down to molten steel and a woodlouse grazing on that is not the picture.
+   thermite burns down to molten steel and an ash bug grazing on that is not the picture.
    Gas and liquid are the test, so the next material that burns down to a liquid is excluded
    without anybody remembering to. */
 const LEFTOVER = (() => {
@@ -1742,23 +1752,73 @@ const LEFTOVER = (() => {
   return s;
 })();
 
-/* Grazing, which deliberately does *not* stop it walking. A grub at a face of food stays
-   put and tunnels; a woodlouse that did the same would sit in an ash field clearing a
-   circle round itself and never look like it was foraging. It eats what it is passing and
-   keeps going. */
-function louseGraze(i, x, y){
+const ASHBUG_SNIFF = 60;   // how many columns away it can tell there is something to eat
+const ASHBUG_FEED  = 22;   // ticks between steps while there is food under its nose...
+const ASHBUG_NOSE  = .8;   // ...and how often it follows the scent rather than wandering
+
+/* Grazing, which deliberately does *not* stop it walking. A grub at a face of food stays put
+   and tunnels; an ash bug that did the same would sit in an ash field clearing a circle
+   round itself and never look like it was foraging. It eats what it is passing.
+
+   Returns whether there was anything to eat, bite or no bite, because that is also what
+   decides how fast it moves: an ash bug in food dawdles. */
+function ashbugGraze(i, x, y){
   const m = M[type[i]];
-  if (Math.random() * m.graze >= 1) return;
+  let at = -1, what = E;
   for (let k=0;k<8;k++){
     const [dx,dy] = MOTH_DIRS[k];
     const xx = x+dx, yy = y+dy;
     if (!inb(xx,yy)) continue;
     const j = idx(xx,yy);
     if (!LEFTOVER.has(type[j])) continue;
-    found(type[i] + ':graze', `${m.n} clears away ${M[type[j]].n}`);
-    become(xx, yy, E);
-    return;
+    at = j; what = type[j]; break;
   }
+  if (at < 0) return false;
+  if (Math.random() * m.graze < 1){
+    found(type[i] + ':graze', `${m.n} clears away ${M[what].n}`);
+    become(at % W, (at / W) | 0, E);
+  }
+  return true;
+}
+
+/* Which way the food is.
+
+   Reported from the phone: "they don't seem to seek the ash, or look like they do at
+   least" — and they did not. They walked a bug's random walk and ate whatever they bumped
+   into. Eating debris and *looking* for debris are two different verbs, and only one of them
+   had been written.
+
+   An ash bug walks a floor, so the question is only ever left or right — which makes this
+   one number per column rather than a beacon per block. One pass fills the tally and every
+   louse in the box reads it, the same bargain the moths get: the cost is one grid scan a
+   tick however many of them there are, and none at all when there are none.
+
+   The first version of this counted cells within reach of the creature itself, which cost
+   the same per creature and measured nothing: at a reach of 16 on a box 131 wide, an ash bug
+   released across the room from a pile could not smell it at all, so eight of them wandered
+   *away* from ash on the left as readily as toward it. The range was the whole fault and
+   the count was never the point. */
+let scentCol = null;
+function findScent(){
+  if (!scentCol || scentCol.length !== W) scentCol = new Int32Array(W);
+  scentCol.fill(0);
+  for (let y=0; y<H; y++){
+    const row = y*W;
+    for (let x=0; x<W; x++) if (LEFTOVER.has(type[row+x])) scentCol[x]++;
+  }
+}
+
+// Nearest wins, so an ash bug goes to the pile in front of it rather than the biggest one
+// in the box. A tie is a coin, not a preference for one side.
+function ashbugSniff(x){
+  for (let d=1; d<=ASHBUG_SNIFF; d++){
+    const l = x-d >= 0 && scentCol[x-d] > 0;
+    const r = x+d < W  && scentCol[x+d] > 0;
+    if (l && r) return Math.random() < .5 ? -1 : 1;
+    if (l) return -1;
+    if (r) return 1;
+  }
+  return 0;
 }
 
 /* A bite, and the move into what was just eaten, are one action — which is what makes a
@@ -1804,22 +1864,25 @@ function grubEat(i, x, y){
 
 function moveLife(){
   const alive = [];
-  let anyMoth = false;
+  let anyMoth = false, anyAshbug = false;
   for (let i=0;i<type.length;i++){
     const t = type[i];
-    if (t === BUG || t === MOTH || t === FISH || t === GRUB || t === PUPA || t === LOUSE){
-      alive.push(i); if (t === MOTH) anyMoth = true;
+    if (t === BUG || t === MOTH || t === FISH || t === GRUB || t === PUPA || t === ASHBUG){
+      alive.push(i);
+      if (t === MOTH)  anyMoth  = true;
+      if (t === ASHBUG) anyAshbug = true;
     }
   }
   if (!alive.length) return;
-  // One pass for all of them, and only when there is something that cares.
+  // One pass each for all of them, and only when there is something that cares.
   if (anyMoth) findBeacons(); else beacons.length = 0;
+  if (anyAshbug) findScent();
 
   for (const i of alive){
     const kind = type[i];
     // burned, eaten, drowned or dried out since the list was taken
     if (kind !== BUG && kind !== MOTH && kind !== FISH && kind !== GRUB
-        && kind !== PUPA && kind !== LOUSE) continue;
+        && kind !== PUPA && kind !== ASHBUG) continue;
     if (kind === FISH){ moveFish(i, i % W, (i / W) | 0); continue; }
 
     const mx = i % W, my = (i / W) | 0;
@@ -1846,8 +1909,8 @@ function moveLife(){
     // Out of the wood a grub falls and walks exactly like a bug, only slower, so the rest
     // of this is shared rather than copied.
     if (kind === GRUB && grubEat(i, mx, my)) continue;
-    // A woodlouse eats and then carries on walking, so this is not a `continue`.
-    if (kind === LOUSE) louseGraze(i, mx, my);
+    // An ash bug eats and then carries on walking, so this is not a `continue`.
+    const feeding = kind === ASHBUG && ashbugGraze(i, mx, my);
     const x = mx, y = my;
 
     // Falls, because nothing else will do it: a bug is a static solid so that it does not
@@ -1865,7 +1928,9 @@ function moveLife(){
     const hot = temp[i] >= PANIC_AT;
     // Panicking is the same speed whatever you are: a grub in a burning log is not slow
     // about leaving it, it just has further to come.
-    const every = hot ? BUG_FLEE : (kind === GRUB ? GRUB_STEP : BUG_STEP);
+    const every = hot   ? BUG_FLEE
+                : feeding ? ASHBUG_FEED               // an ash bug in food dawdles in it
+                : kind === GRUB ? GRUB_STEP : BUG_STEP;
     /* A chance per tick rather than a fixed phase, and the reason is that a bug has no
        fixed anything to take a phase from. The first version staggered on the cell index
        — `(tick + i) % every` — which is what the vents use, and vents do not move. A bug's
@@ -1885,11 +1950,19 @@ function moveLife(){
       const r = inb(x+1,y) ? temp[idx(x+1,y)] : Infinity;
       dir = l < r ? -1 : 1;
     } else {
-      // Wandering, not commuting. A bug with nothing wrong changes its mind now and then
-      // and sometimes stops altogether; a panicking one does neither, because it knows
-      // exactly where it wants to be and that is anywhere else.
-      if (Math.random() < BUG_TURN) dir = -dir;
-      if (Math.random() < BUG_IDLE){ way[i] = dir; continue; }
+      /* An ash bug has somewhere to be, which is the difference between it and a bug — but
+         not every step, or it stops being an animal and becomes an errand. One step in five
+         is its own, which is enough to make it look like it is searching rather than being
+         steered, and not enough to stop it arriving. */
+      const scent = kind === ASHBUG ? ashbugSniff(x) : 0;
+      if (scent && Math.random() < ASHBUG_NOSE) dir = scent;
+      else {
+        // Wandering, not commuting. A bug with nothing wrong changes its mind now and then
+        // and sometimes stops altogether; a panicking one does neither, because it knows
+        // exactly where it wants to be and that is anywhere else.
+        if (Math.random() < BUG_TURN) dir = -dir;
+        if (Math.random() < BUG_IDLE){ way[i] = dir; continue; }
+      }
     }
 
     // Ahead, or up one step, or turn round. Climbing a single cell is what lets it get out
