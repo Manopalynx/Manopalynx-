@@ -14,7 +14,12 @@
 //   · Clear wiped the scene on one tap, with no confirmation and no undo, sitting the
 //     same size and colour as Erase and Rain in the same row.
 //   · any resize rebuilt the grid and reseeded it, so rotating the phone erased what
-//     you had built.
+//     you had built. Fixed once, and then only most of the way: the rebuild still threw
+//     away everything above the new ceiling, so rotating a phone and rotating it back
+//     deleted 912 cells of paper and 1112 of wood off the top of a test scene. The check
+//     written the first time passed, because it had been written to accept that.
+//   · Clear wiped everything you could see and left what you could not, so turning the
+//     phone handed it back.
 //   · a drawer that wrapped to two rows made the tray taller and moved the scene, and
 //     Clear growing into "Clear — sure?" did it between the tap that asks and the tap
 //     that confirms.
@@ -329,9 +334,9 @@ await check('resizing does not destroy the scene', async p => {
   // Build something recognisable, then move the goalposts the way a phone does when
   // its address bar slides away or it is turned on its side.
   // Built on the floor and left to settle, which is where a scene lives. Coal is a
-  // powder: dropped in mid-air it is still falling when the resize crops the grid,
-  // and a bottom-anchored crop is supposed to lose what is above the new ceiling.
-  // Asserting otherwise would be asserting against the anchoring, not the scene.
+  // powder, and one dropped in mid-air is still falling when the resize crops the grid.
+  // What is above the new ceiling goes to the attic rather than being lost — the check
+  // below is the one that says so; this one only asks that the floor stays put.
   await p.evaluate(() => {
     for (let x=20;x<40;x++) for (let y=H-14;y<H-4;y++) put(x,y,9);   // a slab of coal
   });
@@ -342,6 +347,110 @@ await check('resizing does not destroy the scene', async p => {
   const after = await p.evaluate(() => __count(9));
   if (after === 0) return `the scene was wiped: ${before} cells of coal became ${after}`;
   if (after < before * 0.5) return `${before} cells of coal became ${after} across a resize`;
+  return null;
+});
+
+/* Reported from the phone, with pictures: build a tower, turn the phone on its side, turn
+   it back, and the top of the tower has been deleted. Portrait is 131×153 and landscape is
+   173×51, so rotating takes a hundred rows off the top, and rotating back takes forty
+   columns off the right.
+
+   The check above did not catch it because it was written to accept it — its own comment
+   said a bottom-anchored crop "is supposed to lose what is above the new ceiling", which
+   was true of the code and not true of what anybody wants. A check can only be as good as
+   the thing it decided to be relaxed about.
+
+   Measured before the fix, on this exact scene: 912 cells of paper and 1112 of wood gone,
+   and no way to get them back. */
+await check('turning the phone over and back does not delete what was off the screen', async p => {
+  const PORTRAIT  = { width: 390, height: 844 };
+  const LANDSCAPE = { width: 844, height: 390 };
+  const settle = () => p.waitForTimeout(700);          // the resize handler is debounced
+  const census = () => p.evaluate(() => {
+    const n = {};
+    for (let i=0;i<type.length;i++) if (type[i]!==0) n[M[type[i]].n] = (n[M[type[i]].n]||0) + 1;
+    return n;
+  });
+  const shape = () => p.evaluate(() => `${W}×${H}`);
+  const bad = [];
+
+  // One thing against each edge the rebuild can clip: a tower up to the ceiling, a shelf
+  // across the top, and a floor that should never move.
+  await p.evaluate(() => {
+    type.fill(0); temp.fill(AMBIENT); fuel.fill(0); life.fill(0); vel.fill(0);
+    for (let y=H-40; y<H; y++) for (let x=0;x<W;x++) put(x,y,STONE);
+    for (let y=6; y<H-40; y++) for (let x=4;x<12;x++) put(x,y,WOOD);
+    for (let y=6; y<14; y++) for (let x=12;x<W-4;x++) put(x,y,PAPER);
+    for (let n=0;n<10;n++) put(20 + n*4, 20, WORM);
+  });
+  const before = await census(), wasPortrait = await shape();
+
+  await p.setViewportSize(LANDSCAPE); await settle();
+  const side = await census(), wasLandscape = await shape();
+  if (wasLandscape === wasPortrait) return `the viewport changed and the grid did not (${wasPortrait})`;
+  if ((side.Paper || 0) >= (before.Paper || 0))
+    return 'nothing left the screen on rotating, so this proves nothing about getting it back';
+
+  await p.setViewportSize(PORTRAIT); await settle();
+  const after = await census();
+  for (const k of Object.keys(before))
+    if ((after[k] || 0) < (before[k] || 0))
+      bad.push(`${(before[k]) - (after[k] || 0)} of ${before[k]} cells of ${k} were lost turning the phone over and back`);
+
+  // The other axis: something built in landscape, out past where portrait can show it.
+  await p.setViewportSize(LANDSCAPE); await settle();
+  const far = await p.evaluate(() => {
+    let n = 0;
+    for (let y=H-30; y<H-24; y++) for (let x=W-14;x<W-2;x++){ put(x,y,COAL); n++; }
+    return n;
+  });
+  await p.setViewportSize(PORTRAIT); await settle();
+  await p.setViewportSize(LANDSCAPE); await settle();
+  const coal = (await census()).Coal || 0;
+  if (coal < far) bad.push(`${far - coal} of ${far} cells built off the right in landscape did not come back`);
+
+  /* And the attic is not a place things hide from Clear. The wipe has to happen while
+     something is actually up there — wiping in portrait proves nothing, because a portrait
+     window covers the whole attic and there is nothing above it to forget. That version of
+     this leg passed against a build with the forgetting taken out. */
+  await p.setViewportSize(PORTRAIT); await settle();
+  await p.evaluate(() => {
+    for (let y=8; y<20; y++) for (let x=20;x<60;x++) put(x,y,STRAW);   // high up, off the
+  });                                                                  // screen in landscape
+  await p.setViewportSize(LANDSCAPE); await settle();
+  if (await p.evaluate(() => __count(STRAW)) !== 0)
+    bad.push('the straw was still on screen in landscape, so nothing was in the attic to forget');
+  await (await reveal(p, 'clear')).click();
+  await p.locator('[data-act="clear-all"]').click();
+  if (await p.evaluate(() => __cells()) !== 0) bad.push('Clear did not clear, so the rest proves nothing');
+  await p.setViewportSize(PORTRAIT); await settle();
+  const ghosts = await p.evaluate(() => __cells());
+  if (ghosts) bad.push(`${ghosts} cells came back out of the attic after the box was cleared`);
+
+  return bad.length ? bad.join('; ') : null;
+});
+
+await check('clearing the life reaches the part of the box that is off the screen', async p => {
+  const PORTRAIT  = { width: 390, height: 844 };
+  const LANDSCAPE = { width: 844, height: 390 };
+  const settle = () => p.waitForTimeout(700);
+  const worms = () => p.evaluate(() => __count(WORM));
+
+  await p.evaluate(() => {
+    type.fill(0); temp.fill(AMBIENT); fuel.fill(0); life.fill(0); vel.fill(0);
+    for (let y=H-8; y<H; y++) for (let x=0;x<W;x++) put(x,y,STONE);
+    for (let y=10; y<16; y++) for (let x=10;x<W-10;x+=3) put(x,y,WORM);   // high up
+  });
+  const before = await worms();
+  if (before < 10) return `only ${before} worms were placed, so this proves nothing`;
+
+  await p.setViewportSize(LANDSCAPE); await settle();
+  if (await worms() !== 0) return 'the worms were still on screen in landscape, so nothing was in the attic';
+  await (await reveal(p, 'clear')).click();
+  await p.locator('[data-act="clear-life"]').click();
+  await p.setViewportSize(PORTRAIT); await settle();
+  const left = await worms();
+  if (left) return `${left} of ${before} worms came back out of the attic after Life was cleared`;
   return null;
 });
 

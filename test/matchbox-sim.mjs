@@ -2152,10 +2152,17 @@ await check(browser, 'ants gather scattered grains into heaps, and sort two kind
     const f = scatter();
     const n0 = __count(SAND), c0 = clump(SAND);
     for (let k=0;k<ants;k++) put(14+k*10, f-3, ANT);
-    for (let k=0;k<7200;k++) __step(1);
+    // Sampled through the run rather than read off the end of it — see below.
+    let laden = 0, seen = 0;
+    for (let k=0;k<7200;k++){
+      __step(1);
+      if (k % 50 === 0)
+        for (let i=0;i<type.length;i++) if (type[i]===ANT){ seen++; if (feed[i]) laden++; }
+    }
     let held = 0;
     for (let i=0;i<type.length;i++) if (type[i]===ANT && feed[i]) held++;
-    return { c0, c1: clump(SAND), n0, n: __count(SAND), held, ants: __count(ANT) };
+    return { c0, c1: clump(SAND), n0, n: __count(SAND), held, ants: __count(ANT),
+             carrying: seen ? laden/seen : 0 };
   };
   const idle = run(0), busy = run(10);
   if (Math.abs(idle.c1 - idle.c0) > 0.15)
@@ -2167,9 +2174,23 @@ await check(browser, 'ants gather scattered grains into heaps, and sort two kind
   if (busy.ants !== 10) bad.push(`ten ants became ${busy.ants}`);
 
   /* And they must put things down again. At an earlier setting the heaps measured slightly
-     better and seven ants in ten were permanently laden — the same fault wearing a good
-     number, and invisible to a clumping measurement alone. */
-  if (busy.held > 4) bad.push(`${busy.held} of 10 ants were still holding a grain — they are hoarding, not heaping`);
+     better and most of the ants were permanently laden — the same fault wearing a good
+     number, and invisible to a clumping measurement alone.
+
+     This used to count the ants holding something at the final tick, and that was the wrong
+     measurement twice over. Ten ants sampled once is ten coin flips: measured across eight
+     runs it came out 2 3 3 3 4 4 4 5 against a bar of four, so the check failed about one
+     run in eight for a build that was working perfectly. And it does not separate the
+     thing it is looking for — an ant that never drops comes out at 3 to 8 on the same
+     measurement, straight through the middle of the working range.
+
+     The fraction of its time an ant spends laden, sampled every fifty ticks, does both.
+     Working: 0.25 to 0.32 over sixteen runs. Never dropping: 0.64 to 0.72 over eight. The
+     bar sits at 0.45, in the gap. (Never dropping does not reach 1.0 because `ANT_KEEP` is
+     a floor under the drop chance — an ant that cannot find a spot eventually gives up and
+     puts the thing down, which is why the box never deadlocks.) */
+  if (busy.carrying > 0.45)
+    bad.push(`the ants spent ${(100*busy.carrying).toFixed(0)}% of their time holding a grain — they are hoarding, not heaping`);
   if (busy.n + busy.held < busy.n0)
     bad.push(`${busy.n0} grains became ${busy.n} on the floor and ${busy.held} carried — ${busy.n0 - busy.n - busy.held} left the box`);
 

@@ -750,11 +750,33 @@ skipped others. An ant with exactly one place to put something down would often 
 it. Fixing that alone took the heaping from 0.88 to 2.4.
 
 *And then the good number was the bug.* At `ANT_TAKE .55 / ANT_DROP .40` the heaps measured
-**better** than what shipped — and **seven ants in ten were permanently laden**, with grains
-held rather than heaped. A clumping measurement cannot see that; it looks like success. It
-ships at `.30/.60`, which measures slightly worse and has **one ant in ten** carrying at any
-moment and 71 grains of 72 on the floor. The check now asserts both, because the first number
-alone was satisfied by hoarding.
+**better** than what shipped — and most of the ants were permanently laden, with grains held
+rather than heaped. A clumping measurement cannot see that; it looks like success. It ships
+at `.30/.60`, which measures slightly worse and puts 71 grains of 72 on the floor. The check
+asserts both, because the first number alone was satisfied by hoarding.
+
+##### The measurement of the second one was wrong for months, and turned up as a flake
+
+It counted the ants holding something **at the final tick**. Ten ants sampled once is ten
+coin flips, and across eight runs it came out `2 3 3 3 4 4 4 5` against a bar of four — so the
+suite failed about one run in eight on a build that was working perfectly. That is how it was
+found: a full run went red on a change that could not possibly have touched ants, and the two
+builds measured identically when compared side by side.
+
+Worse than flaky, it did not separate the thing it was looking for. An ant that **never**
+drops comes out at `3 6 6 6 6 7 7 8` on the same measurement — straight through the middle of
+the working range.
+
+**The fraction of its time an ant spends laden**, sampled every fifty ticks, does both jobs:
+
+| | measured | runs |
+|---|---|---|
+| working | **0.25 – 0.32** | 16, across two builds |
+| never dropping (`ANT_DROP 0`) | **0.64 – 0.72** | 8 |
+
+The bar sits at 0.45, in the gap, and the mutation is caught at 65%. Never dropping does not
+reach 1.0 because `ANT_KEEP` is a floor under the drop chance — an ant that cannot find a spot
+eventually gives up and puts the thing down, which is why the box never deadlocks.
 
 A panicking ant drops what it is holding, which is both what one would do and the only place
 a grain can leave the box for good: an ant that burns while laden takes its load with it.
@@ -1468,6 +1490,59 @@ All three go through `snapshot()`, so all three can be undone. None of them spen
 slot when there is nothing to do: Fire on a cold box and Life on an empty one say so and
 leave the last stroke recoverable.
 
+## The attic, which is the part of the box that is not on the screen
+
+Reported from the phone, with pictures: build a tower, turn the phone on its side, turn it
+back, and the top of the tower has been deleted.
+
+Portrait is 131×153 and landscape is 173×51. The rebuild was bottom-anchored and copied
+whatever overlapped, so rotating took **a hundred rows off the top**, and rotating back took
+**forty columns off the right**. Measured on one test scene: 912 cells of paper and 1112 of
+wood gone, with no way to get them back.
+
+So the field stopped being the whole box. The attic holds every cell the box has ever had,
+in coordinates measured **from the bottom-left corner** — the corner the rebuild anchors to,
+and therefore the one that does not move. A resize writes the visible field up into the
+attic and reads the new field back out of it, so whatever goes off the top comes back when
+there is room for it again. It only ever grows, and only to the largest the box has actually
+been, so it is bounded by the screen rather than by anything you can do.
+
+**The attic and the window are kept disjoint.** After a resize hands the visible rows back,
+those cells are blanked upstairs, so at any moment the attic is exactly the part of the box
+that is off the screen and nothing else. Without that it holds a stale copy of the visible
+rows too, and every question about the whole box — how many living things are in it, is
+anything still alight — has to know which half of its answer is a duplicate.
+
+**Nothing simulates up there.** A fire outside the window is paused, and comes back exactly
+as it left rather than having burned down while you were not looking. Stepping cells nobody
+can see would spend the frame budget on the part of the box that is not on the screen, which
+is the whole reason the grid is sized to the screen in the first place.
+
+Anything that replaces the whole box — a wipe, a preset, a load — throws the attic away with
+it, or a rotation resurrects what you just got rid of. And the two Clear options that mean
+"everything of this kind" sweep it: both are per-cell rules with no neighbours in them, so
+they port upstairs unchanged. Anything that needed to look sideways would not, and that is
+the line.
+
+Undo is the exception, and deliberately: it restores what you can see, and it already
+refuses across a resize rather than guessing.
+
+### Why the check that existed did not catch it
+
+There was a resize check. It passed, because **it had been written to accept the bug** — its
+own comment said a bottom-anchored crop "is supposed to lose what is above the new ceiling",
+which was true of the code and not true of what anybody wants.
+
+The new one rotates a real scene, with something against each edge the rebuild can clip, and
+asserts every count comes back. Three ways of breaking it were tried and all three are
+caught: nothing kept across a resize, a Life clear that skips the attic, and a wipe that
+leaves it behind.
+
+**One leg of it was vacuous and had to be rewritten.** It wiped the box in portrait and then
+rotated, expecting ghosts — but a portrait window covers the whole attic, so there was never
+anything above it to forget. It passed against a build with the forgetting removed. The wipe
+has to happen while something is actually up there.
+
 ## Undo
 
 One step, in **Tools**, disabled until there is something to go back to. It covers a
@@ -1659,7 +1734,7 @@ the glass.
 ```
 npm i playwright
 node test/matchbox-sim.mjs     # 80 checks — the simulation
-node test/matchbox-ui.mjs      # 38 checks — the hand
+node test/matchbox-ui.mjs      # 40 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
 
