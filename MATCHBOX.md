@@ -46,9 +46,9 @@ fetched fresh whenever there is a signal — no stale-build trap, and nothing to
 ## What is in the box
 
 Thirty-four chips in the tray — twenty-five materials, eight living things and the vent — and
-nine more the simulation makes and never lets you place: fire, smoke, steam, ash, the pupa, the
-stem and the flower, molten wax and molten rubber. Every one of them is one row of the `M` table
-and nothing else in the file knows any of them by name.
+eleven more the simulation makes and never lets you place: fire, smoke, steam, ash, the pupa, the
+stem, the flower, rich soil, grass, molten wax and molten rubber. Every one of them is one row of
+the `M` table and nothing else in the file knows any of them by name.
 
 (This count has been wrong twice. It was stale before the grub was added to it, and the
 first attempt at fixing it undercounted the made-only list, because the probe I counted with
@@ -1086,6 +1086,95 @@ On the stone at the far end, and on the dry soil, the seeds are still sitting th
 the half a screenshot cannot tell you, and it is what the check is for: a box that grew
 flowers on a stone floor would look just as green.
 
+### The meadow, and the two rules that had to be measured apart
+
+Rich soil and grass, both made and never placed, and between them they turn one flower into a
+meadow that spreads and then stops.
+
+| | rule | |
+|---|---|---|
+| Flower | `enrich` 400, `reach` 4 | turns one cell of dirt within reach of its **foot** into rich soil |
+| Flower | `sows` 200 | drops a seed onto bare ground **standing on rich soil**, never shoulder to shoulder with a stalk |
+| Rich soil | `sprouts` 120, `damp` 30 | puts up one blade of grass into the air directly above it |
+
+**Both jobs happen at the foot of the stalk, not at the head.** The flower is the cell that runs
+the rule because it is the cell that has finished growing — but it is eight or nine cells up in
+the air. With the scan centred on the flower, a plant on a bed of soil enriched **nothing at all
+in seven minutes**, because the ground was out of reach, and the rule read as doing nothing
+rather than as reaching for the wrong place. It walks down the stalk now, the same way a wick
+walks down to the wax it is drawing from.
+
+#### Four goes at what a flower sows onto
+
+Each one was wrong in a way that was only obvious in a picture or in a number, and the four
+together are the whole design:
+
+1. **Into any empty cell nearby, and let it fall.** A seed is a powder and the ground can decide.
+   Most of them landed on stone, out of reach of water, or on top of the last one: **one seed
+   became a carpet of 167 loose seeds** with the few that came up flowering at ground level
+   because the pile on top of them was in the way. It read as a spill.
+2. **Onto bare ground standing on soil.** No litter — and no meadow either. Grass grows on
+   exactly the exposed soil a seed needs, so the patch filled with blades and **stopped dead at
+   nine flowers** on a bed with room for fifty.
+3. **Bare ground, or a blade of grass.** The meadow spread, and ate all its own grass on the way:
+   **grass nought** at every sample past two minutes.
+4. **Bare ground first, a blade only if there is none — and never shoulder to shoulder.** The
+   spacing is what leaves any surface for the grass at all: without it the meadow saturates by
+   putting a stalk on every cell of the bed.
+
+#### The gate that was not a gate
+
+Rich soil had to earn a verb, and the first attempt did not. The rule was "a flower may sow if
+there is rich soil somewhere in reach" — which sounds like a constraint and is not one, because a
+flower feeds every 400 ticks and sows every 200, so it is true within seconds of the flower
+opening and never false again. **Removing it entirely changed nothing measurable**, which is the
+tell, and it is the same fault as a field that can never fire wearing the opposite face.
+
+It sows **onto** rich soil now, not merely near it, and feeding is the slow step. That makes the
+meadow paced by the ground:
+
+| a minute in | flowers |
+|---|---|
+| sowing onto fed ground only | **1 to 5**, five runs |
+| sowing onto any soil it likes | **18 to 19**, already finished |
+
+#### It stops
+
+Nothing tells it to. It stops because a flower can only enrich what it can reach, only sows onto
+bare fed ground, and will not sow against a stalk that is already there. On a bed 134 cells wide
+with a water trench at 60-69 and one seed at 40, four runs: the meadow **spans 22 to 58** every
+time and is flat from about five and a half minutes — 14 to 15 flowers, 135 to 167 cells of rich
+soil, 16 to 17 blades of grass.
+
+It reaches further left than the flat `damp` 30 would allow, and the reason is worth knowing:
+**dirt is denser than water**, so the row of soil capping the trench sinks into it and the water
+comes up to the surface and spreads. Nothing says that anywhere. It falls out of a powder being
+heavier than a liquid.
+
+The cheapest guard of all is that dirt and rich soil together must add up to exactly the dirt
+there was at the start — rich soil is made out of dirt and out of nothing else. That is the moss
+failure stated as arithmetic.
+
+#### Four goes at counting a fire, as well
+
+The meadow burns, and checking that it does not manufacture ash while doing it took four
+attempts — every one of them defeated by the same fact, that **a meadow grows while it burns**:
+
+1. *Net loss over the window.* Reported 17 cells of plant leaving 18 cells of ash. Two cells
+   grew while eighteen burnt.
+2. *The per-tick drops, added up.* Nought cells lost against 26 of ash — a tick that burns two
+   and sows two has no drop in it at all.
+3. *Cells that went from plant to ash, one tick at a time* — the right idea, still nought,
+   because `__hold` runs its own two hundred ticks before the counting loop starts and that is
+   where most of the burning happens. The match is unrolled into the counted loop now.
+4. And the accounting left out seeds and grass, which have an `ash` of their own. 24 cells of
+   ash from 22 cells of plant: the two missing kinds, read as matter being manufactured.
+
+The bar on *how much* burns is a count and not a fraction, for the reason three other checks in
+this suite have already learned: measured seven times the fraction came out 12, 23, 26, 28, 31,
+40 and 47 per cent, so any bar inside that spread is a bar inside the working distribution. The
+failure being looked for — plants that do not burn — is nought every time.
+
 ### Dirt, and what the worm turns out to be for
 
 Every fire in this box used to end the same way: a floor of grey that stayed grey. The ash
@@ -1618,14 +1707,14 @@ be a guess dressed up as an undo.
 
 ## The finds
 
-`FOUND 3/65` in the corner used to be the whole of it. The rest existed as things that the
+`FOUND 3/71` in the corner used to be the whole of it. The rest existed as things that the
 box would never name, mention again or hint at — a progress bar for a task nobody had been
 told. **Finds** in Tools opens the list: found ones read as what they are (`Lava + Water →
 Obsidian`) and the rest read `Acid — ?`, carrying the material's colour and name and nothing
 else. Eight rows mentioning Acid tell you to go and play with acid without telling you what
 happens when you do. Found ones sort to the top, so it is a record before it is a to-do list.
 
-The sixty-five are derived from the material table — every melt, boil, set, ash, contact
+The seventy-one are derived from the material table — every melt, boil, set, ash, contact
 reaction, explosion, drowning and suffocation in it — so a material added tomorrow brings
 its discoveries with it. The three creatures added five between them and no new derivation
 code: a `drown` or an `air` field is enough. Seeds added seven the same way.
@@ -1791,7 +1880,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 82 checks — the simulation
+node test/matchbox-sim.mjs     # 84 checks — the simulation
 node test/matchbox-ui.mjs      # 40 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
@@ -1836,6 +1925,14 @@ first:
   The footprint was wrong the first time too, and in a way worth writing down: it counted the
   cells the worms *fell* through on the way down, so worms pinned in place with `BUG_STEP` at
   nine billion scored twenty cells each and passed. It waits for them to land now.
+
+  A third one turned up the same week, in the same costume: no more than three of twelve moths
+  may survive a lit candle. Twelve runs across two builds gave 0 to 2 — a comfortable margin,
+  until a full run turned up a 4 and went red on a change that had never touched moths. It also
+  added nothing: the claim is that the *flame* is what kills them, which is a claim about the
+  difference between the two rooms, and the difference has come out 8 to 12 every time. **An
+  absolute bar on a small count from a dice roll is worth suspecting on sight** — three of them
+  were shipped in this file and every one measured fine on the runs that set it.
 
 ## Honest notes
 

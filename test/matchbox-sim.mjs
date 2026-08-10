@@ -1515,10 +1515,20 @@ await check(browser, 'a moth crosses the box to a flame, and does not without on
   if (dark.left < 10) bad.push(`${12-dark.left} of 12 moths died in a room with nothing lit in it`);
 
   const lit = run(true);
-  if (lit.left > 3) bad.push(`${lit.left} of 12 moths survived a lit candle — they are not going to it`);
-  // No claim about where a survivor ended up: one moth out of twelve can be anywhere, and
-  // asserting on it measures a single dice roll rather than the creature.
-  if (dark.left - lit.left < 6) bad.push(`a lit candle killed ${12-lit.left} and an unlit one killed ${12-dark.left} — that is not attraction`);
+  /* The difference between the two rooms, and nothing about the lit one on its own.
+
+     There used to be a second bar here — no more than three of twelve may survive the candle
+     — and it was the same mistake as the ants and the worms in a third costume: an absolute
+     threshold on a small count from a dice roll. Measured twelve times across two builds it
+     came out 0 to 2, which looks like a comfortable margin against a bar of three, and then a
+     full run turned up a 4 and went red on a build that had never touched moths.
+
+     It also added nothing. The claim is that a flame is what kills them, and a claim about a
+     difference is answered by the difference: twelve survive the dark room in every run ever
+     measured, and the gap has come out 8 to 12. A build where moths ignored the flame, or one
+     where they died of something else, moves the gap and not the absolute. */
+  if (dark.left - lit.left < 6)
+    bad.push(`a lit candle killed ${12-lit.left} and an unlit one killed ${12-dark.left} — that is not attraction`);
   return bad.length ? bad.join('; ') : null;
 });
 
@@ -2374,7 +2384,7 @@ await check(browser, 'a single cell of anything is findable on a floor of anythi
   // The things that end up on a floor together: what you build with, what a fire leaves,
   // what the worm makes out of it, and what you sprinkle on that. A seed you cannot see on
   // soil is a seed you cannot tell you have planted.
-  const GROUND = [STONE, ASH, DIRT, SAND, WOOD, COAL, EMBER, SEED];
+  const GROUND = [STONE, ASH, DIRT, RICH, SAND, WOOD, COAL, EMBER, SEED];
   for (const bg of GROUND) for (const fg of GROUND){
     if (bg === fg) continue;
     __wipe();
@@ -2870,6 +2880,7 @@ await check(browser, 'a seed comes up on damp soil, and sits there on anything e
     }
     return n;
   };
+  const plants = () => __count(SEED) + __count(STEM) + __count(FLOWER) + __count(GRASS);
   const tallest = () => {
     let m = 0;
     for (let x=0;x<W;x++){
@@ -2906,8 +2917,11 @@ await check(browser, 'a seed comes up on damp soil, and sits there on anything e
     `nothing opened on damp soil — ${__count(STEM)} cells of stem, ${__count(SEED)} seeds left`;
   if (grew < damp.n * 0.6)
     bad.push(`${damp.n} seeds on damp soil gave ${grew} flowers`);
-  if (__count(SEED) > damp.n - grew)
-    bad.push(`${__count(SEED)} seeds are still sitting on damp soil with ${grew} flowers up`);
+  /* No claim here about how many seeds are left. There was one — that the seeds still lying
+     about must be the ones that have not come up yet — and self-seeding made it false: a
+     flower sows seeds of its own, so the count goes up as well as down and "seeds remaining"
+     stops meaning "seeds that failed". The two beds below still make the claim, because
+     nothing flowers on either of them and so nothing sows. */
   // One head per stalk. A stalk that opened twice would read as "it grew" and be wrong.
   if (grew !== up) bad.push(`${up} stalks carry ${grew} flowers between them — that is not one each`);
 
@@ -2936,18 +2950,52 @@ await check(browser, 'a seed comes up on damp soil, and sits there on anything e
      the worst run rather than near the average of a lucky one. */
   const f = sow(DIRT, true).f;
   for (let k=0;k<3000;k++) __step(1);
-  const standing = __count(STEM) + __count(FLOWER);
+  // Everything that burns down to ash, not just the standing stalks. Seeds and grass have
+  // an `ash` of their own, and leaving them out of the accounting reported 24 cells of ash
+  // from 22 cells of plant — the two missing kinds, read as matter being manufactured.
+  const standing = plants();
   if (standing < 12) return (bad.length ? bad.join('; ') + '; ' : '') +
     `only ${standing} cells of plant grew, so the burn leg proves nothing`;
   const ash0 = __count(ASH);
-  __hold(20, f-10, 4, 200);
-  for (let k=0;k<3000;k++) __step(1);
-  const lost = standing - (__count(STEM) + __count(FLOWER));
-  if (lost < standing * 0.15)
-    bad.push(`a fire held in the middle of ${standing} cells of plant took ${lost} of them`);
+  /* Counted as cells that went from being a plant to being ash, one tick at a time, rather
+     than by subtracting the two ends. Two goes at the cheap version were both wrong, and both
+     were wrong because **the meadow grows while it burns**:
+
+     · net loss over the window said 17 cells of plant left 18 cells of ash, which reads as
+       matter being manufactured and was two cells growing while eighteen burnt;
+     · adding up the per-tick drops said 0 cells lost against 26 of ash, because a tick that
+       burns two and sows two has no drop in it at all.
+
+     Nothing short of watching the cells themselves gets this right, so that is what this
+     does. A plant cell can only become ash by burning: ash is a powder, and a powder cannot
+     displace a solid, so no ash ever falls into a cell that had a plant in it. */
+  const wasPlant = new Uint8Array(type.length);
+  const mark = () => { for (let i=0;i<type.length;i++){
+    const t = type[i];
+    wasPlant[i] = (t===SEED || t===STEM || t===FLOWER || t===GRASS) ? 1 : 0; } };
+  mark();
+  /* The match is held inside the counted loop rather than by `__hold` before it, which is the
+     third thing this leg got wrong: `__hold` runs its own two hundred ticks, most of the
+     burning happens in them, and counting only afterwards found nought transitions against
+     twenty-odd cells of ash. This is what `__hold` does, unrolled so the counting can see it. */
+  let burnt = 0;
+  for (let k=0;k<3200;k++){
+    if (k < 200) __flame(20, f-10, 4);
+    __step(1);
+    for (let i=0;i<type.length;i++) if (wasPlant[i] && type[i]===ASH) burnt++;
+    mark();
+  }
+  /* A count, not a fraction. The fraction was tried and it is the wrong shape: measured seven
+     times it came out 12, 23, 26, 28, 31, 40 and 47 per cent, so any bar drawn inside that
+     spread is a bar drawn inside the working distribution — which is the mistake three other
+     checks in this suite have already made. The failure this is looking for is plants that do
+     not burn, and that is exactly nought every time. Seven to thirty-four cells burnt across
+     those runs, so five is in a gap with nothing in it. */
+  if (burnt < 5)
+    bad.push(`a fire held in the middle of ${standing} cells of plant burnt ${burnt} of them`);
   const made = __count(ASH) - ash0;
-  if (made > lost)
-    bad.push(`${lost} cells of plant burnt and left ${made} cells of ash — the meadow is making matter`);
+  if (made > burnt)
+    bad.push(`${burnt} cells of plant burnt and left ${made} cells of ash — the meadow is making matter`);
   return bad.length ? bad.join('; ') : null;
 });
 
@@ -2984,6 +3032,139 @@ await check(browser, 'plants die when the water goes, and not while it is there'
   if (left) bad.push(`${left} of ${grown} cells of plant were still alive long after the water went`);
   if (!finds.has(STEM + ':thirst') && !finds.has(FLOWER + ':thirst'))
     bad.push('nothing reported dying of thirst, so they went some other way');
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* One seed becomes a meadow, and then the meadow stops.
+
+   The stopping is the half worth checking. Moss is the precedent and it is not a happy one:
+   one spreading rule, and it made a 1219-cell fog on a pillar before it was bounded. This is
+   two rules feeding each other — a flower enriches the ground, rich ground lets a flower sow
+   — which is the shape of a thing that runs away. Nothing tells it to stop. It stops because
+   a flower can only enrich what it can reach, only sows onto bare ground standing on soil,
+   and will not sow shoulder to shoulder with a stalk that is already there.
+
+   Measured on the bed below: it climbs for about two and a half minutes and is then flat to
+   the tick — 14 flowers, 162 rich, 17 grass at 160s and the same at 400s. */
+await check(browser, 'one seed becomes a meadow, and the meadow stops', () => {
+  const bad = [];
+  const census = () => ({ seed: __count(SEED), stem: __count(STEM), flower: __count(FLOWER),
+                          rich: __count(RICH), grass: __count(GRASS), dirt: __count(DIRT) });
+
+  __wipe(); const f = __floor();
+  __slab(4, f-8, W-5, f-1, DIRT);
+  for (let y=f-7; y<f-1; y++) for (let x=60; x<70; x++) put(x, y, WATER);   // a trench in it
+  const dirt0 = __count(DIRT);
+  put(40, f-10, SEED);
+
+  /* Two samples, and the early one is the interesting half. A flower may only sow onto ground
+     that has already been fed, and feeding is the slow step — `enrich` 400 against `sows` 200
+     — so the meadow is paced by the soil rather than by the flowers. Measured five times, it
+     has **1 to 5 flowers** at this point. A build where sowing takes any soil it likes has
+     **18 or 19** and is already finished, which is what makes this a gate rather than a
+     sentence in a comment. The first version of the rule only asked that there be rich soil
+     somewhere in reach, and that was unfalsifiable: a flower feeds faster than it sows, so it
+     was true within seconds of the flower opening and removing it changed nothing. */
+  for (let k=0;k<4000;k++) __step(1);
+  const early = census();
+  if (early.flower > 9)
+    bad.push(`${early.flower} flowers a minute in — the meadow is not waiting for the ground`);
+
+  for (let k=0;k<14000;k++) __step(1);
+  const grown = census();
+  // Measured five times at this point: 14-15 flowers, 135-167 cells of rich soil, 16-17
+  // blades of grass. The bars sit well under the worst of those.
+  if (grown.flower < 8)
+    return `one seed gave ${grown.flower} flowers in five minutes — nothing below can be concluded`;
+  if (grown.rich < 80) bad.push(`${grown.flower} flowers fed only ${grown.rich} cells of soil`);
+  if (grown.grass < 6) bad.push(`${grown.rich} cells of rich soil put up ${grown.grass} blades of grass`);
+
+  // It stops. Two samples a long way apart, on the same run rather than on two runs, because
+  // "it grew this much" and "it grew this much and then stopped" are the same number once.
+  for (let k=0;k<6000;k++) __step(1);
+  const mid = census();
+  for (let k=0;k<6000;k++) __step(1);
+  const late = census();
+  for (const k of ['flower','rich','grass']){
+    if (late[k] > mid[k] * 1.08 + 2)
+      bad.push(`${k} went ${mid[k]} → ${late[k]} between two and a half minutes apart — it is still going`);
+  }
+
+  /* Nothing is manufactured. Rich soil is made out of dirt and out of nothing else, so the
+     two together have to be exactly what the dirt was. This is the cheapest possible guard
+     against the failure moss had, where a thing that grew on what fire left behind grew back
+     on its own ash and the scene ended up with more matter in it than it started with. */
+  if (late.dirt + late.rich !== dirt0)
+    bad.push(`${dirt0} cells of dirt became ${late.dirt} dirt and ${late.rich} rich soil — ` +
+             `${late.dirt + late.rich - dirt0} cells appeared from nowhere`);
+
+  /* And it stayed near the water. Measured four times on this bed, which is 134 cells wide
+     with the trench at 60..69 and the seed at 40: the meadow spans **22 to 58** every time,
+     within a cell or two. So the ends of the bed must still be bare, and a runaway would
+     have to cross sixty cells of dry dirt to trip this. The first version of this line put
+     the boundary at 20 and 110, which is a guess rather than a measurement — it sat one cell
+     outside the real extent and failed one run and passed the next.
+
+     It reaches further left than the flat `damp` 30 would suggest, and the reason is worth
+     knowing: dirt is denser than water, so the row of soil capping the trench sinks into it
+     and the water comes up to the surface, where it spreads. Nothing says that anywhere. It
+     falls out of a powder being heavier than a liquid. */
+  let far = 0;
+  for (let x=4; x<W-5; x++){
+    if (x > 12 && x < 100) continue;
+    for (let y=0; y<H; y++){
+      const t = type[idx(x,y)];
+      if (t===RICH || t===GRASS || t===STEM || t===FLOWER) far++;
+    }
+  }
+  if (far) bad.push(`${far} cells of meadow reached the ends of the bed, sixty cells past where it settles`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* The two halves of what rich soil is *for*, each measured against a bed that is missing the
+   other half. A colour that only looked richer would pass neither. */
+await check(browser, 'rich soil is what grass grows on and what lets a flower sow', () => {
+  const bad = [];
+
+  /* Grass, on a bed of rich soil laid down by hand with no flowers anywhere. If grass needed
+     a flower nearby it would be the flower's rule wearing the soil's name. */
+  __wipe(); let f = __floor();
+  __slab(6, f-6, 60, f-1, RICH);
+  __slab(6, f-10, 12, f-7, WATER);
+  for (let k=0;k<6000;k++) __step(1);
+  const blades = __count(GRASS);
+  if (!blades) return 'bare rich soil beside water put up no grass at all';
+  // One blade per exposed cell and no more: grass does not stack up or creep sideways off
+  // the soil, so it cannot outnumber the surface it is standing on.
+  let surface = 0;
+  for (let x=0;x<W;x++) for (let y=1;y<H;y++)
+    if (type[idx(x,y)]===RICH && (type[idx(x,y-1)]===E || type[idx(x,y-1)]===GRASS)) surface++;
+  if (blades > surface)
+    bad.push(`${blades} blades of grass on ${surface} exposed cells of rich soil`);
+
+  // Dry rich soil puts up nothing, the same rule everything green in this box lives under.
+  __wipe(); f = __floor();
+  __slab(6, f-6, 60, f-1, RICH);
+  for (let k=0;k<6000;k++) __step(1);
+  if (__count(GRASS)) bad.push(`${__count(GRASS)} blades came up on rich soil with no water anywhere`);
+
+  /* And sowing, asked the way round that can be answered. A seed on a bed that is already
+     rich can spread at once; the same seed on plain dirt has to wait for the ground to be fed
+     first, and feeding is the slow step. Two beds rather than one, because a flower left alone
+     makes its own rich soil eventually — the arc is the point, and it is also what hides the
+     gate if you only ever watch one bed to the end. */
+  const bed = (ground) => {
+    __wipe(); const ff = __floor();
+    __slab(6, ff-6, 60, ff-1, ground);
+    __slab(6, ff-10, 12, ff-7, WATER);
+    put(20, ff-8, SEED);
+    for (let k=0;k<5000;k++) __step(1);
+    return __count(FLOWER);
+  };
+  const onRich = bed(RICH), onDirt = bed(DIRT);
+  if (onRich < 3) bad.push(`a seed on ready-made rich soil gave ${onRich} flowers — it did not spread at all`);
+  if (onDirt >= onRich) bad.push(`a seed spread as fast on plain dirt (${onDirt}) as on rich soil (${onRich}) — ` +
+                                 `the ground is not pacing anything`);
   return bad.length ? bad.join('; ') : null;
 });
 
