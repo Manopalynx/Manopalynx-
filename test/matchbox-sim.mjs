@@ -2212,6 +2212,25 @@ await check(browser, 'ants gather scattered grains into heaps, and sort two kind
    lightness than to blue and an RGB number says the opposite. Creatures are held further
    apart from each other than from materials, because every confusion reported so far has
    been one creature for another rather than a creature for a wall. */
+/* Two checks on the palette, and they measure different things on purpose. This one reads
+   the table. The one after it reads the pixels.
+
+   The metric changed, because the old one was answering a question nobody asked. It was
+   CIE76 on the table colours, and by that measure Dirt and Ash were 17.6 apart — a
+   comfortable pass — while on the phone they were the thing Sam reported as looking the
+   same. Two faults in one number:
+
+   · **CIE76 overrates chroma.** Dirt and Ash differed almost entirely in yellowness, at low
+     chroma, and CIE76 charges the full 17 for it. CIEDE2000 charges what the eye does.
+   · **It ignored the grain.** Every cell is drawn with a tint added to all three channels,
+     which is very nearly pure lightness, so a lightness difference smaller than the tint's
+     own spread is not a difference you can see at one cell. Dirt and Ash sat at L* 38 and
+     39 — the difference between them was a third of the variation inside either one.
+
+   So `survives` shrinks the lightness difference by what the tint can hide and then asks
+   CIEDE2000 what is left. On that metric the pair Sam reported came out at 11.7, and the
+   worst pair in the box came out at 1.1: Stone and Ash, which the old check passed at a
+   bar of 3 while calling itself the check for this. */
 await check(browser, 'no two things in the box are the same colour, and creatures least of all', () => {
   const bad = [];
   const lab = ([R,G,B]) => {
@@ -2222,27 +2241,178 @@ await check(browser, 'no two things in the box are the same colour, and creature
     x=k(x); y=k(y); z=k(z);
     return [116*y-16, 500*(x-y), 200*(y-z)];
   };
-  const dE = (a,b) => { const A=lab(a), B=lab(b); return Math.hypot(A[0]-B[0],A[1]-B[1],A[2]-B[2]); };
-  /* Three bars, and the gap between them is deliberate rather than lazy.
+  const d2000 = ([L1,a1,b1],[L2,a2,b2]) => {
+    const C1 = Math.hypot(a1,b1), C2 = Math.hypot(a2,b2), Cb = (C1+C2)/2;
+    const G = .5*(1 - Math.sqrt(Math.pow(Cb,7)/(Math.pow(Cb,7)+Math.pow(25,7))));
+    const A1 = (1+G)*a1, A2 = (1+G)*a2;
+    const Cp1 = Math.hypot(A1,b1), Cp2 = Math.hypot(A2,b2);
+    const hf = (a,b) => { if (a===0 && b===0) return 0; const d = Math.atan2(b,a)*180/Math.PI; return d<0?d+360:d; };
+    const h1 = hf(A1,b1), h2 = hf(A2,b2);
+    const dL = L2-L1, dC = Cp2-Cp1;
+    let dh = 0;
+    if (Cp1*Cp2 !== 0){ dh = h2-h1; if (dh > 180) dh -= 360; else if (dh < -180) dh += 360; }
+    const dH = 2*Math.sqrt(Cp1*Cp2)*Math.sin(dh*Math.PI/360);
+    const Lb = (L1+L2)/2, Cpb = (Cp1+Cp2)/2;
+    let hb;
+    if (Cp1*Cp2 === 0) hb = h1+h2;
+    else { hb = (h1+h2)/2; if (Math.abs(h1-h2) > 180) hb += (h1+h2 < 360) ? 180 : -180; }
+    const T = 1 - .17*Math.cos((hb-30)*Math.PI/180) + .24*Math.cos(2*hb*Math.PI/180)
+                + .32*Math.cos((3*hb+6)*Math.PI/180) - .20*Math.cos((4*hb-63)*Math.PI/180);
+    const Sl = 1 + (.015*Math.pow(Lb-50,2))/Math.sqrt(20+Math.pow(Lb-50,2));
+    const Sc = 1 + .045*Cpb, Sh = 1 + .015*Cpb*T;
+    const dTh = 30*Math.exp(-Math.pow((hb-275)/25,2));
+    const Rc = 2*Math.sqrt(Math.pow(Cpb,7)/(Math.pow(Cpb,7)+Math.pow(25,7)));
+    const Rt = -Rc*Math.sin(2*dTh*Math.PI/180);
+    return Math.sqrt(Math.pow(dL/Sl,2) + Math.pow(dC/Sc,2) + Math.pow(dH/Sh,2)
+                     + Rt*(dC/Sc)*(dH/Sh));
+  };
+  // The tint reaches GRAIN either way, which is about six points of L* at these
+  // lightnesses. Anything smaller than that is inside the noise, so it does not count.
+  const HIDES = 6;
+  const survives = (c1, c2) => {
+    const A = lab(c1), B = lab(c2);
+    const dL = B[0] - A[0];
+    const kept = Math.sign(dL) * Math.max(0, Math.abs(dL) - HIDES);
+    return d2000(A, [A[0] + kept, B[1], B[2]]);
+  };
 
-     Two creatures: 30. Every confusion reported so far has been one creature for another.
-     A creature and a material: 20 — a moth at dE 2.3 from Paper is the fault that started
-     this, and a creature crosses everything in the box so it cannot rely on context.
-     Two materials: 3, which only catches a literal duplicate.
+  /* Measured minima at the time of writing, which is where the bars come from rather than
+     from taste: two creatures, 19.7 (Worm/Ant); a creature and a material, 9.2 (Lava/Pupa).
+     A creature crosses everything in the box and cannot rely on where it is to say what it
+     is, which is why it is held to more than a material is. */
+  const CREATURES = 15, CREATURE_AND_THING = 8, TWO_THINGS = 6;
 
-     That last one is low on purpose and the honest reason is that the material palette does
-     not meet a higher bar and never has: Stone and Ash are 3.4 apart, Powder and Smoke 4.2,
-     Paper and Wax 5.1, Coal and Rubber 5.1. Twenty-six pairs sit under 12. They are told
-     apart by where they are and what they do — ash is on the floor after a fire and stone is
-     the wall you built — and nobody has ever reported confusing them. Asserting a standard
-     here that the box has never met would be a failing check about a problem nobody has. */
+  /* Fourteen material pairs are under the bar and always have been. They are listed rather
+     than legislated away with a lower number, because a list is a thing you can read and
+     argue with, and a bar of 3 was just the old worst case wearing a uniform.
+
+     Three families, and one pair on its own:
+     · the near-blacks — coal, rubber, powder, smoke. Four things that are all "burnt".
+     · the near-whites — paper, wax, steam, magnesium, sand.
+     · fire and lava, which are the same orange because they are the same temperature; one
+       of them flickers and rises and the other pools, which is how you tell.
+     · powder and the vent, which is a device rather than a material.
+
+     They are told apart by where they are and what they do, and nobody has reported
+     confusing any of them. Anything NOT on this list has to clear the bar — that is the
+     ratchet, and it is what would have caught Stone and Ash. */
+  const KNOWN = [
+    ['coal','rubber'], ['powder','rubber'], ['powder','coal'], ['powder','smoke'],
+    ['coal','smoke'], ['smoke','rubber'], ['smoke','rubber-molten'],
+    ['steam','magnesium'], ['paper','wax'], ['paper','wax-molten'], ['wax-molten','sand'],
+    ['fire','lava'], ['powder','vent'], ['wood','thermite'],
+  ].map(p => p.sort().join('|'));
+
   const shown = [];
   for (let t=1;t<M.length;t++) if (M[t] && M[t].col) shown.push(t);
+  const spared = new Set();
   for (let i=0;i<shown.length;i++) for (let j=i+1;j<shown.length;j++){
-    const a = shown[i], b = shown[j], e = dE(M[a].col, M[b].col);
-    const floor = M[a].alive && M[b].alive ? 30 : (M[a].alive || M[b].alive) ? 20 : 3;
-    if (e < floor)
-      bad.push(`${M[a].n} and ${M[b].n} are ${e.toFixed(1)} apart, under the ${floor} this pair needs`);
+    const a = shown[i], b = shown[j], e = survives(M[a].col, M[b].col);
+    const both = M[a].alive && M[b].alive, one = M[a].alive || M[b].alive;
+    const floor = both ? CREATURES : one ? CREATURE_AND_THING : TWO_THINGS;
+    // Named by save key, not by what the tray calls them: Wax and molten Wax share a
+    // display name, so a list keyed on names cannot say which pair it is forgiving.
+    const key = [SAVE_KEY[a], SAVE_KEY[b]].sort().join('|');
+    if (e >= floor) continue;
+    if (!both && !one && KNOWN.includes(key)){ spared.add(key); continue; }
+    bad.push(`${M[a].n} and ${M[b].n} (${key}) are ${e.toFixed(1)} apart, under the ${floor} this pair needs`);
+  }
+  // A list that has stopped describing anything is worse than no list: it quietly forgives
+  // a pair that has since moved, and the next collision hides behind the same entry.
+  for (const k of KNOWN) if (!spared.has(k))
+    bad.push(`${k} is on the list of pairs known to be too close, and is not too close any more — take it off`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* The same question asked of the pixels rather than the table, because the table does not
+   know about the grain and the grain is now doing half the work.
+
+   This is the check that would have caught what was reported. A field of stone with single
+   cells of ash scattered through it: **every one of them was hidden**, in the sense that
+   the field already contained cells of that exact colour. Every other pair of things that
+   share a floor came out at nought. One number, 100 against 0, for a defect that read as
+   "the check says 17.6, which is fine".
+
+   Ash is pale now, and the grain and the fleck do the rest. Two fields of the same
+   lightness can still be told apart if one of them is smooth and the other is coarse and
+   speckled — but that only works for a field. A single cell has no texture, which is why
+   this is measured one cell at a time and why the colours had to move as well. */
+await check(browser, 'a single cell of anything is findable on a floor of anything else', () => {
+  const bad = [];
+  const lab = ([R,G,B]) => {
+    const f = v => { v/=255; return v > .04045 ? Math.pow((v+.055)/1.055, 2.4) : v/12.92; };
+    const r=f(R), g=f(G), b=f(B);
+    let x=(r*.4124+g*.3576+b*.1805)/.95047, y=r*.2126+g*.7152+b*.0722, z=(r*.0193+g*.1192+b*.9505)/1.08883;
+    const k = v => v > .008856 ? Math.cbrt(v) : (7.787*v + 16/116);
+    x=k(x); y=k(y); z=k(z);
+    return [116*y-16, 500*(x-y), 200*(y-z)];
+  };
+  const gap = (a,b) => Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]);
+  const at = (data,x,y) => { const p = (y*W + x)*4; return [data[p], data[p+1], data[p+2]]; };
+
+  // The things that end up on a floor together: what you build with, what a fire leaves,
+  // and what the worm makes out of it.
+  const GROUND = [STONE, ASH, DIRT, SAND, WOOD, COAL, EMBER];
+  for (const bg of GROUND) for (const fg of GROUND){
+    if (bg === fg) continue;
+    __wipe();
+    for (let y=0;y<H;y++) for (let x=0;x<W;x++) put(x,y,bg);
+    const spots = [];
+    for (let n=0;n<40;n++){
+      const x = 5 + (n*3) % (W-10), y = 5 + (n*7) % (H-10);
+      put(x,y,fg); spots.push([x,y]);
+    }
+    draw();
+    const data = ctx.getImageData(0,0,W,H).data;
+    const field = [];
+    for (let y=1;y<H-1;y+=2) for (let x=1;x<W-1;x+=2)
+      if (type[idx(x,y)] === bg) field.push(lab(at(data,x,y)));
+    /* Hidden means the field already contains cells that look like this one — not "far
+       from the field's average", which is a different and wrong question. Soil is two
+       browns and is wide by that measure, and a grey cell dropped in it is still perfectly
+       obvious, because none of the browns is grey. */
+    let hidden = 0;
+    for (const [x,y] of spots) {
+      const c = lab(at(data,x,y));
+      if (field.some(v => gap(v,c) < 4)) hidden++;
+    }
+    if (hidden) bad.push(`${hidden} of ${spots.length} cells of ${M[fg].n} vanished into a field of ${M[bg].n}`);
+  }
+
+  /* And the grain and the fleck are real, rather than two fields nothing reads. This is
+     not idle: the draw loop takes its colours out of arrays built once at load, so a
+     material could declare either and be drawn without it, and the picture would still
+     look plausible — just flat, and back to colour carrying everything on its own.
+
+     Measured spread of the drawn brightness across a full field: Ash 2.7 against a plain
+     material's 7.0, and Dirt 15.2. About 31% of a flecked material's cells come out nearer
+     the fleck than the base, which is the one-in-four the tint is sliced into, plus the
+     base cells that the tint has carried across the halfway line. */
+  const spreadOf = t => {
+    __wipe();
+    for (let y=0;y<H;y++) for (let x=0;x<W;x++) put(x,y,t);
+    draw();
+    const d = ctx.getImageData(0,0,W,H).data;
+    const v = []; let toFleck = 0;
+    for (let y=1;y<H-1;y+=2) for (let x=1;x<W-1;x+=2){
+      const p = (y*W+x)*4, R=d[p], G=d[p+1], B=d[p+2];
+      v.push((R+G+B)/3);
+      const f = M[t].fleck, c = M[t].col;
+      if (f && Math.hypot(R-f[0],G-f[1],B-f[2]) < Math.hypot(R-c[0],G-c[1],B-c[2])) toFleck++;
+    }
+    const mean = v.reduce((s,x)=>s+x,0)/v.length;
+    return { sd: Math.sqrt(v.reduce((s,x)=>s+(x-mean)**2,0)/v.length), fleck: toFleck/v.length };
+  };
+
+  const plain = spreadOf(SAND).sd;                       // no grain, no fleck: the baseline
+  for (let t=1;t<M.length;t++){
+    if (!M[t] || !M[t].col) continue;
+    if (M[t].grain === undefined && M[t].fleck === undefined) continue;
+    const g = spreadOf(t);
+    if (M[t].grain !== undefined && M[t].grain < 13 && !(g.sd < plain * .6))
+      bad.push(`${M[t].n} asks for a fine grain of ${M[t].grain} and is drawn at ${g.sd.toFixed(1)} against a plain material's ${plain.toFixed(1)}`);
+    if (M[t].fleck !== undefined && (g.fleck < .15 || g.fleck > .45))
+      bad.push(`${M[t].n} declares a fleck and ${Math.round(100*g.fleck)}% of its cells came out nearer it — the loop is not drawing it`);
   }
   return bad.length ? bad.join('; ') : null;
 });

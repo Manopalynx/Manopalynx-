@@ -803,6 +803,94 @@ floor after a fire and stone is the wall you built. Nobody has reported confusin
 check asserting a standard the box has never met would be a failing test about a problem
 nobody has. Creatures cannot lean on context — they move, and they mix.
 
+### Then somebody reported confusing them
+
+Reported from the phone: dirt and ash look the same, so you cannot see what the worm is
+doing. The check above passed that pair at **17.6** and called it comfortable. It was wrong
+twice over, and both faults are worth keeping written down.
+
+**It measured the table, and the table is not what gets drawn.** Every cell carries a fixed
+tint, added to all three channels at once — which is very nearly pure lightness. So the
+lightness difference between two materials is the one thing the grain can hide, and it hid
+this one whole:
+
+| | table dE76 | L\* | mean lightness gap **as drawn** |
+|---|---|---|---|
+| Dirt / Ash | 17.6 | 38 vs 39 | **3.6** |
+| Dirt / Wood | 15.0 | 38 vs 38 | 3.4 |
+| Moss / Green *(reads fine)* | 20.1 | 58 vs 41 | 17.0 |
+
+One material's own tint spreads it **10.8** in lightness. Dirt and Ash were 3.6 apart. The
+variation inside a field of dirt was three times the difference between dirt and ash.
+
+**And CIE76 overrates chroma.** The whole 17.6 was yellowness at low chroma, which the eye
+discounts and that formula does not. The metric is CIEDE2000 now, with the lightness
+difference first shrunk by what the tint can hide — `survives()` in the suite. On that
+measure the reported pair is 11.7 and **the worst pair in the box is 1.1: Stone and Ash**,
+which the old check waved through at a bar of 3 while being the check for exactly this.
+
+Then the pixels, which settled it. Single cells of one material scattered through a field of
+another, counting the ones the field already contained a match for:
+
+| | single cells hidden, before | after |
+|---|---|---|
+| Ash on Stone | **100%** | 0% |
+| Stone on Ash | **100%** | 0% |
+| every other pair that shares a floor | 0% | 0% |
+
+#### Why the fix is not new hex codes
+
+Sorted by lightness, thirty-seven materials span L\* 13 to 94 — an average gap of two. Water,
+Wood and Dirt are all at 38; Green, Stone and Gas at 41 to 43. **The palette is full**, and
+moving a colour only moves the collision. So colour stopped carrying all of it:
+
+| | grain | fleck | what it reads as |
+|---|---|---|---|
+| **Ash** | 5 | — | fine, even dust |
+| **Stone** | default 13 | `[82,79,74]` | rough speckled rock |
+| **Dirt** | 16 | `[70,58,34]` | coarse soil, grains of two browns |
+
+`grain` is how far that material's tint reaches. `fleck` is a second colour for about a
+quarter of its cells, chosen off the tint that cell already has, so the speckle is fixed in
+place and does not shimmer as things move. Measured spread of drawn brightness across a full
+field: **Ash 2.7, a plain material 7.0, Dirt 15.2**, and 31% of a flecked material's cells
+come out nearer the fleck than the base.
+
+Both are one field in the table, and **the draw loop got faster** — 0.42ms to 0.39ms over
+five runs of two hundred draws — because reading colours out of a plain array beats reading
+them off the material object by more than the fleck and the grain cost.
+
+#### What moved, and what did not
+
+Only ash. Searching the whole Lab space for the place that makes the fewest new collisions
+returned one empty lane — **pale warm grey**, which is what ash actually looks like — and
+only one material could have it. Ash took it, because Ash/Stone at 1.1 was the worse fault
+and because pale is the truer colour: `[96,92,88]` → `[174,160,150]`, worst pair 1.1 → 9.9.
+
+**Dirt did not move at all.** Once ash was out of the way, dirt's problem was gone; it kept
+its colour and gained a surface. Worth noting because the instinct was to change the thing
+that was reported, and the thing that was reported was the victim.
+
+A browner soil looked better and was rejected on measurement: `[104,78,48]` collides with
+Wood at 4.6, which is worse than the fault being fixed.
+
+#### The limit, stated plainly
+
+**Grain and fleck cannot help a single cell.** A lone cell has no texture — two fields of the
+same lightness can be told apart by one being smooth and the other coarse, but one cell of
+either is just a colour. That is why ash had to move as well, and it is why the second check
+measures one cell at a time rather than a field.
+
+The table check now uses `survives`, with bars taken from measurement rather than taste — 15
+between two creatures (measured minimum 19.7), 8 between a creature and a material (9.2), 6
+between two materials — and **the fourteen material pairs under that bar are listed by name
+in the check rather than legislated away with a lower number.** Coal and rubber and powder
+and smoke are all "burnt"; paper, wax, steam, magnesium and sand are all "pale"; fire and
+lava are the same orange because they are the same temperature. A list is a thing you can
+read and argue with. Anything not on it has to clear the bar, and the check also fails if a
+listed pair has since moved apart — a stale excuse is worse than none, because the next
+collision hides behind it.
+
 ### The moss, which is the exception
 
 The seventh, and **the one that breaks the rule the other six were built to keep.** Every
@@ -1570,7 +1658,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 79 checks — the simulation
+node test/matchbox-sim.mjs     # 80 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
