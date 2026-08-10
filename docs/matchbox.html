@@ -318,7 +318,7 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
       LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24,
       THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31, WORM=32,
       MOTH=33, FISH=34, GRUB=35, PUPA=36, ASHBUG=37, ANT=38, MOSS=39, DIRT=40,
-      SEED=41, STEM=42, FLOWER=43;
+      SEED=41, STEM=42, FLOWER=43, RICH=44, GRASS=45;
 
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
@@ -393,7 +393,7 @@ M[ASH]    = {n:'Ash',      ph:2, col:[174,160,150], ig:9e9, cond:.10, cap:.9,  d
    `proof`. `ph:2` because soil is loose — it piles, ants can carry it, and moss will root on
    it the way moss roots on anything that is not a gas or a liquid. */
 M[DIRT]   = {n:'Dirt',     ph:2, col:[100, 88, 56], ig:9e9, cond:.14, cap:1.6, dens:1.5,
-             melt:1150, into:LAVA, tough:1.2, grain:16, fleck:[ 70, 58, 34]};
+             melt:1150, into:LAVA, tough:1.2, grain:16, fleck:[ 70, 58, 34], fertile:1};
 
 /* Matter that only exists once something has been hot enough.
 
@@ -740,12 +740,35 @@ M[MOSS]    ={n:'Moss',     ph:3, col:[ 92,152, 96], ig:9e9, cond:.14, cap:1.2,
    stand, which is what stops a green box staying green for free. */
 M[SEED]    ={n:'Seed',     ph:2, col:[ 72, 48, 92], ig:210, fuel:6,  out:0.6, cond:.12, cap:.8,
              char:6, ash:ASH, dens:1.1, sparse:.20, alive:1,
-             sprout:150, damp:30, soil:DIRT, becomes:STEM};
+             sprout:150, damp:30, becomes:STEM};
 M[STEM]    ={n:'Stem',     ph:3, col:[ 16, 86, 66], ig:190, fuel:10, out:0.8, cond:.16, cap:1.1,
              char:8, ash:ASH, dens:.9, alive:1,
              climb:26, tall:9, damp:30, thirst:240, becomes:FLOWER};
 M[FLOWER]  ={n:'Flower',   ph:3, col:[255,216,103], ig:180, fuel:8,  out:0.7, cond:.16, cap:1.0,
              char:6, ash:ASH, dens:.9, alive:1,
+             damp:30, thirst:240, enrich:400, reach:4, feeds:DIRT, rich:RICH, sows:200, seeds:SEED, into_grass:GRASS};
+/* Rich soil, and the grass that comes up out of it — the two halves of a meadow.
+
+   **Rich soil had to earn a verb.** A second brown that only looked richer would be a colour
+   with nothing behind it, and everything else in this table does something. It does two
+   things: grass grows on it, and a flower standing near it will sow. That second one is what
+   turns one flower into a meadow, and it is why the order matters — a flower feeds the ground
+   first and only then reproduces, so a single seed on plain soil gives you one flower that
+   slowly makes the ground it needs, and then spreads. Bare dirt does not.
+
+   **Grass is what you can see.** Rich soil is mostly underneath something by the time there
+   is much of it, which is how it is in life, and a meadow that was only a change of brown
+   would not read at all from arm's length.
+
+   Grass grows off the soil's row rather than its own: one blade per exposed cell of rich
+   soil, put up into the air above it. That bounds the whole thing without a rule about
+   bounding anything — there is exactly as much grass as there is rich soil with room over it,
+   and a flower can only enrich what it can reach. */
+M[RICH]    ={n:'Rich soil',ph:2, col:[ 44, 46,  0], ig:9e9, cond:.15, cap:1.7, dens:1.5,
+             melt:1150, into:LAVA, tough:1.2, grain:16, fleck:[ 28, 30,  0], fertile:1,
+             grows:GRASS, sprouts:120, damp:30};
+M[GRASS]   ={n:'Grass',    ph:3, col:[140,146,  0], ig:170, fuel:7,  out:0.7, cond:.15, cap:1.0,
+             char:5, ash:ASH, dens:.8, alive:1,
              damp:30, thirst:240};
 /* `chokes` is why this one and not smoke or steam. Gas is the gas that *stays*: it only
    leaves at the top of the box, so it pools and fills a room, and a creature under it is
@@ -824,6 +847,7 @@ SAVE_KEY[GRUB]='grub';        SAVE_KEY[PUPA]='pupa';
 SAVE_KEY[ASHBUG]='ash-bug';   SAVE_KEY[ANT]='ant';         SAVE_KEY[MOSS]='moss';
 SAVE_KEY[DIRT]='dirt';
 SAVE_KEY[SEED]='seed';       SAVE_KEY[STEM]='stem';         SAVE_KEY[FLOWER]='flower';
+SAVE_KEY[RICH]='rich-soil';  SAVE_KEY[GRASS]='grass';
 
 const TYPE_OF_KEY = new Map(SAVE_KEY.map((k,t) => [k,t]));
 
@@ -2211,19 +2235,27 @@ function mossSpread(i, x, y){
 /* Is there soil below this cell, anywhere below it? A seed is a powder and falls, so the
    question that matters when you let one go is what it will land on, not what it is passing.
    Stops at the first thing that is not air: a seed does not fall through a table. */
-function overSoil(x, y, soil){
+function overSoil(x, y){
   for (let yy = y; yy < H; yy++){
     const t = type[idx(x, yy)];
-    if (t === soil) return true;
-    if (t !== E && t !== SEED && M[t].ph !== 0) return false;
+    if (fertile(t)) return true;
+    if (t !== E && t !== SEED && M[t].ph !== 0 && M[t].ph !== 1) return false;
   }
   return false;
 }
 
+/* What counts as somewhere to grow, read off the ground's own row rather than named by the
+   seed. It was `soil: DIRT` on the seed to begin with, which was wrong the moment there was
+   a second kind of soil: rich soil is the *better* ground and a seed would not come up on it,
+   so a meadow sowed itself onto the patch it had just improved and sat there. Measured before
+   the fix: one seed became 115 seeds and ten flowers in eight minutes, nearly all of them
+   lying on ground they could not use. */
+const fertile = (t) => t !== E && M[t].fertile === 1;
+
 function seedSprout(i, x, y){
   const m = M[SEED];
   const under = inb(x, y+1) ? type[idx(x, y+1)] : STONE;
-  if (under !== m.soil || !damp(x, y, m.damp)){ feed[i] = 0; return; }
+  if (!fertile(under) || !damp(x, y, m.damp)){ feed[i] = 0; return; }
   if (++feed[i] < m.sprout) return;
   found(SEED + ':becomes', `${m.n} turns into ${M[m.becomes].n}`);
   become(x, y, m.becomes);
@@ -2255,6 +2287,117 @@ function stemGrow(i, x, y){
   }
   found(STEM + ':becomes', `${m.n} turns into ${M[m.becomes].n}`);
   become(x, y, m.becomes);
+}
+
+/* What a flower does once it is open: it feeds the ground, and then it sows into it.
+
+   Both are dice rolls rather than counters, like every other pace in here, and the scan comes
+   after the roll so a field of flowers is not scanning its neighbourhood every tick.
+
+   The order between them is the whole design. Enriching is cheap and frequent, sowing is rare
+   and needs rich soil within reach — so one seed on plain dirt gives one flower, which spends
+   a while making the ground it needs, and only then starts spreading. Plain dirt on its own
+   does not become a meadow, which is what makes rich soil worth being a thing. */
+function flowerWork(i, x, y){
+  const m = M[FLOWER];
+  const roll = Math.random() * m.enrich < 1, sow = Math.random() * m.sows < 1;
+  if (!roll && !sow) return;
+  // Both jobs happen at the foot of the stalk, not at the head. The flower is the cell that
+  // runs the rule because it is the cell that has finished growing, but it is eight or nine
+  // cells up in the air — measured with the scan centred on the flower, a plant on a bed of
+  // soil enriched nothing at all in seven minutes, because the ground was out of reach and
+  // the rule read as doing nothing rather than as reaching for the wrong place.
+  const [fx, fy] = footOf(x, y);
+  if (roll) enrichNear(fx, fy, m);
+  if (sow)  sowNear(fx, fy, m);
+}
+
+// Is there a stalk in this cell? Grass does not count: a blade is ground cover, not a
+// neighbour competing for the same patch of soil.
+const standing = (x,y) => inb(x,y) && (type[idx(x,y)] === STEM || type[idx(x,y)] === FLOWER);
+
+// Down the stalk to the last cell of it, which is the one standing on the ground. The same
+// walk a wick does to find the wax it is drawing from.
+function footOf(x, y){
+  let fy = y;
+  while (fy + 1 < H){
+    const u = type[idx(x, fy + 1)];
+    if (u !== STEM && u !== FLOWER) break;
+    fy++;
+  }
+  return [x, fy];
+}
+
+// One cell of soil at a time, and only soil — a flower does not turn a stone floor into a
+// garden. Picked at random from what is in reach rather than nearest-first, so the patch
+// under a flower fills in rather than growing a neat disc.
+function enrichNear(x, y, m){
+  const r = m.reach, spots = [];
+  for (let dy=-r; dy<=r; dy++) for (let dx=-r; dx<=r; dx++){
+    const xx=x+dx, yy=y+dy;
+    if (inb(xx,yy) && type[idx(xx,yy)] === m.feeds) spots.push([xx,yy]);
+  }
+  if (!spots.length) return;
+  const [sx,sy] = spots[(Math.random()*spots.length)|0];
+  become(sx, sy, m.rich);
+  found(FLOWER + ':enrich', `${m.n} feeds the soil under it`);
+}
+
+/* A seed, onto a bare patch of ground the flower can reach.
+
+   The first version dropped it into any empty cell nearby and let it fall, on the grounds
+   that a seed is a powder and the ground can decide. That was wrong, and wrong in the way
+   that is only obvious in a picture: most seeds landed somewhere they could not grow — on
+   stone, out of reach of water, or on top of the last one — and stayed there. **One seed
+   became a carpet of 167 loose seeds** across the whole bed in seven minutes, with the few
+   that did come up flowering at ground level because the pile on top of them was in the way.
+   It read as a spill, not a meadow.
+
+   So sowing looks first. A spot has to be empty, standing on soil, with nothing already
+   growing in it — and if there is no such spot in reach, the flower does not sow. That is
+   also what makes a finished meadow stop: it runs out of bare ground rather than being told
+   a number. */
+function sowNear(x, y, m){
+  const r = m.reach;
+  /* Onto rich soil, and only rich soil. You may plant a seed by hand on any ground that will
+     take it; a flower may only sow into ground it or another has already fed.
+
+     The first version asked only that there be rich soil *somewhere in reach*, which sounded
+     like a gate and was not one — a flower enriches every 150 ticks and sows every 900, so
+     the condition was true within a couple of seconds of the flower opening and never false
+     again. Removing it entirely changed nothing measurable, which is the tell.
+
+     This version is the gate the design wanted. The meadow can only expand as fast as the
+     ground is fed, and the ground is only fed within `reach` of a plant that is already
+     standing — so the front advances a few cells at a time and stops when the last flower
+     runs out of soil it can reach. That is what makes rich soil the thing a meadow is made
+     of rather than a darker brown underneath one.
+
+     Open ground first, and a blade of grass only if there is none. Both halves were measured
+     wrong before they were measured right. Refusing grass outright
+     strangles the meadow — grass grows on exactly the exposed soil a seed needs, so the patch
+     fills with blades and stops dead at nine flowers on a bed with room for fifty. Taking
+     grass freely does the opposite: the flowers seed into every blade and the grass count
+     goes to nought, which loses the ground cover that was the point of having it. Preferring
+     bare ground keeps both — the sward stays, and the meadow can still get past it. */
+  const bare = [], sward = [];
+  for (let dy=-r; dy<=r; dy++) for (let dx=-r; dx<=r; dx++){
+    const xx=x+dx, yy=y+dy;
+    if (!inb(xx,yy) || !inb(xx,yy+1)) continue;
+    if (type[idx(xx,yy+1)] !== m.rich) continue;
+    // Not shoulder to shoulder with something already growing. Plants need room, and this
+    // is also the only thing that leaves any surface for the grass: without it the meadow
+    // saturates by putting a stalk on every cell of the bed — 31 flowers, and grass nought.
+    if (standing(xx-1, yy) || standing(xx+1, yy)) continue;
+    const here = type[idx(xx,yy)];
+    if (here === E) bare.push([xx,yy]);
+    else if (here === m.into_grass) sward.push([xx,yy]);
+  }
+  const spots = bare.length ? bare : sward;
+  if (!spots.length) return;
+  const [sx,sy] = spots[(Math.random()*spots.length)|0];
+  put(sx, sy, m.seeds);
+  found(FLOWER + ':sows', `${m.n} drops a seed of its own`);
 }
 
 /* Take the water away and a plant dies where it stands, which is what stops a green box
@@ -2473,7 +2616,7 @@ function moveLife(){
     /* The things that are alive and stay where they are: moss on its wet rock, and a plant
        where it was sown. None of them drowns, none of them walks, so they take none of the
        rest of this pass. What they do instead is one line each, read off their own row. */
-    if (kind === MOSS || kind === SEED || kind === STEM || kind === FLOWER){
+    if (kind === MOSS || kind === SEED || kind === STEM || kind === FLOWER || kind === GRASS){
       const m = M[kind];
       // Moss dries out in the heat and is gone, leaving nothing — which is the whole point
       // of it: moss that left ash would grow back on the ash and burn again. A plant is the
@@ -2482,9 +2625,10 @@ function moveLife(){
         found(kind + ':wither', `${m.n} dries out`); become(mx, my, E); continue;
       }
       if (m.thirst !== undefined && thirsty(i, mx, my, m)) continue;
-      if (kind === MOSS)      mossSpread(i, mx, my);
-      else if (kind === SEED) seedSprout(i, mx, my);
-      else if (kind === STEM) stemGrow(i, mx, my);
+      if (kind === MOSS)        mossSpread(i, mx, my);
+      else if (kind === SEED)   seedSprout(i, mx, my);
+      else if (kind === STEM)   stemGrow(i, mx, my);
+      else if (kind === FLOWER) flowerWork(i, mx, my);
       continue;
     }
     if (drowning(i, mx, my, M[kind])) continue;
@@ -2628,6 +2772,21 @@ function react(){
           if ((tick % VENT_EVERY) === (i % VENT_EVERY)) ventPush(x, y, what);
         }
         continue;                     // it is not fuel, it does not melt, it just sits
+      }
+
+      /* ---- soil with something in it puts up a blade, into the air directly above and
+         nowhere else. One per exposed cell, so there is exactly as much grass as there is
+         rich soil with room over it and nothing has to be told to stop.
+
+         Here rather than in the life pass because it is the soil's rule and soil is not
+         alive. The roll and the empty-cell test come before the damp scan, which is the
+         expensive part: at `sprouts` 220 about one exposed cell in two hundred pays for a
+         scan on any given tick. Not a `continue` — rich soil still melts and still carries
+         heat like the dirt it came from. */
+      if (m.grows !== undefined && y > 0 && type[i-W] === E
+          && Math.random() * m.sprouts < 1 && damp(x, y, m.damp)){
+        put(x, y-1, m.grows);
+        found(t + ':grows', `${m.n} puts up ${M[m.grows].n}`);
       }
 
       // ---- gases last a while and are then air again, keeping whatever heat is
@@ -3919,8 +4078,8 @@ function paintAt(cx, cy){
   // And the other half of a seed's question, which the damp scan cannot answer: a seed on
   // stone is a grain. Asked of where it will come to rest rather than where it was let go,
   // so sprinkling seeds over a field of soil does not read as a warning.
-  else if (m && m.sprout !== undefined && !overSoil(cx, cy, m.soil))
-    say(`${m.n} needs ${M[m.soil].n} under it — on anything else it just sits there`);
+  else if (m && m.sprout !== undefined && !overSoil(cx, cy))
+    say(`${m.n} needs soil under it — on anything else it just sits there`);
 
   /* And the other silence of the same kind. A match is 780°C and thermite catches at 950,
      which is deliberate — you light it with a magnesium ribbon — but holding a flame on it
@@ -4102,6 +4261,9 @@ const FINDS = (() => {
     if (m.tills)  add(t, 'till',   `${m.n} turns what fire left into ${M[m.soil].n}`);
     if (m.wither) add(t, 'wither', `${m.n} dries out in the heat`);
     if (m.thirst) add(t, 'thirst', `${m.n} dies when the water goes`);
+    if (m.rich !== undefined) add(t, 'enrich', `${m.n} feeds the soil under it`);
+    if (m.seeds !== undefined) add(t, 'sows', `${m.n} drops a seed of its own`);
+    if (m.grows !== undefined) add(t, 'grows', `${m.n} puts up ${M[m.grows].n}`);
     // One rule, both ends of a life: a grub filling up, and what it opens into.
     if (m.becomes !== undefined) add(t, 'becomes', `${m.n} turns into ${M[m.becomes].n}`);
     // Two ways of being somewhere you cannot be, and both are worth finding out about.
