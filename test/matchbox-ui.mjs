@@ -1127,20 +1127,43 @@ await check('a worm drawn on the stage walks about on its own', async p => {
   const placed = await p.evaluate(() => __count(WORM));
   if (placed < 5) return `three taps put ${placed} worms in the box, which is too few to measure`;
 
-  // How far apart they are, not where the middle of them is. A tap puts down a clump and
-  // they wander off both ways, so the mean sits almost exactly still while every one of
-  // them is walking — measured, a clump that went from spanning 62-68 to spanning 9-97
-  // moved its mean from 64.9 to 63.1, and a check on the mean called that "nothing is
-  // walking".
+  /* The footprint: how many distinct cells the worms have stood in over the window.
+
+     Two measurements were tried before this one and both were wrong in the same way — they
+     asked where the worms *are* rather than where they have *been*, and a random walk is
+     entitled to come back. The mean position sits almost exactly still while every one of
+     them is walking: a clump that went from spanning 62-68 to spanning 9-97 moved its mean
+     from 64.9 to 63.1. And the span itself, which replaced it, can shrink — eleven worms
+     went from spanning 23 cells to 13 on a build that was working perfectly, because the
+     two on the outside happened to wander inwards.
+
+     A footprint only grows. Measured over six runs once they have landed: **5.5 to 9.1 cells
+     per worm** in four seconds, against **exactly 1.0** for worms pinned in place with
+     `BUG_STEP` turned up to nine billion. The bar is 2.0, in a gap with nothing in it. */
   const span = () => p.evaluate(() => {
     const o = []; for (let i=0;i<type.length;i++) if (type[i]===WORM) o.push(i%W);
-    return o.length ? Math.max(...o) - Math.min(...o) : null;
+    return o.length ? Math.max(...o) - Math.min(...o) : 0;
   });
   const first = await span();
+  /* Let them land first. Tried without this and it made the measurement useless: the taps
+     drop clumps from nine-tenths of the way down an empty box, so every worm falls about
+     twenty cells before it does anything, and twenty cells of falling is a footprint of
+     twenty whether it ever takes a step or not. Worms pinned in place with `BUG_STEP`
+     turned up to nine billion passed the check. */
+  await p.waitForTimeout(1500);
+  await p.evaluate(() => {
+    window.__seen = new Set();
+    window.__watch = setInterval(() => {
+      for (let i=0;i<type.length;i++) if (type[i]===WORM) __seen.add(i);
+    }, 100);
+  });
   await p.waitForTimeout(4000);
-  const later = await span();
+  const foot = await p.evaluate(() => { clearInterval(__watch); return __seen.size; });
   if (await p.evaluate(() => __count(WORM)) !== placed) return 'worms appeared or vanished while nothing was happening';
-  if (later <= first + 6) return `${placed} worms spanned ${first} cells and now span ${later} — nothing is walking`;
+  const each = foot / placed;
+  if (each < 2)
+    return `${placed} worms stood in ${foot} cells between them over four seconds — ${each.toFixed(1)} each, ` +
+           `and a clump that never moved would be 1.0. They span ${first} cells and now span ${await span()}.`;
   return null;
 });
 

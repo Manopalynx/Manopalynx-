@@ -317,7 +317,8 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
       FIRE=16, SMOKE=17, STEAM=18, EMBER=19, ASH=20,
       LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24,
       THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31, WORM=32,
-      MOTH=33, FISH=34, GRUB=35, PUPA=36, ASHBUG=37, ANT=38, MOSS=39, DIRT=40;
+      MOTH=33, FISH=34, GRUB=35, PUPA=36, ASHBUG=37, ANT=38, MOSS=39, DIRT=40,
+      SEED=41, STEM=42, FLOWER=43;
 
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
@@ -708,6 +709,44 @@ M[ANT]     ={n:'Ant',      ph:3, col:[136, 44, 44], ig:200, fuel:18, out:1.1, co
 M[MOSS]    ={n:'Moss',     ph:3, col:[ 92,152, 96], ig:9e9, cond:.14, cap:1.2,
              dens:.9, tough:.5, sparse:.30, alive:1,
              spread:40, damp:40, roots:1, wither:70};
+/* A seed, and the two things it turns into. One rule each, and the whole chain is three
+   rows of the table with no code that knows any of them by name.
+
+   **The seed is the only one of the three you can place.** Stem and Flower are made, never
+   placed — like the pupa, and for the same reason: a flower you can paint is a colour, and
+   a flower you grew is a thing that happened. `alive:1` keeps them out of a grub's diet, off
+   a moss cell's list of surfaces, and inside what Clear's Life option takes.
+
+   **Where, and only where.** A seed sprouts on soil, with water within reach — the same
+   `damp` question moss asks, and the same answer when it cannot: the readout says so as you
+   paint rather than leaving you watching a seed that was never going to do anything. On
+   stone, or in mid-air, it is a grain that sits there.
+
+   **The clock is `feed`.** `vel` is not free on a seed the way it is on a pupa: a seed is a
+   powder, so the falling pass writes its velocity every tick, and a counter kept there would
+   be reset by its own fall. `feed` is the byte a vent keeps its payload in and an ant its
+   cargo, and a seed is neither.
+
+   **`tall` is carried, not counted.** The growing tip holds what is left of its height in
+   `feed` and hands it up a cell at a time, so exactly one cell of a stem is ever growing and
+   nothing has to scan down a stalk to ask how high it already is. At the top — or against
+   anything in the way, which is a ceiling as far as a plant is concerned — it opens.
+
+   **They burn, and they do not wither in the heat.** That is the opposite of the choice moss
+   made, and for the opposite reason: moss grows on what fire leaves behind, so moss that
+   burned to ash grew back on its own ash and the scene manufactured matter. A plant grows
+   from a seed you placed, so there is no loop, and a field of flowers going up is worth
+   having. `thirst` is the other end of it — take the water away and they die where they
+   stand, which is what stops a green box staying green for free. */
+M[SEED]    ={n:'Seed',     ph:2, col:[ 72, 48, 92], ig:210, fuel:6,  out:0.6, cond:.12, cap:.8,
+             char:6, ash:ASH, dens:1.1, sparse:.20, alive:1,
+             sprout:150, damp:30, soil:DIRT, becomes:STEM};
+M[STEM]    ={n:'Stem',     ph:3, col:[ 16, 86, 66], ig:190, fuel:10, out:0.8, cond:.16, cap:1.1,
+             char:8, ash:ASH, dens:.9, alive:1,
+             climb:26, tall:9, damp:30, thirst:240, becomes:FLOWER};
+M[FLOWER]  ={n:'Flower',   ph:3, col:[255,216,103], ig:180, fuel:8,  out:0.7, cond:.16, cap:1.0,
+             char:6, ash:ASH, dens:.9, alive:1,
+             damp:30, thirst:240};
 /* `chokes` is why this one and not smoke or steam. Gas is the gas that *stays*: it only
    leaves at the top of the box, so it pools and fills a room, and a creature under it is
    under it for as long as the room holds.
@@ -735,7 +774,7 @@ const GROUPS = [
   { name:'Wet',   items:[WATER, OIL, ICE, ACID] },
   { name:'Solid', items:[STONE, STEEL, SAND, DIRT, WAX, GLASS, OBSIDIAN] },
   { name:'Hot',   items:[LAVA, MOLTEN, EMBER, THERMITE, MAGNES, GAS, VENT] },
-  { name:'Life',  items:[WORM, MOTH, FISH, GRUB, ASHBUG, ANT, MOSS] },
+  { name:'Life',  items:[WORM, MOTH, FISH, GRUB, ASHBUG, ANT, MOSS, SEED] },
   { name:'Scene', items:'scenes' },
   { name:'Tools', items:'tools' },
 ];
@@ -784,6 +823,7 @@ SAVE_KEY[GRUB]='grub';        SAVE_KEY[PUPA]='pupa';
    Once a save exists that anybody minds losing, the rule bites and these stop moving. */
 SAVE_KEY[ASHBUG]='ash-bug';   SAVE_KEY[ANT]='ant';         SAVE_KEY[MOSS]='moss';
 SAVE_KEY[DIRT]='dirt';
+SAVE_KEY[SEED]='seed';       SAVE_KEY[STEM]='stem';         SAVE_KEY[FLOWER]='flower';
 
 const TYPE_OF_KEY = new Map(SAVE_KEY.map((k,t) => [k,t]));
 
@@ -2163,6 +2203,74 @@ function mossSpread(i, x, y){
   }
 }
 
+/* A seed waits on soil until it has waited long enough, and then it is a stem.
+
+   The wait is only counted where it could actually happen: off soil, or out of reach of
+   water, the clock goes back to nought rather than pausing. A seed carried onto a rock by an
+   ant has not been getting on with it in the meantime. */
+/* Is there soil below this cell, anywhere below it? A seed is a powder and falls, so the
+   question that matters when you let one go is what it will land on, not what it is passing.
+   Stops at the first thing that is not air: a seed does not fall through a table. */
+function overSoil(x, y, soil){
+  for (let yy = y; yy < H; yy++){
+    const t = type[idx(x, yy)];
+    if (t === soil) return true;
+    if (t !== E && t !== SEED && M[t].ph !== 0) return false;
+  }
+  return false;
+}
+
+function seedSprout(i, x, y){
+  const m = M[SEED];
+  const under = inb(x, y+1) ? type[idx(x, y+1)] : STONE;
+  if (under !== m.soil || !damp(x, y, m.damp)){ feed[i] = 0; return; }
+  if (++feed[i] < m.sprout) return;
+  found(SEED + ':becomes', `${m.n} turns into ${M[m.becomes].n}`);
+  become(x, y, m.becomes);
+  // What is left of its height, handed to the tip. `become` clears `feed`, so this is
+  // after it rather than part of it.
+  const tall = M[m.becomes].tall;
+  feed[idx(x, y)] = 1 + ((Math.random() * tall) | 0);
+}
+
+/* A stem climbs by handing its remaining height up a cell at a time, so exactly one cell of
+   a stalk is ever the growing tip and nothing has to count how high it already is.
+
+   The roll comes before the damp scan, for the same reason moss's does: at `climb` 26 only
+   one tip in twenty-six pays for a scan on any given tick, and there is only ever one tip. */
+function stemGrow(i, x, y){
+  const m = M[STEM];
+  const left = feed[i];
+  if (!left) return;                                   // not the tip: this part is built
+  if (Math.random() * m.climb >= 1) return;
+  if (!damp(x, y, m.damp)) return;
+  // The roof is a ceiling, and so is anything else in the way. A plant that stopped in
+  // mid-air waiting for a gap would be a stalk that never finishes.
+  const up = inb(x, y-1) ? type[idx(x, y-1)] : STONE;
+  if (left > 1 && up === E){
+    put(x, y-1, STEM);
+    feed[idx(x, y-1)] = left - 1;
+    feed[i] = 0;
+    return;
+  }
+  found(STEM + ':becomes', `${m.n} turns into ${M[m.becomes].n}`);
+  become(x, y, m.becomes);
+}
+
+/* Take the water away and a plant dies where it stands, which is what stops a green box
+   staying green for nothing. `breath` is the clock: it is the time-somewhere-you-cannot-live
+   counter already, and nothing that grows has a `drown` to spend it on.
+
+   It recovers the way a lungful does — faster than it is spent — so a pond that dries out
+   for a moment and comes back does not kill a meadow. */
+function thirsty(i, x, y, m){
+  if (damp(x, y, m.damp)){ breath[i] = Math.max(0, breath[i] - BREATH_BACK); return false; }
+  if (++breath[i] < m.thirst) return false;
+  found(type[i] + ':thirst', `${m.n} dies without water`);
+  become(x, y, E);
+  return true;
+}
+
 /* Composting, and burrowing, which are the worm's two and both read off its row.
 
    `tills` turns one cell of what fire left behind into `soil` — the same `LEFTOVER` set the
@@ -2340,8 +2448,11 @@ function moveLife(){
   let anyMoth = false, anyAshbug = false;
   for (let i=0;i<type.length;i++){
     const t = type[i];
-    if (t === WORM || t === MOTH || t === FISH || t === GRUB || t === PUPA || t === ASHBUG
-        || t === ANT || t === MOSS){
+    // Read off the table rather than named one by one. The list used to be a chain of
+    // eight comparisons, and every living thing added since has had to be remembered in
+    // three places — here, the guard below, and Clear's Life option. Two of those already
+    // asked `alive`.
+    if (t !== E && M[t].alive){
       alive.push(i);
       if (t === MOTH)  anyMoth  = true;
       if (t === ASHBUG) anyAshbug = true;
@@ -2355,18 +2466,26 @@ function moveLife(){
   for (const i of alive){
     const kind = type[i];
     // burned, eaten, drowned or dried out since the list was taken
-    if (kind !== WORM && kind !== MOTH && kind !== FISH && kind !== GRUB
-        && kind !== PUPA && kind !== ASHBUG && kind !== ANT && kind !== MOSS) continue;
+    if (kind === E || !M[kind].alive) continue;
     if (kind === FISH){ moveFish(i, i % W, (i / W) | 0); continue; }
 
     const mx = i % W, my = (i / W) | 0;
-    // Moss does not move, does not drown — it lives on wet rock — and does not walk, so it
-    // takes none of the rest of this pass.
-    if (kind === MOSS){
-      // Dries out and is gone, leaving nothing — which is the whole point of it: moss that
-      // left ash would grow back on the ash and burn again.
-      if (temp[i] >= M[kind].wither){ found(kind + ':wither', `${M[kind].n} dries out`); become(mx, my, E); continue; }
-      mossSpread(i, mx, my); continue;
+    /* The things that are alive and stay where they are: moss on its wet rock, and a plant
+       where it was sown. None of them drowns, none of them walks, so they take none of the
+       rest of this pass. What they do instead is one line each, read off their own row. */
+    if (kind === MOSS || kind === SEED || kind === STEM || kind === FLOWER){
+      const m = M[kind];
+      // Moss dries out in the heat and is gone, leaving nothing — which is the whole point
+      // of it: moss that left ash would grow back on the ash and burn again. A plant is the
+      // other choice, and burns, so it has no `wither` to reach.
+      if (m.wither !== undefined && temp[i] >= m.wither){
+        found(kind + ':wither', `${m.n} dries out`); become(mx, my, E); continue;
+      }
+      if (m.thirst !== undefined && thirsty(i, mx, my, m)) continue;
+      if (kind === MOSS)      mossSpread(i, mx, my);
+      else if (kind === SEED) seedSprout(i, mx, my);
+      else if (kind === STEM) stemGrow(i, mx, my);
+      continue;
     }
     if (drowning(i, mx, my, M[kind])) continue;
 
@@ -3794,7 +3913,14 @@ function paintAt(cx, cy){
      Non-forced, so a discovery still takes the line. */
   const m = M[tool];
   if (m && m.damp !== undefined && !damp(cx, cy, m.damp))
-    say(`${m.n} needs water within reach — it will not spread here`);
+    say(m.sprout !== undefined
+      ? `${m.n} needs water within reach — it will not come up here`
+      : `${m.n} needs water within reach — it will not spread here`);
+  // And the other half of a seed's question, which the damp scan cannot answer: a seed on
+  // stone is a grain. Asked of where it will come to rest rather than where it was let go,
+  // so sprinkling seeds over a field of soil does not read as a warning.
+  else if (m && m.sprout !== undefined && !overSoil(cx, cy, m.soil))
+    say(`${m.n} needs ${M[m.soil].n} under it — on anything else it just sits there`);
 
   /* And the other silence of the same kind. A match is 780°C and thermite catches at 950,
      which is deliberate — you light it with a magnesium ribbon — but holding a flame on it
@@ -3975,6 +4101,7 @@ const FINDS = (() => {
     if (m.spread) add(t, 'spread', `${m.n} spreads over damp surfaces`);
     if (m.tills)  add(t, 'till',   `${m.n} turns what fire left into ${M[m.soil].n}`);
     if (m.wither) add(t, 'wither', `${m.n} dries out in the heat`);
+    if (m.thirst) add(t, 'thirst', `${m.n} dies when the water goes`);
     // One rule, both ends of a life: a grub filling up, and what it opens into.
     if (m.becomes !== undefined) add(t, 'becomes', `${m.n} turns into ${M[m.becomes].n}`);
     // Two ways of being somewhere you cannot be, and both are worth finding out about.

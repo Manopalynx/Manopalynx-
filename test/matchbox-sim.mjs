@@ -2372,8 +2372,9 @@ await check(browser, 'a single cell of anything is findable on a floor of anythi
   const at = (data,x,y) => { const p = (y*W + x)*4; return [data[p], data[p+1], data[p+2]]; };
 
   // The things that end up on a floor together: what you build with, what a fire leaves,
-  // and what the worm makes out of it.
-  const GROUND = [STONE, ASH, DIRT, SAND, WOOD, COAL, EMBER];
+  // what the worm makes out of it, and what you sprinkle on that. A seed you cannot see on
+  // soil is a seed you cannot tell you have planted.
+  const GROUND = [STONE, ASH, DIRT, SAND, WOOD, COAL, EMBER, SEED];
   for (const bg of GROUND) for (const fg of GROUND){
     if (bg === fg) continue;
     __wipe();
@@ -2852,6 +2853,137 @@ await check(browser, 'Clear takes what it was asked for and leaves the rest', ()
   if (left) bad.push(`Everything left ${left} cells behind`);
 
   if (fish0 < 4) bad.push(`the pond only held ${fish0} fish, so the Life leg was thin`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* Seeds, and the two things one turns into. The claim is not "plants appear" — it is that
+   they appear **where they can and nowhere else**, which is the half a screenshot cannot
+   tell you. A box that grew flowers on a stone floor would look just as green. */
+await check(browser, 'a seed comes up on damp soil, and sits there on anything else', () => {
+  const bad = [];
+  const stalks = () => {                       // how many columns have a plant in them
+    let n = 0;
+    for (let x=0;x<W;x++){
+      let got = false;
+      for (let y=0;y<H;y++){ const t = type[idx(x,y)]; if (t===STEM || t===FLOWER) got = true; }
+      if (got) n++;
+    }
+    return n;
+  };
+  const tallest = () => {
+    let m = 0;
+    for (let x=0;x<W;x++){
+      let h = 0;
+      for (let y=0;y<H;y++){ const t = type[idx(x,y)]; if (t===STEM || t===FLOWER) h++; }
+      if (h > m) m = h;
+    }
+    return m;
+  };
+
+  /* Three beds, one difference each. Soil and water; soil and no water; water and no soil.
+     Sown the same way and given the same time, so the only thing that can explain a
+     difference between them is the rule. */
+  const sow = (ground, wet) => {
+    __wipe(); const f = __floor();
+    __slab(6, f-6, 60, f-1, ground);
+    if (wet) __slab(6, f-9, 12, f-7, WATER);
+    let n = 0;
+    for (let k=0;k<12;k++){ put(16 + k*3, f-8, SEED); n++; }
+    return { f, n };
+  };
+
+  const damp = sow(DIRT, true);
+  for (let k=0;k<3000;k++) __step(1);
+  const grew = __count(FLOWER), up = stalks(), high = tallest();
+  /* Height first, and before the bail below, because the way a height cap breaks is that
+     stalks climb forever and never open — so the flower count goes to nought and every
+     assertion written after "did anything grow" stops running. Tried it: with the cap
+     removed this check failed with "nothing came up on damp soil", which is true and is
+     not the fault. */
+  if (high > M[STEM].tall)
+    bad.push(`a stalk reached ${high} against a stated height of ${M[STEM].tall}`);
+  if (!grew) return (bad.length ? bad.join('; ') + '; ' : '') +
+    `nothing opened on damp soil — ${__count(STEM)} cells of stem, ${__count(SEED)} seeds left`;
+  if (grew < damp.n * 0.6)
+    bad.push(`${damp.n} seeds on damp soil gave ${grew} flowers`);
+  if (__count(SEED) > damp.n - grew)
+    bad.push(`${__count(SEED)} seeds are still sitting on damp soil with ${grew} flowers up`);
+  // One head per stalk. A stalk that opened twice would read as "it grew" and be wrong.
+  if (grew !== up) bad.push(`${up} stalks carry ${grew} flowers between them — that is not one each`);
+
+  const dry = sow(DIRT, false);
+  for (let k=0;k<3000;k++) __step(1);
+  if (__count(STEM) + __count(FLOWER))
+    bad.push(`${__count(STEM) + __count(FLOWER)} cells of plant came up on soil with no water anywhere`);
+  if (__count(SEED) !== dry.n) bad.push(`${dry.n - __count(SEED)} seeds went missing on dry soil`);
+
+  const rock = sow(STONE, true);
+  for (let k=0;k<3000;k++) __step(1);
+  if (__count(STEM) + __count(FLOWER))
+    bad.push(`${__count(STEM) + __count(FLOWER)} cells of plant came up on wet stone`);
+  if (__count(SEED) !== rock.n) bad.push(`${rock.n - __count(SEED)} seeds went missing on stone`);
+
+  /* And a meadow burns, which is the other half of why it is here at all. This is the choice
+     moss did not make: moss withers rather than burns, because moss grows on what a fire
+     leaves behind and grew back on its own ash. A plant comes from a seed you placed, so
+     there is no loop.
+
+     What a match does to a meadow, measured nine times across three spacings: it takes
+     **27% to 48% of it** and then goes out, and the spacing makes no difference — the
+     hypothesis going in was that gaps between stalks would stop the fire, and they do not,
+     because what stops it is a thin stalk with ten fuel in it losing heat to the air faster
+     than the next one can catch. So the claim is a patch, not a field, and the bar is under
+     the worst run rather than near the average of a lucky one. */
+  const f = sow(DIRT, true).f;
+  for (let k=0;k<3000;k++) __step(1);
+  const standing = __count(STEM) + __count(FLOWER);
+  if (standing < 12) return (bad.length ? bad.join('; ') + '; ' : '') +
+    `only ${standing} cells of plant grew, so the burn leg proves nothing`;
+  const ash0 = __count(ASH);
+  __hold(20, f-10, 4, 200);
+  for (let k=0;k<3000;k++) __step(1);
+  const lost = standing - (__count(STEM) + __count(FLOWER));
+  if (lost < standing * 0.15)
+    bad.push(`a fire held in the middle of ${standing} cells of plant took ${lost} of them`);
+  const made = __count(ASH) - ash0;
+  if (made > lost)
+    bad.push(`${lost} cells of plant burnt and left ${made} cells of ash — the meadow is making matter`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* The other end of the same rule. Growth is gated on water, but a gate on growth is not a
+   gate on staying alive — a meadow that had drunk once and then stood there forever would
+   make a pond a thing you need for a minute rather than a thing the scene is built around.
+   `thirst` is what makes taking the water away mean something.
+
+   Measured: the water goes, and 78 cells of plant are gone within about forty seconds. */
+await check(browser, 'plants die when the water goes, and not while it is there', () => {
+  const bad = [];
+  const bed = () => {
+    __wipe(); const f = __floor();
+    __slab(6, f-6, 60, f-1, DIRT);
+    __slab(6, f-9, 12, f-7, WATER);
+    for (let k=0;k<12;k++) put(16 + k*3, f-8, SEED);
+    for (let k=0;k<3000;k++) __step(1);
+    return __count(STEM) + __count(FLOWER);
+  };
+
+  // Left alone, with the pond still there.
+  const kept = bed();
+  if (kept < 12) return `only ${kept} cells of plant grew, so this proves nothing`;
+  for (let k=0;k<4000;k++) __step(1);
+  const still = __count(STEM) + __count(FLOWER);
+  if (still < kept * 0.8)
+    bad.push(`${kept} cells of plant became ${still} with the pond untouched — they are dying of something else`);
+
+  // And the same bed with the water taken out from under them.
+  const grown = bed();
+  for (let i=0;i<type.length;i++) if (type[i]===WATER || type[i]===ICE || type[i]===STEAM) put(i%W, (i/W)|0, E);
+  for (let k=0;k<4000;k++) __step(1);
+  const left = __count(STEM) + __count(FLOWER);
+  if (left) bad.push(`${left} of ${grown} cells of plant were still alive long after the water went`);
+  if (!finds.has(STEM + ':thirst') && !finds.has(FLOWER + ':thirst'))
+    bad.push('nothing reported dying of thirst, so they went some other way');
   return bad.length ? bad.join('; ') : null;
 });
 

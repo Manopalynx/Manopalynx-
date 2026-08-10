@@ -45,10 +45,10 @@ fetched fresh whenever there is a signal — no stale-build trap, and nothing to
 
 ## What is in the box
 
-Thirty-three chips in the tray — twenty-five materials, seven living things and the vent — and
-seven more the simulation makes and never lets you place: fire, smoke, steam, ash, the pupa,
-molten wax and molten rubber. Every one of them is one row of the `M` table and nothing else in the
-file knows any of them by name.
+Thirty-four chips in the tray — twenty-five materials, eight living things and the vent — and
+nine more the simulation makes and never lets you place: fire, smoke, steam, ash, the pupa, the
+stem and the flower, molten wax and molten rubber. Every one of them is one row of the `M` table
+and nothing else in the file knows any of them by name.
 
 (This count has been wrong twice. It was stale before the grub was added to it, and the
 first attempt at fixing it undercounted the made-only list, because the probe I counted with
@@ -1034,6 +1034,58 @@ ash — which is inherent to it being something you can build with, not a separa
 every moss cell did it every tick. The spread roll comes **first**, so at `spread` 40 only
 about one cell in forty ever pays for a scan. Order of operations is the whole optimisation.
 
+### A seed, and the two things it becomes
+
+The chain is three rows of the table and no code that knows any of them by name: a **Seed**
+you sprinkle, a **Stem** that climbs, a **Flower** on the top of it.
+
+Only the seed is in the tray. Stem and Flower are made, never placed — like the pupa, and for
+the same reason: a flower you can paint is a colour, a flower you grew is a thing that
+happened.
+
+| | rule | what it means |
+|---|---|---|
+| Seed | `sprout` 150, `soil` Dirt, `damp` 30 | soil under it and water within reach, or it is a grain that sits there |
+| Stem | `climb` 26, `tall` 9, `damp` 30 | hands its remaining height up a cell at a time |
+| Flower | — | what a stem opens into, at the top or against anything in the way |
+| both | `thirst` 240 | take the water away and they die where they stand |
+
+**The clock is `feed`, and that is not the obvious choice.** `vel` is free on a pupa, so a
+pupa's hatch clock lives there — but a seed is a powder, so the falling pass writes its
+velocity every tick and a counter kept there would be reset by its own fall. `feed` is the
+byte a vent keeps its payload in and an ant its cargo, and a seed is neither.
+
+**`tall` is carried, not counted.** The growing tip holds what is left of its height in
+`feed` and hands it up a cell at a time, so exactly one cell of a stalk is ever growing and
+nothing has to scan down a stem to ask how high it already is.
+
+**The wait only runs where it could happen.** Off soil, or out of reach of water, the clock
+goes back to nought rather than pausing — a seed carried onto a rock by an ant has not been
+getting on with it in the meantime.
+
+#### They burn, which is the opposite of what moss does
+
+Moss withers in the heat and leaves nothing, because moss grows on what a fire leaves behind
+and grew back on its own ash — 480 cells of wood once became 1714 of ash. A plant grows from
+a seed you placed, so there is no loop, and a meadow going up is worth having.
+
+What a match actually does to a meadow, measured nine times across three spacings: **it takes
+27% to 48% of it and then goes out.** The hypothesis going in was that the gaps between
+stalks would stop the fire, and the spacing made no difference at all — what stops it is a
+thin stalk with ten fuel in it losing heat to the air faster than the next one catches. So
+the check claims a patch rather than a field, with the bar under the worst run.
+
+#### What the growing looks like when it is working
+
+Eighteen seeds sprinkled along a bed of soil with a pond at one end: twelve came up. The ones
+that did not were out of reach of the water — and the reach was not the flat 30 cells the
+field says, because the pond spread sideways along the top of the soil first and carried the
+damp with it. Nothing in the rules says that; it falls out of water being water.
+
+On the stone at the far end, and on the dry soil, the seeds are still sitting there. That is
+the half a screenshot cannot tell you, and it is what the check is for: a box that grew
+flowers on a stone floor would look just as green.
+
 ### Dirt, and what the worm turns out to be for
 
 Every fire in this box used to end the same way: a floor of grey that stayed grey. The ash
@@ -1566,17 +1618,23 @@ be a guess dressed up as an undo.
 
 ## The finds
 
-`FOUND 3/58` in the corner used to be the whole of it. Fifty-five things existed that the
+`FOUND 3/65` in the corner used to be the whole of it. The rest existed as things that the
 box would never name, mention again or hint at — a progress bar for a task nobody had been
 told. **Finds** in Tools opens the list: found ones read as what they are (`Lava + Water →
 Obsidian`) and the rest read `Acid — ?`, carrying the material's colour and name and nothing
 else. Eight rows mentioning Acid tell you to go and play with acid without telling you what
 happens when you do. Found ones sort to the top, so it is a record before it is a to-do list.
 
-The fifty-eight are derived from the material table — every melt, boil, set, ash, contact
+The sixty-five are derived from the material table — every melt, boil, set, ash, contact
 reaction, explosion, drowning and suffocation in it — so a material added tomorrow brings
 its discoveries with it. The three creatures added five between them and no new derivation
-code: a `drown` or an `air` field is enough.
+code: a `drown` or an `air` field is enough. Seeds added seven the same way.
+
+**A row that nothing ever raises is worse than no row**, and this list is the easiest place
+in the file to add one. The first draft of the seed derived a find from its `sprout` field —
+"Seed needs soil under it and water within reach" — which nothing ever calls `found()` for,
+so it would have sat in the panel as `Seed — ?` forever and quietly made the denominator a
+lie. Every field that derives a find has to have a `found()` at the other end of it.
 
 **That list and the words for each find used to be two separate derivations** with nothing
 comparing them: this table, and the label written out again at each `found()` call site. The
@@ -1733,7 +1791,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 80 checks — the simulation
+node test/matchbox-sim.mjs     # 82 checks — the simulation
 node test/matchbox-ui.mjs      # 40 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
@@ -1752,7 +1810,7 @@ sand never burn, a scene never lights itself, a fire never runs away, an empty b
 at room temperature, no temperature goes NaN or past the ceiling, and conduction
 conserves energy over 300 ticks of a lumpy field.
 
-Three things learned the hard way while writing them, all of which cost a wrong answer
+Four things learned the hard way while writing them, all of which cost a wrong answer
 first:
 
 - **Count what is alight, not what is hot.** A cell over its ignition point has not
@@ -1765,6 +1823,19 @@ first:
   stopped agreeing with the page. `__flame` calls the page's own `paintAt`. It still
   silently stopped lighting anything the moment a guard was added to `paintAt`, and
   only re-running the whole suite caught it.
+- **Ask where a thing has been, not where it is.** Two flaky checks, found in the same week
+  and the same mistake twice: the ants counted how many were carrying something at the final
+  tick (ten coin flips: `2 3 3 3 4 4 4 5` against a bar of four), and the worms measured how
+  far apart they were and asked that it grow (a random walk is entitled to come back — eleven
+  worms went from spanning 23 cells to 13 on a build that was working). Both are now
+  cumulative: the fraction of its time an ant spends laden, and the count of distinct cells
+  the worms have stood in. Neither can go backwards on a working build, and both separate
+  cleanly from the fault they are looking for — 0.25-0.32 against 0.64-0.72, and 5.5-9.1
+  against exactly 1.0.
+
+  The footprint was wrong the first time too, and in a way worth writing down: it counted the
+  cells the worms *fell* through on the way down, so worms pinned in place with `BUG_STEP` at
+  nine billion scored twenty cells each and passed. It waits for them to land now.
 
 ## Honest notes
 
