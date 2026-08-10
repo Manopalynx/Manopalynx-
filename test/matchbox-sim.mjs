@@ -2416,10 +2416,22 @@ await check(browser, 'wet ash becomes dirt, and a worm makes soil out of a burn'
 
   /* And it keeps going. Before burrowing was made the thing a worm does when it has nothing
      to compost, six worms took the field to 86 cells of dirt in a minute and 79 in three —
-     they had buried themselves in their own soil and were swimming about in it. */
-  const later = compost(6, 10800);
-  if (later.dirt < busy.dirt - 10)
-    bad.push(`six worms made ${busy.dirt} cells of dirt in a minute and ${later.dirt} in three — they stopped working`);
+     they had buried themselves in their own soil and were swimming about in it.
+
+     Sampled twice inside ONE run, which the first version of this was not: it built the
+     scene twice and compared a minute in one run against three minutes in another. Composting
+     varies by about twenty cells run to run, so it was subtracting one noisy number from a
+     different noisy number and calling the difference a stall — it failed reporting "120 in
+     a minute and 89 in three" on two runs that were both perfectly healthy. */
+  __wipe(); const ff = __floor();
+  __slab(cx-25, ff-4, cx+25, ff-1, ASH);
+  for (let k=0;k<6;k++) put(cx-18+k*6, ff-5, WORM);
+  for (let k=0;k<3600;k++) __step(1);
+  const atOneMinute = __count(DIRT);
+  for (let k=0;k<7200;k++) __step(1);
+  const atThree = __count(DIRT);
+  if (atThree < atOneMinute)
+    bad.push(`six worms had made ${atOneMinute} cells of dirt at a minute and ${atThree} at three — it went backwards`);
 
   // Through the soil, not eating it: a worm leaves the ground where it found it.
   __wipe(); f = __floor();
@@ -2485,7 +2497,16 @@ await check(browser, 'a creature under a gas cloud suffocates, and a fire outsid
   __slab(cx-21, f-20, cx-21, f-1, STONE);
   __slab(cx+21, f-20, cx+21, f-1, STONE);
   for (let n=0;n<10;n++) put(cx-16+n*4, f-1, WORM);
-  __slab(cx-20, f-19, cx+20, f-2, GAS);
+  /* Into the empty cells only, and *including* the row the worms are standing in.
+
+     Two ways this scene has been wrong. `__slab` uses `put`, which replaces whatever is in
+     a cell, so gassing across the worms deletes them — measured as "all gone at tick 1 with
+     no discovery raised", which looks exactly like suffocation working perfectly. Then
+     gassing only down to the row *above* them left clear air on both sides of each worm,
+     which is a creature standing under a gas layer rather than in one, and it is right that
+     it can breathe. */
+  for (let y=f-19; y<=f-1; y++) for (let x=cx-20; x<=cx+20; x++)
+    if (type[idx(x,y)] === E) put(x, y, GAS);
   const n0 = __count(WORM);
   let gone = -1;
   for (let k=1;k<=2400;k++){ __step(1); if (gone < 0 && !__count(WORM)) gone = k; }
@@ -2493,6 +2514,29 @@ await check(browser, 'a creature under a gas cloud suffocates, and a fire outsid
   // On the breath clock, not instantly: a creature is worth a moment, same as drowning.
   else if (gone < M[WORM].drown) bad.push(`the room emptied in ${gone} ticks against a breath of ${M[WORM].drown}`);
   if (![...finds].some(k => k === WORM + ':choke')) bad.push('suffocating did not register as a discovery');
+
+  /* Creatures standing on a ledge in a gassed box. This is the arm that catches the two
+     things reported as "the gas only affects the moths".
+
+     A gas has no surface, so one lookup upward is not enough: a creature makes its own
+     pocket, because the gas above it rises away and its body blocks anything refilling from
+     underneath. And `moveRising` could only ever move a gas up or diagonally up, so that
+     pocket was permanent. With a sideways move for a gas that cannot rise, 3 to 4 of 12 go;
+     without it, 12 of 12 sit there indefinitely — which is what the phone showed. */
+  __wipe(); f = __floor();
+  __slab(cx-4, f-12, cx+30, f-9, STONE);
+  for (let n=0;n<12;n++) put(cx-2+n*2, f-13, WORM);
+  const l0 = __count(WORM);
+  for (let y=2; y<=f-1; y++) for (let x=2; x<W-2; x++)
+    if (type[idx(x,y)] === E) put(x, y, GAS);
+  /* Two minutes, and the bar is simply that somebody dies. Measured eight runs each way:
+     with the drift, 7 to 10 of 12 left and a first death between ticks 645 and 1047, every
+     run; without it, 12 of 12 left in seven runs of eight. A bar of "at least two die" sits
+     exactly on the worst run with the drift, which is how thresholds get set on a lucky
+     measurement — this one has margin instead. */
+  for (let k=0;k<7200;k++) __step(1);
+  if (__count(WORM) >= l0)
+    bad.push(`all ${l0} worms stood on a ledge in a box full of gas for two minutes`);
 
   /* And the cost, which is the reason smoke is not on the list. An ordinary wood fire with
      creatures on the floor beside it must not quietly become a gas chamber. */

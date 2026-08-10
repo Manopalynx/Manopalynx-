@@ -1198,6 +1198,21 @@ function moveFalling(){
   }
 }
 
+const GAS_DRIFT = .25;   /* how readily a gas that cannot rise goes sideways instead.
+
+                            Without it a gas only ever moves up or diagonally up, so any
+                            pocket it cannot reach from below stays empty forever — and a
+                            creature standing on a floor makes its own pocket, because the
+                            gas above it rises away and the creature's body blocks anything
+                            refilling from underneath. Measured: a worm walking a floor in a
+                            box 76% full of gas had empty cells on its left, its right and
+                            above it, at every sample across fifteen seconds, and its breath
+                            never left zero. Gas killed the moths and nothing else, which is
+                            how it was reported.
+
+                            A quarter rather than always, so it stays a drift: a gas is still
+                            a thing that goes up, and the sideways move only ever happens
+                            when up is closed. */
 function moveRising(){
   for (let y=1; y<H; y++){
     for (let x=0; x<W; x++){
@@ -1206,10 +1221,20 @@ function moveRising(){
       const u = idx(x,y-1);
       if (type[u]===E){ swap(i,u); continue; }
       const s = Math.random()<.5 ? 1 : -1;
+      let rose = false;
       for (const dx of [s,-s]){
         if (!inb(x+dx,y-1)) continue;
         const ud = idx(x+dx,y-1);
-        if (type[ud]===E){ swap(i,ud); break; }
+        if (type[ud]===E){ swap(i,ud); rose = true; break; }
+      }
+      // Nowhere up to go: spread out instead, which is what fills a pocket under a shelf
+      // or beside anything standing on the floor.
+      if (!rose && Math.random() < GAS_DRIFT){
+        for (const dx of [s,-s]){
+          if (!inb(x+dx,y)) continue;
+          const sd = idx(x+dx,y);
+          if (type[sd]===E){ swap(i,sd); break; }
+        }
       }
     }
   }
@@ -1788,7 +1813,30 @@ const SINK_SLOW = 6;     /* one chance in this many, per tick, of going down a c
    Returns true if it has just died, so the caller stops handling it. */
 function drowning(i, x, y, m){
   const over = inb(x, y-1) ? type[idx(x, y-1)] : E;
-  const wet = over === WATER || (M[over] && M[over].chokes === 1);
+  let wet = over === WATER, why = over;
+
+  /* Water and gas want different geometry, and using one test for both was wrong in a way
+     that took a screenshot to notice: **the gas only killed the moths.**
+
+     Water has a surface. Being under it is one lookup, and it has to be one lookup —
+     counting all four neighbours drowned 7 of 10 worms standing *beside* a puddle.
+
+     A gas has no surface. You are inside it or you are not, and one lookup is not enough,
+     because `leak` lets gas escape at the top of the box and the vacancies percolate back
+     down through the column. A worm on the floor kept collecting a one-cell bubble directly
+     above it, and with `BREATH_BACK` at 4 against 1 a single tick of bubble undoes four
+     ticks of choking — measured, its breath never left 0 in fifteen seconds. A moth flies up
+     into the thick of it and is surrounded, which is why moths were the only thing dying. */
+  if (!wet){
+    let air = 0, fumes = 0;
+    for (let d=0; d<4; d++){
+      const xx = x+NX[d], yy = y+NY[d];
+      const u = inb(xx,yy) ? type[idx(xx,yy)] : E;
+      if (u === E) air++;
+      else if (M[u] && M[u].chokes === 1){ fumes++; why = u; }
+    }
+    wet = fumes > air;
+  }
   // Getting a breath back is quicker than losing one, but it is not instant. Zeroing the
   // clock the moment a cell reaches air made anything that could surface immortal: a worm
   // in a four-deep puddle walked up, drew one tick of air, and started again from nothing,
@@ -1796,9 +1844,9 @@ function drowning(i, x, y, m){
   // just has to keep doing it.
   if (!wet){ breath[i] = Math.max(0, breath[i] - BREATH_BACK); return false; }
   if (++breath[i] < m.drown) return false;      // still struggling
-  const how = over === WATER ? 'drown' : 'choke';
+  const how = why === WATER ? 'drown' : 'choke';
   found(type[i] + ':' + how,
-        over === WATER ? `${m.n} drowns` : `${m.n} suffocates in ${M[over].n}`);
+        why === WATER ? `${m.n} drowns` : `${m.n} suffocates in ${M[why].n}`);
   become(x, y, E);
   return true;
 }

@@ -148,6 +148,7 @@ A material is described by a handful of numbers. The ones that matter:
 | `hatch` `becomes` | how long a life stage lasts, and what it turns into |
 | `drown` `air` | how many ticks a living thing lasts in the wrong one of the two |
 | `chokes` | a gas you cannot breathe: runs a creature's breath clock the way water does |
+| `GAS_DRIFT` | how readily a gas that cannot rise spreads sideways instead |
 | `feed` `way` `breath` (per cell) | what a vent pours, which way a bug is walking, and how long it has been somewhere it cannot survive |
 
 `ig` and `char` together are what make the tray more than fourteen colours. The match
@@ -1010,6 +1011,61 @@ top of the box, pools, and fills a room.
 
 The check asserts the cost as well as the effect: worms beside a wood fire, and worms in an
 empty box, both have to come through.
+
+#### "It looks like the gas only affects the moths"
+
+Reported from the phone the next morning, and correct. Two faults under it, and the
+investigation went wrong twice before finding either.
+
+**A gas has no surface.** Water does — being under it is one lookup, and it has to be one
+lookup, because counting all four neighbours once drowned 7 of 10 worms standing *beside* a
+puddle. A gas is not like that: you are inside it or you are not. It reads four neighbours
+now and asks whether the fumes outnumber the clear air.
+
+**And a gas could only ever move up.** `moveRising` tried the cell above and the two above
+that, and stopped. So a creature standing on a floor made its own pocket — the gas above it
+rose away, and its own body blocked anything refilling from below — and the pocket was
+permanent. Measured on a worm walking a floor in a box 76% full of gas: **empty cells to its
+left, its right and above it at every sample across fifteen seconds, and its breath never
+left zero.** A moth flies up into the thick of it and is surrounded, which is why moths were
+the only thing dying.
+
+A gas that cannot rise now drifts sideways, `GAS_DRIFT` .25, which is the same shape as a
+grain sliding off a heap when it cannot fall. Twelve worms on a ledge in a gassed box, eight
+runs each way, two minutes:
+
+| | survivors | first death |
+|---|---|---|
+| before | **12 of 12** | never |
+| four-neighbour rule alone | 12 of 12 | never |
+| four-neighbour rule **and** the drift | **7–10 of 12** | ticks 645–1047, every run |
+
+The middle row is the one worth keeping. **The reading rule on its own changed nothing at
+all** — it was the drift that mattered, and I would have shipped the reading rule alone and
+called it fixed if I had not measured them apart.
+
+The bar is "somebody dies" rather than "at least two die", because two is exactly the worst
+run with the drift and a threshold sitting on the worst observation is how they get set on a
+lucky measurement. It costs a known false pass: the build without the drift loses a worm
+about one run in eight, so this check catches that regression seven times in eight rather
+than always.
+
+**Two of my own scenes were unreachable before that.** An alcove *under* a shelf with gas
+poured above it reported 0% either way — a gas never moves down, so it can never get in. A
+sealed room with gas released in one corner reported 0% in the far bottom corner either way —
+with headroom the gas always rises, so the drift never fires. Both looked like the drift doing
+nothing.
+
+**And one scene was deleting what it measured.** `__slab` uses `put`, which replaces whatever
+is in a cell, so gassing across a scene removes every creature in it: everything died at tick
+1 with no discovery raised, which is indistinguishable from suffocation working perfectly.
+The doc already records the same mistake with water and moths, four months of work apart.
+
+**A creature on an open floor still survives**, and that is not a leftover — a buoyant gas
+rises off the floor and leaves it breathable. Measured, the bottom fifth of a filled box goes
+from 100% gas to 35% within forty seconds while the top stays at 100. Gas is a ceiling
+hazard, and sealing a room is what makes it a chamber: ten worms sealed in with it are gone
+in **180 ticks**.
 
 ### Dying takes a moment, which is most of what you see
 
