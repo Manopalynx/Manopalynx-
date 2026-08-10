@@ -2558,6 +2558,112 @@ await check(browser, 'a creature under a gas cloud suffocates, and a fire outsid
   return bad.length ? bad.join('; ') : null;
 });
 
+/* Clear is three answers now, and the two new ones are only worth having if they are
+   surgical. A Fire that also took the logs, or a Life that also took the pond, is just a
+   slower Everything, and the failure would be invisible in the moment you asked for it —
+   you tapped a thing called Clear and something got cleared.
+
+   Driven through the chips rather than by calling the code behind them, because the chips
+   are the feature. A picker that offers three options and wires two of them to the same
+   handler would pass everything written against the model. */
+await check(browser, 'Clear takes what it was asked for and leaves the rest', () => {
+  const bad = [];
+  const cx = (W/2)|0;
+  const ask = what => {
+    showDrawer(TOOLS_DRAWER);
+    document.querySelector('[data-act="clear"]').click();
+    const b = document.querySelector('[data-act="clear-' + what + '"]');
+    if (!b) throw new Error('no Clear option called ' + what);
+    b.click();
+  };
+  const living = () => { let n=0; for (let i=0;i<type.length;i++) if (type[i]!==E && M[type[i]].alive) n++; return n; };
+  const fumes  = () => { let n=0; for (let i=0;i<type.length;i++) if (FUMES.has(type[i])) n++; return n; };
+
+  // What counts as the fire's own leavings is derived from the tray rather than listed,
+  // so the derivation is read back rather than trusted: the gases the box makes and you
+  // cannot place. If a placeable gas ever falls into this set, Fire starts deleting
+  // material somebody put there by hand.
+  const named = [...FUMES].map(t => M[t].n).sort().join(', ');
+  if (named !== 'Fire, Smoke, Steam') bad.push(`the fire's leavings derived as [${named}]`);
+
+  // A log pile alight, a pond with fish in it, worms on the woodpile, well apart.
+  const build = () => {
+    __wipe(); const f = __floor();
+    __slab(cx-24, f-9, cx-8, f-1, WOOD);
+    __slab(cx+4, f-7, cx+20, f-1, WATER);
+    for (let n=0;n<6;n++) put(cx+6+n*2, f-3, FISH);
+    for (let n=0;n<8;n++) put(cx-22+n*2, f-10, WORM);
+    return f;
+  };
+
+  let f = build();
+  __hold(cx-16, f-10, 3, 300);
+  for (let k=0;k<400;k++) __step(1);
+  if (!__alight(WOOD)) return 'the woodpile never caught, so nothing here is being put out';
+  const wood0 = __count(WOOD), water0 = __count(WATER), fish0 = __count(FISH), life0 = living();
+
+  ask('fire');
+  if (fumes()) bad.push(`${fumes()} cells of flame and smoke survived the fire being put out`);
+  if (__alight(WOOD)) bad.push(`${__alight(WOOD)} cells of wood were still alight afterwards`);
+  if (__maxT() > AMBIENT + 1) bad.push(`the hottest cell left was ${Math.round(__maxT())}°C`);
+  if (__count(WOOD) !== wood0) bad.push(`${wood0 - __count(WOOD)} cells of wood went with the fire`);
+  if (__count(WATER) !== water0) bad.push(`${water0 - __count(WATER)} cells of water went with the fire`);
+  if (living() !== life0) bad.push(`${life0 - living()} living things went with the fire`);
+
+  // And it stays out, in the only scene where staying out is in doubt: a heat source
+  // that is still there afterwards. Lava is not a fire and Fire is not a way of turning
+  // it off, so the wood does catch again — but it has to do it from cold, the whole way
+  // round the ignition path. Measured: 66 ticks to first light, 71-74 to relight. A
+  // build that cooled nothing, or that left the charring banked, would flare in one or
+  // two, and putting the fire out would look broken.
+  for (let k=0;k<900;k++) __step(1);
+  if (__alight(WOOD)) bad.push(`the fire restarted with no heat source: ${__alight(WOOD)} cells alight`);
+
+  __wipe(); f = __floor();
+  __slab(cx-6, f-14, cx+6, f-1, WOOD);
+  __slab(cx-14, f-4, cx-7, f-1, LAVA);
+  let lit = -1;
+  for (let k=1;k<=1500;k++){ __step(1); if (__alight(WOOD)){ lit = k; break; } }
+  if (lit < 0) bad.push('wood against lava never caught at all');
+  else {
+    ask('fire');
+    if (__alight(WOOD)) bad.push('the wood was still alight the moment the fire was put out');
+    let again = -1;
+    for (let k=1;k<=1500;k++){ __step(1); if (__alight(WOOD)){ again = k; break; } }
+    if (again < 0) bad.push(`lava stopped setting light to wood after a Fire — it caught at ${lit} the first time and never again`);
+    else if (again < 40) bad.push(`the fire came back after ${again} ticks against ${lit} to light it cold — it was smouldering, not out`);
+  }
+
+  // Life, on a scene that is still burning, to be sure it is taking creatures rather
+  // than taking everything that is not stone.
+  f = build();
+  __hold(cx-16, f-10, 3, 300);
+  for (let k=0;k<400;k++) __step(1);
+  const wood1 = __count(WOOD), water1 = __count(WATER), alight1 = __alight(WOOD);
+  if (!living()) return 'nothing was alive by the time Life was asked for';
+  if (!alight1) return 'the second woodpile never caught, so this leg proves nothing';
+
+  ask('life');
+  if (living()) bad.push(`${living()} living things survived Life`);
+  if (__count(FISH) || __count(WORM)) bad.push('a fish or a worm came through Life');
+  if (__count(WOOD) !== wood1) bad.push(`${wood1 - __count(WOOD)} cells of wood went with the creatures`);
+  if (__count(WATER) !== water1) bad.push(`${water1 - __count(WATER)} cells of water went with the creatures`);
+  if (!__alight(WOOD)) bad.push('Life put the fire out as well, which is the other option');
+
+  // Back, which has to be the answer that does nothing at all.
+  const held = __count(WOOD) + __count(WATER);
+  ask('none');
+  if (__count(WOOD) + __count(WATER) !== held) bad.push('Back removed something');
+
+  ask('all');
+  let left = 0;
+  for (let i=0;i<type.length;i++) if (type[i]!==E) left++;
+  if (left) bad.push(`Everything left ${left} cells behind`);
+
+  if (fish0 < 4) bad.push(`the pond only held ${fish0} fish, so the Life leg was thin`);
+  return bad.length ? bad.join('; ') : null;
+});
+
 await check(browser, 'a box full of living things still costs less than a frame', () => {
   const bad = [];
   const bench = (t, n) => {

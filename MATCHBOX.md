@@ -73,6 +73,8 @@ Both ways of breaking it were reported from the phone rather than found here:
 - Clear grew into "Clear — sure?" while asking, which reflowed the row, wrapped Load onto
   a second line and lifted the whole box by ~86px — **between the tap that asks and the
   tap that confirms**. The second tap lands somewhere the first one was not.
+  (Clear asks in the drawer row now — see *Clear, which is a question rather than a
+  button* — but the rule it broke is the one everything above is built on.)
 
 A third way in, reported after the first two were fixed and diagnosed correctly from the
 screenshots: **material chips carry a 6px colour swatch and the gap under it, and the
@@ -88,13 +90,15 @@ their labels sit on the same line as everything else's. Not a colour swatch: a c
 strip on Erase would be claiming Erase is a material.
 
 So `#mats` and `.tabs` are `flex-wrap:nowrap`, chips are `flex:1 1 0` at a fixed height,
-and the labels that change while asking got shorter — Clear becomes "Sure?", Save becomes
-"Replace?", with the sentence moved to the readout, which has room for it and moves
-nothing by changing.
+and the label that still changes while asking got shorter — Save becomes "Replace?", with
+the sentence moved to the readout, which has room for it and moves nothing by changing.
+Clear no longer relabels at all: it asks by borrowing the drawer row, which is a bigger
+change to the tray than a word and therefore the likelier of the two to move something,
+and is measured not to.
 
 `test/matchbox-ui.mjs` asserts one row per drawer, equal widths within a row, that every
-drawer sits at exactly the same height as every other, and that arming either button
-leaves the stage, tray and strip where they were. The drawer check compares the drawers
+drawer sits at exactly the same height as every other, and that neither button asking its
+question moves the stage, tray or strip. The drawer check compares the drawers
 against each other rather than against a number, because the claim is that they agree,
 not that they are any particular size.
 
@@ -1326,6 +1330,56 @@ creatures do not move — with neither the page nor the harness saying a word. T
 Cost: **2.31ms a frame with no bugs and 2.34ms with five hundred.** The pass itself is
 0.067ms empty and 0.09ms with five hundred in the box.
 
+## Clear, which is a question rather than a button
+
+Three things can be taken out of the box, and for a long time only one of them could:
+
+| | takes | leaves |
+|---|---|---|
+| **Fire** | flame, smoke and steam, and all the heat | the build, the creatures, the water |
+| **Life** | every cell whose row says `alive` | everything else, fire included |
+| **Everything** | the box | nothing |
+| **Back** | nothing at all | — |
+
+Clear used to arm on one tap and wipe on the next, inside a three-second window. That was
+safe enough — the second tap landed on a chip that had gone red and changed its word, so it
+was a different target rather than the same one twice — but it spent two taps to say one
+thing, and both of them landed in the same place.
+
+**The tray already had the better answer in Room:** a chip that borrows the drawer row and
+shows what it could do. Clear borrows it too. The first tap opens the question, the second
+lands on a different chip with a different word on it, and the confirmation comes free with
+the answer. It costs no chip in the tray and no height anywhere, for the same reason Room's
+picker does not: the row it borrows is one the tray already keeps.
+
+**Back is in the row because the other three all destroy something.** A drawer you cannot
+leave without breaking something is a trap, and it is first so the way out is where the
+thumb already is — which puts the one chip that cannot be undone at the far end of the row
+from it, wearing the red that used to appear only after you had armed it.
+
+**What Fire takes is derived from the tray, not listed.** It removes gases that have a row
+and are in no drawer — the ones the box makes rather than the ones you can place — which is
+exactly Fire, Smoke and Steam today, and is asserted to be, because the day a placeable gas
+falls into that set is the day Fire starts deleting material somebody put there by hand.
+Gas itself is in the Hot drawer and survives.
+
+Then every cell goes back to the temperature it would have if you had just placed it —
+`t0`, or the room for anything without one. So **lava stays at 1180°C**: lava is a heat
+source, not a fire, and Fire is not a way of switching it off. Wood against lava catches
+again afterwards, and that is correct. What matters is that it has to do it from cold:
+measured at **66 ticks to first light and 71-74 to relight**, against 30 for a build that
+cooled nothing. A fire that came back in one or two ticks would look like the button did
+nothing.
+
+Resetting the charring alongside is worth about two ticks and no more (71-74 with it,
+69-71 without) — what actually keeps a fire out is the cooling, since charring decays on
+its own below the ignition point. It is there because `put()` clears the same field and
+"back to how it was placed" is the whole rule.
+
+All three go through `snapshot()`, so all three can be undone. None of them spends the undo
+slot when there is nothing to do: Fire on a cold box and Life on an empty one say so and
+leave the last stroke recoverable.
+
 ## Undo
 
 One step, in **Tools**, disabled until there is something to go back to. It covers a
@@ -1516,7 +1570,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 78 checks — the simulation
+node test/matchbox-sim.mjs     # 79 checks — the simulation
 node test/matchbox-ui.mjs      # 38 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```

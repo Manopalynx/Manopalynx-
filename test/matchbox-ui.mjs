@@ -146,31 +146,45 @@ await check('the match tool cannot be selected when there is no match', async p 
 
 console.log('\n— the tray —');
 
-await check('Clear asks before it wipes the scene', async p => {
+await check('Clear asks what to clear before it wipes anything', async p => {
   const before = await p.evaluate(() => __cells());
   if (before < 100) return 'the opening scene is empty, so there is nothing to wipe';
-  await p.locator('.tab', { hasText: /^tools$/i }).click();
-  // Located by data-act, not by the word on it: the armed label is "Sure?", so a
-  // locator that hunts for "Clear" stops resolving at exactly the moment it matters.
-  const clear = p.locator('[data-act="clear"]');
-  await clear.click();
+  // Located by data-act, not by the word on it: the words in this row are the thing
+  // under test, and a locator that hunts for them stops resolving when they change.
+  await (await reveal(p, 'clear')).click();
   const mid = await p.evaluate(() => __cells());
-  if (mid !== before) return `one tap wiped ${before - mid} cells with no confirmation and no undo`;
-  await clear.click();
+  if (mid !== before) return `one tap wiped ${before - mid} cells with no question asked`;
+  const asked = await p.locator('#mats .chip').evaluateAll(cs => cs.map(c => c.dataset.act));
+  for (const want of ['clear-none', 'clear-fire', 'clear-life', 'clear-all'])
+    if (!asked.includes(want)) return `the question left out ${want}: it offered ${asked.join(', ')}`;
+  await p.locator('[data-act="clear-all"]').click();
   const after = await p.evaluate(() => __cells());
-  if (after !== 0) return `the second tap left ${after} cells — confirming did not clear`;
+  if (after !== 0) return `answering Everything left ${after} cells`;
   return null;
 });
 
-await check('a Clear left unconfirmed goes back to being harmless', async p => {
+await check('leaving the Clear question alone destroys nothing', async p => {
   const before = await p.evaluate(() => __cells());
-  await p.locator('.tab', { hasText: /^tools$/i }).click();
-  const clear = p.locator('[data-act="clear"]');
-  await clear.click();
-  await p.waitForTimeout(3200);                  // longer than the window to confirm
-  await clear.click();                           // this must ask again, not wipe
-  const after = await p.evaluate(() => __cells());
-  if (after !== before) return `${before - after} cells went after the confirmation should have lapsed`;
+
+  // Back, which is the answer the row is there to make possible.
+  await (await reveal(p, 'clear')).click();
+  await p.locator('[data-act="clear-none"]').click();
+  const afterBack = await p.evaluate(() => __cells());
+  if (afterBack !== before) return `Back took ${before - afterBack} cells with it`;
+
+  // And walking away from it by tapping a tab, which is the other way out. The row has
+  // to come back as it was: the chips are moved rather than rebuilt, so a drawer that
+  // forgets to hand them back loses the buttons entirely.
+  await (await reveal(p, 'clear')).click();
+  await p.locator('.tab').first().click();
+  const afterLeaving = await p.evaluate(() => __cells());
+  if (afterLeaving !== before) return `${before - afterLeaving} cells went while walking away from the question`;
+  const stranded = await p.locator('#mats [data-act^="clear-"]').count();
+  if (stranded) return `${stranded} of the Clear options were still in the tray after leaving`;
+  const again = await reveal(p, 'clear');
+  if (!await again.count()) return 'Clear did not come back after its own drawer was left';
+  await again.click();
+  if (!await p.locator('[data-act="clear-all"]').count()) return 'Clear stopped asking the second time round';
   return null;
 });
 
@@ -453,18 +467,29 @@ await check('a button that asks a question does not move the scene while asking'
     return { stage: r('.stage'), tray: r('.tray'), strip: r('#strip') };
   });
   const bad = [];
-  for (const act of ['clear', 'save']) {
-    const btn = await reveal(p, act);
-    const before = await geom();
-    if (act === 'save') await btn.click();          // first save fills the slot
-    await btn.click();                              // this one asks
-    const label = await labelOf(btn);
-    const after = await geom();
-    if (JSON.stringify(before) !== JSON.stringify(after)) {
-      bad.push(`${act} asking ("${label}") moved the page: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
-    }
-    if (await btn.getAttribute('aria-pressed') !== 'true') bad.push(`${act} did not arm`);
-  }
+
+  // Save still asks on the chip itself, by changing its own label.
+  const save = await reveal(p, 'save');
+  const beforeSave = await geom();
+  await save.click();                               // first save fills the slot
+  await save.click();                               // this one asks
+  const label = await labelOf(save);
+  if (JSON.stringify(beforeSave) !== JSON.stringify(await geom()))
+    bad.push(`save asking ("${label}") moved the page`);
+  if (await save.getAttribute('aria-pressed') !== 'true') bad.push('save did not arm');
+
+  // Clear asks by borrowing the drawer row for four chips, which is a bigger change to
+  // the tray than a one-word relabel and therefore the more likely of the two to move
+  // something. The row is fixed-height and the chips are equal-width whatever is in
+  // them, so it must not — and that is the whole reason the row is built that way.
+  const clear = await reveal(p, 'clear');
+  const beforeClear = await geom();
+  await clear.click();
+  const shown = await p.locator('#mats .chip').count();
+  if (JSON.stringify(beforeClear) !== JSON.stringify(await geom()))
+    bad.push(`clear asking (${shown} chips) moved the page: ${JSON.stringify(beforeClear)} -> ${JSON.stringify(await geom())}`);
+  if (!shown) bad.push('clear did not ask anything');
+
   return bad.length ? bad.join('; ') : null;
 });
 
@@ -865,7 +890,8 @@ await check('Clear, a preset and Load can all be taken back', async p => {
 
   const beforeClear = await sig();
   const clear = await reveal(p, 'clear');
-  await clear.click(); await clear.click();
+  await clear.click();
+  await p.locator('[data-act="clear-all"]').click();
   if (await p.evaluate(() => __cells()) !== 0) return 'Clear did not clear, so this proves nothing';
   await (await reveal(p, 'undo')).click();
   if (await sig() !== beforeClear) return 'the scene did not come back after undoing a Clear';
