@@ -1155,6 +1155,39 @@ The cheapest guard of all is that dirt and rich soil together must add up to exa
 there was at the start — rich soil is made out of dirt and out of nothing else. That is the moss
 failure stated as arithmetic.
 
+#### Nothing green stays in the air
+
+Reported from the phone with pictures: a fire ate the bank out from under a meadow and the
+flowers, stems and grass stayed exactly where they were, hanging over the water.
+
+They are `ph:3` — static solids, like stone and wood — so the falling pass never looks at them,
+and nothing else was asking whether they still had anything underneath. At its simplest: a stem,
+a flower and a blade of grass dropped into empty air thirty rows up were all still there ten
+seconds later. A seed, being a powder, fell.
+
+**They come apart rather than fall.** A stalk that toppled would need to be a rigid body and
+this box does not have those; a stalk that unravels from the bottom up is one line, and what you
+see is the ground going and the plant going with it.
+
+**Moss had the same hole from the day it was written**, and hid it well. It refuses to be
+painted in mid-air and refuses to spread there, so the only way to see it was to take the wall
+away afterwards — which no check ever did, because both existing moss checks build the wall and
+leave it standing.
+
+The check makes both claims, because a rule that killed every plant would pass the first one on
+its own: the half of the meadow still over ground has to survive.
+
+#### Three colours of flower, not three kinds
+
+`blooms` is a list the draw loop picks from using the tint that cell already has, so a meadow
+comes up mixed and every head keeps its colour for as long as it stands. One row of the table,
+one material, no second Flower.
+
+Every colour in the list has to clear the palette bars on its own, and the suite checks all of
+them rather than the first — which is not a formality: **white and cream both fail against Wax,
+magenta against the worm, and pale blue against the ash bug**, and all four looked perfectly
+reasonable written down. Yellow, red and violet clear by 5.1, 3.2 and 1.4.
+
 #### Four goes at counting a fire, as well
 
 The meadow burns, and checking that it does not manufacture ash while doing it took four
@@ -1880,7 +1913,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 84 checks — the simulation
+node test/matchbox-sim.mjs     # 85 checks — the simulation
 node test/matchbox-ui.mjs      # 40 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
@@ -1912,8 +1945,8 @@ first:
   stopped agreeing with the page. `__flame` calls the page's own `paintAt`. It still
   silently stopped lighting anything the moment a guard was added to `paintAt`, and
   only re-running the whole suite caught it.
-- **Ask where a thing has been, not where it is.** Two flaky checks, found in the same week
-  and the same mistake twice: the ants counted how many were carrying something at the final
+- **Ask where a thing has been, not where it is.** Four flaky checks, found in the same week
+  and the same mistake each time: the ants counted how many were carrying something at the final
   tick (ten coin flips: `2 3 3 3 4 4 4 5` against a bar of four), and the worms measured how
   far apart they were and asked that it grow (a random walk is entitled to come back — eleven
   worms went from spanning 23 cells to 13 on a build that was working). Both are now
@@ -1925,6 +1958,19 @@ first:
   The footprint was wrong the first time too, and in a way worth writing down: it counted the
   cells the worms *fell* through on the way down, so worms pinned in place with `BUG_STEP` at
   nine billion scored twenty cells each and passed. It waits for them to land now.
+
+  A **fifth** was not a bar at all but an implicit one, which is why it survived so long: the
+  brush check asked that a tap put *at least one* fish inside a tank. A fish's brush is
+  `sparse` — about one cell in seven of what it covers, because thirty fish in a heap is one
+  lump and not thirty fish — so one tap of a brush-3 disc is twenty-nine chances at 0.14 and
+  comes up empty about once in seventy runs. It duly did. Three taps and a floor of three now.
+
+  A **fourth** was the ants again, at the other end of the same check: the sorting arm read the
+  clumping off the final tick, and a single sample of a scene that lively is noisier than the
+  thing it measures. Twelve runs across two builds gave an end-of-run gain of 0.59 to 2.87, and
+  a full suite run turned up 0.47 against a bar of 0.5. The mean of seven samples over the last
+  three thousand ticks runs 0.91 to 1.65 — same bar, now under the worst of a dozen instead of
+  inside the spread.
 
   A third one turned up the same week, in the same costume: no more than three of twelve moths
   may survive a lit candle. Twelve runs across two builds gave 0 to 2 — a comfortable margin,

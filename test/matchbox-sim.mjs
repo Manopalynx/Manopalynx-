@@ -1829,16 +1829,31 @@ await check(browser, 'a worm tipped into a pond goes under it rather than standi
 await check(browser, 'the brush reaches into a tank, and still not through a wall', () => {
   const bad = [];
   const cx = (W/2)|0;
+  /* Three taps, and a floor of three cells rather than one.
+
+     A creature's brush is `sparse` — a fish lays down about one cell in seven of what it
+     covers, because thirty fish in a heap is one lump and not thirty fish. One tap of a
+     brush-3 disc is twenty-nine chances at 0.14, which comes up empty about once in seventy
+     runs, and this check asked for at least one cell. It duly failed a full suite run with
+     "a fish could not be placed inside a tank of water" on a build where the brush was
+     perfect. An implicit bar of *at least one* on a sparse brush is the same fault as an
+     absolute bar on a small count, which this file has now met five times. */
   const into = (t) => {
     __wipe(); const f = __floor();
     __slab(cx-20, f-30, cx+20, f-1, WATER);
     const before = __count(t);
     const t0 = tool, b0 = brush;
-    tool = t; brush = 3; paintAt(cx, f-15); tool = t0; brush = b0;
+    tool = t; brush = 3;
+    paintAt(cx-8, f-15); paintAt(cx, f-15); paintAt(cx+8, f-15);
+    tool = t0; brush = b0;
     return __count(t) - before;
   };
-  for (const [n, t] of [['a fish', FISH], ['sand', SAND], ['a worm', WORM]])
-    if (into(t) < 1) bad.push(`${n} could not be placed inside a tank of water`);
+  for (const [n, t] of [['a fish', FISH], ['sand', SAND], ['a worm', WORM]]){
+    // Counted once. Calling it again inside the message re-runs the whole scene and prints a
+    // number that is not the one that failed.
+    const got = into(t);
+    if (got < 3) bad.push(`three taps put ${got} cells of ${n} inside a tank of water`);
+  }
 
   // The other half. Solids and powders still refuse, or the brush quietly becomes an
   // eraser and every wall in every scene is one stray thumb from a hole in it.
@@ -2218,9 +2233,19 @@ await check(browser, 'ants gather scattered grains into heaps, and sort two kind
   for (let x=10; x<W-10; x++){ const r = rnd(); if (r < .25) put(x, f-1, SAND); else if (r < .5) put(x, f-1, ASH); }
   for (let k=0;k<14;k++) put(16+k*7, f-3, ANT);
   const s0 = clump(SAND), a0 = clump(ASH);
-  for (let k=0;k<18000;k++) __step(1);
-  if (clump(SAND) < s0 + 0.5) bad.push(`sand went from ${s0.toFixed(2)} to ${clump(SAND).toFixed(2)} in a mixed scatter`);
-  if (clump(ASH)  < a0 + 0.7) bad.push(`ash went from ${a0.toFixed(2)} to ${clump(ASH).toFixed(2)} in a mixed scatter`);
+  /* Averaged over the last three thousand ticks rather than read off the final one. A single
+     sample of a scene this lively is noisier than the thing it is measuring: measured twelve
+     times across two builds the end-of-run gain for sand ran **0.59 to 2.87**, and a full suite
+     run turned up 0.47 against a bar of 0.5. The mean of seven samples over the same tail runs
+     **0.91 to 1.65**, so the same bar now sits under the worst of a dozen rather than inside
+     the spread. Fourth time this file has learned it. */
+  for (let k=0;k<15000;k++) __step(1);
+  const sTail = [], aTail = [];
+  for (let k=0;k<3000;k++){ __step(1); if (k % 500 === 0){ sTail.push(clump(SAND)); aTail.push(clump(ASH)); } }
+  const mean = a => a.reduce((x,y)=>x+y,0)/a.length;
+  const s1 = mean(sTail), a1 = mean(aTail);
+  if (s1 < s0 + 0.5) bad.push(`sand went from ${s0.toFixed(2)} to ${s1.toFixed(2)} in a mixed scatter`);
+  if (a1 < a0 + 0.7) bad.push(`ash went from ${a0.toFixed(2)} to ${a1.toFixed(2)} in a mixed scatter`);
 
   // Grains only. A creature that could carry a wall away is not an ant.
   for (const t of [STONE, WOOD, GLASS, WATER, STEEL]){
@@ -2336,9 +2361,16 @@ await check(browser, 'no two things in the box are the same colour, and creature
 
   const shown = [];
   for (let t=1;t<M.length;t++) if (M[t] && M[t].col) shown.push(t);
+  /* Every colour a material can be drawn in, not just the one in `col`. A flower comes up in
+     one of three, and checking only the first would have let the other two in unmeasured —
+     white and cream both fail against Wax, magenta against the worm, pale blue against the
+     ash bug, and all four looked perfectly reasonable in a list. */
+  const paints = t => M[t].blooms || [M[t].col];
   const spared = new Set();
   for (let i=0;i<shown.length;i++) for (let j=i+1;j<shown.length;j++){
-    const a = shown[i], b = shown[j], e = survives(M[a].col, M[b].col);
+    const a = shown[i], b = shown[j];
+    let e = 1e9;
+    for (const ca of paints(a)) for (const cb of paints(b)) e = Math.min(e, survives(ca, cb));
     const both = M[a].alive && M[b].alive, one = M[a].alive || M[b].alive;
     const floor = both ? CREATURES : one ? CREATURE_AND_THING : TWO_THINGS;
     // Named by save key, not by what the tray calls them: Wax and molten Wax share a
@@ -3005,6 +3037,70 @@ await check(browser, 'a seed comes up on damp soil, and sits there on anything e
    `thirst` is what makes taking the water away mean something.
 
    Measured: the water goes, and 78 cells of plant are gone within about forty seconds. */
+/* Reported from the phone with pictures: a fire ate the bank out from under a meadow and the
+   flowers, stems and grass stayed where they were, hanging over the water.
+
+   They are `ph:3` — static solids, like stone and wood — so the falling pass never looks at
+   them, and nothing else was asking whether they still had anything underneath. Moss had the
+   same hole from the day it was written, and hid it well: it refuses to be painted in mid-air
+   and refuses to spread there, so the only way to see it was to take the wall away afterwards,
+   which no check did. */
+await check(browser, 'nothing green stays in the air when the ground under it goes', () => {
+  const bad = [];
+  const KINDS = [STEM, FLOWER, GRASS, MOSS];
+
+  // The simplest possible statement of it: one cell of each, dropped into empty air.
+  __wipe(); let f = __floor();
+  __slab(4, f-10, W-5, f-1, WATER);
+  KINDS.forEach((t,k) => put(10 + k*10, f-30, t));
+  put(60, f-30, SEED);
+  for (let k=0;k<600;k++) __step(1);
+  for (const t of KINDS)
+    if (__count(t)) bad.push(`${M[t].n} was still hanging in mid-air after ten seconds`);
+  // A seed is a powder and is supposed to fall rather than come apart, which is the other
+  // half: this is a rule about things that cannot fall, not a rule about everything green.
+  if (!__count(SEED)) bad.push('the seed came apart in mid-air as well — it should have fallen');
+
+  /* And the case as it was reported: a grown meadow with the bank taken out from under half
+     of it. The half over ground stays, the half over nothing does not — which is the pair of
+     claims, because a rule that killed the lot would also pass the check above. */
+  /* On stone, not on water. The first go built the bank straight onto a sea and it sank
+     without being touched — dirt is denser than water, so a bank floating on one is not a
+     scene, it is a countdown. Nine cells of plant grew before it went under. */
+  __wipe(); f = __floor();
+  __slab(4, f-8, W-5, f-1, DIRT);
+  for (let y=f-7; y<f-1; y++) for (let x=60; x<70; x++) put(x, y, WATER);
+  for (let k=0;k<8;k++) put(24 + k*4, f-10, SEED);
+  for (let k=0;k<9000;k++) __step(1);
+  const green = () => __count(STEM) + __count(FLOWER) + __count(GRASS);
+  const grown = green();
+  if (grown < 10) return `only ${grown} cells of plant grew, so nothing below can be concluded`;
+  const cut = (W>>1);
+  let overCut = 0;
+  for (let x=cut; x<W-5; x++) for (let y=0; y<H; y++){
+    const t = type[idx(x,y)];
+    if (t===STEM || t===FLOWER || t===GRASS) overCut++;
+  }
+  // Dig the bed out from under the right-hand half, the way a fire would.
+  for (let y=f-8; y<=f-1; y++) for (let x=cut; x<W-5; x++) put(x, y, E);
+  for (let k=0;k<1200;k++) __step(1);
+
+  let left = 0, hanging = 0;
+  for (let x=0;x<W;x++) for (let y=0;y<H-1;y++){
+    const t = type[idx(x,y)];
+    if (t!==STEM && t!==FLOWER && t!==GRASS) continue;
+    if (x >= cut) left++;
+    const u = type[idx(x,y+1)];
+    if (u === E) hanging++;
+  }
+  if (hanging) bad.push(`${hanging} cells of plant were left hanging over nothing`);
+  if (overCut && left > overCut * 0.25)
+    bad.push(`${left} of ${overCut} cells of plant over the dug half survived having no ground`);
+  if (green() < grown * 0.25)
+    bad.push(`digging half the bank away took ${grown - green()} of ${grown} cells of plant — it killed the lot`);
+  return bad.length ? bad.join('; ') : null;
+});
+
 await check(browser, 'plants die when the water goes, and not while it is there', () => {
   const bad = [];
   const bed = () => {
