@@ -211,7 +211,10 @@
   .chip .lb{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .chip[aria-pressed="true"]{background:var(--ink);color:var(--pale);border-color:var(--ink)}
   .chip.act{padding:7px 4px 6px}
-  .chip.danger[aria-pressed="true"]{background:var(--phos);border-color:var(--phos);color:#fff}
+  /* Red at rest, not once armed. Nothing arms any more: the one chip wearing this is
+     the one in the Clear drawer that wipes the box, and it has to be the odd one out in
+     that row before you tap it rather than after. */
+  .chip.danger{background:var(--phos);border-color:var(--phos);color:#fff}
   /* Still the same size when it cannot be used — a chip that shrinks or vanishes when it
      is disabled would resize the row, which is the one thing the tray must never do. */
   .chip[disabled]{opacity:.34;cursor:default}
@@ -2924,42 +2927,95 @@ actsEl.appendChild(undoBtn);
 const eraseBtn = actionChip('Erase', ()=>setTool('erase'), false, 'erase');
 actsEl.appendChild(eraseBtn);
 
-/* Clear asks first. It wipes everything, it cannot be undone, and it used to do that
-   on one tap while sitting the same size and colour as Erase and Rain beside it. Two
-   taps within the window, and the second one is on a button that has gone red and
-   changed its name, so it is a different target rather than the same one twice.
+/* Clear asks first, and asking is where you say what you meant.
 
-   This is also what the .danger styling in the stylesheet was always for: it keys off
-   aria-pressed, which nothing ever set. */
-const CLEAR_WINDOW = 3000;
-let clearArmed = 0, clearTimer = 0;
+   It used to arm on one tap and wipe on the next, inside a three-second window. That
+   was safe enough — but it spent two taps saying one thing, and both taps landed on
+   the same chip, which is the shape a mis-tap has. Room had the better answer already:
+   a chip that borrows the drawer row and shows what it could do. So Clear borrows it
+   too. The first tap opens the choice, the second lands on a different chip with a
+   different word on it, and the confirmation comes free with the question.
+
+   The wipe is not the only thing you want gone, either. A box full of creatures you
+   are done with, or a fire you have watched long enough, both used to mean losing the
+   build with them. Back is in the row because the other three all destroy something,
+   and a drawer you cannot leave without breaking something is a trap. */
+
+// The fire's own leavings, as against the gases you can place: derived from the tray
+// rather than named, so a flame product added later is covered by having a row and not
+// being in a drawer. Measured to be exactly Fire, Smoke and Steam — asserted in the
+// suite, because the day that stops being true this rule quietly changes meaning.
+const TRAYED = new Set(GROUPS.flatMap(g => Array.isArray(g.items) ? g.items : []));
+const FUMES  = new Set();
+for (let t=0;t<M.length;t++) if (t!==E && M[t] && M[t].ph===0 && !TRAYED.has(t)) FUMES.add(t);
+
+// Where a cell would sit if you had just placed it. Fire is a change to the heat field
+// as much as it is a flame, so putting it out means putting the heat field back, and
+// `t0` is where every material starts. Lava arrives at 1180°C and stays there: lava is
+// a heat source, not a fire, and Fire is not a way of turning it off.
+const restingAt = t => (M[t] && M[t].t0 !== undefined) ? M[t].t0 : AMBIENT;
+
+function livingCells(){
+  let n = 0;
+  for (let i=0;i<type.length;i++) if (type[i]!==E && M[type[i]].alive) n++;
+  return n;
+}
+function anythingBurning(){
+  for (let i=0;i<type.length;i++)
+    if (FUMES.has(type[i]) || temp[i] > restingAt(type[i]) + .5 || life[i] > 0) return true;
+  return false;
+}
+
+const clearEl = document.createElement('div');
+function clearChoice(label, act, danger, fn){
+  clearEl.appendChild(actionChip(label, ()=>{ fn(); showDrawer(TOOLS_DRAWER); }, danger, act));
+}
+
+// Back first, so the way out is where the thumb already is and the chip that cannot be
+// undone is at the far end of the row from it.
+clearChoice('Back', 'clear-none', false, ()=> say('Nothing removed', true));
+
+clearChoice('Fire', 'clear-fire', false, ()=>{
+  if (!anythingBurning()){ say('Nothing alight, and nothing warm', true); return; }
+  snapshot('putting the fire out');
+  let flames = 0;
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++){
+    const i = idx(x,y);
+    if (FUMES.has(type[i])){ become(x,y,E); flames++; }
+    const rest = restingAt(type[i]);
+    if (temp[i] > rest) temp[i] = rest;
+    // `life` is how far a cell has charred, so a log that was most of the way to
+    // catching goes back to being a log. Worth about two ticks and no more: measured
+    // against a wall of wood with lava at its foot, the relight came back at 71-74
+    // ticks with this line and 69-71 without it. What actually stops a fire coming
+    // straight back is the cooling above — char decays on its own once a cell is under
+    // its ignition point. This is here because `put()` clears the same field, and
+    // "back to how it was placed" is the whole rule.
+    life[i] = 0;
+  }
+  say(`Fire out — ${flames} flame${flames===1?'':'s'} gone, and the heat with it`);
+});
+
+clearChoice('Life', 'clear-life', false, ()=>{
+  const n = livingCells();
+  if (!n){ say('Nothing living in the box', true); return; }
+  snapshot('clearing the life');
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++)
+    if (type[idx(x,y)]!==E && M[type[idx(x,y)]].alive) become(x,y,E);
+  say(`Cleared ${n} living thing${n===1?'':'s'}`);
+});
+
+clearChoice('Everything', 'clear-all', true, ()=>{
+  snapshot('the clear');
+  wipeAll();
+  say('Cleared');
+});
 
 const clearBtn = actionChip('Clear', ()=>{
-  if (Date.now() < clearArmed){
-    snapshot('the clear');
-    wipeAll();
-    disarmClear();
-    say('Cleared');
-    return;
-  }
-  clearArmed = Date.now() + CLEAR_WINDOW;
-  // 'Sure?' rather than 'Clear — sure?'. The long version was two and a half times the
-  // width of the word it replaced, and with chips sized to their content that reflowed
-  // the whole row. The sentence belongs in the readout, which has room for it and does
-  // not move anything by changing.
-  chipLabel(clearBtn, 'Sure?');
-  clearBtn.setAttribute('aria-pressed', 'true');
-  say('Clear the whole box?', true);
-  clearTimeout(clearTimer);
-  clearTimer = setTimeout(disarmClear, CLEAR_WINDOW);
-}, true, 'clear');
-
-function disarmClear(){
-  clearArmed = 0;
-  clearTimeout(clearTimer);
-  chipLabel(clearBtn, 'Clear');
-  clearBtn.setAttribute('aria-pressed', 'false');
-}
+  fillFrom(clearEl);
+  tabsEl.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-pressed','false'));
+  say('Clear — pick what goes. Fire takes the heat', true);
+}, false, 'clear');
 actsEl.appendChild(clearBtn);
 actsEl.appendChild(actionChip('Rain', ()=>{ snapshot('the rain'); raining = RAIN_TICKS; }, false, 'rain'));
 
@@ -3249,6 +3305,10 @@ function decodeScene(s){
   return missing;
 }
 
+// Save is the last chip that arms. Three seconds is long enough to read the question
+// and short enough that a chip left saying "Replace?" is not still armed when you come
+// back to it.
+const ASK_WINDOW = 3000;
 let saveArmed = 0, saveTimer = 0;
 function disarmSave(){
   saveArmed = 0;
@@ -3263,11 +3323,11 @@ const saveBtn = actionChip('Save', ()=>{
   // confirm on a harmless action is what teaches people to tap through the one that
   // is not.
   if (localStorage.getItem(STORE_KEY) && Date.now() >= saveArmed){
-    saveArmed = Date.now() + CLEAR_WINDOW;
+    saveArmed = Date.now() + ASK_WINDOW;
     chipLabel(saveBtn, 'Replace?');
     saveBtn.setAttribute('aria-pressed','true');
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(disarmSave, CLEAR_WINDOW);
+    saveTimer = setTimeout(disarmSave, ASK_WINDOW);
     say('Replace the saved scene?', true);
     return;
   }
