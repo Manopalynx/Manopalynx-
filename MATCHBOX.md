@@ -45,9 +45,9 @@ fetched fresh whenever there is a signal — no stale-build trap, and nothing to
 
 ## What is in the box
 
-Thirty-five chips in the tray — twenty-six materials, eight living things and the vent — and
-eleven more the simulation makes and never lets you place: fire, smoke, steam, ash, the
-pupa, the stem, the flower, rich soil, grass, molten wax and molten rubber.
+Thirty-six chips in the tray — twenty-seven materials, eight living things and the vent — and
+twelve more the simulation makes and never lets you place: fire, smoke, steam, ash, cold fog,
+the pupa, the stem, the flower, rich soil, grass, molten wax and molten rubber.
 
 Snow moved from the second list to the first. It was weather-only, and placing a drift by
 hand is a different act from summoning a snowfall — weather gives you snow everywhere, a
@@ -371,6 +371,108 @@ which is why the check asks for a *decline* rather than a return to 20.
 One pass of `CAPS[type[i]]` and two float operations over 31,460 cells a tick, gathered
 inside `roomLoss`'s existing sweep rather than its own. Measured on a busy scene:
 **2.95ms a tick against 2.83 with a fixed room — 0.126ms, under 1% of a 16.6ms frame.**
+
+## Nitrogen, which is thermite's opposite
+
+Thermite is the one thing a match cannot light and water cannot put out. Nitrogen is the
+other end of the same idea, and it was asked for under that frame: **nothing in the box
+could make anything colder than the room.** The fixed settings are a floor you choose, ice
+only ever reaches its own −14, and every route to cold went through `AMBIENT`. This pours
+216 degrees below it.
+
+```
+M[NITRO] = {n:'Nitrogen', ph:1, col:[110,230,214], cond:.55, cap:4.0, dens:.81,
+            t0:-196, boil:-180, into:FOG, vap:4000};
+M[FOG]   = {n:'Cold fog', ph:0, col:[190,200,252]};
+```
+
+Measured, room set to Normal:
+
+| | |
+|---|---|
+| a splash on bare stone | liquid readable for **2.3s**, peak 174 cells of fog, coldest **−32°C** |
+| poured on a pond of 408 water | **154 cells frozen**, 254 left |
+| the same splash, on Neutral | pulls the room from 20°C to **16.8** |
+| a box filled with it, 60s later | nothing left, no NaN, floor respected |
+
+**It arrives at −196 and boils at −180, which is backwards for a real dewar and is the
+whole reason you can see it.** Boiling is instant the moment a cell is over its threshold —
+melting soaks up `lat` first, boiling does not — so a liquid that arrived at its own boiling
+point flashed off on tick one and there was nothing on screen. Sixteen degrees subcooled,
+with `cap` 4.0 to make those degrees cost something, buys the two seconds it needs.
+
+**It is not a fire extinguisher, and that is the discovery rather than a shortfall.**
+Measured on the same fire: left alone it goes 19 → 138 cells of flame, drenched in water
+23 → 0, drenched in nitrogen 18 → 88. It flashes off against the flame and the cold goes up
+with the fog. Water keeps its job; nitrogen freezes everything that *isn't* already alight.
+
+### Two pieces of shared code were water's numbers wearing a general name
+
+Neither was found by reading. Both would have shipped as "nitrogen doesn't really do
+anything" rather than as a crash.
+
+- **`spend` clamped at `AMBIENT`.** It is what a boiling liquid takes out of its four
+  neighbours, and it could not leave them below room temperature — so the coldest thing in
+  the box could chill a stone floor to 20°C and not one degree further. The clamp read as
+  prudence and was a wall. It takes a `floor` now, defaulting to `AMBIENT` so water does not
+  move, and the call site passes `Math.min(AMBIENT, m.boil)`: a boiling liquid can chill
+  what it touches to room temperature, or to its own boiling point if that is colder. Water
+  boils at 100, so the min is 20 and water is untouched.
+- **The boil path set the vapour to a flat `100`.** Nitrogen boiling into a gas at 100°C
+  would have *heated* the box it exists to freeze. It is `m.boil` now — which is 100 for
+  water, so again nothing about water moves. `LATENT_BOIL` became `m.vap` on the same
+  principle.
+
+`MIN_T` is new for the same reason: `MAX_T` has always been the ceiling and there was no
+floor, because nothing could go below the room so an unbounded bottom cost nothing and was
+never noticed. It is −273 rather than a playable number, because a floor a material can
+actually reach quietly becomes that material's behaviour.
+
+### The fog's colour, and a metric I got wrong by hand
+
+A cold fog wants to be pale blue-white, and that is the most crowded corner of the palette —
+ice, glass, steam, snow and magnesium all live in it. The first try was `[208,226,236]`,
+which I checked by hand at **7.8 against ice** and the suite failed at **5.5** on a bar of 6.
+
+The difference is the whole point of the metric. `survives()` throws away six points of
+lightness before measuring, because the tint noise in the draw loop covers that much: two
+colours that differ only in *how pale they are* do not differ at all once they are on
+screen. I had compared base colours with plain CIEDE2000 and skipped the discount. The fog
+is periwinkle `[190,200,252]` now — blue enough to read as cold, far enough round the hue
+circle to read as itself, and 13.6 from its nearest neighbour.
+
+Cold fog also joined `FUMES`, which is derived as "gases the box makes and you cannot
+place", so Clear → Fire puts a nitrogen cloud away with the smoke. That is consistent rather
+than incidental: Clear → Fire already sets every cell back to resting, so it undoes the
+chill in the same breath and leaving the cloud behind would have been the odd half.
+
+### Mud was considered and dropped
+
+It was on the list as the next liquid, and two measurements killed it — worth recording
+because the reasoning was wrong before it was measured, not after.
+
+**The slow-liquid slot is already taken.** `flow` is not a field mud would have contributed;
+it already exists and molten wax already uses it. A 12×12 blob on a flat floor:
+
+| | width over 6s | tallest column |
+|---|---|---|
+| Water | 30 → 52 | 8 → 4 (levels out) |
+| Oil | 29 → 53 | 8 → 5 |
+| Molten wax, `flow:.25` | 24 → 37 | 11 → 7 (holds a mound) |
+| Dirt, a powder | 24 → 24 | 11 → 11 (holds completely) |
+
+Molten wax already *is* the slow heap-holding liquid, and dirt already holds a heap
+absolutely. Mud would have been squeezed into the narrow band between them.
+
+**And the colour collision is not where it looks.** Dirt and rich soil are 16.6 apart,
+comfortably clear — the problem is *oil*, because a dark brown slowish liquid is what oil
+already looks like. Four of five candidate browns failed against Oil at 1.8 to 4.3, and the
+one that cleared did so by being red enough to read as rust.
+
+On top of both: it could not even be *made*, because dirt and water have to keep coexisting
+or the meadow stops sprouting. A tray-only material that duplicates molten wax's motion and
+oil's colour and dries into a material already in the box is three arguments against and
+none for.
 
 ## Two ways for a gas to stop being there
 
@@ -2019,7 +2121,7 @@ be a guess dressed up as an undo.
 
 ## The finds
 
-`FOUND 3/72` in the corner used to be the whole of it. The rest existed as things that the
+`FOUND 3/73` in the corner used to be the whole of it. The rest existed as things that the
 box would never name, mention again or hint at — a progress bar for a task nobody had been
 told. **Finds** in Tools opens the list: found ones read as what they are (`Lava + Water →
 Obsidian`) and the rest read `Acid — ?`, carrying the material's colour and name and nothing
@@ -2192,7 +2294,7 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 92 checks — the simulation
+node test/matchbox-sim.mjs     # 96 checks — the simulation
 node test/matchbox-ui.mjs      # 43 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```

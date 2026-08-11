@@ -55,6 +55,7 @@ const HARNESS = `
       if (type[i]===t && fuel[i]>0 && temp[i]>=m.ig && life[i]>=c) n++;
     return n; };
   window.__maxT  = () => { let m=-1e9; for (let i=0;i<temp.length;i++) if (temp[i]>m) m=temp[i]; return m; };
+  window.__minT  = () => { let m= 1e9; for (let i=0;i<temp.length;i++) if (temp[i]<m) m=temp[i]; return m; };
   window.__nan   = () => { for (let i=0;i<temp.length;i++) if (!Number.isFinite(temp[i])) return true; return false; };
   window.__wipe  = () => { type.fill(0); temp.fill(AMBIENT); fuel.fill(0); life.fill(0); vel.fill(0); };
   window.__floor = () => { const f = H-6; for (let x=0;x<W;x++) for (let y=f;y<H;y++) put(x,y,STONE); return f; };
@@ -2876,7 +2877,12 @@ await check(browser, 'Clear takes what it was asked for and leaves the rest', ()
   // cannot place. If a placeable gas ever falls into this set, Fire starts deleting
   // material somebody put there by hand.
   const named = [...FUMES].map(t => M[t].n).sort().join(', ');
-  if (named !== 'Fire, Smoke, Steam') bad.push(`the fire's leavings derived as [${named}]`);
+  // Cold fog joined this set when nitrogen did, and belongs by the rule above rather than
+  // by anyone deciding it should: it is a gas the box makes and you cannot place. Clear →
+  // Fire putting a nitrogen cloud away with the smoke is consistent with the rest of what
+  // that button does, which is to set every cell back to resting — it undoes the chill in
+  // the same breath, so leaving the cloud behind would be the odd half.
+  if (named !== 'Cold fog, Fire, Smoke, Steam') bad.push(`the fire's leavings derived as [${named}]`);
 
   // A log pile alight, a pond with fish in it, worms on the woodpile, well apart.
   const build = () => {
@@ -3380,6 +3386,107 @@ await check(browser, 'mist waters what is growing, and rain drowns the box', () 
 /* Snow is the one that has to earn its place, and its whole case is that it does two things a
    shower does not: it lies, and it chills. Both of those are answers to what the room is set
    to, which is what makes it different from rain rather than colder rain. */
+/* --------------------------------------------------------------- nitrogen
+
+   Thermite's opposite, and the frame is worth keeping because it is what the material is
+   for: thermite is the one thing a match cannot light and water cannot put out, and
+   nitrogen is the one thing that can make the box colder than the room. Nothing else could
+   — the fixed rooms are a floor you choose, and ice only ever reaches its own −14.
+
+   Two pieces of shared code had to change for it and both were water's numbers wearing a
+   general name. `spend` clamped at AMBIENT, so the coldest thing in the box could chill a
+   stone floor to 20°C and not one degree past it; and the boil path set the vapour to a
+   flat 100°C, which would have had nitrogen *heat* the box it is meant to freeze. */
+await check(browser, 'nitrogen freezes what water only wets', () => {
+  const bad = [];
+  const pond = () => {
+    __wipe(); const f = __floor();
+    __slab(40, f-8, 90, f-1, WATER);
+    return { f, n: __count(WATER) };
+  };
+
+  // Water on water is water. The control, and it is the one that would have passed on its
+  // own the whole time `spend` was clamped at room temperature.
+  let { f, n } = pond();
+  __slab(50, f-16, 80, f-9, WATER);
+  for (let k=0;k<900;k++) __step(1);
+  if (__count(ICE)) bad.push(`${__count(ICE)} cells of ice appeared from pouring water on water`);
+
+  // Measured: 154 of 408 frozen, and the coldest cell in the box below the Freezing room's
+  // own −30 while the room is set to Normal.
+  ({ f, n } = pond());
+  let coldest = 1e9;
+  __slab(50, f-16, 80, f-9, NITRO);
+  for (let k=0;k<900;k++){ __step(1); const m = __minT(); if (m < coldest) coldest = m; }
+  if (__count(ICE) < 40) bad.push(`nitrogen poured on ${n} cells of water froze ${__count(ICE)} of them`);
+  if (coldest > 0) bad.push(`the coldest cell in the box was ${Math.round(coldest)}°C — nitrogen never got it below freezing`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* It is not a fire extinguisher, and that is the discovery rather than a shortfall. It
+   flashes off against a flame and the cold goes up with the fog, so it slows a fire and
+   does not stop one — which is what keeps water's job water's. Both numbers are needed:
+   "nitrogen damped the fire" is true of doing nothing at all if you only look at one. */
+await check(browser, 'nitrogen slows a fire where water puts it out', () => {
+  const burn = (t) => {
+    __wipe(); const f = __floor();
+    __slab(20, f-16, 100, f-1, WOOD);
+    __hold(60, f-8, 4, 90);
+    for (let k=0;k<240;k++) __step(1);
+    const lit = __count(FIRE);
+    if (t !== null) __slab(48, f-20, 72, f-9, t);
+    for (let k=0;k<600;k++) __step(1);
+    return { lit, left: __count(FIRE) };
+  };
+  const bad = [];
+  const alone = burn(null), wet = burn(WATER), cold = burn(NITRO);
+  if (!alone.left) return `the control fire went out on its own (${alone.lit} → 0), so nothing here measures anything`;
+  if (wet.left) bad.push(`water left ${wet.left} cells of fire burning`);
+  if (!cold.left) bad.push(`nitrogen put the fire out completely — that is water's job, not its own`);
+  if (cold.left >= alone.left)
+    bad.push(`a fire left alone came to ${alone.left} and one drenched in nitrogen to ${cold.left} — it did nothing at all`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+await check(browser, 'a splash of nitrogen can be seen before it goes, and leaves nothing', () => {
+  const bad = [];
+  __wipe(); const f = __floor();
+  __slab(60, f-14, 78, f-1, NITRO);
+  const n0 = __count(NITRO);
+  let seen = 0, fog = 0;
+  for (let k=1;k<=900;k++){
+    __step(1);
+    if (__count(NITRO)) seen = k;
+    if (__count(FOG) > fog) fog = __count(FOG);
+  }
+  /* A second and a half is the whole reason it arrives at −196 and boils at −180. Boiling
+     is instant the moment a cell is over its threshold — melting soaks up `lat` first and
+     boiling does not — so a liquid that arrived at its own boiling point flashed off on
+     tick one and there was nothing on screen to see. Measured at 2.3s. */
+  if (seen < 60) bad.push(`the liquid was gone in ${seen} ticks — you never see it`);
+  if (seen > 600) bad.push(`the liquid was still there after ${seen} ticks — it is not flashing off, it is a pool`);
+  if (fog < 30) bad.push(`boiling ${n0} cells of nitrogen made only ${fog} cells of fog`);
+  if (__count(NITRO) || __count(FOG))
+    bad.push(`${__count(NITRO)} liquid and ${__count(FOG)} fog were still in the box fifteen seconds later`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* The floor, which is the same claim MAX_T makes at the other end and which the file did
+   not make until there was something cold enough to test it. Nothing in the box could go
+   below the room before nitrogen, so an unbounded bottom cost nothing and was invisible. */
+await check(browser, 'nothing in the box gets colder than the floor', () => {
+  __wipe(); const f = __floor();
+  // Everything, wall to wall, in the coldest room there is — the worst case there is.
+  __room('Freezing');
+  for (let y=8;y<f;y++) for (let x=4;x<W-4;x++) put(x,y,NITRO);
+  let coldest = 1e9;
+  for (let k=0;k<3600;k++){ __step(1); const m = __minT(); if (m < coldest) coldest = m; }
+  __room('Normal');
+  if (coldest < MIN_T) return `a cell reached ${Math.round(coldest)}°C against a floor of ${MIN_T}`;
+  if (__nan()) return 'a temperature went to nothing';
+  return null;
+});
+
 await check(browser, 'snow lies where it is cold and becomes water where it is not', () => {
   const bad = [];
   const fall = (room, n) => {
