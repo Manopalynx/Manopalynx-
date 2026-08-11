@@ -313,6 +313,40 @@ await check('shapes obey the same rules as the brush', async p => {
 
 console.log('\n— the box itself —');
 
+/* Reported from the phone: a box filled edge to edge with ice reads 20°C.
+
+   The gauge averages the empty cells and calls it "air", and with no empty cells it fell back
+   to AMBIENT — printing the room's own setting as though it were a measurement. The box was at
+   −10°C at the time. It says what it measured now, and says what it measured it from.
+
+   The other half of what was reported is not a fault and is not fixed: the room line does not
+   move, because the room is a setting rather than a reading, and the cold does not spread far
+   from the ice, because cold air sinks and ice on the floor is already at the bottom. Measured
+   air above a slab of ice: 14.5°C for three rows, then 19.8, then 20. Two goes at making cold
+   travel — a mirror of the hot-air convection, and a third of the room coupling — moved that
+   14.5 to 14.5 and 10.6 respectively. */
+await check('a box with no air in it does not report the room as a measurement', async p => {
+  const line = () => p.locator('#gauge').innerText();
+  await p.evaluate(() => { for (let i=0;i<type.length;i++) put(i%W, (i/W)|0, ICE); });
+  await p.waitForTimeout(4000);
+  const packed = (await line()).split('\n')[0];
+  const boxT = await p.evaluate(() => {
+    let s = 0; for (let i=0;i<temp.length;i++) s += temp[i]; return s/temp.length;
+  });
+  if (boxT > 0) return `the ice did not chill the box (${boxT.toFixed(1)}°C), so this proves nothing`;
+  if (/air/i.test(packed)) return `a box with no air in it reads "${packed}" while the box is at ${boxT.toFixed(1)}°C`;
+  const shown = Number((packed.match(/-?\d+/) || [999])[0]);
+  if (Math.abs(shown - boxT) > 3)
+    return `the gauge says ${shown}°C and the box is at ${boxT.toFixed(1)}°C`;
+
+  // and with air in it, it is still an air reading
+  await p.evaluate(() => wipeAll());
+  await p.waitForTimeout(800);
+  const empty = (await line()).split('\n')[0];
+  if (!/air/i.test(empty)) return `an empty box reads "${empty}" rather than an air temperature`;
+  return null;
+});
+
 await check('the heat view shows the field without touching it', async p => {
   const before = await p.evaluate(() => {
     let sum = 0; for (let i=0;i<type.length;i++) sum += type[i]*7 + Math.round(temp[i]);

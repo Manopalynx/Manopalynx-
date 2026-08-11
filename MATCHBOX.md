@@ -1664,6 +1664,46 @@ All three go through `snapshot()`, so all three can be undone. None of them spen
 slot when there is nothing to do: Fire on a cold box and Life on an empty one say so and
 leave the last stroke recoverable.
 
+## A box full of ice, and what the gauge was saying about it
+
+Reported from the phone: filling the whole box with ice barely moves the air reading and does
+not touch the room at all. Three separate things, and only one of them was a fault.
+
+**The room is a setting, not a reading.** `ROOM NORMAL 20°C` is what you turned it to. It is
+correct that it does not move, and it sits next to the air line precisely so the pair reads as
+"what the box has settled at, and what it is settling toward".
+
+**The gauge was lying, and that is the fault.** It averages the empty cells and calls it air —
+and with a box packed edge to edge there are no empty cells, so it fell back to `AMBIENT` and
+printed the room's own setting as though it were a measurement. The box was at **−10.3°C** and
+the readout said 20. It says `solid −12°C` now, and it says which it is measuring.
+
+**Cold reaches three cells and heat reaches thirty**, and that is mostly correct. Measured, the
+air above a thirty-row slab of ice: **14.5°C for three rows, then 19.8, then 20, then 20.** The
+air above a fire: 116.7, 91.4, 49.4. The asymmetry looks wrong and is largely right — hot air
+rises and distributes itself through the box, cold air sinks and pools, and ice on the floor is
+already at the bottom, so a cold layer sitting on it is stratification rather than a bug.
+
+### Two fixes tried and measured doing nothing
+
+Both are worth recording, because both looked obviously correct before they were measured.
+
+**Cold air sinking**, the mirror of the existing `convect()` — same bound, threshold scaled to
+the smaller range cold can reach. Under an ice ceiling with open air below, the air just under
+it went from 16.5°C to 15.7 and the floor did not move. Dropping the threshold from eight
+degrees to three, and then to one, changed the ice-slab numbers **not at all**: 14.5 either way.
+The reason is the scene rather than the rule — with ice on the floor, every cold air cell has
+ice underneath it, so there is nowhere for it to sink to.
+
+**Weakening the room's grip**, on the theory that `ROOM_LOSS` refills every air cell as fast as
+the ice can cool it. At a third of its value the first three rows went 14.5 → 10.6 and the rows
+above went 19.8 → 19.0. Not nothing, and not worth touching the load-bearing constant of the
+heat model for, with an energy check and a runaway-fire check sitting on it.
+
+What would actually move the numbers is how well air exchanges with a cold solid — `AIR_COND`
+is .06 against ice's .28 — and that is the same constant every fire in the box is balanced
+against. It is written down here rather than changed.
+
 ## Weather
 
 Four things the sky can do, behind one chip, sharing one clock — so turning one on turns the
@@ -1994,7 +2034,7 @@ the glass.
 ```
 npm i playwright
 node test/matchbox-sim.mjs     # 88 checks — the simulation
-node test/matchbox-ui.mjs      # 41 checks — the hand
+node test/matchbox-ui.mjs      # 42 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
 

@@ -1516,6 +1516,25 @@ function convect(){
   }
 }
 
+/* There is no mirror of this for cold air, and there was one for about an hour.
+
+   Reported from the phone: a box filled with ice barely moves the air reading. Measured, the
+   air above a thirty-row slab of ice — **14.5°C for three rows, then 19.8, then 20, then 20** —
+   against the air above a fire at 116.7, 91.4, 49.4 over thirty rows. Heat has a way of getting
+   about this box and cold does not, so the obvious fix was `convect()` in a mirror: cold air
+   falls, same bound, threshold scaled to the smaller range cold can reach.
+
+   It did nothing. Under an ice ceiling with open air below it, the air just underneath went
+   from 16.5°C to 15.7 and the floor did not move at all, because **the air never gets cold
+   enough to trigger it**: every air cell is pulled back toward the room at `ROOM_LOSS` a tick
+   and settles about five degrees under it, which is short of any threshold worth having.
+
+   So the rule came out again. The thing actually holding the box at room temperature is
+   `ROOM_LOSS` applying to every air cell equally, as though every cell of air were touching
+   the room — rather than the walls touching the room, which is what `EDGE_LOSS` is already
+   for. That is a change to the load-bearing part of the heat model, with an energy check and
+   a runaway-fire check sitting on it, so it is not being made on the way past. */
+
 // The room. Only the air is in touch with it — a stone floor loses its heat by
 // conducting into the air above it, which conduct() already does. Applying this to
 // every cell made a thick wall into a heat sink that no fire could ever warm.
@@ -4577,17 +4596,26 @@ let gaugeTick = 0, frameMs = 16;
 const gaugeEl = document.getElementById('gauge');
 
 function updateGauge(){
-  let peak = -1e9, airSum = 0, airN = 0;
+  let peak = -1e9, airSum = 0, airN = 0, allSum = 0;
   for (let i=0; i<temp.length; i++){
     const T = temp[i];
+    allSum += T;
     if (T > peak) peak = T;
     if (type[i] === E){ airSum += T; airN++; }
   }
-  const air = airN ? airSum/airN : AMBIENT;
+  /* With no air left, this used to fall back to AMBIENT and print the room's own setting as
+     though it were a measurement. Reported from the phone as a box packed edge to edge with
+     ice reading 20°C: the box was at −10.3 and every cell of it was ice, so there was nothing
+     for "air" to average and it showed the number it was settling toward instead. It says what
+     it measured now, and what it measured it from. */
+  const air = airN ? airSum/airN : null;
+  const label = air === null
+    ? `solid ${Math.round(allSum/temp.length)}°C`
+    : `air ${Math.round(air)}°C`;
   // The room is shown next to the air because the pair is the interesting reading: the
   // air is what the box has settled at, the room is what it is settling toward, and the
   // gap between them is the fire.
-  gaugeEl.innerHTML = `air ${Math.round(air)}°C<br>room ${ROOMS[roomAt].n} ${AMBIENT}°C` +
+  gaugeEl.innerHTML = `${label}<br>room ${ROOMS[roomAt].n} ${AMBIENT}°C` +
                       `<br><b>peak ${Math.round(peak)}°C</b>` +
                       `<br>found ${finds.size}/${FINDS.length}` +
                       `<br>${frameMs.toFixed(1)}ms work · ${W}×${H}`;
