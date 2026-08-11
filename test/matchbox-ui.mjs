@@ -1314,6 +1314,27 @@ await check('every chip is the same size, in every drawer, with no label cut off
     const widest = seen.find(x => x.w === hi), narrow = seen.find(x => x.w === lo);
     bad.push(`${widest.where} has ${hi}px chips and ${narrow.where} has ${lo}px — the same chip in two sizes`);
   }
+
+  /* And the chips that are not in the drawer row, which is where the first version of this
+     check had its blind spot. Free, Line and Box sit beside the brush slider and size to
+     their own labels rather than sharing a row's width, so the cap that keeps a drawer
+     honest does not apply to them — and when the cap arrived it applied anyway, squeezed
+     them to 49px, and took the E off Free. Reported from the phone. Everything above was
+     green at the time, because everything above looks inside #mats.
+
+     They are not held to one width, because they are deliberately not that kind of chip.
+     They are held to fitting the word on them. */
+  const shapes = await p.evaluate(() =>
+    [...document.querySelectorAll('#shapes .chip')].map(c => {
+      const l = c.querySelector('.lb') || c;
+      return { t: l.textContent.trim(), w: Math.round(c.getBoundingClientRect().width),
+               cut: l.scrollWidth > l.clientWidth + 0.5 };
+    }));
+  if (!shapes.length) bad.push('there are no shape chips at all');
+  for (const sh of shapes){
+    if (sh.cut) bad.push(`the ${sh.t} chip cuts off its own label at ${sh.w}px`);
+    if (sh.w < 24) bad.push(`the ${sh.t} chip is ${sh.w}px wide`);
+  }
   return bad.length ? bad.join('; ') : null;
 });
 

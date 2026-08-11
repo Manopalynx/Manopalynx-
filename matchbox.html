@@ -252,7 +252,13 @@
   .bar{display:flex;align-items:center;gap:9px}
   .bar span{font-size:9.5px;letter-spacing:.14em;color:var(--card-dark);text-transform:uppercase;flex:none}
   .shapes{display:flex;gap:4px;flex:none}
-  .shapes .chip{flex:0 0 auto;padding:7px 9px 6px}
+  /* max-width:none, and it is load-bearing rather than tidy. These three sit outside the
+     drawer row and size to their own labels — `flex:0 0 auto` — so the cap that keeps a
+     drawer's chips honest is meaningless here and actively wrong: measured at 49px, Free
+     lost its E and Line and Box were squeezed to nothing. Reported from the phone, and the
+     check written for the cap did not see it, because that check looks inside #mats and
+     this row is not in #mats. */
+  .shapes .chip{flex:0 0 auto;max-width:none;padding:7px 9px 6px}
   input[type=range]{flex:1;accent-color:var(--phos);height:18px}
   input[type=range]:focus-visible{outline:2px solid var(--phos);outline-offset:3px}
 
