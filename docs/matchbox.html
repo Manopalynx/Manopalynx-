@@ -337,7 +337,7 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
       LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24,
       THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31, WORM=32,
       MOTH=33, FISH=34, GRUB=35, PUPA=36, ASHBUG=37, ANT=38, MOSS=39, DIRT=40,
-      SEED=41, STEM=42, FLOWER=43, RICH=44, GRASS=45, SNOW=46;
+      SEED=41, STEM=42, FLOWER=43, RICH=44, GRASS=45, SNOW=46, NITRO=47, FOG=48;
 
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
@@ -840,6 +840,37 @@ M[GRASS]   ={n:'Grass',    ph:3, col:[140,146,  0], ig:170, fuel:7,  out:0.7, co
    and it is easier to notice a search that says no than one that says yes. */
 M[SNOW]    ={n:'Snow',     ph:2, col:[246,248,250], ig:9e9, cond:.22, cap:2.1, dens:.35,
              melt:0, into:WATER, lat:200, t0:-10, grain:6, wets:1};
+/* Thermite's opposite, and that is the frame it was asked for under.
+
+   Thermite is the one thing in the box a match cannot light and that nothing can put out.
+   Nitrogen is the other end of the same idea: nothing in the box could make anything
+   colder than the room, and this pours 216 degrees below it.
+
+   It arrives at −196 and boils at −180, which is backwards for a real dewar and is the
+   whole reason a splash is visible at all. Boiling is instant the moment a cell is over
+   its threshold — unlike melting, which soaks up `lat` first — so a liquid that arrived
+   exactly at its boiling point flashed off on tick one and you never saw it. Arriving
+   sixteen degrees subcooled, with `cap` 2.4 to make those degrees cost something, is what
+   buys the second and a half it takes to read as a liquid before it goes.
+
+   `vap` is what the boil takes out of the four cells around it, against water's 1800.
+   Lower, because most of the chill here is not the phase change at all: it is 216 degrees
+   of gradient doing ordinary conduction, which the box already knew how to do. */
+M[NITRO]   ={n:'Nitrogen', ph:1, col:[110,230,214], ig:9e9, cond:.55, cap:4.0, dens:.81,
+             t0:-196, boil:-180, into:FOG, vap:4000};
+/* What it boils into: a gas, and it rises for the same reason every gas here does. A cold
+   cloud that billows up is also what a nitrogen splash actually looks like, so the engine's
+   one rule about gases happens to be right for this one rather than merely tolerable.
+
+   Periwinkle and not the pale blue-white a cold fog wants to be, because that shade is the
+   most crowded corner of the whole palette — ice, glass, steam, snow and magnesium all live
+   in it. The first try was [208,226,236] and it measured **5.5 against ice** on a bar of 6.
+   It looked clear at 7.8 when I checked it by hand, and the difference is the whole point of
+   the metric: `survives()` throws away six points of lightness before measuring, because the
+   tint noise in the draw loop covers that much, so two colours that differ only in how pale
+   they are do not differ at all once they are on screen. Blue enough to be read as cold and
+   far enough round the hue circle to be read as itself: 13.6 against its nearest, the ash bug. */
+M[FOG]     ={n:'Cold fog', ph:0, col:[190,200,252]};
 /* `chokes` is why this one and not smoke or steam. Gas is the gas that *stays*: it only
    leaves at the top of the box, so it pools and fills a room, and a creature under it is
    under it for as long as the room holds.
@@ -864,7 +895,7 @@ M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, 
    the eraser, the weather, the views — and later the presets and the saves. */
 const GROUPS = [
   { name:'Fuel',  items:[WOOD, PAPER, STRAW, FUSE, COAL, GREEN, POWDER, RUBBER] },
-  { name:'Wet',   items:[WATER, OIL, ICE, SNOW, ACID] },
+  { name:'Wet',   items:[WATER, OIL, ICE, SNOW, NITRO, ACID] },
   { name:'Solid', items:[STONE, STEEL, SAND, DIRT, WAX, GLASS, OBSIDIAN] },
   { name:'Hot',   items:[LAVA, MOLTEN, EMBER, THERMITE, MAGNES, GAS, VENT] },
   { name:'Life',  items:[WORM, MOTH, FISH, GRUB, ASHBUG, ANT, MOSS, SEED] },
@@ -918,6 +949,7 @@ SAVE_KEY[ASHBUG]='ash-bug';   SAVE_KEY[ANT]='ant';         SAVE_KEY[MOSS]='moss'
 SAVE_KEY[DIRT]='dirt';
 SAVE_KEY[SEED]='seed';       SAVE_KEY[STEM]='stem';         SAVE_KEY[FLOWER]='flower';
 SAVE_KEY[RICH]='rich-soil';  SAVE_KEY[GRASS]='grass';       SAVE_KEY[SNOW]='snow';
+SAVE_KEY[NITRO]='nitrogen';  SAVE_KEY[FOG]='cold-fog';
 
 const TYPE_OF_KEY = new Map(SAVE_KEY.map((k,t) => [k,t]));
 
@@ -1012,6 +1044,14 @@ const FLAME_PEAK = 1200;  // as hot as combustion alone can drive a cell, unless
                           // took the heat over a wick down with it, and at 1150 the
                           // candle fell from ~1800 ticks to 1104. The leak had been
                           // propping it up.
+const MIN_T      = -273;  // ...and nothing gets colder than this, which is a claim the
+                          // file did not make until there was something in the box cold
+                          // enough to test it. `spend` and conduction can both take a
+                          // cell down, and before nitrogen nothing went below the room,
+                          // so an unbounded floor cost nothing and was never noticed.
+                          // Absolute zero rather than a playable number, because a floor
+                          // that a material can reach is a floor that quietly becomes
+                          // that material's behaviour.
 const MAX_T      = 2600;  // nothing in the box gets hotter than this. It has to clear
                           // steel's melting point or steel can never melt, which is the
                           // same defect as green wood that could never be lit. 2600
@@ -1626,6 +1666,7 @@ function roomLoss(){
     // claim the file makes, and it was being trusted to five separate clamps
     // scattered through the reaction code — one of which did not exist.
     if (temp[i] > MAX_T) temp[i] = MAX_T;
+    if (temp[i] < MIN_T) temp[i] = MIN_T;
     if (roomDrifts){ const p = CAPS[type[i]]; heat += temp[i] * p; cap += p; }
   }
   // The walls. Whatever is pressed against the outside of the box is in contact with
@@ -1690,12 +1731,24 @@ function radiate(x, y, q, rad){
 /* Energy taken out of the neighbourhood, for a change of state that costs some.
    Nothing may be driven below room temperature by this: boiling cools what it
    touches, it does not refrigerate it. */
-function spend(x, y, q){
+/* Take energy out of the four neighbours — what a boiling liquid does to whatever it is
+   touching, and for water that is usually the fire you are trying to put out.
+
+   `floor` is how cold this is allowed to leave them, and it defaults to the room because
+   that is what it was hard-coded to and water must not change. It had to become an
+   argument for nitrogen: boiling at −196 and clamped at AMBIENT, a splash of it could
+   take a stone floor to 20°C and not one degree further, so **the coldest thing in the
+   box could not freeze anything**. The clamp read as prudence and was a wall.
+
+   The call site passes `Math.min(AMBIENT, m.boil)` — a boiling liquid can chill what it
+   touches to room temperature, or to its own boiling point if that is colder. Water's
+   boil is 100, so the min is 20 and nothing about water moves. */
+function spend(x, y, q, floor = AMBIENT){
   for (let d=0; d<4; d++){
     const xx = x+NX[d], yy = y+NY[d];
     if (!inb(xx,yy)) continue;
     const j = idx(xx,yy);
-    temp[j] = Math.max(AMBIENT, temp[j] - (q/4) / capOf(type[j]));
+    temp[j] = Math.max(floor, temp[j] - (q/4) / capOf(type[j]));
   }
 }
 
@@ -3092,10 +3145,16 @@ function react(){
       // ---- boiling, which is where water does its real work. The energy comes out
       //      of whatever the water is touching, and what it is usually touching is
       //      the fire you are trying to put out.
+      /* Three of the numbers here were water's own, written as though they were every
+         liquid's: the energy a boil takes out of its neighbours, how cold it may leave
+         them, and what temperature the vapour comes off at. `temp[i] = 100` is the one
+         that mattered — nitrogen boiling into a gas at 100°C would have *heated* the box
+         it is supposed to freeze. Each is now read from the row, and each reads back the
+         old constant for water, so nothing about water changes. */
       if (m.boil !== undefined && temp[i] > m.boil){
-        spend(x, y, LATENT_BOIL);
+        spend(x, y, m.vap !== undefined ? m.vap : LATENT_BOIL, Math.min(AMBIENT, m.boil));
         become(x,y,m.into);
-        temp[i] = 100;
+        temp[i] = m.boil;
         found(t+':boil', `${m.n} → ${M[m.into].n}`);
         continue;
       }
