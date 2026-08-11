@@ -2078,8 +2078,26 @@ some people will expect.
 **The candle ends by losing its wick**, not by running out of wax: 35 of 158 cells used.
 The pool recedes below what the wick can reach, the wick goes dry and burns away.
 
-**Ice never falls.** It is a static solid, like stone and wood, so a block of it hangs
-where you put it.
+**Ice never falls** — it is a static solid, like stone and wood, so a block of it hangs where
+you put it. That sentence sat here for months while the code did something else.
+
+Ice was `ph:2`, a powder, with a `rigid` flag on it. The flag turns off the sideways slide, so
+a column of ice does not slump into a heap — and it was read, here, as meaning ice does not
+move. It never stopped it falling. Measured when the claim was finally questioned: **a block
+drawn thirty rows up went to the floor**, it floated up through a pond, and **ants carried it
+about for 4,733 cell-ticks**, because what an ant may lift is any powder that is not alive and
+ice was a powder.
+
+It is a solid now, and `rigid` is gone with it — ice was the only thing that ever set it, and
+a powder that will not slump is a solid with extra steps. Snow took the powder's job, which is
+what made the tidy-up available: something has to pile and drift and bob about in a pond, and
+now something does. Reported from the phone as "ice is powder like and now that we have snow I
+think it would be better if it were solid", which was right, and right for a better reason than
+the one it was offered with.
+
+**The lesson is about the note rather than the code.** This file is full of measured claims and
+this one was not measured; it was inferred from a flag's name. Everything in this section that
+carries a number was checked. This one carried none and was wrong.
 
 **Thermite has a reach, and thick steel defeats it.** Measured with a six-deep charge:
 three and four deep always open up (7-9 of 12 columns), six and eight deep never do

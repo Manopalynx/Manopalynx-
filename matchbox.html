@@ -357,7 +357,19 @@ M[STEEL]  = {n:'Steel',    ph:3, col:[142,146,152], ig:9e9, cond:.92, cap:1.6, d
 // there is no temperature where a cell can flip between the two forever.
 M[WATER]  = {n:'Water',    ph:1, col:[ 44, 92,132], ig:9e9, cond:.42, cap:6.0, boil:100, into:STEAM,
              cool:0, sets:ICE, t0:12, dens:1.0, wets:1};
-M[ICE]    = {n:'Ice',      ph:2, col:[168,204,222], ig:9e9, cond:.28, cap:3.0, melt:0,   into:WATER, t0:-14, dens:.92, rigid:1, lat:430, wets:1};
+/* Ice is a solid, and was a powder until snow arrived to take the job.
+
+   `rigid` used to hold it half way between: a powder that would not slump sideways. It never
+   stopped it falling, whatever the design notes said — measured, a block drawn thirty rows up
+   went to the floor — and it left ice doing two other things a block should not. It floated up
+   through water, and **ants carried it about**, because what an ant may lift is any powder that
+   is not alive, and ice was a powder. Four thousand seven hundred cell-ticks of an ant hauling
+   an ice cube, with nothing in the suite to notice.
+   
+   Snow is the powder now: it piles, it slumps, it floats, and it is what falls out of the sky.
+   So ice can be what it looks like — a block you place, which hangs where you put it like every
+   other solid, and melts where it stands. `rigid` went with it; ice was its only user. */
+M[ICE]    = {n:'Ice',      ph:3, col:[168,204,222], ig:9e9, cond:.28, cap:3.0, melt:0,   into:WATER, t0:-14, dens:.92, lat:430, wets:1};
 // Its own latent heat, and a large one: melting ice really does cost far more per
 // unit than melting wax. Sharing the default meant that opening the box up to the
 // room — which it badly needed, or a lava scene simply cooked — took a third of a
@@ -780,9 +792,11 @@ M[GRASS]   ={n:'Grass',    ph:3, col:[140,146,  0], ig:170, fuel:7,  out:0.7, co
              damp:30, thirst:240};
 /* Snow, which is ice that fell rather than ice you placed, and behaves like neither.
 
-   Ice is `rigid`: a block you draw and it hangs there, which is right for a block and wrong
-   for weather. Snow is a powder, so it piles and drifts and slumps off a roof, and it is
-   lighter than water, so it floats on a pond instead of sinking through it.
+   Ice is the block and snow is the powder, and it took snow arriving to sort that out: ice
+   was a powder with a flag on it that stopped it slumping, which is a solid with extra steps.
+   Snow piles and drifts and slumps off a roof, and it is lighter than water, so it floats on
+   a pond instead of sinking through it. Ice hangs where you draw it and melts where it
+   stands.
 
    **It waters things twice.** `wets` makes a drift count as damp in its own right, so a
    meadow under snow is not dying of thirst; and it melts into water above nought, so the
@@ -1298,16 +1312,16 @@ function moveFalling(){
         const d = idx(cx, cy+1);
         if (denser(t, type[d])){ swap(ci,d); ci = d; cy++; fell++; continue; }
 
-        // Sliding off a heap is not falling, so it does not keep the speed — and a
-        // rigid thing does not slide at all, it comes straight down.
+        // Sliding off a heap is not falling, so it does not keep the speed. There used to be
+        // a `rigid` flag here that switched the sliding off, and ice was the only thing that
+        // ever set it — a powder that would not slump, which is a solid with extra steps. Ice
+        // is a solid now and the flag went with it.
         let slid = false;
-        if (!m.rigid){
-          const s = Math.random()<.5 ? 1 : -1;
-          for (const dx of [s,-s]){
-            if (!inb(cx+dx, cy+1)) continue;
-            const dg = idx(cx+dx, cy+1);
-            if (denser(t, type[dg])){ swap(ci,dg); ci = dg; cx += dx; cy++; fell++; slid = true; break; }
-          }
+        const s = Math.random()<.5 ? 1 : -1;
+        for (const dx of [s,-s]){
+          if (!inb(cx+dx, cy+1)) continue;
+          const dg = idx(cx+dx, cy+1);
+          if (denser(t, type[dg])){ swap(ci,dg); ci = dg; cx += dx; cy++; fell++; slid = true; break; }
         }
         if (slid) continue;
         vel[ci] = 0;                   // landed on something

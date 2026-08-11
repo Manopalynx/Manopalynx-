@@ -902,7 +902,8 @@ await check(browser, 'a falling grain speeds up', () => {
 // Density, which used to be a rule about phases: powders sink through liquids, full
 // stop, and liquids ignored each other completely. Oil and water simply stayed
 // wherever they were put.
-await check(browser, 'oil floats, sand sinks, ice bobs up', () => {
+await check(browser, 'oil floats, sand sinks, snow bobs up, ice does neither', () => {
+  let bad0 = null;
   const meanRow = t => { let sum=0, n=0; for (let i=0;i<type.length;i++) if (type[i]===t){ sum += (i/W)|0; n++; } return n ? sum/n : null; };
   const pool = () => {
     __wipe();
@@ -921,13 +922,43 @@ await check(browser, 'oil floats, sand sinks, ice bobs up', () => {
   for (let k=0;k<900;k++) __step(1);
   if (meanRow(SAND) <= meanRow(WATER)) return `sand settled at row ${meanRow(SAND).toFixed(1)} against water at ${meanRow(WATER).toFixed(1)} — it did not sink`;
 
-  f = pool(); __slab(46, f-14, 53, f-9, ICE);
-  const before = meanRow(ICE);
+  /* Snow bobs up, and this leg used to be ice doing it. Ice was a powder with a flag on it
+     that stopped it slumping sideways — the flag never stopped it falling, whatever the notes
+     said, and it left ice floating up through ponds and being carried around by ants. Snow is
+     the powder now and it inherits the buoyancy, which it earns at `dens` 0.35 against water's
+     1.0 rather than ice's 0.92 squeaking under. */
+  f = pool(); setRoom(0);
+  __slab(46, f-14, 53, f-9, SNOW);
+  const before = meanRow(SNOW);
   for (let k=0;k<400;k++) __step(1);
-  const after = meanRow(ICE);
-  if (after === null) return 'the ice melted before it could float, so this measured nothing';
-  if (after >= before) return `ice sat at row ${before.toFixed(1)} and was at ${after.toFixed(1)} 400 ticks later — it did not rise`;
-  return null;
+  const after = meanRow(SNOW);
+  setRoom(2);
+  if (after === null) return 'the snow melted before it could float, so this measured nothing';
+  if (after >= before) return `snow sat at row ${before.toFixed(1)} and was at ${after.toFixed(1)} 400 ticks later — it did not rise`;
+
+  /* And ice does not, because ice is a block. Drawn in mid-air it hangs there like stone and
+     wood do; drawn in a pond it stays put. Measured before the change: a block thirty rows up
+     came down to the floor, and eight ants hauled it about for 4,733 cell-ticks between them,
+     because what an ant may lift is any powder that is not alive. */
+  __wipe(); const ff = __floor();
+  setRoom(0);
+  __slab(30, 40, 40, 50, ICE);
+  const air0 = meanRow(ICE);
+  for (let k=0;k<900;k++) __step(1);
+  if (Math.abs(meanRow(ICE) - air0) > 0.5)
+    bad0 = `a block of ice drawn at row ${air0.toFixed(1)} was at ${meanRow(ICE).toFixed(1)} fifteen seconds later`;
+
+  __wipe(); const f3 = __floor();
+  for (let x=40;x<70;x++) put(x, f3-1, ICE);
+  for (let k=0;k<8;k++) put(44+k*3, f3-3, ANT);
+  let hauled = 0;
+  for (let k=0;k<2000;k++){
+    __step(1);
+    for (let i=0;i<type.length;i++) if (type[i]===ANT && feed[i]===ICE) hauled++;
+  }
+  setRoom(2);
+  if (hauled) return `an ant carried a block of ice for ${hauled} cell-ticks`;
+  return bad0 || null;
 });
 
 /* --------------------------------------------------------------- CANNOT
