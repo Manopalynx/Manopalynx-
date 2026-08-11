@@ -318,7 +318,7 @@ const E=0, WOOD=1, PAPER=2, STRAW=3, OIL=4, WAX=5, MELT=6, POWDER=7, FUSE=8,
       LAVA=21, GLASS=22, MOLTEN=23, OBSIDIAN=24,
       THERMITE=25, MAGNES=26, RUBBER=27, MRUBBER=28, ACID=29, GAS=30, VENT=31, WORM=32,
       MOTH=33, FISH=34, GRUB=35, PUPA=36, ASHBUG=37, ANT=38, MOSS=39, DIRT=40,
-      SEED=41, STEM=42, FLOWER=43, RICH=44, GRASS=45;
+      SEED=41, STEM=42, FLOWER=43, RICH=44, GRASS=45, SNOW=46;
 
 // phase: 0 gas (rises)  1 liquid (flows)  2 powder (piles)  3 solid (static)
 const M = [];
@@ -356,8 +356,8 @@ M[STEEL]  = {n:'Steel',    ph:3, col:[142,146,152], ig:9e9, cond:.92, cap:1.6, d
 // than not having the setting at all. Ice melts above 0 and water freezes below it, so
 // there is no temperature where a cell can flip between the two forever.
 M[WATER]  = {n:'Water',    ph:1, col:[ 44, 92,132], ig:9e9, cond:.42, cap:6.0, boil:100, into:STEAM,
-             cool:0, sets:ICE, t0:12, dens:1.0};
-M[ICE]    = {n:'Ice',      ph:2, col:[168,204,222], ig:9e9, cond:.28, cap:3.0, melt:0,   into:WATER, t0:-14, dens:.92, rigid:1, lat:430};
+             cool:0, sets:ICE, t0:12, dens:1.0, wets:1};
+M[ICE]    = {n:'Ice',      ph:2, col:[168,204,222], ig:9e9, cond:.28, cap:3.0, melt:0,   into:WATER, t0:-14, dens:.92, rigid:1, lat:430, wets:1};
 // Its own latent heat, and a large one: melting ice really does cost far more per
 // unit than melting wax. Sharing the default meant that opening the box up to the
 // room — which it badly needed, or a lava scene simply cooked — took a third of a
@@ -778,6 +778,35 @@ M[RICH]    ={n:'Rich soil',ph:2, col:[ 44, 46,  0], ig:9e9, cond:.15, cap:1.7, d
 M[GRASS]   ={n:'Grass',    ph:3, col:[140,146,  0], ig:170, fuel:7,  out:0.7, cond:.15, cap:1.0,
              char:5, ash:ASH, dens:.8, alive:1,
              damp:30, thirst:240};
+/* Snow, which is ice that fell rather than ice you placed, and behaves like neither.
+
+   Ice is `rigid`: a block you draw and it hangs there, which is right for a block and wrong
+   for weather. Snow is a powder, so it piles and drifts and slumps off a roof, and it is
+   lighter than water, so it floats on a pond instead of sinking through it.
+
+   **It waters things twice.** `wets` makes a drift count as damp in its own right, so a
+   meadow under snow is not dying of thirst; and it melts into water above nought, so the
+   drift becomes a puddle and then the puddle waters the meadow. In a Freezing room it does
+   neither and just sits there, which is the point of having a room you can turn.
+
+   `lat` 200 against ice's 430, and that number is the difference between snow and slow rain.
+   Measured over forty seconds in a Normal room: at 120 a flake melts on the way down and the
+   most snow ever on screen at once is 59 — you press Snow and get a puddle. At 400 it barely
+   melts at all, because four hundred flakes at `cap` 2.1 chill the whole box and stop their
+   own thaw. At 200 it settles to 179, is down to 41 by the end, and leaves 428 cells of water.
+   In Cold or Freezing it lies where it falls and melts none of it, which is the point of
+   having a room you can turn.
+
+   **The colour was expected to need an exception and does not.** The pale end is the crowded
+   end — Steam, Magnesium, Ice, Glass, Paper and Wax are all up there — and the scan that
+   picked this said pure white would land half a point under and have to join the list of
+   pairs the suite forgives. It was wrong twice in the same direction: it had magnesium's
+   colour copied down wrong, and it was holding materials to the bar for a creature and a
+   material rather than the bar for two materials. Snow sits 7.5 from magnesium against a bar
+   of 6. Worth writing down because the scan is only ever as good as the palette it is handed,
+   and it is easier to notice a search that says no than one that says yes. */
+M[SNOW]    ={n:'Snow',     ph:2, col:[246,248,250], ig:9e9, cond:.22, cap:2.1, dens:.35,
+             melt:0, into:WATER, lat:200, t0:-10, grain:6, wets:1};
 /* `chokes` is why this one and not smoke or steam. Gas is the gas that *stays*: it only
    leaves at the top of the box, so it pools and fills a room, and a creature under it is
    under it for as long as the room holds.
@@ -855,7 +884,7 @@ SAVE_KEY[GRUB]='grub';        SAVE_KEY[PUPA]='pupa';
 SAVE_KEY[ASHBUG]='ash-bug';   SAVE_KEY[ANT]='ant';         SAVE_KEY[MOSS]='moss';
 SAVE_KEY[DIRT]='dirt';
 SAVE_KEY[SEED]='seed';       SAVE_KEY[STEM]='stem';         SAVE_KEY[FLOWER]='flower';
-SAVE_KEY[RICH]='rich-soil';  SAVE_KEY[GRASS]='grass';
+SAVE_KEY[RICH]='rich-soil';  SAVE_KEY[GRASS]='grass';       SAVE_KEY[SNOW]='snow';
 
 const TYPE_OF_KEY = new Map(SAVE_KEY.map((k,t) => [k,t]));
 
@@ -933,8 +962,6 @@ const VENT_EVERY = 10;    // ticks between one vent cell producing anything. Per
 // Up first: that is what fills a shaft and makes a volcano overflow at the top rather
 // than a puddle creep sideways out of the bottom.
 const VENT_DIRS  = [[0,-1], [-1,0], [1,0], [0,1]];
-const RAIN_TICKS = 420;   // how long a press of Rain keeps raining. At 90 it was a
-                          // second and a half, which a fire of any size shrugged off.
 const MATCH_HEAT = 780;   // what the match puts into whatever you touch with it
 const FIRE_HEAT  = 780;   // a flame, newly lit
 const FIRE_DIES  = 360;   // below this a flame is not a flame any more
@@ -2167,12 +2194,21 @@ function findScent(){
    something you notice happening. The rule that matters is still the one that bites: no
    water, no moss, and the readout says so now. */
 function damp(x, y, r){
+  /* What counts as wet is a field on the material rather than a list of names here: water,
+     ice, and a drift of snow, which is wet where it lies as well as after it melts.
+
+     Mist used to short-circuit this — misting, therefore damp, everywhere at once — and it
+     was taken out because nothing could tell the difference. Mist beads dew on things, dew
+     is water, and `damp` is a radius rather than a line of sight, so a drop on the roof of a
+     sealed chamber wets the moss inside it through the stone. Moss walled up with no water
+     anywhere went from 11 cells to 224 under a mist with the short-circuit and 11 to 224
+     without it. Everything that grows in this box grows on a surface, and dew lands on
+     surfaces, so there was no case left for the rule to serve. */
   for (let dy=-r; dy<=r; dy++)
     for (let dx=-r; dx<=r; dx++){
       const xx=x+dx, yy=y+dy;
       if (!inb(xx,yy)) continue;
-      const t = type[idx(xx,yy)];
-      if (t === WATER || t === ICE) return true;
+      if (M[type[idx(xx,yy)]].wets === 1) return true;
     }
   return false;
 }
@@ -3058,11 +3094,16 @@ const BLOOMS = M.map(m => m && m.blooms ? m.blooms : null);
 const GRAINS = M.map(m => (m && m.grain !== undefined ? m.grain : GRAIN) / GRAIN);
 
 function draw(){
+  /* Mist is drawn rather than placed: the air lightens and takes the grain of the cell it is
+     in, so a misty box looks like fog rather than like a grey rectangle. Hoisted out of the
+     loop, so it costs one boolean rather than a test per cell. */
+  const foggy = (sky === SKY_MIST && skyLeft > 0);
   for (let i=0, p=0; i<type.length; i++, p+=4){
     const t = type[i];
     let r,g,b;
     if (t===E){
-      r=11; g=10; b=9;
+      if (foggy){ const j = tint[i]; r=56+j; g=60+j; b=64+j; }
+      else { r=11; g=10; b=9; }
     } else {
       // `bl`, not `b`: the loop's own `b` is the blue channel it is about to write, and a
       // `const b` here shadows it and throws on the very next line. It threw on every cell
@@ -3470,7 +3511,47 @@ const clearBtn = actionChip('Clear', ()=>{
   say('Clear — pick what goes. Fire takes the heat', true);
 }, false, 'clear');
 actsEl.appendChild(clearBtn);
-actsEl.appendChild(actionChip('Rain', ()=>{ snapshot('the rain'); raining = RAIN_TICKS; }, false, 'rain'));
+/* Weather, as a picker, for the same reason Clear and Room are: four things belong under one
+   word, and the drawer row is already there and already empty. One chip in the tray, four
+   behind it, and the tray does not grow.
+
+   Rain keeps its downpour. It is the fire-fighting tool — a sustained shower is the only
+   thing that reliably puts a fire out — and a rain gentle enough not to flood is a rain with
+   no job. The gentle one is Mist, which is a different tool for a different problem. */
+const skyEl = document.createElement('div');
+function skyChoice(label, act, fn){
+  skyEl.appendChild(actionChip(label, ()=>{ fn(); showDrawer(TOOLS_DRAWER); }, false, act));
+}
+
+skyChoice('Back', 'weather-none', ()=> say('Nothing changed', true));
+
+skyChoice('Rain', 'weather-rain', ()=>{
+  snapshot('the rain'); sky = SKY_RAIN; skyLeft = RAIN_LEFT;
+  say('Rain — enough of it to put a fire out, and it stays where it lands');
+});
+
+skyChoice('Mist', 'weather-mist', ()=>{
+  // No snapshot: mist puts nothing in the box and takes nothing out, so there is nothing to
+  // undo, and spending the one undo slot on it would throw away the stroke before it.
+  sky = SKY_MIST; skyLeft = MIST_LEFT;
+  say('Mist — everything is damp while it lasts, and the box stays dry');
+});
+
+skyChoice('Snow', 'weather-snow', ()=>{
+  snapshot('the snow'); sky = SKY_SNOW; skyLeft = SNOW_LEFT;
+  say('Snow — it piles, it chills, and above nought it becomes water');
+});
+
+skyChoice('Storm', 'weather-storm', ()=>{
+  snapshot('the storm'); sky = SKY_STORM; skyLeft = STORM_LEFT;
+  say('Storm — lightning at 1500°C, which will light anything in the box');
+});
+
+actsEl.appendChild(actionChip('Weather', ()=>{
+  fillFrom(skyEl);
+  tabsEl.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-pressed','false'));
+  say('Weather — Mist waters, Rain floods, Snow chills, Storm sets light', true);
+}, false, 'weather'));
 
 /* A false-colour view of the temperature field. The model is the whole point of this
    box and almost none of it is visible: a log at 280°C and a log at 20°C look the
@@ -3562,7 +3643,7 @@ actsEl.appendChild(findBtn);
 function wipeAll(){
   type.fill(E); temp.fill(AMBIENT); fuel.fill(0); life.fill(0); vel.fill(0); feed.fill(0);
   way.fill(0); breath.fill(0);
-  raining = 0;
+  skyLeft = 0;
   // The attic is part of the box. Leaving it behind would mean a wipe, a preset or a load
   // followed by a rotation brings back whatever had been off the top of the screen.
   atticForget();
@@ -3987,7 +4068,112 @@ brushEl.addEventListener('input', ()=>{
 
 /* ============================================================ input */
 
-let painting = false, raining = 0;
+/* Weather: four things the sky can be doing, and one clock between them, so turning one on
+   turns the last one off without anything having to say so.
+
+   Rain and snow put material in at the top and let it fall. A storm strikes. Mist is not
+   material at all — it is a state of the air, read by `damp()` and drawn by `draw()` — which
+   is why it can wet a whole box without filling it, and why it costs the palette nothing at
+   a point where the palette has nothing left to give. */
+const SKY_RAIN = 1, SKY_MIST = 2, SKY_SNOW = 3, SKY_STORM = 4;
+// Rain at 420: at 90 it was a second and a half, which a fire of any size shrugged off.
+// The others are longer because none of them is trying to win an argument with a fire.
+const RAIN_LEFT = 420, MIST_LEFT = 1200, SNOW_LEFT = 1800, STORM_LEFT = 1800;
+const SNOW_RATE = .25;      // chance of a flake on any tick
+const DEW_RATE  = .05;      // ...and of a drop of mist beading on something
+const STRIKE_EVERY = 110;   // ticks between bolts, so a storm is weather and not a strobe
+/* Hotter than a match on purpose. A match is 780 and cannot light coal at 520 through its
+   char delay, nor thermite at 950 at all; lightning at 1500 lights anything in the box,
+   which is the whole appeal of a sky that starts fires you did not. */
+const BOLT_HEAT = 1500;
+const BOLT_SCORCH = 2;      // cells either side of the point of impact that get it too
+let sky = 0, skyLeft = 0;
+
+function weatherTick(){
+  if (sky === SKY_RAIN){
+    for (let k=0;k<Math.ceil(W/22);k++){
+      const x = (Math.random()*W)|0;
+      if (type[idx(x,0)]===E) put(x,0,WATER);
+    }
+  } else if (sky === SKY_SNOW){
+    /* One flake every few ticks, against rain's six a tick. A flake is a cell of frozen
+       water and it all melts in the end, so the rate is really a question about how much
+       water a snowfall leaves behind: at one a tick it came to **2,075 cells**, which is a
+       rainstorm wearing a hat. At this rate it is about four hundred. */
+    if (Math.random() < SNOW_RATE){
+      const x = (Math.random()*W)|0;
+      if (type[idx(x,0)]===E) put(x,0,SNOW);
+    }
+  } else if (sky === SKY_STORM){
+    if ((tick % STRIKE_EVERY) === 0) bolt();
+  } else if (sky === SKY_MIST){
+    dew();
+  }
+}
+
+/* Mist wets things by beading on them, and that turned out to be the whole of it.
+
+   Without this, mist is a trick rather than a tool: measured, ten seeds under a mist all came
+   up and **every one of the plants was dead within a few seconds of it stopping**, because
+   `thirst` runs the moment `damp` goes false and mist leaves nothing behind. A meadow needs
+   water to still be there tomorrow, not to have been there once.
+
+   So a mist beads on things. One drop every few ticks, laid on top of the first solid thing
+   under a random column — about sixty over a full mist, against rain's 2,202. That is the
+   difference the two are for: mist leaves puddles, rain leaves a lake. */
+function dew(){
+  if (Math.random() >= DEW_RATE) return;
+  const x = (Math.random()*W)|0;
+  let y = 0;
+  while (y < H-1 && type[idx(x,y)] === E) y++;
+  if (y === 0) return;                       // nothing under this column but the ceiling
+  const t = type[idx(x,y)];
+  if (t === E || M[t].ph === 0 || M[t].ph === 1) return;   // it beads on solids, not on ponds
+  put(x, y-1, WATER);
+}
+
+/* A bolt: straight down a column to the first thing that is not air, and whatever that is
+   gets 1500°C put into it.
+
+   `bolt`, not `strike`: the match already has a `strike()` and a second function declaration
+   of the same name in the same scope simply replaces it. Striking the strip fired lightning
+   and lit no match. Two checks caught it — the match going out mid-drag, and a second strike
+   not giving a fresh match — and neither of them is about weather, which is the only reason
+   the collision did not ship.
+
+   The flash is made of ordinary fire cells with their clock already nearly run out. A gas in
+   this box dies when its `life` passes about its span, so setting `life` past the top of that
+   range means the bolt is gone within a tick or two without any new machinery to draw it and
+   without a column of flame hanging in the air afterwards. */
+function bolt(){
+  const x = 2 + ((Math.random() * (W-4)) | 0);
+  let y = 0;
+  while (y < H-1 && type[idx(x,y)] === E) y++;
+  /* A patch, not a point. A bolt into one cell is over in a few ticks — the heat conducts
+     away into the cold thing next to it — and several materials need to be held over their
+     ignition point for a while before they catch: thermite wants twenty-four ticks above
+     950°C. One cell at 1500 never got there, and a storm over a bed of thermite did nothing
+     at all, which is the one thing lightning ought to be able to do that a match cannot.
+     A scorched patch holds itself up long enough. */
+  for (let dy=-BOLT_SCORCH; dy<=BOLT_SCORCH; dy++)
+    for (let dx=-BOLT_SCORCH; dx<=BOLT_SCORCH; dx++){
+      if (dx*dx + dy*dy > BOLT_SCORCH*BOLT_SCORCH + 1) continue;
+      if (!inb(x+dx, y+dy)) continue;
+      const j = idx(x+dx, y+dy);
+      if (temp[j] < BOLT_HEAT) temp[j] = BOLT_HEAT;
+    }
+  const hit = idx(x,y);
+  for (let k=y-1; k>=0; k--){
+    const i = idx(x,k);
+    if (type[i] !== E) break;
+    become(x, k, FIRE);
+    temp[i] = BOLT_HEAT;
+    life[i] = 40;                 // past the top of fire's own span, so it goes at once
+  }
+  say(type[hit] === E ? 'Lightning' : `Lightning strikes the ${M[type[hit]].n.toLowerCase()}`, true);
+}
+
+let painting = false;
 
 /* One step of undo, taken before a stroke rather than after it.
 
@@ -4243,13 +4429,7 @@ function frame(now){
      Everything in the model is per tick, so this changes how fast the world runs and
      nothing about how it behaves. The suites step it themselves and are unaffected. */
   for (let s=0; s<STEPS; s++){
-    if (raining > 0){
-      raining--;
-      for (let k=0;k<Math.ceil(W/22);k++){
-        const x = (Math.random()*W)|0;
-        if (type[idx(x,0)]===E) put(x,0,WATER);
-      }
-    }
+    if (skyLeft > 0){ skyLeft--; weatherTick(); }
     simTick();
   }
   heatView ? drawHeat() : draw();
