@@ -1178,6 +1178,9 @@ const inb = (x,y) => x>=0 && x<W && y>=0 && y<H;
 // question "is this cell air" has to be asked here rather than read off `ph`.
 const gassy = t => t===E || M[t].ph===0;
 const capOf = t => { const c = M[t].cap; return c !== undefined ? c : AIR_CAP; };
+// The same figure as a flat array, for the one loop that asks for it 31,460 times a
+// tick. `capOf` is the readable form and stays the form everything else uses.
+const CAPS  = M.map(m => m && m.cap !== undefined ? m.cap : AIR_CAP);
 
 /* There are two ways for a cell to change, and telling them apart was worth four
    defects on its own.
@@ -1535,16 +1538,76 @@ function convect(){
    for. That is a change to the load-bearing part of the heat model, with an energy check and
    a runaway-fire check sitting on it, so it is not being made on the way past. */
 
+/* Neutral: the room as part of the simulation rather than a wall behind it.
+
+   Every other setting is an infinite reservoir. Pack the box edge to edge with ice and
+   Normal still holds the walls at 20°C for ever, so the cold has nowhere to go and the
+   gauge reads a room that is not answering anything. Reported from the phone exactly
+   that way, and it is not a bug in the ice.
+
+   The room relaxes toward a bounded function of what is in the box:
+
+     box     the box's *mixing temperature* — total heat energy over total heat
+             capacity, i.e. what the box would read if you stirred it. Not the plain
+             average of the readings: measured, a mean puts a fully iced box at 11.8°C
+             against a mixing temperature of 2.6, because it counts a cell of air the
+             same as a cell of ice holding nine times the heat.
+     gain    how hard the room answers. This one is not free. If the room sits at
+             20 + gain·(box − 20) then the gap driving the box's own cooling is
+             (1 − gain) of what it was, so **everything in the box cools (1 − gain)
+             times as fast**. That is the whole reason the hot gain is low.
+     span    how far the room can ever get from base. This one *is* free, and the two
+             were worth separating: measured, gain .22 with span 45 both peaks higher
+             than gain .5 with span 20 (60.4°C against 39.9) and recovers from it far
+             faster (down 18° after 150s, against 0.1°). Through tanh rather than a
+             clamp, so near the edge the room reports a reading instead of pinning at
+             a number the way the first version did.
+
+   No runaway is possible by construction, which was the thing to get right: `target`
+   is 20 whenever the box is, so there is no fixed point away from base and no need
+   for a second restoring term. The first draft had the room simply follow the box,
+   and measured, a big fire drove it to 400°C and left it there for good.
+
+   The two directions do not want the same answer, because the box's hot excursions are
+   twenty times the size of its cold ones — a large fire takes the mixing temperature to
+   277°C and a box packed with ice only to −10. Hence two gains and two spans. */
+const N_BASE      = 20;
+const N_GAIN_COLD = .80;  // .70 leaves a fully iced box at 0.8°C, which is a cold room
+                          // and not a freezing one. At .80 it reaches −1.8 and the
+                          // things that key off zero start to mean something.
+const N_GAIN_HOT  = .25;  // a third slower cooling on the hot side, which is the price
+const N_SPAN_COLD = 40;   // never reached in practice — the cold side is gain-limited,
+                          // not span-limited, so this is a rail rather than a setting
+const N_SPAN_HOT  = 45;   // reached, and doing real work: a large fire saturates it
+const N_RATE      = .0035;// ~5s to answer a change. At .0015 the destinations were the
+                          // same and the recovery from a removed ice slab took 82s
+                          // rather than 46 — the rate is a cheap win, so it is spent.
+let roomDrifts = false;   // whether the setting in hand is Neutral. Derived from the
+                          // opening `roomAt` where ROOMS is declared, and set by
+                          // setRoom after that — never written by hand, because a copy
+                          // of a fact is a copy that can disagree with it.
+
+function roomTarget(box){
+  const d = box - N_BASE;
+  const g = d < 0 ? N_GAIN_COLD : N_GAIN_HOT;
+  const s = d < 0 ? N_SPAN_COLD : N_SPAN_HOT;
+  return N_BASE + s * Math.tanh(g * d / s);
+}
+
 // The room. Only the air is in touch with it — a stone floor loses its heat by
 // conducting into the air above it, which conduct() already does. Applying this to
 // every cell made a thick wall into a heat sink that no fire could ever warm.
 function roomLoss(){
+  // The mixing temperature is gathered in this pass rather than its own. It is a whole
+  // extra sweep of the grid otherwise, every tick, for one number.
+  let heat = 0, cap = 0;
   for (let i=0; i<temp.length; i++){
     if (gassy(type[i])) temp[i] += (AMBIENT - temp[i]) * ROOM_LOSS;
     // The ceiling, enforced in one place. "Nothing gets hotter than MAX_T" is a
     // claim the file makes, and it was being trusted to five separate clamps
     // scattered through the reaction code — one of which did not exist.
     if (temp[i] > MAX_T) temp[i] = MAX_T;
+    if (roomDrifts){ const p = CAPS[type[i]]; heat += temp[i] * p; cap += p; }
   }
   // The walls. Whatever is pressed against the outside of the box is in contact with
   // the room, so the border ring sheds heat properly rather than banking it.
@@ -1558,6 +1621,10 @@ function roomLoss(){
     temp[l] += (AMBIENT - temp[l]) * EDGE_LOSS;
     temp[r] += (AMBIENT - temp[r]) * EDGE_LOSS;
   }
+  // Last, so the walls above shed into the room the box had this tick rather than the
+  // one it is moving to. A tick of lag against a five-second response is nothing, and
+  // reading and writing AMBIENT in the same pass is how a feedback loop gets subtle.
+  if (roomDrifts) AMBIENT += (roomTarget(heat / cap) - AMBIENT) * N_RATE;
 }
 
 
@@ -3603,6 +3670,9 @@ actsEl.appendChild(actionChip('Weather', ()=>{
    seconds to be visible at all, because the air only relaxes toward the room at
    ROOM_LOSS a tick and everything else waits on the air. */
 const ROOMS = [
+  // First because it is the default, and because it is the only one that is not a
+  // number you are choosing — see roomTarget() for what it does and what it costs.
+  { n:'Neutral',  t: 20, drift:1, tell:'the room follows what is in the box' },
   { n:'Freezing', t:-30, tell:'water freezes' },
   // 0 freezes water too, and says so. Water sits exactly at the room and rounds under
   // its own freezing point, so labelling this one "ice keeps" and leaving it there
@@ -3615,20 +3685,24 @@ const ROOMS = [
   { n:'Oven',     t:230, tell:'powder, straw, oil, fuse and paper catch on their own' },
   { n:'Furnace',  t:480, tell:'everything but coal and thermite goes by itself' },
 ];
-let roomAt = 2;                                  // Normal, 20°C
+let roomAt = 0;                                  // Neutral, starting at 20°C
+roomDrifts = !!ROOMS[roomAt].drift;              // rather than stating it twice
 
-/* Tapping Room shows the six, rather than stepping to the next one.
+/* Tapping Room shows the seven, rather than stepping to the next one.
 
    Cycling was the first version and it was reported as clunky, correctly: the settings
    are invisible until you have been through them, and getting from Furnace back to
-   Normal is five taps in one direction and none in the other. Six chips is one row,
-   which is the size of every other drawer, so showing them costs nothing and moves
-   nothing — the row it borrows is the row the tray already keeps clear. */
+   Normal is five taps in one direction and none in the other. Seven chips is one row —
+   Fuel and Life already carry eight — so showing them costs nothing and moves nothing:
+   the row it borrows is the row the tray already keeps clear. */
 const roomEl = document.createElement('div');
 
 function setRoom(i){
   roomAt = i;
   const r = ROOMS[i];
+  roomDrifts = !!r.drift;
+  // Neutral starts where Normal sits and goes from there, so turning it on is not
+  // itself an event — it inherits the room you were in rather than jumping.
   AMBIENT = r.t;
   // The room is the air. Everything solid comes along by conduction at whatever its own
   // `cond` and `cap` say, which is the interesting part and is why ice can hold out in
@@ -3636,7 +3710,9 @@ function setRoom(i){
   for (let k=0;k<type.length;k++) if (type[k]===E) temp[k] = AMBIENT;
   roomEl.querySelectorAll('.chip').forEach((c,k) => c.setAttribute('aria-pressed', String(k===i)));
   matsEl.querySelectorAll('.chip[data-room]').forEach((c,k) => c.setAttribute('aria-pressed', String(k===i)));
-  say(`${r.n} — ${r.t}°C, ${r.tell}`, true);
+  // Neutral has no number to announce — the number is the thing it is about to work
+  // out — so it says what it does instead of claiming a temperature it will not hold.
+  say(r.drift ? `${r.n} — ${r.tell}` : `${r.n} — ${r.t}°C, ${r.tell}`, true);
 }
 
 ROOMS.forEach((r,i) => {
@@ -3649,7 +3725,7 @@ ROOMS.forEach((r,i) => {
 const roomBtn = actionChip('Room', ()=>{
   fillFrom(roomEl);
   tabsEl.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-pressed','false'));
-  say(`Room — ${ROOMS[roomAt].n}, ${AMBIENT}°C. Pick one`, true);
+  say(`Room — ${ROOMS[roomAt].n}, ${Math.round(AMBIENT)}°C. Pick one`, true);
 }, false, 'room');
 actsEl.appendChild(roomBtn);
 
@@ -3784,6 +3860,10 @@ function loadScene(s){
    change to this one. */
 
 const STORE_KEY = 'matchbox.scene.1';
+// The save format's version, in one place because Load has to agree with encodeScene and
+// for one build it did not: encodeScene said 4 and Load accepted 1 to 3, so every save the
+// page wrote came back as "That save is damaged" from the page that had just written it.
+const SAVE_V    = 4;
 let storeOK = null;
 
 // Asked once, and asked by trying rather than by feature-detecting: `localStorage`
@@ -3827,7 +3907,11 @@ function encodeScene(){
   // — the list can grow. Leaving it out was a defect and not a simplification: a volcano
   // built in a Furnace and loaded back at Normal is not the scene that was saved, it is a
   // different one doing different things, and nothing about it looks wrong.
-  return { v:3, w:W, h:H, keys, runs, feed: vents, room: ROOMS[roomAt].n };
+  // v4 adds the room's *temperature* alongside its name, because on Neutral the name no
+  // longer determines the number. A box you left at −1.8°C under a slab of ice and saved
+  // would otherwise come back at 20 and spend the next twenty seconds drifting down to
+  // where it already was, with the ice melting the whole way.
+  return { v:SAVE_V, w:W, h:H, keys, runs, feed: vents, room: ROOMS[roomAt].n, at: AMBIENT };
 }
 
 // Returns the keys it could not place, which is not an error: a save written by a
@@ -3862,6 +3946,11 @@ function decodeScene(s){
   // answer available and is why this says so rather than guessing at 20.
   const named = ROOMS.findIndex(r => r.n === s.room);
   if (named >= 0) setRoom(named);
+  // ...and then the number it was actually at, which setRoom has just reset to the
+  // setting's base. Only for a drifting room: on a fixed one the name *is* the number,
+  // and a save carrying a stale `at` must not be allowed to contradict it. Before
+  // wipeAll, which fills the field with whatever AMBIENT is by then.
+  if (named >= 0 && ROOMS[named].drift && Number.isFinite(s.at)) AMBIENT = s.at;
   wipeAll();
   // Bottom-aligned and clipped, the same rule a resize already uses, because the
   // floor is the floor. A scene saved on a taller screen loses its ceiling rather
@@ -3918,7 +4007,11 @@ const loadBtn = actionChip('Load', ()=>{
   if (!text){ say('Nothing saved yet', true); return; }
   let s = null;
   try { s = JSON.parse(text); } catch { s = null; }
-  if (!s || !(s.v >= 1 && s.v <= 3) || !Array.isArray(s.keys) || !Array.isArray(s.runs) ||
+  // SAVE_V rather than a number written here. This said `s.v <= 3` and encodeScene said
+  // `v:4`, so every save the page wrote was rejected by the page that wrote it — as "That
+  // save is damaged", which is a sentence about the file and not about the two lines of
+  // this that had stopped agreeing.
+  if (!s || !(s.v >= 1 && s.v <= SAVE_V) || !Array.isArray(s.keys) || !Array.isArray(s.runs) ||
       !(s.w > 0) || !(s.h > 0)){
     say('That save is damaged', true); return;
   }
@@ -4612,10 +4705,13 @@ function updateGauge(){
   const label = air === null
     ? `solid ${Math.round(allSum/temp.length)}°C`
     : `air ${Math.round(air)}°C`;
-  // The room is shown next to the air because the pair is the interesting reading: the
-  // air is what the box has settled at, the room is what it is settling toward, and the
-  // gap between them is the fire.
-  gaugeEl.innerHTML = `${label}<br>room ${ROOMS[roomAt].n} ${AMBIENT}°C` +
+  /* The room is shown next to the air because the pair is the interesting reading: the
+     air is what the box has settled at, the room is what it is settling toward, and the
+     gap between them is the fire.
+
+     Rounded, which matters now rather than being tidiness: on Neutral the room is a
+     drifting float and printing it raw put `room Neutral -1.7724609375°C` on the gauge. */
+  gaugeEl.innerHTML = `${label}<br>room ${ROOMS[roomAt].n} ${Math.round(AMBIENT)}°C` +
                       `<br><b>peak ${Math.round(peak)}°C</b>` +
                       `<br>found ${finds.size}/${FINDS.length}` +
                       `<br>${frameMs.toFixed(1)}ms work · ${W}×${H}`;
