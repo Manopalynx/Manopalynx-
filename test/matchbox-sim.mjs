@@ -72,6 +72,20 @@ const HARNESS = `
   window.__hold = (x,y,r,ticks) => { for (let k=0;k<ticks;k++){ __flame(x,y,r); __step(1); } };
   window.__energy = () => { let e=0; for (let i=0;i<temp.length;i++){ const m=M[type[i]];
     e += temp[i] * (m.cap !== undefined ? m.cap : AIR_CAP); } return e; };
+  // By name, because the settings are a list that grows and an index is a fact about
+  // where a thing happens to sit today. Adding Neutral at the front shifted every one
+  // of them by one, and a check that says setRoom(0) would have gone on passing while
+  // measuring a different room than the one it names in its own failure message.
+  window.__room  = n => { const i = ROOMS.findIndex(r => r.n === n);
+    if (i < 0) throw new Error('no room called ' + n); setRoom(i); return i; };
+  /* And every check starts in a fixed room, whatever the app defaults to.
+
+     The app now opens on Neutral, where the room drifts with what is in the box. That is
+     the point of it, and it is the wrong ground to measure anything else from: a check
+     about how long a candle burns would quietly become a check about how long a candle
+     burns in a room the candle is warming. The Neutral checks turn it back on for
+     themselves. */
+  setRoom(ROOMS.findIndex(r => r.n === 'Normal'));
 `;
 
 let passed = 0, failed = 0;
@@ -927,12 +941,12 @@ await check(browser, 'oil floats, sand sinks, snow bobs up, ice does neither', (
      said, and it left ice floating up through ponds and being carried around by ants. Snow is
      the powder now and it inherits the buoyancy, which it earns at `dens` 0.35 against water's
      1.0 rather than ice's 0.92 squeaking under. */
-  f = pool(); setRoom(0);
+  f = pool(); __room('Freezing');
   __slab(46, f-14, 53, f-9, SNOW);
   const before = meanRow(SNOW);
   for (let k=0;k<400;k++) __step(1);
   const after = meanRow(SNOW);
-  setRoom(2);
+  __room('Normal');
   if (after === null) return 'the snow melted before it could float, so this measured nothing';
   if (after >= before) return `snow sat at row ${before.toFixed(1)} and was at ${after.toFixed(1)} 400 ticks later — it did not rise`;
 
@@ -941,7 +955,7 @@ await check(browser, 'oil floats, sand sinks, snow bobs up, ice does neither', (
      came down to the floor, and eight ants hauled it about for 4,733 cell-ticks between them,
      because what an ant may lift is any powder that is not alive. */
   __wipe(); const ff = __floor();
-  setRoom(0);
+  __room('Freezing');
   __slab(30, 40, 40, 50, ICE);
   const air0 = meanRow(ICE);
   for (let k=0;k<900;k++) __step(1);
@@ -956,7 +970,7 @@ await check(browser, 'oil floats, sand sinks, snow bobs up, ice does neither', (
     __step(1);
     for (let i=0;i<type.length;i++) if (type[i]===ANT && feed[i]===ICE) hauled++;
   }
-  setRoom(2);
+  __room('Normal');
   if (hauled) return `an ant carried a block of ice for ${hauled} cell-ticks`;
   return bad0 || null;
 });
@@ -1090,8 +1104,12 @@ await check(browser, 'turning the room up lights things that nothing touched', (
   // setting it afterwards leaves the floor at whatever the previous run used — measured,
   // it left a stone floor at −30 under a 20°C room and froze five cells of the water
   // standing on it, which reads exactly like the page freezing water at room temperature.
-  const run = (i) => {
-    roomAt = i; AMBIENT = ROOMS[i].t;
+  // By name. This said run(0), run(2), run(4) and meant Freezing, Normal, Oven — until
+  // Neutral went in at the front of the list and they meant Neutral, Cold and Warm. The
+  // check went on running and went on being about the room; it was simply about three
+  // different rooms than the ones it names in its own failure messages.
+  const run = (name) => {
+    __room(name);
     __wipe();
     const f = __floor(); const cx = (W/2)|0;
     __slab(cx-12, f-9, cx+11, f-1, PAPER);
@@ -1101,22 +1119,22 @@ await check(browser, 'turning the room up lights things that nothing touched', (
     return { paperGone: paper0 - __count(PAPER), water: __count(WATER), ice: __count(ICE),
              water0, nan: __nan() };
   };
-  const cold = run(0);                                   // Freezing, -30
+  const cold = run('Freezing');
   if (cold.nan) bad.push('a freezing room produced a NaN temperature');
   if (cold.ice < cold.water0 * 0.5) bad.push(`Freezing froze ${cold.ice} of ${cold.water0} water cells — the label says it freezes`);
   if (cold.paperGone) bad.push(`${cold.paperGone} paper cells burned in a freezing room`);
 
-  const room = run(2);                                   // Room, 20
+  const room = run('Normal');
   if (room.paperGone) bad.push(`${room.paperGone} paper cells burned at room temperature with nothing touching them`);
   if (room.ice) bad.push(`${room.ice} cells of ice appeared at 20°C`);
 
-  const oven = run(4);                                   // Oven, 230
+  const oven = run('Oven');
   if (oven.paperGone < 100) bad.push(`an oven burned ${oven.paperGone} of ${room.water0 && ''}${216} paper cells`);
   if (oven.water) bad.push(`${oven.water} water cells survived an oven`);
   if (oven.nan) bad.push('an oven produced a NaN temperature');
 
   // Put it back, so a check that runs after this one gets the room it expects.
-  roomAt = 2; AMBIENT = ROOMS[2].t;
+  __room('Normal');
   return bad.length ? bad.join('; ') : null;
 });
 
@@ -1497,22 +1515,34 @@ await check(browser, 'the box kills worms with what it already had', () => {
   return bad.length ? bad.join('; ') : null;
 });
 
+/* This asked for the single deepest point the moth ever reached in fifteen seconds, and
+   failed if that was ever the floor. It is one moth on a random walk against an absolute
+   bar, which is the shape of every flaky check this suite has had: measured over forty
+   runs the deepest point has a median of row 88 and a maximum of 200 against a bar of
+   212, so it passes — and then a full-suite run turned up a 213 and failed on a moth that
+   had brushed the ground once and flown off again, which is flying.
+
+   What the check is actually about is whether the moth *stays* up, so it measures the
+   share of its time spent in the bottom eight rows. Moth: 0.000 across all forty runs.
+   The control is a grain of sand dropped from the same place — something that cannot fly
+   by construction — which scores 0.88 and bottoms out at row 213 every single time. */
 await check(browser, 'a moth flies, and does not fall out of the air', () => {
   __wipe(); __floor();
   const cx = (W/2)|0;
   put(cx, 40, MOTH);
   const at = () => { for (let i=0;i<type.length;i++) if (type[i]===MOTH) return [i%W,(i/W)|0]; return null; };
-  const start = at();
-  let lowest = start[1], moved = 0, last = start;
+  let onFloor = 0, moved = 0, last = at();
   for (let k=0;k<900;k++){
     __step(1);
     const p = at(); if (!p) return 'it died in an empty box';
     if (p[0]!==last[0] || p[1]!==last[1]) moved++;
-    lowest = Math.max(lowest, p[1]);
+    if (p[1] >= H-8) onFloor++;
     last = p;
   }
   if (!moved) return 'it never moved at all';
-  if (lowest >= H-8) return `it sank to row ${lowest} — a moth that ends up on the floor is not flying`;
+  const grounded = onFloor / 900;
+  if (grounded > 0.15)
+    return `it spent ${(grounded*100).toFixed(0)}% of fifteen seconds on the floor — a grain of sand scores 88%`;
   return null;
 });
 
@@ -1714,11 +1744,7 @@ await check(browser, 'the room can kill a tank of fish, hot or cold', () => {
     for (let k=0;k<8;k++) put(cx-8+k*2, f-5, FISH);
     return __count(FISH);
   };
-  const setRoomTo = (name) => {
-    const i = ROOMS.findIndex(r => r.n === name);
-    roomAt = i; AMBIENT = ROOMS[i].t;
-    for (let k=0;k<type.length;k++) if (type[k]===E) temp[k] = AMBIENT;
-  };
+  const setRoomTo = __room;      // its own copy of this once, which is one too many
 
   setRoomTo('Normal');
   const n0 = tank();
@@ -3357,7 +3383,7 @@ await check(browser, 'mist waters what is growing, and rain drowns the box', () 
 await check(browser, 'snow lies where it is cold and becomes water where it is not', () => {
   const bad = [];
   const fall = (room, n) => {
-    __wipe(); setRoom(room);
+    __wipe(); __room(room);
     const f = __floor();
     __slab(6, f-4, W-7, f-1, STONE);
     sky = SKY_SNOW; skyLeft = SNOW_LEFT;
@@ -3375,12 +3401,12 @@ await check(browser, 'snow lies where it is cold and becomes water where it is n
      in the middle is `lat` 200 and it took three goes to find — at 120 a flake melts on the
      way down and the most ever on screen is 59, at 400 the drift chills the box enough to
      stop its own thaw and 382 of it is still lying there. */
-  const cold = fall(0, 2400);
+  const cold = fall('Freezing', 2400);
   if (cold.lying < 150) bad.push(`only ${cold.lying} cells of snow were left lying in a freezing room`);
   if (cold.water) bad.push(`${cold.water} cells of water appeared in a freezing room`);
 
-  const warm = fall(2, 2400);
-  setRoom(2);
+  const warm = fall('Normal', 2400);
+  __room('Normal');
   if (warm.most < 60) bad.push(`the most snow ever on screen in a normal room was ${warm.most} — you cannot see it fall`);
   if (warm.lying > warm.most * 0.6)
     bad.push(`${warm.lying} of a peak ${warm.most} was still lying in a normal room — it is not melting`);
@@ -3393,9 +3419,9 @@ await check(browser, 'snow lies where it is cold and becomes water where it is n
   __wipe(); const f = __floor();
   __slab(20, f-20, 80, f-1, WATER);
   for (let k=0;k<30;k++) put(30 + k, f-24, SNOW);
-  setRoom(0);
+  __room('Freezing');
   for (let k=0;k<600;k++) __step(1);
-  setRoom(2);
+  __room('Normal');
   let onTop = 0, sunk = 0;
   for (let x=0;x<W;x++) for (let y=0;y<H-1;y++){
     if (type[idx(x,y)] !== SNOW) continue;
@@ -3535,6 +3561,157 @@ await check(browser, 'every material has a save key, no two share one, and a ren
 /* The room is part of what was built, not part of the app around it. Leaving it out of
    the save was a defect: a volcano built in a Furnace and loaded back at Normal is a
    different scene doing different things, and nothing about it looks wrong. */
+/* --------------------------------------------------------------- the room that answers
+
+   Every other setting is an infinite reservoir. Neutral is the box's own temperature fed
+   back into the walls, and it is the only part of the heat model that can be driven by
+   what the player builds — so it is the only part that can be driven somewhere it cannot
+   come back from. These four checks are the ones that would have caught the two versions
+   of it that did not work.
+
+   Version one simply followed the box. Measured, a big fire drove the room to 400°C and it
+   stayed there for good, because a hot room reheats the box which keeps the room hot.
+   Version two bounded that with a hard clamp, which stopped the number running away and
+   changed nothing else: the room sat pinned at the clamp a hundred and fifty seconds after
+   the fire was out, and a small fire and a large fire both read exactly the ceiling. */
+await check(browser, 'an empty box on Neutral stays where it is', () => {
+  __room('Neutral');
+  __wipe(); __floor();
+  for (let k=0;k<3600;k++) __step(1);
+  // The one thing Neutral must never do is have an opinion about nothing. Any asymmetry
+  // between the way it reads the box and the way the box relaxes toward it shows up here
+  // first, as a room that wanders off with an empty box in front of it.
+  if (Math.abs(AMBIENT - 20) > 0.5)
+    return `sixty seconds with an empty box took the room from 20°C to ${AMBIENT.toFixed(2)}`;
+  return null;
+});
+
+await check(browser, 'ice makes the room cold and fire makes it warm', () => {
+  const bad = [];
+  // Measured: a forty-row slab of ice takes the room to 4.8°C in a minute, and a box packed
+  // with ice to −1.8. A room that answers ice at all is the whole reason this exists.
+  __room('Neutral');
+  __wipe(); let f = __floor();
+  __slab(4, f-40, W-5, f-1, ICE);
+  for (let k=0;k<3600;k++) __step(1);
+  const iced = AMBIENT;
+  if (iced > 10) bad.push(`a forty-row slab of ice left the room at ${iced.toFixed(1)}°C`);
+
+  /* And the other direction, with the gradation that the clamped version did not have.
+     A small fire reads 28 and a large one 63, so the two are not the same event: measured
+     against the clamped version, which read 31.6 and 39.9 and could not tell them apart. */
+  __room('Neutral');
+  __wipe(); f = __floor();
+  __slab(60, f-10, 76, f-1, WOOD);
+  __hold(68, f-5, 3, 120);
+  let small = -1e9;
+  for (let k=0;k<2400;k++){ __step(1); if (AMBIENT > small) small = AMBIENT; }
+
+  __room('Neutral');
+  __wipe(); f = __floor();
+  __slab(6, f-30, W-7, f-1, WOOD);
+  for (let x=14; x<W-14; x+=18) __hold(x, f-16, 4, 40);
+  let large = -1e9;
+  for (let k=0;k<3600;k++){ __step(1); if (AMBIENT > large) large = AMBIENT; }
+
+  if (small < 22) bad.push(`a small fire moved the room to ${small.toFixed(1)}°C, which is nothing`);
+  if (large < 45) bad.push(`a large fire moved the room to ${large.toFixed(1)}°C`);
+  if (large < small + 20)
+    bad.push(`a small fire read ${small.toFixed(1)} and a large one ${large.toFixed(1)} — the room cannot tell them apart`);
+  // Neither may reach the span, or the reading is the rail and not a measurement.
+  if (large > 20 + N_SPAN_HOT - 1)
+    bad.push(`a large fire pinned the room at ${large.toFixed(1)} against a span of ${N_SPAN_HOT}`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+await check(browser, 'the room comes back, and cannot be driven somewhere it cannot', () => {
+  const bad = [];
+
+  /* The failure this is really about: a fire that leaves the room hot for good. Version one
+     of Neutral ended at 400°C and stayed; version two sat on its clamp for the full 150
+     seconds measured. What has to be true is that the room is *falling* — the box after a
+     big fire is genuinely 150°C of hot stone and ash and takes minutes to shed it, so this
+     asks for a decline rather than a return to 20. */
+  __room('Neutral');
+  __wipe(); let f = __floor();
+  __slab(6, f-30, W-7, f-1, WOOD);
+  for (let x=14; x<W-14; x+=18) __hold(x, f-16, 4, 40);
+  for (let k=0;k<2400;k++) __step(1);
+  const hot = AMBIENT;
+  for (let i=0;i<type.length;i++){                       // put it out
+    const t = type[i];
+    if (t===FIRE || t===EMBER || (M[t].fuel && fuel[i]>0 && life[i]>0)){
+      type[i]=E; fuel[i]=0; life[i]=0; temp[i]=Math.min(temp[i], 200);
+    }
+  }
+  for (let k=0;k<9000;k++) __step(1);                    // 150 seconds
+  if (hot < 40) return `the fire only took the room to ${hot.toFixed(1)}°C, so the recovery proves nothing`;
+  if (AMBIENT > hot - 12)
+    bad.push(`the room was ${hot.toFixed(1)}°C when the fire went out and ${AMBIENT.toFixed(1)} two and a half minutes later`);
+
+  /* And the cold side all the way back, which it can do because ice leaves nothing behind
+     the way a fire leaves hot ash. Measured at 73 seconds to within two degrees of 20. */
+  __room('Neutral');
+  __wipe(); f = __floor();
+  __slab(4, f-40, W-5, f-1, ICE);
+  for (let k=0;k<3600;k++) __step(1);
+  const cold = AMBIENT;
+  for (let i=0;i<type.length;i++) if (type[i]===ICE || type[i]===WATER){ type[i]=E; temp[i]=AMBIENT; }
+  for (let k=0;k<7200;k++) __step(1);                    // two minutes
+  if (cold > 10) return `the ice only took the room to ${cold.toFixed(1)}°C, so the recovery proves nothing`;
+  if (Math.abs(AMBIENT - 20) > 2)
+    bad.push(`the room was ${cold.toFixed(1)}°C under the ice and ${AMBIENT.toFixed(1)} two minutes after it went`);
+
+  /* The runaway, stated directly: light everything, twice, and the room may not end past
+     its own span. Version one failed this at 400°C against a stated ceiling of 400. */
+  __room('Neutral');
+  __wipe(); f = __floor();
+  __slab(4, 20, W-5, f-1, WOOD);
+  for (let x=10; x<W-10; x+=12) __hold(x, 40, 5, 30);
+  for (let k=0;k<7200;k++) __step(1);
+  for (let x=10; x<W-10; x+=12) __hold(x, 60, 5, 30);
+  for (let k=0;k<7200;k++) __step(1);
+  if (AMBIENT > 20 + N_SPAN_HOT)
+    bad.push(`burning the whole box twice put the room at ${AMBIENT.toFixed(1)}°C, past its span of ${N_SPAN_HOT}`);
+  if (!Number.isFinite(AMBIENT)) bad.push('the room went to nothing');
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* A save has to carry the number, not just the name. On every other setting the name is the
+   number; on Neutral it is wherever the box had driven it, and a scene saved at −1.8°C under
+   a slab of ice that came back at 20 would melt its way to the reading it was already at. */
+await check(browser, 'a save carries a drifted room, and a fixed one ignores a stale number', () => {
+  const bad = [];
+  __room('Neutral');
+  __wipe(); const f = __floor();
+  __slab(4, f-40, W-5, f-1, ICE);
+  for (let k=0;k<3600;k++) __step(1);
+  const at = AMBIENT;
+  if (at > 10) return `the ice only took the room to ${at.toFixed(1)}°C, so this measures nothing`;
+  const text = JSON.stringify(encodeScene());
+
+  __room('Oven');
+  decodeScene(JSON.parse(text));
+  if (ROOMS[roomAt].n !== 'Neutral') bad.push(`saved on Neutral and loaded as ${ROOMS[roomAt].n}`);
+  if (Math.abs(AMBIENT - at) > 0.5)
+    bad.push(`saved with the room at ${at.toFixed(1)}°C and it came back at ${AMBIENT.toFixed(1)}`);
+
+  /* ...and the other way, which is the part that is easy to get wrong: a fixed room's number
+     comes from its name, so a save carrying `at` from some other setting must not be allowed
+     to contradict it. Written by hand here because only a corrupted or hand-edited save has
+     this shape, and it is exactly the shape that would put a Furnace at −1.8°C. */
+  const forged = JSON.parse(text);
+  forged.room = 'Furnace'; forged.at = -1.8;
+  __room('Normal');
+  decodeScene(forged);
+  const furnace = ROOMS.find(r => r.n === 'Furnace').t;
+  if (AMBIENT !== furnace)
+    bad.push(`a save claiming Furnace at −1.8°C loaded as ${AMBIENT}°C rather than ${furnace}`);
+
+  __room('Normal');
+  return bad.length ? bad.join('; ') : null;
+});
+
 await check(browser, 'a save carries the room it was built in', () => {
   const bad = [];
   const hot = ROOMS.findIndex(r => r.n === 'Oven');
@@ -3562,7 +3739,7 @@ await check(browser, 'a save carries the room it was built in', () => {
   decodeScene(old);
   if (roomAt !== cold) bad.push(`a save with no room in it moved the room to ${ROOMS[roomAt].n}`);
 
-  setRoom(ROOMS.findIndex(r => r.n === 'Normal'));
+  __room('Normal');
   return bad.length ? bad.join('; ') : null;
 });
 

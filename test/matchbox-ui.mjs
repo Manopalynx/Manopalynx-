@@ -319,10 +319,11 @@ console.log('\n— the box itself —');
    to AMBIENT — printing the room's own setting as though it were a measurement. The box was at
    −10°C at the time. It says what it measured now, and says what it measured it from.
 
-   The other half of what was reported is not a fault and is not fixed: the room line does not
-   move, because the room is a setting rather than a reading, and the cold does not spread far
-   from the ice, because cold air sinks and ice on the floor is already at the bottom. Measured
-   air above a slab of ice: 14.5°C for three rows, then 19.8, then 20. Two goes at making cold
+   The other half of what was reported — that the room line does not move either — was a fault,
+   and is fixed elsewhere: the room is a reading now on Neutral, which is what the app opens on.
+   See roomTarget(). What is still true and is not a fault: the cold does not spread far from
+   the ice, because cold air sinks and ice on the floor is already at the bottom. Measured air
+   above a slab of ice: 14.5°C for three rows, then 19.8, then 20. Two goes at making cold
    travel — a mirror of the hot-air convection, and a third of the room coupling — moved that
    14.5 to 14.5 and 10.6 respectively. */
 await check('a box with no air in it does not report the room as a measurement', async p => {
@@ -804,7 +805,10 @@ await check('tapping Room offers the settings instead of stepping through them',
     [...document.querySelectorAll('#mats .chip')].map(c => c.querySelector('.lb').textContent));
 
   const base = await geom();
-  if (await p.evaluate(() => AMBIENT) !== 20) return 'the box did not start at 20°C';
+  // Within a degree rather than exactly, because the app opens on Neutral and the room
+  // is free to have answered the opening scene by the time the check gets here.
+  const opened = await p.evaluate(() => AMBIENT);
+  if (Math.abs(opened - 20) > 1) return `the box started at ${opened.toFixed(1)}°C, not 20`;
 
   await press(p, 'room');
   const offered = await labels();
@@ -838,11 +842,47 @@ await check('tapping Room offers the settings instead of stepping through them',
   return null;
 });
 
+/* The app opens on Neutral, where the room is a reading rather than a setting. That is a
+   change to what the box does before you touch it, so it is worth one check on its own —
+   and the readable half of Neutral is the gauge, which is the only place the number shows. */
+await check('the app opens on a room that answers the box', async p => {
+  const opens = await p.evaluate(() => ROOMS[roomAt].n);
+  if (opens !== 'Neutral') return `the app opened on ${opens}`;
+
+  // Fill it with ice and the gauge's room line has to move. Before Neutral it could not:
+  // reported from the phone as a box packed with ice leaving the room at 20°C, which it did.
+  await p.evaluate(() => { for (let i=0;i<type.length;i++) put(i%W, (i/W)|0, ICE); });
+  await p.waitForTimeout(5000);
+  const at = await p.evaluate(() => AMBIENT);
+  if (at > 12) return `a box packed with ice left the room at ${at.toFixed(1)}°C`;
+
+  const g = await p.locator('#gauge').innerText();
+  const line = g.split('\n').find(l => /room/i.test(l)) || '';
+  if (!/neutral/i.test(line)) return `the gauge's room line reads "${line}"`;
+  // Whole degrees. The raw float went on the gauge once and it read room Neutral -1.7724609375°C.
+  if (/\d\.\d/.test(line)) return `the gauge is printing a fraction: "${line}"`;
+  const shown = Number((line.match(/-?\d+(?=°)/) || [999])[0]);
+  if (Math.abs(shown - at) > 1) return `the gauge says ${shown}°C and the room is at ${at.toFixed(1)}`;
+
+  // ...and picking a fixed setting stops it answering anything.
+  await press(p, 'room');
+  await p.locator('[data-act="room-normal"]').click();
+  const held = await p.evaluate(async () => {
+    const before = AMBIENT;
+    await new Promise(r => setTimeout(r, 3000));
+    return [before, AMBIENT];
+  });
+  if (held[1] !== 20) return `Normal drifted from ${held[0]} to ${held[1]} with a box full of ice`;
+  return null;
+});
+
 await check('the gauge says what the room is set to, not just what the air is', async p => {
   await press(p, 'room');                                  // off the default, so it shows
   await p.waitForTimeout(1200);                            // the gauge refreshes on a timer
   const g = await p.locator('#gauge').textContent();
-  const at = await p.evaluate(() => AMBIENT);
+  // Rounded on both sides: on Neutral AMBIENT is a drifting float and the gauge prints a
+  // whole number, so String(AMBIENT) would be looking for "19.8734" in "room Neutral 20°C".
+  const at = Math.round(await p.evaluate(() => AMBIENT));
   if (!/room/i.test(g)) return `the gauge reads "${g}" and never mentions the room`;
   if (!g.includes(String(at))) return `the gauge reads "${g}" with the room at ${at}°C`;
   return null;

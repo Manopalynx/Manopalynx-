@@ -174,14 +174,15 @@ Measured, on a bar of each with the match held at one end:
 
 ## The room
 
-Tap **Room** in Tools and the six settings appear in the same row — Freezing, Cold,
-Normal, Warm, Oven, Furnace — with the one you are on ticked. Pick any of them in one
+Tap **Room** in Tools and the seven settings appear in the same row — Neutral, Freezing,
+Cold, Normal, Warm, Oven, Furnace — with the one you are on ticked. Pick any of them in one
 tap and the row hands itself back. It sets `AMBIENT`, which was already the number the whole box
 relaxes toward — gas sheds heat to it every tick, and all four walls do too — so almost
 no new code, and the ignition table turns into a dial:
 
 | | |
 |---|---|
+| Neutral | the room follows what is in the box — see below |
 | −30 Freezing | water freezes |
 | 0 Cold | ice keeps, and water becomes it |
 | 20 Normal | nothing happens on its own |
@@ -212,6 +213,114 @@ of ice can hold out in an oven for a while.
 sets:ICE` on water, which is the same rule lava already used to become stone rather than
 anything added for it. The coldest setting was labelled "water freezes" and did not
 freeze water — a worse fault than not having the setting.
+
+### Neutral, which is the one that is not a number you choose
+
+Reported from the phone: *a box filled edge to edge with ice barely moves the air reading
+and does not touch the room at all.* Both halves were true and only one of them was the
+gauge's fault. The other half is that **every other setting is an infinite reservoir** —
+`AMBIENT` is written by `setRoom` and by nothing else, so the walls hold 20°C for ever and
+the cold has nowhere to go. The room was a wall behind the simulation rather than part of
+it, and Neutral is it becoming part of it. It is what the app opens on.
+
+The room relaxes toward a **bounded function of what is in the box**:
+
+```
+box    = total heat energy ÷ total heat capacity     the box's mixing temperature
+target = 20 + span · tanh( gain · (box − 20) / span )
+room  += (target − room) · rate
+```
+
+`gain` .80 cold and .25 hot, `span` 40 cold and 45 hot, `rate` .0035 — about five seconds
+to answer a change.
+
+**The mixing temperature and not the average reading.** Measured, a plain mean puts a
+fully iced box at 11.8°C against a mixing temperature of 2.6, because it counts a cell of
+air the same as a cell of ice holding nine times the heat.
+
+#### Two failed versions, and the distinction that came out of them
+
+**Version one simply followed the box.** It works perfectly for ice — the room goes to
+−13.5 — and it is stable for an empty box, and a large fire drives it to the clamp and
+**leaves it there for good**, because a hot room reheats the box which keeps the room hot.
+Measured at a clamp of 400°C: a fresh sheet of paper dropped in afterwards ignited on its
+own, 0 of 451 cells left. Oven behaviour, arriving uninvited and permanently.
+
+**Version two bounded it with a hard clamp and a pull back toward 20.** That stopped the
+number running away and fixed nothing else. Measured across four bands, every one of them
+**pinned at its own ceiling** for a large fire — peaks of exactly 40.0, 40.0, 60.0 and 90.0
+— so the gauge stopped reporting a temperature and started reporting the cap, and a small
+fire and a large fire read the same number. A hundred and fifty seconds after the fire was
+put out the room was still sitting on the ceiling.
+
+The reason is one line of algebra that is worth stating, because it is the whole design:
+
+> If the room sits at `20 + gain·(box − 20)`, the gap driving the box's own cooling is
+> `(1 − gain)` of what it was. **Everything in the box cools `(1 − gain)` times as fast.**
+
+The room could not come down because the box could not come down, because the room is what
+cools it. Not a runaway — a tar pit. So **gain and span are separate knobs and only one of
+them costs anything**:
+
+| | what it does | what it costs |
+|---|---|---|
+| **gain** | how hard the room answers the box | everything cools `(1 − gain)` as fast |
+| **span** | how far the room can ever get | nothing |
+
+Measured, and this is the result the shape is built on: gain .22 with span 45 both **peaks
+higher** than gain .5 with span 20 (60.4°C against 39.9) **and recovers from it far faster**
+(down 18° after 150 seconds, against 0.1°). Span is free, so it is spent freely; gain is
+not, so the hot side is low. It also restores the gradation the clamped version lost — a
+small fire reads 25 and a large one 60, where the clamped version read 31.6 and 39.9 and
+could not tell them apart. A candle should not heat the house.
+
+`tanh` rather than a clamp, so near the edge the room reports a reading instead of a rail.
+And **no runaway is possible by construction**: `target` is 20 whenever the box is, so
+there is no fixed point away from base and no second restoring term is needed.
+
+#### The two directions do not want the same answer
+
+The box's hot excursions are twenty times the size of its cold ones — a large fire takes
+the mixing temperature to 277°C and a box packed with ice only reaches −10 — so two gains
+and two spans. Measured over nine scenarios, at the settings shipped:
+
+| | fixed room | Neutral |
+|---|---|---|
+| empty box, 60s | 20.0 | 20.0 |
+| forty-row ice slab, 60s | 20.0 | **2.9** |
+| packed with ice, 120s | 20.0 | **−1.8** |
+| snow onto ice, 60s | 20.0 | 4.5 |
+| small fire, peak | 20.0 | 28.0 |
+| large fire, peak | 20.0 | **63.4** |
+| large fire → 150s after it is out | 20.0 | 43.8, still falling |
+| ice removed → back within 2° of 20 | — | 73s |
+| ice, then a fire on top of it | 20.0 | −1.8 → 38.9 |
+
+**The cold side is gain-limited, not span-limited.** `spanCold` 40 is a rail that is never
+reached: at gain .70 a fully packed box only took the room to 0.8°C, which is a cold room
+and not a freezing one, because the box's mixing temperature includes the air and the stone
+floor and bottoms out near −10. Gain .80 reaches −1.8 and the things that key off zero start
+to mean something.
+
+**What it still does not do: freeze a standing pool.** Measured, 192 cells of water walled
+off across the box from the ice, two minutes, room at −1.8 — **0 of them froze**. Water's
+`cap` is 6.0 and its only route to the room is conduction through the air above it. Newly
+placed water and lying snow feel the cold room; a pond does not, and calling that a
+threshold Neutral crosses would be a claim the measurement does not support.
+
+#### The slow tail after a fire is not Neutral's fault
+
+Worth stating because it looks like one. Measured, the box takes longer than 150 seconds to
+fall below 40°C after a big fire is doused — **including with Neutral switched off**. The
+box is genuinely 130–250°C of hot stone and ash for minutes. A fixed room is not recovering
+faster; it is claiming 20°C while sitting inside a box at 134. Neutral stops hiding it,
+which is why the check asks for a *decline* rather than a return to 20.
+
+#### What it costs to run
+
+One pass of `CAPS[type[i]]` and two float operations over 31,460 cells a tick, gathered
+inside `roomLoss`'s existing sweep rather than its own. Measured on a busy scene:
+**2.95ms a tick against 2.83 with a fixed room — 0.126ms, under 1% of a 16.6ms frame.**
 
 ## Two ways for a gas to stop being there
 
@@ -2033,8 +2142,8 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 88 checks — the simulation
-node test/matchbox-ui.mjs      # 42 checks — the hand
+node test/matchbox-sim.mjs     # 92 checks — the simulation
+node test/matchbox-ui.mjs      # 43 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
 
@@ -2051,6 +2160,20 @@ first set being satisfied by making everything catch fire instantly: stone, stee
 sand never burn, a scene never lights itself, a fire never runs away, an empty box stays
 at room temperature, no temperature goes NaN or past the ceiling, and conduction
 conserves energy over 300 ticks of a lumpy field.
+
+Neutral added a *cannot* of its own, and it is the sharpest one in the suite because both
+failed versions of it passed everything else: **an empty box on Neutral stays where it is,
+and burning the whole box twice may not put the room past its span.** Version one ended at
+400°C and stayed; version two sat on its clamp. Neither broke anything a check was watching.
+
+Every check now sets its room **by name**. They used to say `setRoom(0)` and `setRoom(2)`
+and mean Freezing and Normal — until Neutral went in at the front of the list and they
+meant Neutral and Cold. Nothing would have failed. The checks would have gone on running,
+gone on being about the room, and gone on naming rooms in their failure messages that they
+were no longer measuring. The suite also pins every check to Normal before it starts, so
+the 88 that were written against a fixed room still measure one: a check about how long a
+candle burns must not quietly become a check about how long a candle burns in a room the
+candle is warming.
 
 Four things learned the hard way while writing them, all of which cost a wrong answer
 first:
