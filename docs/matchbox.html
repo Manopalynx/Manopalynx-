@@ -172,7 +172,7 @@
 
   /* ---- tray ---- */
   .tray{flex:none;padding:7px 8px 9px;display:flex;flex-direction:column;gap:6px}
-  .row{display:flex;gap:5px;flex-wrap:wrap}
+  .row{--chipgap:5px;display:flex;gap:var(--chipgap);flex-wrap:wrap}
   /* The two rows of chips never wrap, and that is load-bearing rather than tidy.
      Wrapping made the tray taller, and the tray is above the stage, so the scene moved
      under your finger — reported from the phone twice over: the Fuel drawer pushing
@@ -188,8 +188,27 @@
        the whole screen. That is the shape of the very first complaint about this tray —
        Rubber alone on a wrapped row, full width — and a Life drawer holding a single
        creature would have reproduced it exactly, at 377px. Every chip is capped the same,
-       so widths within a row still match and nothing can move by changing its label. */
-    flex:1 1 0;min-width:0;max-width:112px;overflow:hidden;padding:7px 4px 6px;border:1.5px solid var(--card-dark);
+       so widths within a row still match and nothing can move by changing its label.
+
+       The cap was a flat 112px, which is a number no drawer ever reached, so the rule was
+       there and did nothing. Reported from the phone as Wet looking wrong beside the rest,
+       and measured on a 390px screen it was: Wet's four chips were **90px against 42–49px
+       in every other drawer**, more than double. The cap is now the width a chip has in
+       the fullest row the tray can show — `--chipn`, set from the drawers themselves at
+       boot rather than written here, because a drawer that grows must not need a number in
+       a stylesheet changed by hand. Short drawers keep their chips the size they are
+       everywhere else and leave the slack at the end of the row, so the first chip of
+       every drawer is in the same place and switching drawers slides nothing sideways.
+
+       Seven and not eight, and the difference was measured rather than picked. Eight is
+       the fullest row there is, and capping at it makes every chip in the tray identical
+       — and clips Obsidian, Thermite, Magnesium, Freezing and Everything, because the
+       drawers with seven chips have the longest words in them. At seven, five of the
+       seven drawers are untouched, the tray goes from four chip widths to two, and Wet
+       drops from 90px to 49. Uniformity is worth having up to the point where it starts
+       eating labels, and that point is between seven and eight. */
+    flex:1 1 0;min-width:0;overflow:hidden;padding:7px 4px 6px;border:1.5px solid var(--card-dark);
+    max-width:calc((100% - (var(--chipn,7) - 1) * var(--chipgap,5px)) / var(--chipn,7));
     background:rgba(255,255,255,.13);border-radius:3px;cursor:pointer;
     font-family:'Space Mono',monospace;font-size:var(--chipfs,9.5px);letter-spacing:.02em;color:var(--ink);
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
@@ -845,7 +864,7 @@ M[GAS]     ={n:'Gas',      ph:0, col:[ 92,104, 88], ig:250, out:9.0,  cond:.09, 
    the eraser, the weather, the views — and later the presets and the saves. */
 const GROUPS = [
   { name:'Fuel',  items:[WOOD, PAPER, STRAW, FUSE, COAL, GREEN, POWDER, RUBBER] },
-  { name:'Wet',   items:[WATER, OIL, ICE, ACID] },
+  { name:'Wet',   items:[WATER, OIL, ICE, SNOW, ACID] },
   { name:'Solid', items:[STONE, STEEL, SAND, DIRT, WAX, GLASS, OBSIDIAN] },
   { name:'Hot',   items:[LAVA, MOLTEN, EMBER, THERMITE, MAGNES, GAS, VENT] },
   { name:'Life',  items:[WORM, MOTH, FISH, GRUB, ASHBUG, ANT, MOSS, SEED] },
@@ -3458,7 +3477,12 @@ function fitLabels(){
   const labels = [...matsEl.querySelectorAll('.lb')];
   if (!labels.length) return;
   const clipped = () => labels.some(l => l.scrollWidth > l.clientWidth + 0.5);
-  for (let px = 9.5; px >= 7; px -= 0.5){
+  // The floor was 7px and **Magnesium clipped at 375px with it**, on the tray as shipped
+  // and before the chip cap went anywhere near it. Found while measuring something else,
+  // which is the only way this kind of thing is ever found. 6.5 clears it at every width
+  // measured; 6 would clear Everything as well and is too small to read, so that one was
+  // given a shorter word instead of the whole row a smaller one.
+  for (let px = 9.5; px >= 6.5; px -= 0.5){
     matsEl.style.setProperty('--chipfs', px + 'px');
     if (!clipped()) return;
   }
@@ -3599,7 +3623,11 @@ clearChoice('Life', 'clear-life', false, ()=>{
   say(`Cleared ${n} living thing${n===1?'':'s'}`);
 });
 
-clearChoice('Everything', 'clear-all', true, ()=>{
+// 'All' rather than 'Everything': the four chips are answers to "Clear what?" — Back,
+// Fire, Life, All — and the long one was the only label in the tray that could not be
+// made to fit a chip the same width as every other chip. The weight of the destructive
+// one is carried by the danger styling and the two-tap confirm, not by its length.
+clearChoice('All', 'clear-all', true, ()=>{
   snapshot('the clear');
   wipeAll();
   say('Cleared');
@@ -4034,6 +4062,19 @@ SCENES.forEach(s => scenesEl.appendChild(
   actionChip(s.name, ()=>loadScene(s), false, 'scene-' + s.name.toLowerCase())));
 scenesEl.appendChild(saveBtn);
 scenesEl.appendChild(loadBtn);
+
+/* The widest row the tray can ever show, which is what a chip's max-width is measured
+   against. Derived here rather than written into the stylesheet, and derived from every
+   holder rather than from GROUPS alone: the Room, Clear and Weather pickers borrow the
+   same row without being drawers, and Room is seven chips. A number a human keeps in
+   step by hand is a number that goes stale — the cap it replaces was 112px, wide enough
+   that no drawer ever reached it, so the rule read correctly and did nothing for months.
+
+   Last, after everything above has been appended, because it counts what is in them. */
+const ROW_N = Math.min(7, Math.max(
+  ...GROUPS.filter(g => Array.isArray(g.items)).map(g => g.items.length),
+  ...[actsEl, scenesEl, clearEl, skyEl, roomEl].map(h => h.childElementCount)));
+matsEl.style.setProperty('--chipn', ROW_N);
 
 showDrawer(0);
 
