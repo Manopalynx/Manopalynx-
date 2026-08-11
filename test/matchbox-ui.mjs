@@ -1268,19 +1268,51 @@ await check('a worm drawn on the stage walks about on its own', async p => {
 // A single chip must not stretch across the screen, which is the shape of the very first
 // complaint about this tray: Rubber alone on a wrapped row, full width. The Life drawer
 // has one thing in it and would have reproduced it at 377px.
-await check('a drawer with one thing in it does not stretch it across the screen', async p => {
-  const bad = [];
-  const tabs = await p.locator('.tab').count();
-  for (let i = 0; i < tabs; i++) {
-    await p.locator('.tab').nth(i).click();
+/* A chip is the same size wherever you find it, and no label is cut off.
+
+   This asked only that a drawer of fewer than three chips not stretch one across half the
+   screen, which was the original complaint and is a much weaker claim than the one worth
+   making. It passed the whole time Wet's four chips were **90px against 42 in Fuel** — more
+   than double, reported from the phone, and invisible to a check watching for 50%.
+
+   Both halves are measured together on purpose, because they pull against each other: the
+   cap that makes every chip identical is the cap that clips Obsidian, Thermite, Magnesium,
+   Freezing and Everything, and a check on either one alone can be passed by breaking the
+   other. The pickers are in it too — Room, Clear and Weather borrow the same row without
+   being drawers, and Clear was the one that had to give up a word to fit. */
+await check('every chip is the same size, in every drawer, with no label cut off', async p => {
+  const bad = [], seen = [];
+  const look = async (where) => {
     const r = await p.evaluate(() => {
-      const name = document.querySelector('.tab[aria-pressed="true"]').textContent.trim();
       const chips = [...document.querySelectorAll('#mats .chip')];
-      const row = document.getElementById('mats').getBoundingClientRect().width;
-      return { name, n: chips.length,
-               widest: Math.max(...chips.map(c => Math.round(c.getBoundingClientRect().width))), row: Math.round(row) };
+      const clipped = [...document.querySelectorAll('#mats .lb')]
+        .filter(l => l.scrollWidth > l.clientWidth + 0.5).map(l => l.textContent.trim());
+      return { n: chips.length, clipped,
+               w: chips.map(c => Math.round(c.getBoundingClientRect().width)),
+               row: Math.round(document.getElementById('mats').getBoundingClientRect().width) };
     });
-    if (r.widest > r.row * 0.5 && r.n < 3) bad.push(`${r.name} has ${r.n} chip(s) and one of them is ${r.widest}px of a ${r.row}px row`);
+    if (r.clipped.length) bad.push(`${where} cuts off ${r.clipped.join(', ')}`);
+    if (new Set(r.w).size > 1) bad.push(`${where} has chips of ${[...new Set(r.w)].join(' and ')}px in one row`);
+    seen.push({ where, n: r.n, w: r.w[0], row: r.row });
+  };
+
+  const tabs = await p.locator('.tab').count();
+  for (let i = 0; i < tabs; i++){
+    await p.locator('.tab').nth(i).click();
+    await look((await p.locator('.tab').nth(i).textContent()).trim());
+  }
+  for (const act of ['room', 'clear', 'weather']){
+    await p.locator('.tab', { hasText: /^tools$/i }).click();
+    await p.locator(`[data-act="${act}"]`).click();
+    await look(act);
+  }
+
+  // Across the whole tray, not within a row. Measured at 390px: 42px in the eight-chip
+  // drawers and 49 everywhere else, a ratio of 1.17. It was 41 to 86 before, a ratio of 2.1.
+  const w = seen.map(x => x.w), lo = Math.min(...w), hi = Math.max(...w);
+  if (hi > lo * 1.25){
+    const widest = seen.find(x => x.w === hi), narrow = seen.find(x => x.w === lo);
+    bad.push(`${widest.where} has ${hi}px chips and ${narrow.where} has ${lo}px — the same chip in two sizes`);
   }
   return bad.length ? bad.join('; ') : null;
 });

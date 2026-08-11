@@ -45,9 +45,15 @@ fetched fresh whenever there is a signal — no stale-build trap, and nothing to
 
 ## What is in the box
 
-Thirty-four chips in the tray — twenty-five materials, eight living things and the vent — and
-twelve more the simulation makes and never lets you place: fire, smoke, steam, ash, snow, the
-pupa, the stem, the flower, rich soil, grass, molten wax and molten rubber. Every one of them is one row of
+Thirty-five chips in the tray — twenty-six materials, eight living things and the vent — and
+eleven more the simulation makes and never lets you place: fire, smoke, steam, ash, the
+pupa, the stem, the flower, rich soil, grass, molten wax and molten rubber.
+
+Snow moved from the second list to the first. It was weather-only, and placing a drift by
+hand is a different act from summoning a snowfall — weather gives you snow everywhere, a
+chip gives you snow *there* — so it earns a row in Wet beside the ice it is the powder form
+of. It is the same row of the table either way; nothing about it changed but where you can
+get it. Every one of them is one row of
 the `M` table and nothing else in the file knows any of them by name.
 
 (This count has been wrong twice. It was stale before the grub was added to it, and the
@@ -66,7 +72,51 @@ load-bearing rather than tidy. The tray sits above the stage, so a row that wrap
 the tray taller and moves the scene — and a chip sized to its own text moves the row
 whenever that text changes.
 
-Both ways of breaking it were reported from the phone rather than found here:
+### Every chip is the same width in every drawer, and that is newer than it sounds
+
+"Every chip in a row is the same width" was true and was not enough, because it says
+nothing about two different rows. Reported from the phone as Wet looking wrong beside the
+rest, and measured on a 390px screen it was:
+
+| drawer | chips | chip width, before | after |
+|---|---|---|---|
+| Fuel | 8 | 42px | 42px |
+| **Wet** | 4 → 5 | **90px** | **49px** |
+| Solid | 7 | 49px | 49px |
+| Hot | 7 | 49px | 49px |
+| Life | 8 | 42px | 42px |
+| Tools | 7 | 49px | 49px |
+| Clear picker | 4 | 90px | 49px |
+
+The rule to stop this already existed — `max-width` on a chip — and its number was 112px,
+which no drawer ever reached. It read correctly and did nothing. The cap is now the width a
+chip has in a full row, derived at boot from the drawers and the pickers themselves rather
+than written into the stylesheet, so a drawer that grows cannot leave it stale.
+
+**Seven per row and not eight, and the difference was measured.** Eight is the fullest row
+there is, and capping at it makes every chip in the tray identical — and clips Obsidian,
+Thermite, Magnesium, Freezing and Everything, because the seven-chip drawers hold the longest
+words. At seven, five of the seven drawers are untouched, the tray goes from four chip widths
+to two (42 and 49 against 41/47/68/86), and nothing clips at 375, 390, 393 or 430px.
+Uniformity is worth having up to the point where it starts eating labels.
+
+Two things fell out of measuring it:
+
+- **`fitLabels` had a floor of 7px and Magnesium clipped at 375px with it** — on the tray as
+  shipped, before any of this. Found while measuring something else, which is the only way
+  that kind of thing is found. The floor is 6.5px now, which clears it at every width.
+- **Clear's "Everything" is "All".** It was the one label that could not be made to fit a
+  chip the same width as every other chip, and the four chips read better as four short
+  answers to "Clear what?" — Back, Fire, Life, All. The weight of the destructive one is
+  carried by the danger styling and the two-tap confirm, not by the length of its word.
+
+The check that was supposed to catch all this asked only that a drawer of fewer than three
+chips not stretch one across half the screen. It passed the whole time Wet was at double
+width. It now measures both halves together, in every drawer *and* every picker, because
+they pull against each other: the cap that makes every chip identical is the cap that clips
+five labels, and a check on either alone is passed by breaking the other.
+
+Both ways of breaking the no-wrap rule were reported from the phone rather than found here:
 
 - The Fuel drawer pushed Rubber onto a line of its own and stretched it the full width
   of the screen.
