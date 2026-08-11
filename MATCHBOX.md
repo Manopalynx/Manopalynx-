@@ -46,8 +46,8 @@ fetched fresh whenever there is a signal — no stale-build trap, and nothing to
 ## What is in the box
 
 Thirty-four chips in the tray — twenty-five materials, eight living things and the vent — and
-eleven more the simulation makes and never lets you place: fire, smoke, steam, ash, the pupa, the
-stem, the flower, rich soil, grass, molten wax and molten rubber. Every one of them is one row of
+twelve more the simulation makes and never lets you place: fire, smoke, steam, ash, snow, the
+pupa, the stem, the flower, rich soil, grass, molten wax and molten rubber. Every one of them is one row of
 the `M` table and nothing else in the file knows any of them by name.
 
 (This count has been wrong twice. It was stale before the grub was added to it, and the
@@ -1664,6 +1664,86 @@ All three go through `snapshot()`, so all three can be undone. None of them spen
 slot when there is nothing to do: Fire on a cold box and Life on an empty one say so and
 leave the last stroke recoverable.
 
+## Weather
+
+Four things the sky can do, behind one chip, sharing one clock — so turning one on turns the
+last one off without anything having to say so. A picker in Tools, the same shape as Clear and
+Room, so the tray does not grow.
+
+| | what it does |
+|---|---|
+| **Rain** | six drops a tick for 420 ticks. The fire-fighting tool, and a downpour on purpose |
+| **Mist** | fog you can see, and a drop of dew beading on something every twenty ticks |
+| **Snow** | a flake every four ticks: it piles, it chills, and above nought it becomes water |
+| **Storm** | a bolt every 110 ticks, 1500°C into a scorched patch wherever it lands |
+
+**Rain was not made gentler, and the numbers are why.** One press leaves **2,202 cells of
+water, standing seventeen rows deep across the whole floor** — three presses is 51 rows, a
+quarter of the box — and nothing but boiling ever takes water out again, so a box you have
+rained on stays a lake. That is exactly wrong for watering a garden and exactly right for
+putting a fire out, which is the job rain has and the reason a gentler rain would be a rain
+with nothing to do. Mist is the other tool.
+
+### Mist beads rather than fills
+
+Mist started as a state of the air: while it is misting, `damp()` is true everywhere. That is
+still how it is drawn — the empty cells lighten and take the grain of the cell they are in —
+but it is **no longer how it works**, and the reason is worth keeping.
+
+The first version wet the air and nothing else, and it was a trick rather than a tool: ten
+seeds under a mist all came up and **every plant was dead within seconds of it stopping**,
+because `thirst` starts running the instant `damp` goes false and mist left nothing behind. So
+mist beads: one drop, laid on top of the first solid thing under a random column, every twenty
+ticks or so. About sixty over a full mist, against rain's 2,202.
+
+Then the short-circuit had to go, because with dew in place nothing could tell it apart from
+nothing. `damp` is a radius rather than a line of sight, so a drop on the roof of a **sealed
+stone chamber** wets the moss inside it through the wall: 11 cells of moss became 224 under a
+mist with the rule and 11 became 224 without it. Everything that grows in this box grows on a
+surface, and dew lands on surfaces. A rule that no scene can distinguish is the same fault as
+a field that can never fire, wearing the opposite face.
+
+Measured, on ten seeds and no water anywhere: **16 flowers, and 56 cells of water left in the
+box.** With no weather at all, nothing comes up.
+
+### Snow is the room made visible
+
+A powder, not a rigid block like Ice, so it piles and drifts; lighter than water, so it floats
+on a pond rather than sinking through it; `wets`, so a drift counts as damp where it lies as
+well as after it melts.
+
+`lat` 200 is the whole design and it took three goes. Over forty seconds in a Normal room: at
+**120** a flake melts on the way down and the most snow ever on screen at once is 59 — you
+press Snow and get a puddle. At **400** the drift chills the box enough to stop its own thaw
+and 382 of it is still lying there. At **200** it settles to 179, is down to 41 by the end,
+and leaves 428 cells of water. In Cold or Freezing it lies where it falls and melts none of
+it, which is what makes it a different weather rather than colder rain.
+
+The rate needed the same treatment: at rain's rate a snowfall melted down to **2,075 cells**,
+which is a rainstorm in a hat.
+
+### Lightning is the only fire you did not start
+
+A bolt goes straight down a column to the first thing that is not air. The flash is ordinary
+fire cells with their clock set past the end of their own span, so it is gone within a tick or
+two and needs no new machinery to draw it.
+
+**1500°C, and it scorches a patch rather than a point.** Both halves are load-bearing. A match
+is 780 and cannot light thermite at all; the sky can, which is the whole appeal. But a bolt
+into a single cell is over in a few ticks — the heat conducts straight into the cold thing next
+to it — and thermite needs twenty-four ticks above 950°C to catch. One cell at 1500 peaked the
+scene at 1,421°C and set off nothing. A scorched patch two cells across holds itself up long
+enough: 2,454°C, and the bed goes.
+
+### `strike` was already taken
+
+The lightning function was called `strike()`, and so is the one that lights the match. A second
+function declaration of the same name in the same scope simply replaces the first, so striking
+the strip fired lightning and lit nothing. Two checks caught it — the match going out mid-drag,
+and a second strike not giving a fresh match — and **neither of them is about weather**, which
+is the only reason it did not ship. Same shape as the `KEEP` collision a few changes earlier,
+in a file with one scope and a lot of short names.
+
 ## The attic, which is the part of the box that is not on the screen
 
 Reported from the phone, with pictures: build a tower, turn the phone on its side, turn it
@@ -1740,14 +1820,14 @@ be a guess dressed up as an undo.
 
 ## The finds
 
-`FOUND 3/71` in the corner used to be the whole of it. The rest existed as things that the
+`FOUND 3/72` in the corner used to be the whole of it. The rest existed as things that the
 box would never name, mention again or hint at — a progress bar for a task nobody had been
 told. **Finds** in Tools opens the list: found ones read as what they are (`Lava + Water →
 Obsidian`) and the rest read `Acid — ?`, carrying the material's colour and name and nothing
 else. Eight rows mentioning Acid tell you to go and play with acid without telling you what
 happens when you do. Found ones sort to the top, so it is a record before it is a to-do list.
 
-The seventy-one are derived from the material table — every melt, boil, set, ash, contact
+The seventy-two are derived from the material table — every melt, boil, set, ash, contact
 reaction, explosion, drowning and suffocation in it — so a material added tomorrow brings
 its discoveries with it. The three creatures added five between them and no new derivation
 code: a `drown` or an `air` field is enough. Seeds added seven the same way.
@@ -1913,8 +1993,8 @@ the glass.
 
 ```
 npm i playwright
-node test/matchbox-sim.mjs     # 85 checks — the simulation
-node test/matchbox-ui.mjs      # 40 checks — the hand
+node test/matchbox-sim.mjs     # 88 checks — the simulation
+node test/matchbox-ui.mjs      # 41 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
 

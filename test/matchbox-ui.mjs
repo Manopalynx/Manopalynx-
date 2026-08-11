@@ -168,6 +168,30 @@ await check('Clear asks what to clear before it wipes anything', async p => {
   return null;
 });
 
+await check('Weather asks which one, and Back changes nothing', async p => {
+  const bad = [];
+  const before = await p.evaluate(() => __cells());
+  await (await reveal(p, 'weather')).click();
+  const asked = await p.locator('#mats .chip').evaluateAll(cs => cs.map(c => c.dataset.act));
+  for (const want of ['weather-none', 'weather-rain', 'weather-mist', 'weather-snow', 'weather-storm'])
+    if (!asked.includes(want)) bad.push(`the weather picker left out ${want}: it offered ${asked.join(', ')}`);
+  await p.locator('[data-act="weather-none"]').click();
+  await p.waitForTimeout(400);
+  if (await p.evaluate(() => __cells()) !== before) bad.push('Back set the weather going anyway');
+  if (await p.evaluate(() => skyLeft) > 0) bad.push('Back left something falling out of the sky');
+
+  // And one that does something. Mist is the one that puts no material in the box, so the
+  // cell count is the wrong thing to watch — the clock is the thing that says it started.
+  await (await reveal(p, 'weather')).click();
+  await p.locator('[data-act="weather-mist"]').click();
+  if (!await p.evaluate(() => skyLeft > 0 && sky === SKY_MIST)) bad.push('Mist did not start');
+  // Picking another closes the first: one sky, one clock.
+  await (await reveal(p, 'weather')).click();
+  await p.locator('[data-act="weather-snow"]').click();
+  if (!await p.evaluate(() => sky === SKY_SNOW)) bad.push('Snow did not replace the mist');
+  return bad.length ? bad.join('; ') : null;
+});
+
 await check('leaving the Clear question alone destroys nothing', async p => {
   const before = await p.evaluate(() => __cells());
 

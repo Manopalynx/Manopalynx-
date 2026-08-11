@@ -265,13 +265,14 @@ await check(browser, 'rain drowns a fire it falls on', () => {
   __slab(10, f-5, 59, f-1, WOOD);
   __hold(20, f-2, 3, 200);
   const before = __alight(WOOD);
-  // RAIN_TICKS, not a number picked here: this has to be the shower the button
-  // actually delivers, or the check is about a downpour nobody can summon.
-  let raining = RAIN_TICKS;
+  /* The page's own weather, not a copy of it here. This used to spell the rain loop out —
+     the rate, the clock, the lot — and a harness that reimplements the thing it is testing
+     agrees with itself long after it has stopped agreeing with the page. It did: rain moved
+     into `weatherTick()` with the other three kinds, and this check went looking for a
+     constant that no longer existed. Now it presses the button the player presses. */
+  sky = SKY_RAIN; skyLeft = RAIN_LEFT;
   for (let k=0;k<1400;k++){
-    if (raining-- > 0) for (let j=0;j<Math.ceil(W/22);j++){
-      const x = (Math.random()*W)|0; if (type[idx(x,0)]===E) put(x, 0, WATER);
-    }
+    if (skyLeft > 0){ skyLeft--; weatherTick(); }
     __step(1);
   }
   const after = __alight(WOOD);
@@ -2416,7 +2417,7 @@ await check(browser, 'a single cell of anything is findable on a floor of anythi
   // The things that end up on a floor together: what you build with, what a fire leaves,
   // what the worm makes out of it, and what you sprinkle on that. A seed you cannot see on
   // soil is a seed you cannot tell you have planted.
-  const GROUND = [STONE, ASH, DIRT, RICH, SAND, WOOD, COAL, EMBER, SEED];
+  const GROUND = [STONE, ASH, DIRT, RICH, SAND, WOOD, COAL, EMBER, SEED, SNOW];
   for (const bg of GROUND) for (const fg of GROUND){
     if (bg === fg) continue;
     __wipe();
@@ -3261,6 +3262,168 @@ await check(browser, 'rich soil is what grass grows on and what lets a flower so
   if (onRich < 3) bad.push(`a seed on ready-made rich soil gave ${onRich} flowers — it did not spread at all`);
   if (onDirt >= onRich) bad.push(`a seed spread as fast on plain dirt (${onDirt}) as on rich soil (${onRich}) — ` +
                                  `the ground is not pacing anything`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* Weather, and the reason there is more than one kind of it.
+
+   Rain is the fire-fighting tool and it is meant to be a downpour — but one press leaves
+   **2,202 cells of water standing seventeen rows deep across the floor**, and nothing but
+   boiling ever takes water out again, so a box you have rained on stays a lake. That is fine
+   for putting a fire out and useless for watering a garden.
+
+   Mist is the other end: it is not material at all, just a state of the air that `damp()`
+   reads, plus the occasional drop beading on something. So the claim worth checking is the
+   pair — that mist grows a meadow, and that it does it without filling the box. */
+await check(browser, 'mist waters what is growing, and rain drowns the box', () => {
+  const bad = [];
+  const bed = () => {
+    __wipe(); const f = __floor();
+    __slab(6, f-6, 100, f-1, DIRT);
+    for (let k=0;k<10;k++) put(20 + k*6, f-8, SEED);
+    return f;
+  };
+  // The frame runs the weather and then a tick; the harness has to do the same.
+  const run = (kind, ticks, n) => {
+    sky = kind; skyLeft = ticks;
+    for (let k=0;k<n;k++){ if (skyLeft > 0){ skyLeft--; weatherTick(); } __step(1); }
+  };
+
+  // Nothing at all: the control. Ten seeds on dry soil are ten seeds on dry soil.
+  bed(); run(0, 0, 4000);
+  const idle = { flower: __count(FLOWER), seed: __count(SEED) };
+  if (idle.flower) return `${idle.flower} flowers came up on dry soil with no weather — the control is wet`;
+
+  // Mist: measured at 16 flowers and 45 stems from ten seeds, with 56 cells of water left.
+  bed(); run(SKY_MIST, MIST_LEFT, 4000);
+  const mist = { flower: __count(FLOWER), water: __count(WATER) };
+  if (mist.flower < 4) bad.push(`a mist over ten seeds gave ${mist.flower} flowers`);
+  if (mist.water > 300) bad.push(`a mist left ${mist.water} cells of water — that is a shower, not a mist`);
+
+  // Rain on the same bed, for the number that makes the two different tools.
+  bed(); run(SKY_RAIN, RAIN_LEFT, 4000);
+  const rain = __count(WATER);
+  if (rain < 1200) bad.push(`a rainstorm left only ${rain} cells of water — it is not the downpour it is for`);
+  if (rain < mist.water * 4)
+    bad.push(`rain left ${rain} and mist left ${mist.water} — they are the same weather with two names`);
+
+  /* And mist has to still be there afterwards, in the sense that matters: the meadow it grew
+     must not die the moment it stops. The first version of mist had no dew in it at all and
+     every plant was dead within seconds of the mist ending, because `thirst` starts running
+     the instant `damp` goes false and mist left nothing behind. */
+  bed(); run(SKY_MIST, MIST_LEFT, 4000);
+  const stood = __count(FLOWER) + __count(STEM) + __count(GRASS);
+  for (let k=0;k<3000;k++) __step(1);                    // long after the mist has gone
+  const after = __count(FLOWER) + __count(STEM) + __count(GRASS);
+  if (stood && after < stood * 0.3)
+    bad.push(`${stood} cells of plant grew under a mist and ${after} were alive a minute after it stopped`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* Snow is the one that has to earn its place, and its whole case is that it does two things a
+   shower does not: it lies, and it chills. Both of those are answers to what the room is set
+   to, which is what makes it different from rain rather than colder rain. */
+await check(browser, 'snow lies where it is cold and becomes water where it is not', () => {
+  const bad = [];
+  const fall = (room, n) => {
+    __wipe(); setRoom(room);
+    const f = __floor();
+    __slab(6, f-4, W-7, f-1, STONE);
+    sky = SKY_SNOW; skyLeft = SNOW_LEFT;
+    let most = 0;
+    for (let k=0;k<n;k++){
+      if (skyLeft > 0){ skyLeft--; weatherTick(); }
+      __step(1);
+      if (__count(SNOW) > most) most = __count(SNOW);
+    }
+    return { most, lying: __count(SNOW), water: __count(WATER) };
+  };
+
+  /* Measured over forty seconds. Freezing: 440 fall and 440 are still there. Normal: it
+     settles to 179 and is down to 41 by the end, having left 428 cells of water. The number
+     in the middle is `lat` 200 and it took three goes to find — at 120 a flake melts on the
+     way down and the most ever on screen is 59, at 400 the drift chills the box enough to
+     stop its own thaw and 382 of it is still lying there. */
+  const cold = fall(0, 2400);
+  if (cold.lying < 150) bad.push(`only ${cold.lying} cells of snow were left lying in a freezing room`);
+  if (cold.water) bad.push(`${cold.water} cells of water appeared in a freezing room`);
+
+  const warm = fall(2, 2400);
+  setRoom(2);
+  if (warm.most < 60) bad.push(`the most snow ever on screen in a normal room was ${warm.most} — you cannot see it fall`);
+  if (warm.lying > warm.most * 0.6)
+    bad.push(`${warm.lying} of a peak ${warm.most} was still lying in a normal room — it is not melting`);
+  if (warm.water < 150) bad.push(`a snowfall in a normal room left ${warm.water} cells of water`);
+  // And not so much of it that it is a rainstorm in a hat: the first rate tried melted down
+  // to 2,075 cells, which is what a press of Rain leaves.
+  if (warm.water > 900) bad.push(`a snowfall melted down to ${warm.water} cells of water — that is a rainstorm`);
+
+  // It floats, because it is lighter than water. A powder that sank would just be gravel.
+  __wipe(); const f = __floor();
+  __slab(20, f-20, 80, f-1, WATER);
+  for (let k=0;k<30;k++) put(30 + k, f-24, SNOW);
+  setRoom(0);
+  for (let k=0;k<600;k++) __step(1);
+  setRoom(2);
+  let onTop = 0, sunk = 0;
+  for (let x=0;x<W;x++) for (let y=0;y<H-1;y++){
+    if (type[idx(x,y)] !== SNOW) continue;
+    if (type[idx(x,y+1)] === WATER) onTop++;
+    let below = false;
+    for (let k=y-1;k>=0;k--) if (type[idx(x,k)] === WATER) below = true;
+    if (below) sunk++;
+  }
+  if (!onTop) bad.push('no snow was left floating on the pond');
+  if (sunk > onTop) bad.push(`${sunk} cells of snow sank under the water and ${onTop} floated`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* A storm is the only thing in the box that starts a fire without you. It is also the only
+   thing that puts 1500°C into a cell from nowhere, so the second half of the check is that an
+   empty box survives being struck — a weather that cooked the room every time you tried it
+   would be a weather nobody uses twice. */
+await check(browser, 'a storm sets fire to things, and an empty box lives through it', () => {
+  const bad = [];
+  // Returns the hottest it ever got, not the hottest it is at the end. Thermite burns out
+  // and cools, so a reading taken afterwards says nothing about whether it went off — the
+  // first version of this check asked exactly that and reported a storm doing nothing to a
+  // bed that had reached 2,454°C in the middle of it.
+  const storm = (n) => {
+    sky = SKY_STORM; skyLeft = STORM_LEFT;
+    let peak = 0;
+    for (let k=0;k<n;k++){
+      if (skyLeft > 0){ skyLeft--; weatherTick(); }
+      __step(1);
+      if (__maxT() > peak) peak = __maxT();
+    }
+    return peak;
+  };
+
+  __wipe(); let f = __floor();
+  __slab(6, f-10, W-7, f-1, WOOD);
+  const wood0 = __count(WOOD);
+  const woodPeak = storm(2400);
+  if (!__count(ASH) && !__alight(WOOD) && __count(WOOD) === wood0)
+    bad.push(`a storm over a field of wood set light to none of it (peak ${Math.round(woodPeak)}°C)`);
+
+  /* Thermite is the point of 1500 rather than a match's 780: a match cannot light it at all,
+     and the sky can. This is the discovery the weather is worth having for. */
+  __wipe(); f = __floor();
+  __slab(20, f-6, 90, f-1, THERMITE);
+  // Thermite's own ash is molten steel, not ash, so what it leaves is the wrong thing to
+  // count. It burns at 2,450°C and nothing else in this scene can reach that.
+  const hot = storm(3000);
+  if (hot < 1600)
+    bad.push(`a storm over a bed of thermite peaked at ${Math.round(hot)}°C — it never went off, ` +
+             `which is the one thing lightning can do that a match cannot`);
+
+  // And an empty box. Struck twenty times over forty seconds, it has to come back to a room.
+  __wipe(); __floor();
+  storm(2400);
+  for (let k=0;k<1800;k++) __step(1);
+  if (__maxT() > AMBIENT + 40)
+    bad.push(`an empty box was still at ${Math.round(__maxT())}°C half a minute after the storm`);
+  if (__nan()) bad.push('a temperature went to nothing during a storm');
   return bad.length ? bad.join('; ') : null;
 });
 
