@@ -252,7 +252,13 @@
   .bar{display:flex;align-items:center;gap:9px}
   .bar span{font-size:9.5px;letter-spacing:.14em;color:var(--card-dark);text-transform:uppercase;flex:none}
   .shapes{display:flex;gap:4px;flex:none}
-  .shapes .chip{flex:0 0 auto;padding:7px 9px 6px}
+  /* max-width:none, and it is load-bearing rather than tidy. These three sit outside the
+     drawer row and size to their own labels — `flex:0 0 auto` — so the cap that keeps a
+     drawer's chips honest is meaningless here and actively wrong: measured at 49px, Free
+     lost its E and Line and Box were squeezed to nothing. Reported from the phone, and the
+     check written for the cap did not see it, because that check looks inside #mats and
+     this row is not in #mats. */
+  .shapes .chip{flex:0 0 auto;max-width:none;padding:7px 9px 6px}
   input[type=range]{flex:1;accent-color:var(--phos);height:18px}
   input[type=range]:focus-visible{outline:2px solid var(--phos);outline-offset:3px}
 
@@ -3859,64 +3865,323 @@ function sceneFloor(){ const f = H-6; sSlab(0, f, W-1, H-1, STONE); return f; }
 
    None of them is lit. The match is the whole interaction and a scene that arrives
    already burning has spent it. */
+/* Six of them, and the rule they are all built against is that **a preset has to pay off
+   over time, not look right at tick zero**. A scene that is a pretty arrangement is the
+   worst thing in the box, because it looks like a promise. Every one of these has a check
+   in `test/matchbox-sim.mjs` that does what the label says and then measures what happened
+   thirty seconds to four minutes later.
+
+   Two constraints shape all six. They must fit the smallest grid anyone opens this on — a
+   phone in portrait is about 131x153 cells, not the 143x220 the suite runs at — so every
+   scene is laid out from `f` and `cx` and clamped by `inb()`, and none of them reaches
+   more than about eighty rows up. And **none of them arrives lit.** The match is the whole
+   interaction, and a scene that starts burning has already spent it. */
 const SCENES = [
-  { name:'Candle', tell:'Candle — light the wick',
+  /* The living one, and the only one that wants nothing from you at all.
+
+     Called Garden and not Glasshouse, which is what it was: ten characters does not fit a
+     tray chip at the width every other chip in the tray is, and the check that measures
+     that caught it.
+
+     Two clocks run at different speeds. The bed grows: seeds sprout, flower, enrich the
+     dirt under them into rich soil, and the rich soil puts out grass — measured on a bare
+     version of this bed, 14 seeds became 90 stems, 30 flowers, 34 grass and 388 cells of
+     rich soil. The log hatches: grubs eat their way out, pupate at about twenty-eight
+     seconds and are moths by thirty-three.
+
+     The pond is the load-bearing part and it is not decoration. `damp` is what makes a
+     seed sprout and what keeps a plant from dying of thirst, and a sunken pond holds a bed
+     damp indefinitely — which is why this grows a meadow with no weather running at all.
+     Without it the bed needs a mist over it and the scene stops being self-contained. */
+  { name:'Garden', tell:'Garden — put it down and leave it alone',
     build(){
       const f = sceneFloor(), cx = W>>1;
-      sSlab(cx-4, f-20, cx+3, f-1, WAX);
-      for (let y=f-26; y<=f-19; y++) if (inb(cx,y)) put(cx, y, FUSE);
+      const half = Math.min(58, (W>>1) - 6);           // fits the narrowest phone
+      const L = cx - half, R = cx + half - 1;
+      const roof = Math.max(3, f - Math.min(46, ((f-3)*0.8)|0));
+
+      sSlab(L, roof, R, roof, GLASS);                  // the house
+      sSlab(L, roof, L, f-1, GLASS);
+      sSlab(R, roof, R, f-1, GLASS);
+      sSlab(L+1, f-3, R-1, f-1, STONE);                // footing, so the bed has a floor
+      sSlab(L+1, f-13, R-1, f-4, DIRT);                // the bed
+
+      // The pond, sunk into the bed with soil left under and around it.
+      const pl = cx - (half>>1) - 4, pr = cx - 2;
+      sSlab(pl, f-11, pr, f-4, WATER);
+
+      // Moss on the damp footing beside the water, which is the one place it holds.
+      for (let x=pl-3; x<=pr+3; x++) if (Math.random() < .6) put(x, f-14, MOSS);
+
+      // Seeds along the dry half, spaced so each has room to make a plant rather than a
+      // thicket. Measured: closer than five apart and they crowd each other out.
+      for (let x=cx+4; x<=R-4; x+=6) put(x, f-14, SEED);
+      for (let x=L+4; x<pl-4; x+=6)  put(x, f-14, SEED);
+
+      // The fallen log, and what is living in it.
+      const lx = R - 22;
+      sSlab(lx, f-22, lx+18, f-15, WOOD);
+      for (let k=0;k<6;k++) put(lx + 3 + k*3, f-18, GRUB);
+
+      // Worms in the soil, ants on the path. Both are already at home here: a worm wants
+      // damp and not wet, and this bed is exactly that everywhere the pond is not.
+      for (let k=0;k<5;k++) put(L + 8 + k*9, f-6, WORM);
+      for (let k=0;k<6;k++) put(cx + 2 + k*7, f-14, ANT);
     } },
 
-  { name:'Fuse', tell:'Fuse — light the far end and stand back',
+  /* The story one, and it is the oldest story in the box.
+
+     Everything here is a fixture the suite already measures separately — the wick draws
+     molten wax up itself, a grub becomes a pupa becomes a moth, and a moth crosses a room
+     to a flame rather than wandering into one. This is the scene that puts all three end
+     to end, and the only thing it asks of you is the match.
+
+     The timing is the design. First moth at about thirty-three seconds, so the candle has
+     to still be burning well past a minute or the moths arrive at a cold wick and the
+     scene has no ending. That is why it is a tall candle and a deep well of wax. */
+  { name:'Chandler', tell:'Chandler — light the wick, then watch the log',
     build(){
       const f = sceneFloor(), cx = W>>1;
-      const x1 = Math.min(W-18, cx+30);
-      sSlab(x1, f-8, x1+14, f-1, POWDER);
-      for (let x=Math.max(2, x1-46); x<x1; x++) put(x, f-1, FUSE);
+      const half = Math.min(56, (W>>1) - 6);
+
+      // The table, and the candle standing on it.
+      const tx = cx - 6, tt = f - 14;
+      sSlab(tx-8, tt, tx+10, tt+2, STONE);
+      sSlab(tx+2, tt, tx+2, f-1, STONE);               // one leg, so it reads as a table
+      /* Measured: the first moth arrives at about thirty-one seconds and the first version
+         of this candle was out at thirty-four, so the moths reached a dying wick and the
+         scene had no ending. Twelve wide and as tall as the room allows, which is roughly
+         three times the wax. */
+      const ch = Math.min(34, Math.max(16, tt - 6));
+      sSlab(cx-6, tt-ch, cx+5, tt-1, WAX);
+      /* The wick runs the whole height of the candle and not just out of the top of it.
+         Measured, a wick standing proud of the wax went out at fifty-seven seconds with
+         329 of its 406 cells of wax never touched — it had not run out of fuel, it had
+         run out of wick. So the wick was run to the base instead, and that was worse: it
+         had the whole candle to draw on and burned the whole candle, out at forty-eight
+         seconds with 374 of 374 cells gone. Half way down was worse again at forty-one.
+
+         Three measurements, and the shortest wick wins: 57s proud, 48s to the base, 41s
+         half way. The guess in between was the one that sounded most like a candle. */
+      for (let y=tt-ch-8; y<=tt-ch+1; y++) put(cx, y, FUSE);
+
+      // The log, at the far end and low, so a moth has the width of the box to cross.
+      const lx = cx - half + 2;
+      sSlab(lx, f-16, lx+22, f-1, WOOD);
+      for (let k=0;k<8;k++) put(lx + 3 + k*2, f-9, GRUB);
+
+      // The damp wall behind it: moss, and a seep of water keeping it that way.
+      sSlab(lx-4, f-30, lx-2, f-1, STONE);
+      for (let y=f-28; y<=f-2; y+=3) put(lx-1, y, MOSS);
+      sSlab(lx-4, f-31, lx-2, f-31, WATER);
     } },
 
-  { name:'Cut', tell:'Cut — light the magnesium, not the thermite',
+  /* The thermal one, and the reason it exists is Neutral.
+
+     Every other scene would behave the same in any room. This one is *about* the room: a
+     box packed with this much ice drives Neutral down near freezing on its own, so the
+     drifts keep and the pond stays hard. Then it forks, and both directions are one tap.
+
+     Light the woodpile and the room climbs — the drifts go to water, the pond opens, and
+     the fish under it has somewhere to be. Break the nitrogen flask instead and it goes
+     the other way until the pond is solid and the fish is not. The gauge narrates either
+     one, which is the whole point of having made the room a reading. */
+  { name:'Thaw', tell:'Thaw — light the woodpile, or open the flask instead',
     build(){
       const f = sceneFloor(), cx = W>>1;
-      const pt = f-14;                       // plate hangs with air under it, so a
-      sSlab(cx-20, pt, cx+19, pt+2, STEEL);  // cut has somewhere to fall
-      sSlab(cx-6, pt-6, cx+5, pt-1, THERMITE);
-      sSlab(cx-4, pt-8, cx+3, pt-7, MAGNES);
+      const half = Math.min(58, (W>>1) - 6);
+      const L = cx - half, R = cx + half - 1;
+      const roof = Math.max(3, f - Math.min(44, ((f-3)*0.8)|0));
+
+      // Thick, because the room is what this scene is about and the room answers mass.
+      // Measured at three cells thick it only pulled Neutral to 11°C; at six it goes to 5.
+      sSlab(L, roof, R, roof+5, ICE);                  // the cavern
+      sSlab(L, roof, L+5, f-1, ICE);
+      sSlab(R-5, roof, R, f-1, ICE);
+
+      // The pond: water with a lid of ice over it, and a fish under the lid.
+      const pl = cx - 16, pr = cx + 15;
+      sSlab(pl-2, f-10, pr+2, f-1, STONE);
+      sSlab(pl, f-9, pr, f-1, WATER);
+      sSlab(pl, f-10, pr, f-10, ICE);
+      put(cx-6, f-5, FISH); put(cx+5, f-4, FISH);
+
+      // Drifts of snow banked against the walls, where they will be the first to go.
+      for (let k=0;k<3;k++) sSlab(L+4, f-6-k*2, L+16-k*4, f-1, SNOW);
+      for (let k=0;k<3;k++) sSlab(R-16+k*4, f-6-k*2, R-4, f-1, SNOW);
+
+      // The woodpile, under a stone ledge so it is dry and does not simply sit in snow.
+      const wx = R - 30;
+      sSlab(wx-2, f-20, wx+16, f-19, STONE);
+      sSlab(wx, f-18, wx+14, f-11, WOOD);
+      for (let y=f-18; y<=f-11; y+=3) put(wx-1, y, FUSE);
+
+      // The flask, on a shelf on the other side. Glass, because glass is the one thing
+      // that holds acid and it reads as laboratory even when what is in it is not.
+      const nx = L + 12;
+      sSlab(nx-1, f-26, nx+9, f-26, STONE);
+      sSlab(nx, f-36, nx, f-27, GLASS);
+      sSlab(nx+8, f-36, nx+8, f-27, GLASS);
+      sSlab(nx+1, f-35, nx+7, f-27, NITRO);
     } },
 
-  { name:'Lava', tell:'Lava — sand makes glass, water makes obsidian',
+  /* The geological one. A vent is the only thing in the box that makes material out of
+     nothing, and this is what it is for.
+
+     Three vent cells and not eleven, which is the whole of the tuning. Measured on an
+     eleven-wide shaft, lava crested in four seconds and put 3,769 cells into the box,
+     which is not a volcano, it is a flood. Three cells climb the shaft in about the same
+     time and then keep going at a rate you can watch.
+
+     What it makes on the way down is the point: obsidian and steam where it reaches the
+     lake, glass where it crosses the sand, and the trees on the flank catch slowly because
+     green wood needs 470°C and takes its time getting there. */
+  { name:'Volcano', tell:'Volcano — it does this by itself; the gas pocket is yours',
     build(){
       const f = sceneFloor(), cx = W>>1;
-      sSlab(cx-22, f-15, cx-22, f-1, STONE);
-      sSlab(cx+21, f-15, cx+21, f-1, STONE);
-      sSlab(cx-21, f-12, cx+20, f-1, LAVA);
+      const half = Math.min(56, (W>>1) - 6);
+      const L = cx - half, R = cx + half - 1;
+      const peak = Math.min(40, ((f-4)*0.7)|0);
+
+      // The cone.
+      for (let y=f-1; y>=f-peak; y--){
+        const t = (f-1-y) / peak;
+        // Twenty-two wide at the base and not sixty-eight. Lava sets at `cool` 560 and a
+        // flow down a wide flank is stone long before it reaches anything: measured on
+        // the first cone, the lake lost 21 cells of water to radiant heat and gained not
+        // one cell of obsidian, because nothing molten ever arrived.
+        const w = Math.max(4, Math.round(18 * (1 - t)) + 4);
+        sSlab(cx-w, y, cx+w, y, STONE);
+      }
+      // The shaft, and the three cells at the bottom of it that do the work.
+      /* Carved to the very top. The first version stopped two rows short and the cone
+         closed over it — measured, the lava climbed the shaft, filled it to 183 cells,
+         and sat there setting back into stone at the rate it arrived. A volcano with a
+         lid is a hot rock. */
+      for (let y=f-peak; y<=f-1; y++) sSlab(cx-2, y, cx+2, y, E);
+      for (let x=cx-2; x<=cx+2; x++){ put(x, f-1, VENT); feed[idx(x,f-1)] = LAVA; }
+
+      /* The lake and the beach sit *at the foot of the cone*, not across the box from it.
+         The first version put them beyond the base and the lava set into stone before it
+         reached either — nine cells of lava left on the map and not one of obsidian. What
+         a flow does on its way down is the whole scene, so it has to have something to
+         reach. */
+      const foot = 22;
+      /* Deep, because a shallow lake is gone before anything molten reaches it. Water's
+         `cap` is 6.0 and six rows of it simply boiled off to the radiant heat of the cone
+         — measured, 21 cells of water lost and no obsidian at all. Fourteen rows have the
+         thermal mass to still be there when the flow arrives. */
+      /* The lake butts against the cone with nothing between them. It had a two-cell
+         stone rim of its own, and lava running down the flank stopped on top of that rim
+         — which puts it *diagonally* next to the water, and `meets` is a four-neighbour
+         rule. Measured: 3,088 cells of lava on the map and not one of obsidian. */
+      sSlab(L, f-15, L+1, f-1, STONE);
+      sSlab(L+2, f-14, cx-foot+2, f-1, WATER);
+      sSlab(cx+foot-2, f-6, R, f-1, SAND);
+
+      // Trees on the slopes. Green wood, so they smoulder rather than flashing over.
+      for (let k=0;k<4;k++){
+        const x = cx + 18 + k*7, base = f-1;
+        sSlab(x, base-9, x+1, base-1, GREEN);
+      }
+      for (let k=0;k<3;k++){
+        const x = cx - 24 - k*7, base = f-1;
+        sSlab(x, base-9, x+1, base-1, GREEN);
+      }
+
+      // And the pocket under the flank, which is the one part of this that waits for you.
+      const gx = cx - 30;
+      sSlab(gx-9, f-18, gx+9, f-18, STONE);
+      sSlab(gx-9, f-18, gx-9, f-9, STONE);
+      sSlab(gx+9, f-18, gx+9, f-9, STONE);
+      sSlab(gx-8, f-17, gx+8, f-9, GAS);
     } },
 
-  { name:'Acid', tell:'Acid — glass holds it, nothing else does for long',
+  /* The industrial one, and it ended up being about what a fire *cannot* do.
+
+     Coal is the hardest thing in the box to light — 520°C, against paper's 210 — so the
+     fuse and the straw under the grate are not decoration, they are the only way in. Once
+     it is going, the billet lying across the bed is the demonstration: steel's `cond` is
+     .92, better than anything else in the table, so the heat runs the length of it.
+
+     **And it will not melt it.** A coal fire here tops out around 1,290°C, because
+     combustion cannot drive a cell past `FLAME_PEAK` 1200 unless the material carries its
+     own `peak`, and coal carries none. Steel melts at 1400. So the billet glows the whole
+     length and stays a billet, which took a four-minute measurement to find out and is the
+     most interesting thing in the scene.
+
+     Nor does the lining, and that was the next guess. Stone melts at 1250, under the
+     hearth's measured 1296 — but melting is not a line a temperature crosses, it is
+     `LATENT_MELT` 140 of energy soaked up first, and three cells of stone at `cap` 2.2
+     shed it to the room faster than the peak delivers it. Measured over four minutes:
+     peak lava, nought.
+
+     So the scene is the fire itself, which is not a small thing here. Coal takes 520°C to
+     catch against paper's 210, and the only way to it is a fuse into straw into the bed.
+     It is the longest, hottest, hardest-won fire in the box — 248 cells of it, burning for
+     minutes at a stretch — and the discovery it hands you is that even this is not enough
+     to move the steel lying in it.
+
+     There was a thermite charge on a bench here for three versions, because thermite at
+     2450°C is the only thing in the box that can open the billet. It came out. Thermite is
+     a powder that catches at 950, steel conducts better than anything, and every
+     arrangement tried — on the billet, on a plate beside the hearth, in a walled alcove
+     thirty cells away — lit itself off the fire before anyone touched the ribbon: measured
+     at MAX_T with the whole ribbon gone and the charge down to one cell. A scene whose
+     label says "when you want" must not go off while you are watching something else.
+     Thermite is still in the tray, and it wants a scene built around it rather than
+     bolted onto one that is already on fire. */
+  { name:'Forge', tell:'Forge — light the straw under the grate; the coal is the hard part',
     build(){
       const f = sceneFloor(), cx = W>>1;
-      sSlab(cx-20, f-17, cx-20, f-1, GLASS);
-      sSlab(cx+19, f-17, cx+19, f-1, GLASS);
-      sSlab(cx-20, f-1, cx+19, f-1, GLASS);
-      sSlab(cx-19, f-14, cx+18, f-2, ACID);
-      sSlab(cx-12, f-10, cx-6, f-4, STEEL);
-      sSlab(cx+3, f-10, cx+9, f-4, WOOD);
+      const half = Math.min(56, (W>>1) - 6);
+      const L = cx - half, R = cx + half - 1;
+
+      // The hearth: a stone box open at the top, with a grate of steel across it.
+      const hl = cx - 26, hr = cx + 10, ht = f - 30;
+      sSlab(hl, ht, hl+2, f-1, STONE);
+      sSlab(hr-2, ht, hr, f-1, STONE);
+      sSlab(hl, f-3, hr, f-1, STONE);
+      sSlab(hl+3, f-12, hr-3, f-12, STEEL);            // the grate
+      sSlab(hl+3, f-11, hr-3, f-5, STRAW);             // kindling under it
+      sSlab(hl+3, f-20, hr-3, f-13, COAL);             // the bed on top of it
+      for (let y=f-11; y<=f-5; y+=3) put(hl+2, y, FUSE);
+
+      // The billet, lying across the coal with its ends out in the air.
+      sSlab(hl-8, f-24, hr+8, f-23, STEEL);
+
+      // The quench trough, under one end, for whatever the hearth gives up.
+      sSlab(hr+6, f-10, hr+6, f-1, STONE);
+      sSlab(R-2, f-10, R-2, f-1, STONE);
+      sSlab(hr+7, f-9, R-3, f-1, WATER);
+
+      // And a sand bank on the other side, which is where the lining ends up going.
+      sSlab(L, f-6, hl-10, f-1, SAND);
     } },
 
-  // This used to say "and it does not wait", which was true and was the wrong thing to
-  // do about it: the room emptied itself in about ten seconds because a painted gas was
-  // fading on the same clock as smoke. Now it keeps — measured, 396 cells at nought
-  // seconds and 396 at sixty — so the label can say what the scene is for instead of
-  // apologising for it.
-  { name:'Gas', tell:'Gas — let it gather under the lid, then reach in with a match',
-    build(){
-      const f = sceneFloor(), cx = W>>1;
-      const lid = Math.max(2, f-26);
-      sSlab(cx-20, lid, cx+19, lid, STONE);
-      sSlab(cx-20, lid, cx-20, f-1, STONE);
-      sSlab(cx+19, lid, cx+19, f-1, STONE);
-      sSlab(cx-18, f-12, cx+17, f-2, GAS);
-    } },
+  /* There were six, and the sixth was a Rube Goldberg machine. It is not here, and the
+     reason is the rule the other five are built on rather than a lack of nerve: a preset
+     that cannot be made to pay off is the worst thing in the box, because it looks like a
+     promise. Four versions of it, and each one failed differently and taught something:
+
+     - **Wax cannot be a trigger anywhere near lava.** Three arrangements put a wax plug
+       over, beside, and three rows clear of a lava pool, and every one melted inside three
+       seconds from the pool's own heat. Wax goes at 62°C and lava sits at 1180. A stage
+       that arms itself is not a stage.
+     - **Water does not raise a lava pool, it quenches it.** The version that finally
+       delivered its water put 138 cells in and got 16 of obsidian back, with every one of
+       the 180 cells of lava set to stone by the end — so the flow that was supposed to
+       spill over a lip onto sand had nothing left to spill.
+     - **Steel is a wire and not a battery.** Carrying the signal by conduction instead
+       worked for the first two stages — charge at 15s, straw alight at 18s, measured — and
+       then stopped: a ninety-cell bar never warmed its far end at all, and a thirty-four
+       cell one did not either. A charge is a brief event, and the far end of a bar is
+       still waiting when it is over.
+
+     Two of five stages fire reliably, which is a machine that works four times in five,
+     which is worse than one that never ran. The parts of it that do work are already the
+     Volcano's and the Forge's. It can come back when there is a way to hold a signal
+     rather than send one. */
 ];
 
 function loadScene(s){
