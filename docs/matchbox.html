@@ -87,7 +87,16 @@
   .readout,.gauge{position:absolute;top:7px;font-size:10px;letter-spacing:.12em;
     color:#b0a08c;pointer-events:none;text-transform:uppercase;
     text-shadow:0 0 3px #000, 0 1px 2px #000}
-  .readout{left:9px}
+  /* The readout's right edge is set from the gauge's real width in updateGauge(), because
+     the gauge is the thing it must not run into and the gauge changes width — "found 3/73"
+     is not "found 36/73", and the grid size is not always four digits. The `right` here is
+     only the value before the first gauge paint.
+
+     Reported from the phone: "Moss needs water within reach — it will not survive here"
+     ran straight under "air 20°C", and every discovery long enough to wrap did the same.
+     Both of these are absolutely positioned over the stage, so neither has ever pushed the
+     other anywhere — the readout simply had no right-hand edge to respect. */
+  .readout{left:9px;right:46%}
   .gauge{right:9px;text-align:right}
   .gauge b{font-weight:400;color:#ffb066}
   /* Clear of the floor: at the foot of the stage this sat on top of the opening
@@ -3942,10 +3951,20 @@ const SCENES = [
       for (let x=cx+4; x<=R-4; x+=6) put(x, f-14, SEED);
       for (let x=L+4; x<pl-4; x+=6)  put(x, f-14, SEED);
 
-      // The fallen log, and what is living in it.
-      const lx = R - 22;
-      sSlab(lx, f-22, lx+18, f-15, WOOD);
-      for (let k=0;k<6;k++) put(lx + 3 + k*3, f-18, GRUB);
+      /* The fallen log, and what is living in it. Deeper than it needs to look, with the
+         grubs set well inside rather than spaced across its whole width: six of them with
+         the last one sitting on the end grain hatched every time in six runs and then
+         failed once in a full suite, which is the shape of a grub wandering out of the
+         wood and into a garden full of pond.
+
+         Eight of them, three cells clear of every edge, in a log with room to live in.
+         Measured, a grub that eats its way out into open air mostly dies before it
+         pupates: at 210 cells of wood the Garden got one pupa from eight and failed
+         outright once in ten runs with none at all, while the Chandler's 368-cell log gave
+         two to four every time. The number that mattered was the wood, not the grubs. */
+      const lx = R - 24;
+      sSlab(lx, f-31, lx+20, f-15, WOOD);
+      for (let k=0;k<8;k++) put(lx + 3 + k*2, f-22, GRUB);
 
       // Worms in the soil, ants on the path. Both are already at home here: a worm wants
       // damp and not wet, and this bed is exactly that everywhere the pond is not.
@@ -5087,6 +5106,23 @@ addEventListener('keydown', e => {
 let gaugeTick = 0, frameMs = 16;
 const gaugeEl = document.getElementById('gauge');
 
+/* Keep the readout out from under the gauge.
+
+   Measured off the gauge rather than guessed at as a percentage, because the gauge is not a
+   fixed width: "found 3/73" and "found 36/73" differ, and so do "131×153" and "143×220".
+   Never more than 60% of the stage though — on a narrow phone a wide gauge would otherwise
+   squeeze the readout down to a column of single words.
+
+   Only written when it changes. `offsetWidth` forces a layout, and this runs on the gauge's
+   own timer rather than every frame, but a style write every fifth of a second for a number
+   that is nearly always the same is still a write nobody asked for. */
+let roClear = -1;
+function keepRoClear(){
+  const stage = gaugeEl.parentElement.clientWidth;
+  const want = Math.min(Math.round(gaugeEl.offsetWidth) + 18, Math.round(stage * 0.6));
+  if (want !== roClear){ roClear = want; roEl.style.right = want + 'px'; }
+}
+
 function updateGauge(){
   let peak = -1e9, airSum = 0, airN = 0, allSum = 0;
   for (let i=0; i<temp.length; i++){
@@ -5114,6 +5150,10 @@ function updateGauge(){
                       `<br><b>peak ${Math.round(peak)}°C</b>` +
                       `<br>found ${finds.size}/${FINDS.length}` +
                       `<br>${frameMs.toFixed(1)}ms work · ${W}×${H}`;
+  // After the write, not before it. Measuring an element you are about to fill gives you
+  // the width it used to be — and on the very first paint that is nought, which put the
+  // readout's edge at 18px and let it run the full width of the box under the numbers.
+  keepRoClear();
 }
 
 /* ============================================================ boot */
