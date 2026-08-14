@@ -348,6 +348,75 @@ await check('a box with no air in it does not report the room as a measurement',
   return null;
 });
 
+/* The readout and the gauge are two overlays on the same strip of stage, one anchored left
+   and one right, and for a long time only one of them had both edges.
+
+   Reported from the phone: "Moss needs water within reach — it will not survive here" ran
+   straight under "air 20°C", and every discovery long enough to wrap did the same. Neither
+   ever pushed the other anywhere — they are both absolutely positioned — the readout simply
+   had no right-hand edge to respect, so it ran the full width of the box underneath the
+   numbers.
+
+   Both halves are checked: the longest sentence the app can say, and the widest the gauge
+   can get. The gauge is not a fixed width — "found 3/73" is not "found 36/73" — so the
+   readout's edge is set from the gauge's measured width rather than from a percentage, and
+   a check that only tried one of them would pass on the easy one. */
+await check('the readout and the gauge do not run into each other', async p => {
+  const bad = [];
+  const box = async () => p.evaluate(() => {
+    const r = document.getElementById('ro').getBoundingClientRect();
+    const g = document.getElementById('gauge').getBoundingClientRect();
+    return { rl:r.left, rr:r.right, rh:r.height, gl:g.left, gr:g.right, gw:g.width,
+             stage: document.querySelector('.stage').getBoundingClientRect().width };
+  });
+
+  // The longest thing in the file that can land in the readout, found rather than invented.
+  const longest = await p.evaluate(() => {
+    let best = '';
+    for (const f of FINDS){ const t = f.tell || f.n || ''; if (t.length > best.length) best = t; }
+    for (const s of SCENES) if (s.tell.length > best.length) best = s.tell;
+    return best;
+  });
+  if (!longest) return 'could not find any readout text to test with';
+
+  await p.evaluate(t => { say(t, true); updateGauge(); }, longest);
+  await p.waitForTimeout(200);
+  let b = await box();
+  if (b.rr > b.gl) bad.push(`"${longest.slice(0,30)}…" runs ${Math.round(b.rr - b.gl)}px under the gauge`);
+  if (b.rr > b.stage * 0.75) bad.push(`the readout reaches ${Math.round(b.rr)}px of a ${Math.round(b.stage)}px stage`);
+
+  /* ...and again with the gauge as wide as it goes: every find made, so the counter is at
+     its longest, and a peak wide enough to matter. A readout edge measured against a narrow
+     gauge is an edge that fails the moment somebody plays for a while — which is exactly
+     when it was reported. */
+  await p.evaluate(t => {
+    for (const f of FINDS) finds.add(f.k !== undefined ? f.k : f);
+    updateGauge(); say(t, true);
+  }, longest);
+  await p.waitForTimeout(200);
+  b = await box();
+  if (b.rr > b.gl) bad.push(`with every find made the readout runs ${Math.round(b.rr - b.gl)}px under a ${Math.round(b.gw)}px gauge`);
+
+  // And the readout must still have room to be a readout rather than a column of words.
+  if (b.rh > 60) bad.push(`the readout is ${Math.round(b.rh)}px tall — it has been squeezed into a column`);
+
+  /* Read in the same tick as the gauge is written, with nothing awaited in between. The
+     edge is set from the gauge's measured width, so setting it *before* the write measures
+     the width the gauge used to be — which on a first paint is nought. That version put the
+     readout's edge at 18px and let it run the full width of the box, and every leg above
+     still passed it, because the app's own timer repaints the gauge inside the 200ms they
+     each wait and the second paint quietly corrects the first. */
+  const firstPaint = await p.evaluate(t => {
+    const ro = document.getElementById('ro'), g = document.getElementById('gauge');
+    g.innerHTML = ''; ro.style.right = '';        // the state the app boots in
+    roClear = -1;
+    say(t, true); updateGauge();
+    return Math.round(ro.getBoundingClientRect().right - g.getBoundingClientRect().left);
+  }, longest);
+  if (firstPaint > 0) bad.push(`on the gauge's first paint the readout runs ${firstPaint}px under it`);
+  return bad.length ? bad.join('; ') : null;
+});
+
 await check('the heat view shows the field without touching it', async p => {
   const before = await p.evaluate(() => {
     let sum = 0; for (let i=0;i<type.length;i++) sum += type[i]*7 + Math.round(temp[i]);
@@ -743,6 +812,10 @@ await check('Save asks before it replaces a save, but not before the first one',
    scene does move, the check says so instead of blaming the save. */
 await check('a scene saved and loaded through the buttons comes back', async p => {
   await press(p, 'scene-forge');
+  // Let it settle first. Even the stillest of the five has a powder bed and a trough in it
+  // and both move for the first few frames; without this the guard below fires on two cells
+  // of coal finding their level and the check reports that it cannot conclude anything.
+  await p.waitForTimeout(600);
   await press(p, 'save');
   const saved = await p.evaluate(() => Array.from(type));
   await p.waitForTimeout(400);

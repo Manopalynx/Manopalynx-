@@ -72,6 +72,29 @@ load-bearing rather than tidy. The tray sits above the stage, so a row that wrap
 the tray taller and moves the scene — and a chip sized to its own text moves the row
 whenever that text changes.
 
+### The readout and the gauge are two overlays, and only one had both edges
+
+Reported from the phone: *"Moss needs water within reach — it will not survive here"* ran
+straight under *"air 20°C"*, and every discovery long enough to wrap did the same.
+
+Neither ever pushed the other anywhere — both are absolutely positioned over the stage, one
+anchored left and one right. The readout simply had no right-hand edge, so it ran the full
+width of the box underneath the numbers.
+
+Its edge is set from the gauge's **measured** width now, not from a percentage, because the
+gauge is not a fixed width: "found 3/73" is not "found 36/73" and "131×153" is not
+"143×220". Capped at 60% of the stage, so a wide gauge on a narrow phone cannot squeeze the
+readout into a column of single words.
+
+**And the measurement has to happen after the gauge is written, not before it.** Measuring
+an element you are about to fill gives you the width it used to be — which on the first
+paint is nought, and put the readout's edge at 18px with the whole box to run under. Worth
+recording because *the check did not catch it*: every leg waited 200ms after saying its
+piece, and the app's own gauge timer repaints inside that window, so the second paint
+quietly corrected the first. The leg that catches it clears the gauge and the inline style
+first, to stand where the app stands at boot, and reads back in the same tick. Verified by
+mutation: 135px of overlap with the order reversed.
+
 ### `fitLabels` was measuring the text against itself
 
 Reported from the phone as **POWD…** and **RUBB…** in the Fuel drawer, with every check
@@ -275,7 +298,7 @@ Measured, at the suite's 143×220:
 
 | | |
 |---|---|
-| Garden, 200s | 78 stems, 35 flowers, 20 grass, **319 cells of rich soil** from 11 seeds; first moth ~30s |
+| Garden, 200s | 78 stems, 35 flowers, 20 grass, **319 cells of rich soil** from 11 seeds; first moth ~31s |
 | Chandler | first moth **32s**, candle still lit at **63s**, 4 moths in the room |
 | Thaw, left alone | Neutral bottoms at **10.4°C**, 1110 of 1144 ice still standing, fish alive |
 | Thaw, lit | Neutral tops at **21.6°C**, ice down to 720, snow 212 → 16 |
@@ -283,6 +306,13 @@ Measured, at the suite's 143×220:
 | Forge | 248 cells of coal fully burnt, peak **1296°C** |
 
 ### Three things the presets taught that the materials had not
+
+**A grub needs wood to live in, not just to eat.** The Garden's log was 210 cells for eight
+grubs and it produced *one* pupa, failing outright once in ten runs with none at all — a
+grub that eats its way out into open air mostly dies before it pupates. The Chandler's log
+is 368 cells and gave two to four every time. Matching them took the Garden to three to five
+pupae in ten runs out of ten. **The number that mattered was the wood, not the grubs**, and
+the first fix tried — more grubs, set clear of the edges — moved it not at all.
 
 **A candle's width is its fuel.** `drawFuel` draws from the wax *beside* the wick, so
 narrowing the candle from twelve cells to eight — which looked better on the table — halved
@@ -2407,7 +2437,7 @@ the glass.
 ```
 npm i playwright
 node test/matchbox-sim.mjs     # 96 checks — the simulation
-node test/matchbox-ui.mjs      # 43 checks — the hand
+node test/matchbox-ui.mjs      # 44 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
 
