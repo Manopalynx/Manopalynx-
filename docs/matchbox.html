@@ -3538,20 +3538,44 @@ function showDrawer(n){
 
    Layout no longer depends on the outcome. Chips are equal-width whatever the type does,
    so this only decides how much of a word you can read. */
+const chipRule = document.createElement('canvas').getContext('2d');
 function fitLabels(){
   const labels = [...matsEl.querySelectorAll('.lb')];
   if (!labels.length) return;
-  const clipped = () => labels.some(l => l.scrollWidth > l.clientWidth + 0.5);
-  // The floor was 7px and **Magnesium clipped at 375px with it**, on the tray as shipped
-  // and before the chip cap went anywhere near it. Found while measuring something else,
-  // which is the only way this kind of thing is ever found. 6.5 clears it at every width
-  // measured; 6 would clear Everything as well and is too small to read, so that one was
-  // given a shorter word instead of the whole row a smaller one.
+  /* Two bugs in one line, and between them they made this function nearly a no-op.
+
+     It asked `l.scrollWidth > l.clientWidth + 0.5`. **`l` is the label, and the label
+     shrink-wraps its own text** — measured, "Wood" reports clientWidth 24 and scrollWidth
+     24, "Powder" reports 35 and 35. The test was comparing the text against itself, so it
+     could only ever fire in the one case where `max-width:100%` clamped the label, and the
+     half-pixel tolerance on top meant even that had to overflow by a margin first. Every
+     attempt to give it headroom put every drawer straight onto the 6.5px floor, because
+     equal is not less and there was never any room in the number to begin with.
+
+     The width that matters is the **chip's**, less its padding. And the text is measured
+     off a canvas rather than off an element, so a pixel of headroom means a pixel:
+     "Powder" at 9.5px is 34.3px wide against 39px of room in a 47px chip and 34px in a
+     42px one — which is precisely the difference between this screen and the phone it was
+     reported from, and why it would not reproduce here at any width.
+
+     Letter-spacing is added back by hand because canvas does not apply it. */
+  const cs = getComputedStyle(labels[0]);
+  const gap = parseFloat(cs.letterSpacing) || 0;
+  const chip = labels[0].parentElement;
+  const cps = getComputedStyle(chip);
+  const pad = (parseFloat(cps.paddingLeft) || 0) + (parseFloat(cps.paddingRight) || 0);
   for (let px = 9.5; px >= 6.5; px -= 0.5){
     matsEl.style.setProperty('--chipfs', px + 'px');
-    if (!clipped()) return;
+    chipRule.font = px + 'px ' + cs.fontFamily;
+    const over = labels.some(l => {
+      const t = l.textContent;
+      const room = l.parentElement.clientWidth - pad;
+      return chipRule.measureText(t).width + gap * t.length > room - 1;
+    });
+    if (!over) return;
   }
 }
+
 
 // The webfont lands after first paint, and it is wider than the fallback it replaces,
 // so whatever fitted a moment ago may not any more.
@@ -3944,14 +3968,24 @@ const SCENES = [
       const f = sceneFloor(), cx = W>>1;
       const half = Math.min(56, (W>>1) - 6);
 
-      // The table, and the candle standing on it.
-      const tx = cx - 6, tt = f - 14;
-      sSlab(tx-8, tt, tx+10, tt+2, STONE);
-      sSlab(tx+2, tt, tx+2, f-1, STONE);               // one leg, so it reads as a table
-      /* Measured: the first moth arrives at about thirty-one seconds and the first version
-         of this candle was out at thirty-four, so the moths reached a dying wick and the
-         scene had no ending. Twelve wide and as tall as the room allows, which is roughly
-         three times the wax. */
+      /* The table, and the candle standing on it.
+
+         Reported from the phone as looking off, and it was: a twelve-wide candle
+         overhanging a nineteen-wide top on a single one-cell leg reads as a paint roller
+         on a post. The table is twenty-five wide with two legs now, which is most of it.
+
+         The candle stayed twelve wide, and that is not stubbornness: `drawFuel` draws from
+         the wax *beside* the wick, so a candle's width is its fuel. Measured, narrowing it
+         to eight halved the burn from sixty-nine seconds to thirty-four — under the first
+         moth's arrival, which is the one thing this scene cannot afford.
+
+         As tall as the room allows, which is roughly three times the wax the first version
+         had — measured, that one was out at thirty-four seconds against a first moth at
+         thirty-one, so the moths reached a dying wick and the scene had no ending. */
+      const tt = f - 14;
+      sSlab(cx-12, tt, cx+12, tt+2, STONE);
+      sSlab(cx-9, tt+3, cx-8, f-1, STONE);
+      sSlab(cx+8, tt+3, cx+9, f-1, STONE);
       const ch = Math.min(34, Math.max(16, tt - 6));
       sSlab(cx-6, tt-ch, cx+5, tt-1, WAX);
       /* The wick runs the whole height of the candle and not just out of the top of it.
