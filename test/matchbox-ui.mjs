@@ -817,15 +817,22 @@ await check('a button that asks a question does not move the scene while asking'
   });
   const bad = [];
 
-  // Save still asks on the chip itself, by changing its own label.
+  /* Save asks inside its own panel now, which floats over the stage and so cannot move
+     the tray at all — but the panel opening is itself a change to the page, and the whole
+     claim of a `.picker` is that it costs no layout. Both halves are checked here. */
   const save = await reveal(p, 'save');
   const beforeSave = await geom();
-  await save.click();                               // first save fills the slot
-  await save.click();                               // this one asks
-  const label = await labelOf(save);
+  await save.click();
   if (JSON.stringify(beforeSave) !== JSON.stringify(await geom()))
-    bad.push(`save asking ("${label}") moved the page`);
-  if (await save.getAttribute('aria-pressed') !== 'true') bad.push('save did not arm');
+    bad.push('opening the save panel moved the page');
+  await p.locator('[data-act="slot-save-1"]').click();      // fills slot 1, closes
+  await save.click();
+  await p.locator('[data-act="slot-save-1"]').click();      // this one asks
+  const armed = await p.locator('[data-act="slot-save-1"]');
+  if (!/replace/i.test(await armed.textContent())) bad.push('save did not arm on an occupied slot');
+  if (JSON.stringify(beforeSave) !== JSON.stringify(await geom()))
+    bad.push('save asking moved the page');
+  await p.locator('#slotCancel').click();
 
   // Clear asks by borrowing the drawer row for four chips, which is a bigger change to
   // the tray than a one-word relabel and therefore the more likely of the two to move
@@ -899,17 +906,40 @@ await check('every preset is reachable and none of them leaves the box empty', a
 // Saving into an empty slot cannot lose anything, so it just saves. Replacing a save
 // destroys something that cannot be got back, so it asks — the same two-tap rule Clear
 // uses, and for the same reason.
-await check('Save asks before it replaces a save, but not before the first one', async p => {
-  await press(p, 'scene-forge');
-  const first = await press(p, 'save');
-  if (/replace/i.test(await labelOf(first))) return 'the very first save asked to replace something';
-  if (!await p.evaluate(() => !!localStorage.getItem(STORE_KEY))) return 'nothing was written';
+/* Saving into an empty slot cannot lose anything; saving over one can. Only the second
+   asks, which is the same two-tap rule Clear uses and for the same reason — a confirm on a
+   harmless action is what teaches people to tap through the one that is not. */
+await check('a save asks before it replaces one, but not before it fills an empty slot', async p => {
+  const bad = [];
+  await press(p, 'scene-chandler');
+  await (await reveal(p, 'save')).click();
+  const one = p.locator('[data-act="slot-save-1"]');
+  if (!await one.count()) return 'the save panel has no slot 1';
+  if (/replace/i.test(await one.textContent())) bad.push('an empty slot offered to replace something');
 
-  await press(p, 'scene-volcano');
-  const again = await press(p, 'save');
-  if (!/replace/i.test(await labelOf(again))) return `a second save went straight through, reading "${await labelOf(again)}"`;
-  if (await again.getAttribute('aria-pressed') !== 'true') return 'the armed Save is not styled as the danger it is';
-  return null;
+  await one.click();                                          // straight through
+  if (await p.evaluate(() => document.getElementById('slotPick').classList.contains('open')))
+    bad.push('the panel stayed open after saving into an empty slot');
+  if (!await p.evaluate(() => !!localStorage.getItem(slotKey(1)))) bad.push('nothing was written');
+
+  await press(p, 'scene-forge');
+  await (await reveal(p, 'save')).click();
+  const again = p.locator('[data-act="slot-save-1"]');
+  await again.click();
+  if (!/replace/i.test(await again.textContent()))
+    bad.push(`a second save into the same slot went straight through, reading "${await again.textContent()}"`);
+  const said = await p.locator('#ro').textContent();
+  if (!/replace/i.test(said)) bad.push(`the readout said "${said}" rather than asking`);
+  await again.click();
+  if (await p.evaluate(() => document.getElementById('slotPick').classList.contains('open')))
+    bad.push('the second tap did not go through');
+
+  // ...and the other four are untouched by any of that.
+  const filled = await p.evaluate(() => {
+    let n = 0; for (let k=1;k<=SLOTS;k++) if (localStorage.getItem(slotKey(k))) n++; return n;
+  });
+  if (filled !== 1) bad.push(`${filled} of ${await p.evaluate(()=>SLOTS)} slots have something in them`);
+  return bad.length ? bad.join('; ') : null;
 });
 
 /* Forge, and the snapshot is taken after the save rather than before. Unlike the
@@ -929,6 +959,7 @@ await check('a scene saved and loaded through the buttons comes back', async p =
   // of coal finding their level and the check reports that it cannot conclude anything.
   await p.waitForTimeout(600);
   await press(p, 'save');
+  await p.locator('[data-act="slot-save-3"]').click();      // not slot 1, so the slot itself is tested
   const saved = await p.evaluate(() => Array.from(type));
   await p.waitForTimeout(400);
   const drift = await p.evaluate(a => { let d=0;
@@ -939,6 +970,7 @@ await check('a scene saved and loaded through the buttons comes back', async p =
   const between = await p.evaluate(() => __count(COAL));
   if (between) return `${between} cells of coal survived loading a different preset, so this proves nothing`;
   await press(p, 'load');
+  await p.locator('[data-act="slot-load-3"]').click();
   const back = await p.evaluate(a => {
     let diff = 0;
     for (let i=0;i<type.length;i++) if (type[i] !== a[i]) diff++;
@@ -949,15 +981,33 @@ await check('a scene saved and loaded through the buttons comes back', async p =
   return null;
 });
 
-await check('Load with nothing saved says so instead of wiping the scene', async p => {
+/* An empty slot cannot be loaded, and the panel says which ones are empty rather than
+   letting you find out by tapping. The old single-slot version could only say "nothing
+   saved yet" after the fact; five slots can show it before you choose. */
+await check('an empty slot cannot be loaded, and says so before you tap it', async p => {
+  const bad = [];
+  // The Forge, because it is the only preset that holds still — the other four are alive
+  // or pouring by design, and a cell count taken across a panel opening would be measuring
+  // the scene rather than the panel.
   await press(p, 'scene-forge');
-  const before = await p.evaluate(() => __cells());
+  await p.waitForTimeout(600);
+  const before = await p.evaluate(() => { let n=0; for (let i=0;i<type.length;i++) if (type[i]!==0) n++; return n; });
+
   await press(p, 'load');
-  const after = await p.evaluate(() => __cells());
-  if (after !== before) return `Load with an empty slot changed the box from ${before} to ${after} cells`;
-  const said = await p.locator('#ro').textContent();
-  if (!/nothing saved/i.test(said)) return `the readout says "${said}"`;
-  return null;
+  const rows = await p.evaluate(() => [...document.querySelectorAll('#slotList .slot')].map(r => ({
+    n: r.dataset.slot,
+    text: r.textContent.replace(/\s+/g,' ').trim(),
+    off: r.querySelector('.go').disabled,
+  })));
+  if (rows.length !== await p.evaluate(() => SLOTS)) bad.push(`the panel showed ${rows.length} slots`);
+  for (const r of rows){
+    if (!r.off) bad.push(`slot ${r.n} offers to load with nothing in it`);
+    if (!/empty/i.test(r.text)) bad.push(`slot ${r.n} reads "${r.text}" while empty`);
+  }
+  await p.locator('#slotCancel').click();
+  const after = await p.evaluate(() => { let n=0; for (let i=0;i<type.length;i++) if (type[i]!==0) n++; return n; });
+  if (after !== before) bad.push(`opening and cancelling the load panel changed the box from ${before} to ${after} cells`);
+  return bad.length ? bad.join('; ') : null;
 });
 
 /* The one that cannot be found by using the page on this machine: a browser that
@@ -965,6 +1015,98 @@ await check('Load with nothing saved says so instead of wiping the scene', async
    `localStorage`, and the throw is on access, not on a missing object — so a check for
    whether it exists passes and the next line takes the page down.
    This is the failure the ledger in this repository already shipped once. */
+/* Five slots, and the thing worth checking is that they are five *separate* slots. One
+   store key with a number appended is a one-character mistake away from every save landing
+   on top of the last one, and that failure looks exactly like a working save until the day
+   you go back for something.
+
+   The key that used to be the only one is `matchbox.scene.1`, so slot 1 is the save anyone
+   already had — the migration is that there isn't one, and this checks it stayed true. */
+await check('five slots hold five different scenes', async p => {
+  const bad = [];
+  const sigOf = () => p.evaluate(() => { let h=0; for (let i=0;i<type.length;i++) h=(h*31+type[i])|0; return h; });
+  /* Three scenes built by hand rather than three presets, because four of the five presets
+     are alive or pouring by design — a signature taken before saving and again after
+     loading would be measuring the thirty frames in between, not the slot. Three walls of
+     stone at three different heights hold perfectly still and are unmistakably different
+     from one another. */
+  const want = [];
+  for (let i=0;i<3;i++){
+    await p.evaluate(n => {
+      wipeAll();
+      const f = H-6;
+      for (let x=0;x<W;x++) for (let y=f;y<H;y++) put(x,y,STONE);
+      for (let x=8+n*10; x<8+n*10+14; x++) for (let y=f-6-n*8; y<f; y++) put(x,y,STONE);
+    }, i);
+    await p.waitForTimeout(200);
+    want.push(await sigOf());
+    await press(p, 'save');
+    await p.locator(`[data-act="slot-save-${i+1}"]`).click();
+  }
+  // Slot 1 is the old single-slot key, unchanged, so nobody's existing save moved.
+  if (!await p.evaluate(() => !!localStorage.getItem('matchbox.scene.1')))
+    bad.push('slot 1 is not the key the single-slot version used');
+
+  const filled = await p.evaluate(() => {
+    const out = [];
+    for (let k=1;k<=SLOTS;k++) out.push(!!localStorage.getItem(slotKey(k)));
+    return out;
+  });
+  if (filled.slice(0,3).some(x => !x)) bad.push(`three saves filled ${filled.filter(Boolean).length} slots`);
+  if (filled.slice(3).some(Boolean))   bad.push('saving into three slots wrote to a fourth');
+
+  /* And each one comes back as itself. Loaded in reverse, so a bug where every slot
+     returns the most recent save cannot pass by accident. */
+  for (let i=2;i>=0;i--){
+    await press(p, 'load');
+    await p.locator(`[data-act="slot-load-${i+1}"]`).click();
+    await p.waitForTimeout(200);
+    if (await sigOf() !== want[i]) bad.push(`slot ${i+1} came back as something other than what went into it`);
+  }
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* A slot can be named, and it does not have to be. The name is the half that was asked for;
+   the half that makes it usable is that a save with no name still says what it is, because
+   a save you must name before it will take is a save you stop making. */
+await check('a slot can be named, and says what it holds when it is not', async p => {
+  const bad = [];
+  await press(p, 'scene-volcano');
+  await p.waitForTimeout(300);
+
+  // Unnamed first.
+  await press(p, 'save');
+  await p.locator('[data-act="slot-save-2"]').click();
+  await press(p, 'load');
+  let row = await p.locator('#slotList .slot[data-slot="2"]').textContent();
+  if (/^\s*2\s*(Empty)?\s*$/.test(row.replace(/\s+/g,' ')))
+    bad.push(`an unnamed save reads "${row.replace(/\s+/g,' ').trim()}" and says nothing about itself`);
+  if (!/lava|stone|sand|green|water/i.test(row))
+    bad.push(`an unnamed save of the Volcano reads "${row.replace(/\s+/g,' ').trim()}" — it should name what is in it`);
+  if (!/kB/i.test(row)) bad.push('a slot does not say how big it is');
+  await p.locator('#slotCancel').click();
+
+  // Named.
+  await press(p, 'save');
+  await p.locator('#slotList .slot[data-slot="2"] input').fill('Mount Doom');
+  await p.locator('[data-act="slot-save-2"]').click();
+  await press(p, 'load');
+  row = await p.locator('#slotList .slot[data-slot="2"]').textContent();
+  if (!/mount doom/i.test(row)) bad.push(`a named save reads "${row.replace(/\s+/g,' ').trim()}"`);
+  await p.locator('#slotCancel').click();
+
+  // Renamed, without saving over it: the scene in the slot must not change.
+  const was = await p.evaluate(() => JSON.parse(localStorage.getItem(slotKey(2))).runs.join(','));
+  await press(p, 'save');
+  await p.locator('#slotList .slot[data-slot="2"] input').fill('Renamed');
+  await p.locator('#slotList .slot[data-slot="2"] input').blur();
+  await p.waitForTimeout(150);
+  const now = await p.evaluate(() => JSON.parse(localStorage.getItem(slotKey(2))));
+  if (now.label !== 'Renamed') bad.push(`renaming left the label as "${now.label}"`);
+  if (now.runs.join(',') !== was) bad.push('renaming a slot changed the scene stored in it');
+  return bad.length ? bad.join('; ') : null;
+});
+
 await check('a browser that refuses to store says so rather than breaking', async p => {
   await p.evaluate(() => {
     storeOK = null;                              // forget any earlier answer
@@ -988,6 +1130,109 @@ console.log('\n— the room and the vent —');
 /* Tapping Room must show the settings rather than step to the next one, and it must do
    it in the row the tray already has — the picker is not allowed to be the one thing
    that moves the scene after three rounds of stopping everything else from doing it. */
+/* Time, and pause is the half of it that has to be exactly right.
+
+   It was asked for so that turning the match on does not set light to something before you
+   are ready — so a pause that lets the world creep, or lets the match burn down while you
+   think, has failed at the thing it exists for. Both are measured here.
+
+   The rest of the ladder is measured as ticks per frame rather than by eye, because "it
+   looks slower" is not a claim and the fractional speeds are the ones that can quietly
+   round to nothing. */
+await check('pause stops the world, and the other speeds are the speeds they say', async p => {
+  const bad = [];
+  const sig = () => p.evaluate(() => { let h=0; for (let i=0;i<type.length;i++) h=(h*31+type[i])|0; return h; });
+
+  await press(p, 'scene-volcano');                 // something that will not sit still
+  await p.waitForTimeout(500);
+  const moving = await sig();
+  await p.waitForTimeout(500);
+  if (await sig() === moving) return 'the Volcano is not moving, so pausing it proves nothing';
+
+  const time = await p.locator('[data-act="time"]');
+  await time.click();
+  await p.locator('[data-act="speed-pause"]').click();
+  await p.waitForTimeout(300);
+  const held = await sig();
+  await p.waitForTimeout(900);
+  if (await sig() !== held) bad.push('the box kept moving while it was paused');
+
+  // The match, which is the reason pause was asked for.
+  const match = await p.evaluate(async () => {
+    matchLit = MATCH_LIFE;
+    await new Promise(r => setTimeout(r, 700));
+    return matchLit;
+  });
+  if (match < await p.evaluate(() => MATCH_LIFE) - 0.05)
+    bad.push(`the match burned from ${await p.evaluate(() => MATCH_LIFE)}s down to ${match.toFixed(2)} while paused`);
+
+  // ...and you can still draw into a paused box, which is most of the point.
+  const stage = await stageBox(p);
+  await p.locator('.tab', { hasText: /^solid$/i }).click();
+  await p.locator('#mats .chip[data-t]').first().click();
+  await p.mouse.click(stage.x + stage.width*0.5, stage.y + stage.height*0.35);
+  await p.waitForTimeout(200);
+  if (await sig() === held) bad.push('drawing into a paused box did nothing');
+
+  /* Every rung, counted. Driven through the app's own accumulator rather than a copy of
+     it, so a change to how the debt is carried is a change this sees. */
+  const rates = await p.evaluate(() => {
+    const out = [];
+    const real = window.simTick; let n = 0;
+    window.simTick = function(){ n++; return real.apply(this, arguments); };
+    for (let i=0;i<SPEEDS.length;i++){
+      setSpeed(i); tickDebt = 0; n = 0;
+      for (let k=0;k<240;k++){
+        tickDebt = Math.min(tickDebt + SPEEDS[i].x * STEPS, 4);
+        while (tickDebt >= 1){ tickDebt -= 1; simTick(); }
+      }
+      out.push({ n: SPEEDS[i].n, want: 240 * SPEEDS[i].x * STEPS, got: n });
+    }
+    window.simTick = real; setSpeed(3);
+    return out;
+  });
+  for (const r of rates) if (r.got !== r.want)
+    bad.push(`${r.n} ran ${r.got} ticks in 240 frames where it should run ${r.want}`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* The Time picker borrows the drawer row exactly as Room, Clear and Weather do, so it has
+   to keep the promise all of those keep: opening it moves nothing. The chip itself lives on
+   the bar rather than in Tools, because Tools is full at eight — measured, a ninth drops
+   that row to 35px and cuts "Weather" even at the smallest type the tray will use. */
+await check('the Time picker offers five speeds and moves nothing', async p => {
+  const geom = () => p.evaluate(() => {
+    const r = e => { const b = document.querySelector(e).getBoundingClientRect();
+                     return [Math.round(b.top), Math.round(b.height)]; };
+    return JSON.stringify({ mats:r('#mats'), stage:r('.stage'), tray:r('.tray'), bar:r('.bar') });
+  });
+  const base = await geom();
+  const time = p.locator('[data-act="time"]');
+  if (!await time.count()) return 'there is no Time chip';
+
+  await time.click();
+  const offered = await p.evaluate(() =>
+    [...document.querySelectorAll('#mats .chip')].map(c => c.textContent.trim()));
+  const want = await p.evaluate(() => SPEEDS.map(s => s.n));
+  if (offered.join('|') !== want.join('|')) return `the picker offered ${offered.join(', ')}`;
+  if (await geom() !== base) return 'opening the Time picker moved the page';
+
+  await p.locator('[data-act="speed-double"]').click();
+  if (await p.evaluate(() => SPEEDS[speedAt].x) !== 2) return 'one tap on Double did not double it';
+  if (await geom() !== base) return 'choosing a speed moved the page';
+
+  // The gauge says so, but only when it is not normal — a line always there is one nobody reads.
+  await p.waitForTimeout(400);
+  let g = await p.locator('#gauge').innerText();
+  if (!/double/i.test(g)) return `the gauge reads "${g}" with the box at double speed`;
+  await time.click();
+  await p.locator('[data-act="speed-normal"]').click();
+  await p.waitForTimeout(400);
+  g = await p.locator('#gauge').innerText();
+  if (/double|half|quarter|pause/i.test(g)) return `the gauge still mentions a speed at normal: "${g}"`;
+  return null;
+});
+
 await check('tapping Room offers the settings instead of stepping through them', async p => {
   const geom = () => p.evaluate(() => {
     const r = e => { const b = document.querySelector(e).getBoundingClientRect();
@@ -1310,12 +1555,19 @@ await check('Clear, a preset and Load can all be taken back', async p => {
      The pause is not padding either. Even the Forge has a powder bed and a trough in it,
      and both settle over the first few frames; measured, it holds still from about 400ms
      and not before. */
+  // Save the Forge into slot 4, then draw over it, so the Load has something to change.
   await press(p, 'save');
-  await press(p, 'scene-forge');
+  await p.locator('[data-act="slot-save-4"]').click();
+  await p.evaluate(() => {
+    wipeAll();
+    const f = H-6;
+    for (let x=0;x<W;x++) for (let y=f;y<H;y++) put(x,y,STONE);
+  });
   await p.waitForTimeout(600);
   if (!await stillness()) return 'the scene to be undone back to is still moving';
   const beforeLoad = await sig();
   await press(p, 'load');
+  await p.locator('[data-act="slot-load-4"]').click();
   if (await sig() === beforeLoad) return 'Load changed nothing, so this proves nothing';
   await (await reveal(p, 'undo')).click();
   if (await sig() !== beforeLoad) return 'the scene did not come back after undoing a Load';

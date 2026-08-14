@@ -137,6 +137,28 @@
   .picker .find .sw{width:9px;height:9px;border-radius:1px;flex:none}
   .picker .find.got{color:var(--pale);background:rgba(255,255,255,.11)}
   .picker .find .tick{margin-left:auto;flex:none;color:#ffb066}
+  /* A save slot is a row rather than a swatch, and it holds a name you can type. The
+     input is 16px of font on purpose and scaled back down: anything under 16 makes iOS
+     zoom the whole page when the field takes focus, and a page that zooms itself while
+     you are naming a save does not zoom back. */
+  .picker .slot{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:3px;
+    background:rgba(255,255,255,.05);min-height:34px}
+  .picker .slot .num{flex:none;width:12px;color:#8d7f6d;font-family:'Space Mono',monospace;
+    font-size:9.5px}
+  .picker .slot .who{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+  .picker .slot input{width:100%;min-width:0;box-sizing:border-box;
+    background:rgba(0,0,0,.35);border:1px solid #4a4038;border-radius:2px;color:var(--pale);
+    font-family:'Space Mono',monospace;font-size:16px;transform-origin:left center;
+    transform:scale(.6);width:167%;padding:3px 5px;letter-spacing:.03em;text-transform:uppercase}
+  .picker .slot .name{font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:.03em;
+    text-transform:uppercase;color:var(--pale);overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap}
+  .picker .slot .sub{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.03em;
+    text-transform:uppercase;color:#6f6252;overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap}
+  .picker .slot .go{flex:none;min-height:30px;padding:6px 9px;flex-direction:row}
+  .picker .slot .go[disabled]{opacity:.35}
+  .picker .slot .go.arm{background:#8c2f22;border-color:#8c2f22;color:#f4e7d6}
   /* The chips here are their own thing rather than .chip, because .chip is pinned to a
      fixed 36px and equal widths to keep the tray still, and none of that applies to a
      panel that is floating over the scene. */
@@ -306,6 +328,14 @@
       </div>
       <div class="grid" id="ventGrid"></div>
     </div>
+    <div class="picker" id="slotPick" role="dialog" aria-modal="true"
+         aria-label="Saved scenes" hidden>
+      <div class="phead">
+        <h2 id="slotTitle">Saved scenes</h2>
+        <button class="cancel" type="button" id="slotCancel">Cancel</button>
+      </div>
+      <div class="list" id="slotList"></div>
+    </div>
     <div class="picker" id="findPick" role="dialog" aria-modal="true"
          aria-label="What the box can do" hidden>
       <div class="phead">
@@ -331,6 +361,7 @@
          was a fifth of the screen and the stage is the point of the page. -->
     <div class="bar">
       <div class="shapes" id="shapes"></div>
+      <div class="shapes" id="timeHold"></div>
       <input type="range" id="brush" min="1" max="9" value="3" aria-label="Brush size">
       <span id="bval">3</span>
     </div>
@@ -1036,6 +1067,32 @@ const STEPS      = 1;     // simulation ticks per drawn frame — see frame().
                           // pixels is not a bigger box. Fire covers the same cells
                           // per second it always did, and there are simply more cells
                           // between one side and the other.
+/* How fast the world runs, as a multiplier on STEPS. Pause is 0.
+
+   Everything in the model is per tick, so this changes how fast the box runs and nothing
+   about how it behaves — which is why it can be a single number rather than a set of
+   rates to keep in step.
+
+   What it cannot be is unbounded. Measured on the Volcano mid-eruption, the busiest thing
+   in the box: one tick costs 5.09ms and one draw 0.68ms against a 16.6ms frame, so 2x is
+   10.9ms and fits, 3x is 16.0 and sits exactly on the line, and 4x is 21.0 and simply
+   drops frames. A speed-up that fails on a busy box is a speed-up that fails on the only
+   box you would want it for, so the list stops at 2x.
+
+   The slow end costs nothing at all and is arguably the more useful half: most of what is
+   worth seeing here happens in a second or two — a flake melting, obsidian forming, a wick
+   catching — and quarter speed is where a discovery you were just told about is actually
+   visible. */
+const SPEEDS = [
+  { n:'Pause',   x:0,    tell:'paused — draw all you like, nothing moves' },
+  { n:'Quarter', x:0.25, tell:'quarter speed' },
+  { n:'Half',    x:0.5,  tell:'half speed' },
+  { n:'Normal',  x:1,    tell:'normal speed' },
+  { n:'Double',  x:2,    tell:'double speed' },
+];
+let speedAt = 3;                              // Normal
+let tickDebt = 0;                             // fractional speeds carried between frames
+
 const VENT_EVERY = 10;    // ticks between one vent cell producing anything. Per cell and
                           // staggered by position, so a wide vent is a fast one and a
                           // row of them does not pulse in lockstep.
@@ -3865,6 +3922,40 @@ ROOMS.forEach((r,i) => {
   roomEl.appendChild(b);
 });
 
+/* Time, and it lives on the bar rather than in Tools for two reasons. Tools is full —
+   measured, a ninth chip drops that row to 35px and cuts "Weather" even at the 6.5px floor
+   — and pause is the one control you want without opening a drawer first.
+
+   It borrows the drawer row for its options exactly as Room, Clear and Weather do, so the
+   five settings cost no chips of their own and opening them moves nothing. */
+const timeEl = document.createElement('div');
+SPEEDS.forEach((sp,i) => {
+  const b = actionChip(sp.n, ()=>{ setSpeed(i); showDrawer(openDrawer); }, false, 'speed-' + sp.n.toLowerCase());
+  b.dataset.speed = i;
+  b.setAttribute('aria-pressed', String(i === speedAt));
+  timeEl.appendChild(b);
+});
+
+function setSpeed(i){
+  speedAt = i;
+  tickDebt = 0;
+  timeEl.querySelectorAll('.chip').forEach((c,k) => c.setAttribute('aria-pressed', String(k===i)));
+  matsEl.querySelectorAll('.chip[data-speed]').forEach((c,k) => c.setAttribute('aria-pressed', String(k===i)));
+  timeBtn.setAttribute('aria-pressed', String(SPEEDS[i].x !== 1));
+  say(SPEEDS[i].tell, true);
+}
+
+const timeBtn = document.createElement('button');
+timeBtn.className = 'chip'; timeBtn.type = 'button'; timeBtn.textContent = 'Time';
+timeBtn.dataset.act = 'time';
+timeBtn.setAttribute('aria-pressed', 'false');
+timeBtn.addEventListener('click', ()=>{
+  fillFrom(timeEl);
+  tabsEl.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-pressed','false'));
+  say(`Time — ${SPEEDS[speedAt].n.toLowerCase()}. Pick one`, true);
+});
+document.getElementById('timeHold').appendChild(timeBtn);
+
 const roomBtn = actionChip('Room', ()=>{
   fillFrom(roomEl);
   tabsEl.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-pressed','false'));
@@ -4284,11 +4375,22 @@ function loadScene(s){
    If resuming a fire mid-burn turns out to matter, that is a second format and not a
    change to this one. */
 
-const STORE_KEY = 'matchbox.scene.1';
+/* Five slots, and the key that used to be the only one is slot 1 — so the save you already
+   had is still there and still first, which is the whole of the migration.
+
+   Five rather than three because they cost nothing worth counting. Measured, a scene is
+   0.9kB (the Forge) to 2.4kB (the Volcano, thirty seconds in), and the worst case there is
+   — random noise in every cell, which run-length encoding cannot compress at all — is
+   131kB. Five of those is 660kB against a localStorage that is usually 5MB, and the
+   "this browser will not store anything" path already exists for the day it is not. */
+const SLOTS     = 5;
+const slotKey   = n => 'matchbox.scene.' + n;
 // The save format's version, in one place because Load has to agree with encodeScene and
 // for one build it did not: encodeScene said 4 and Load accepted 1 to 3, so every save the
 // page wrote came back as "That save is damaged" from the page that had just written it.
-const SAVE_V    = 4;
+// v5 adds `label`, `made` and `saved` — a name you typed, a name derived from the contents
+// for when you did not, and when it was written.
+const SAVE_V    = 5;
 let storeOK = null;
 
 // Asked once, and asked by trying rather than by feature-detecting: `localStorage`
@@ -4336,7 +4438,14 @@ function encodeScene(){
   // longer determines the number. A box you left at −1.8°C under a slab of ice and saved
   // would otherwise come back at 20 and spend the next twenty seconds drifting down to
   // where it already was, with the ice melting the whole way.
-  return { v:SAVE_V, w:W, h:H, keys, runs, feed: vents, room: ROOMS[roomAt].n, at: AMBIENT };
+  /* `made` is what is in the box, in words, worked out here rather than at display time —
+     a slot has to be able to say what it holds without decoding a run-length payload every
+     time the panel opens, and it means naming a save is optional rather than a chore. */
+  const tally = new Map();
+  for (let i=0;i<type.length;i++) if (type[i] !== E) tally.set(type[i], (tally.get(type[i])||0) + 1);
+  const made = [...tally].sort((a,b) => b[1]-a[1]).slice(0,3).map(([t]) => M[t].n.toLowerCase()).join(', ');
+  return { v:SAVE_V, w:W, h:H, keys, runs, feed: vents, room: ROOMS[roomAt].n, at: AMBIENT,
+           made: made || 'an empty box', label: '', saved: Date.now() };
 }
 
 // Returns the keys it could not place, which is not an error: a save written by a
@@ -4389,63 +4498,180 @@ function decodeScene(s){
   return missing;
 }
 
-// Save is the last chip that arms. Three seconds is long enough to read the question
-// and short enough that a chip left saying "Replace?" is not still armed when you come
-// back to it.
-const ASK_WINDOW = 3000;
-let saveArmed = 0, saveTimer = 0;
-function disarmSave(){
-  saveArmed = 0;
-  clearTimeout(saveTimer);
-  chipLabel(saveBtn, 'Save');
-  saveBtn.setAttribute('aria-pressed','false');
+/* Save and Load open the same panel, because they are two questions about the same five
+   things and a player who has just saved into slot 3 should see slot 3 sitting there when
+   they come back to load it.
+
+   A panel rather than the borrowed drawer row that Room, Clear and Weather use, and the
+   reason is the content: those are five words, and this is five rows each carrying a name,
+   what is in it and how long ago. A name in a 47px chip is not a name. */
+const ASK_WINDOW = 3000;                       // long enough to read "Replace?", short
+                                               // enough that it is not still armed later
+const slotPickEl  = document.getElementById('slotPick');
+const slotListEl  = document.getElementById('slotList');
+const slotTitleEl = document.getElementById('slotTitle');
+let slotMode = 'save', slotArmed = 0, slotArmTimer = 0;
+
+function readSlot(n){
+  if (!storageWorks()) return null;
+  const text = localStorage.getItem(slotKey(n));
+  if (!text) return null;
+  let s = null;
+  try { s = JSON.parse(text); } catch { return null; }
+  if (!s || !(s.v >= 1 && s.v <= SAVE_V) || !Array.isArray(s.keys) || !Array.isArray(s.runs) ||
+      !(s.w > 0) || !(s.h > 0)) return { bad: true, size: text.length };
+  s.size = text.length;
+  return s;
 }
 
-const saveBtn = actionChip('Save', ()=>{
-  if (!storageWorks()){ say('This browser will not store anything', true); return; }
-  // Only the overwrite asks. Saving into an empty slot cannot lose anything, and a
-  // confirm on a harmless action is what teaches people to tap through the one that
-  // is not.
-  if (localStorage.getItem(STORE_KEY) && Date.now() >= saveArmed){
-    saveArmed = Date.now() + ASK_WINDOW;
-    chipLabel(saveBtn, 'Replace?');
-    saveBtn.setAttribute('aria-pressed','true');
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(disarmSave, ASK_WINDOW);
-    say('Replace the saved scene?', true);
-    return;
-  }
-  const text = JSON.stringify(encodeScene());
-  let ok = true;
-  try { localStorage.setItem(STORE_KEY, text); } catch { ok = false; }
-  // A write that threw nothing has still not necessarily happened. This exact failure
-  // — a full quota reported as a clean save — is one the ledger in this repository
-  // shipped with, and it is invisible until the day you try to load.
-  if (ok && localStorage.getItem(STORE_KEY) !== text) ok = false;
-  disarmSave();
-  say(ok ? `Saved  ·  ${(text.length/1024).toFixed(1)}kB` : 'The save did not stick — storage is full or blocked', true);
-}, true, 'save');
+// "4 minutes ago", and it stops at days because a save older than that is just old.
+function ago(t){
+  if (!t) return '';
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 60)    return 'just now';
+  if (s < 3600)  return `${Math.round(s/60)}m ago`;
+  if (s < 86400) return `${Math.round(s/3600)}h ago`;
+  return `${Math.round(s/86400)}d ago`;
+}
 
-const loadBtn = actionChip('Load', ()=>{
-  if (!storageWorks()){ say('This browser will not store anything', true); return; }
-  const text = localStorage.getItem(STORE_KEY);
-  if (!text){ say('Nothing saved yet', true); return; }
-  let s = null;
-  try { s = JSON.parse(text); } catch { s = null; }
-  // SAVE_V rather than a number written here. This said `s.v <= 3` and encodeScene said
-  // `v:4`, so every save the page wrote was rejected by the page that wrote it — as "That
-  // save is damaged", which is a sentence about the file and not about the two lines of
-  // this that had stopped agreeing.
-  if (!s || !(s.v >= 1 && s.v <= SAVE_V) || !Array.isArray(s.keys) || !Array.isArray(s.runs) ||
-      !(s.w > 0) || !(s.h > 0)){
-    say('That save is damaged', true); return;
-  }
+function disarmSlots(){
+  slotArmed = 0;
+  clearTimeout(slotArmTimer);
+  slotListEl.querySelectorAll('.go.arm').forEach(b => { b.classList.remove('arm'); b.textContent = 'Save'; });
+}
+
+function writeSlot(n, label){
+  const scene = encodeScene();
+  scene.label = (label || '').trim().slice(0, 24);
+  const text = JSON.stringify(scene);
+  let ok = true;
+  try { localStorage.setItem(slotKey(n), text); } catch { ok = false; }
+  /* A write that threw nothing has still not necessarily happened. This exact failure — a
+     full quota reported as a clean save — is one the ledger in this repository shipped
+     with, and it is invisible until the day you try to load. */
+  if (ok && localStorage.getItem(slotKey(n)) !== text) ok = false;
+  say(ok ? `Saved to ${n}  ·  ${(text.length/1024).toFixed(1)}kB`
+         : 'The save did not stick — storage is full or blocked', true);
+  return ok;
+}
+
+function loadSlot(n){
+  const s = readSlot(n);
+  if (!s){ say(`Slot ${n} is empty`, true); return; }
+  if (s.bad){ say(`Slot ${n} is damaged`, true); return; }
   snapshot('the load');
   const missing = decodeScene(s);
   drawn = true;
   hintEl.style.opacity = 0;
-  say(missing.length ? `Loaded  ·  ${missing.length} unknown left out` : 'Loaded', true);
-}, false, 'load');
+  say(missing.length ? `Loaded ${n}  ·  ${missing.length} unknown left out` : `Loaded ${n}`, true);
+}
+
+function drawSlots(){
+  slotListEl.textContent = '';
+  for (let n=1; n<=SLOTS; n++){
+    const s = readSlot(n);
+    const row = document.createElement('div');
+    row.className = 'slot';
+    row.dataset.slot = n;
+
+    const num = document.createElement('span');
+    num.className = 'num'; num.textContent = n;
+    row.appendChild(num);
+
+    const who = document.createElement('div');
+    who.className = 'who';
+    row.appendChild(who);
+
+    const sub = document.createElement('span');
+    sub.className = 'sub';
+    sub.textContent = !s ? 'empty' : s.bad ? 'damaged' :
+      `${s.made || ''}  ·  ${(s.size/1024).toFixed(1)}kB  ·  ${ago(s.saved)}`;
+
+    if (slotMode === 'save'){
+      /* The name is typed here and it is optional, because `made` already describes what
+         is in the box. A save you have to name before it will take is a save you stop
+         making. */
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.maxLength = 24;
+      inp.value = s && s.label ? s.label : '';
+      inp.placeholder = s && !s.bad ? (s.made || 'unnamed') : 'name it, or do not';
+      inp.setAttribute('aria-label', `Name for slot ${n}`);
+      inp.dataset.slotName = n;
+      // Renaming what is already there, without saving over it.
+      inp.addEventListener('change', ()=>{
+        const cur = readSlot(n);
+        if (!cur || cur.bad) return;
+        cur.label = inp.value.trim().slice(0, 24);
+        delete cur.size;
+        try { localStorage.setItem(slotKey(n), JSON.stringify(cur)); } catch {}
+        say(`Slot ${n} is now "${cur.label || cur.made}"`, true);
+      });
+      who.appendChild(inp);
+      who.appendChild(sub);
+
+      const go = document.createElement('button');
+      go.className = 'go'; go.type = 'button';
+      go.textContent = 'Save';
+      go.dataset.act = 'slot-save-' + n;
+      go.addEventListener('click', ()=>{
+        // Only an overwrite asks. Saving into an empty slot cannot lose anything, and a
+        // confirm on a harmless action is what teaches people to tap through the one that
+        // is not.
+        const cur = readSlot(n);
+        if (cur && !go.classList.contains('arm')){
+          disarmSlots();
+          go.classList.add('arm'); go.textContent = 'Replace?';
+          slotArmed = Date.now() + ASK_WINDOW;
+          slotArmTimer = setTimeout(disarmSlots, ASK_WINDOW);
+          say(`Replace "${cur.label || cur.made}" in slot ${n}?`, true);
+          return;
+        }
+        disarmSlots();
+        if (writeSlot(n, inp.value)) closeSlots();
+      });
+      row.appendChild(go);
+    } else {
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = !s ? 'Empty' : s.bad ? 'Damaged' : (s.label || s.made || `Slot ${n}`);
+      who.appendChild(name);
+      who.appendChild(sub);
+
+      const go = document.createElement('button');
+      go.className = 'go'; go.type = 'button';
+      go.textContent = 'Load';
+      go.dataset.act = 'slot-load-' + n;
+      go.disabled = !s || !!s.bad;
+      go.addEventListener('click', ()=>{ loadSlot(n); closeSlots(); });
+      row.appendChild(go);
+    }
+    slotListEl.appendChild(row);
+  }
+}
+
+function openSlots(mode){
+  if (!storageWorks()){ say('This browser will not store anything', true); return; }
+  slotMode = mode;
+  slotTitleEl.textContent = mode === 'save' ? 'Save — into which slot?' : 'Load — which one?';
+  drawSlots();
+  slotPickEl.hidden = false;
+  slotPickEl.classList.add('open');
+  say(mode === 'save' ? 'Pick a slot to save into' : 'Pick a slot to load', true);
+}
+
+function closeSlots(){
+  disarmSlots();
+  slotPickEl.classList.remove('open');
+  slotPickEl.hidden = true;
+}
+
+document.getElementById('slotCancel').addEventListener('click', ()=>{ closeSlots(); sayTool(); });
+// Tapping the dark around the panel is the other way out, the way every sheet on a phone
+// behaves. Only the backdrop itself — a tap on a control inside has already been handled.
+slotPickEl.addEventListener('click', e => { if (e.target === slotPickEl){ closeSlots(); sayTool(); } });
+
+const saveBtn = actionChip('Save', ()=>openSlots('save'), true,  'save');
+const loadBtn = actionChip('Load', ()=>openSlots('load'), false, 'load');
 
 // Save and Load moved out of Tools and in with the presets. A save is a scene, which is
 // the more honest grouping, and it is what makes room for Finds in Tools without either
@@ -5007,8 +5233,12 @@ let last = performance.now();
 function frame(now){
   const dt = Math.min(50, now-last); last = now;
 
+  /* The match burns in sim-time, not wall-clock. It was `dt/1000` flat, which is fine
+     while there is only one speed and wrong the moment there is more than one: at double
+     you would get half a match, and paused — the setting you reached for so as *not* to
+     set light to something early — your match would burn out while you sat thinking. */
   if (matchLit > 0){
-    matchLit -= dt/1000;
+    matchLit -= dt/1000 * SPEEDS[speedAt].x;
     const k = Math.max(0, matchLit/MATCH_LIFE);
     stickEl.style.width = (30 + 34*k) + 'px';
     if (matchLit <= 0) matchOut();
@@ -5029,7 +5259,13 @@ function frame(now){
 
      Everything in the model is per tick, so this changes how fast the world runs and
      nothing about how it behaves. The suites step it themselves and are unaffected. */
-  for (let s=0; s<STEPS; s++){
+  /* Carried between frames rather than rounded, so a quarter is one tick every fourth
+     frame instead of nothing at all. Clamped, because a tab that has been in the
+     background comes back with a large `dt` and a debt it would otherwise try to pay off
+     in one frame — which is a stall, not a catch-up. */
+  tickDebt = Math.min(tickDebt + SPEEDS[speedAt].x * STEPS, 4);
+  while (tickDebt >= 1){
+    tickDebt -= 1;
     if (skyLeft > 0){ skyLeft--; weatherTick(); }
     simTick();
   }
@@ -5203,7 +5439,10 @@ function updateGauge(){
 
      Rounded, which matters now rather than being tidiness: on Neutral the room is a
      drifting float and printing it raw put `room Neutral -1.7724609375°C` on the gauge. */
-  gaugeEl.innerHTML = `${label}<br>room ${ROOMS[roomAt].n} ${Math.round(AMBIENT)}°C` +
+  // Only when it is not normal. A line that is always there is a line nobody reads, and
+  // the one thing worth knowing is that the box is *not* running the way it usually does.
+  const pace = SPEEDS[speedAt].x === 1 ? '' : `<br><b>${SPEEDS[speedAt].tell.split(' —')[0]}</b>`;
+  gaugeEl.innerHTML = `${label}<br>room ${ROOMS[roomAt].n} ${Math.round(AMBIENT)}°C` + pace +
                       `<br><b>peak ${Math.round(peak)}°C</b>` +
                       `<br>found ${finds.size}/${FINDS.length}` +
                       `<br>${frameMs.toFixed(1)}ms work · ${W}×${H}`;

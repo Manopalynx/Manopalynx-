@@ -72,6 +72,91 @@ load-bearing rather than tidy. The tray sits above the stage, so a row that wrap
 the tray taller and moves the scene — and a chip sized to its own text moves the row
 whenever that text changes.
 
+## Time
+
+Pause, quarter, half, normal, double — on the always-visible bar rather than in Tools,
+borrowing the drawer row for its five options the way Room, Clear and Weather do.
+
+**The ladder stops at double, and that is a measurement rather than a preference.** On the
+Volcano mid-eruption, the busiest thing in the box: one tick costs **5.09ms** and one draw
+**0.68ms** against a 16.6ms frame.
+
+| | work per frame | |
+|---|---|---|
+| 1× | 5.8ms | |
+| 2× | 10.9ms | fits |
+| 3× | 16.0ms | exactly on the line |
+| 4× | 21.0ms | **drops frames** |
+
+A speed-up that fails on a busy box fails on the only box you would want it for. The slow
+end costs nothing at all and is arguably the more useful half: most of what is worth seeing
+here happens in a second or two, and quarter speed is where a discovery you were just told
+about is actually visible.
+
+**Fractional speeds are carried between frames, not rounded.** `tickDebt` accumulates
+`speed × STEPS` and spends whole ticks, so a quarter is one tick every fourth frame rather
+than nothing at all. Measured over 240 frames: 0, 60, 120, 240, 480 ticks — exact at every
+rung. It is clamped at 4, because a tab returning from the background arrives with a debt it
+would otherwise try to pay off in a single frame, which is a stall and not a catch-up.
+
+**The match had to move into sim-time.** It burned on wall-clock (`dt/1000`), which is fine
+while there is only one speed and wrong the moment there is more than one: at double you got
+half a match, and paused — the setting asked for *so as not to* light something early — your
+match burned out while you sat thinking. Verified by mutation: put it back on wall-clock and
+the check reports the match going from 26s to 25.3 during a pause.
+
+Where it lives was forced by measurement too. Tools is full at eight: a ninth chip drops that
+row to 35px and cuts "Weather" even at the 6.5px floor. The bar takes one more — shapes
+133→181px, the brush slider 186→133px at the narrowest tested, bar height unchanged so
+nothing moves.
+
+## Five save slots
+
+Save and Load open the same panel, because they are two questions about the same five things
+and a player who has just saved into slot 3 should see slot 3 when they come back for it. A
+panel rather than the borrowed drawer row, and the reason is content: Room's options are five
+words, and this is five rows each carrying a name, what is in it, how big and how long ago. A
+name in a 47px chip is not a name.
+
+**The migration is that there isn't one.** The single-slot key was `matchbox.scene.1`, so the
+save anyone already had *is* slot 1.
+
+Five rather than three because they cost nothing worth counting:
+
+| | fresh | after 30s |
+|---|---|---|
+| Forge | 0.9kB | 0.9kB |
+| Chandler | 1.3kB | 1.9kB |
+| Garden | 1.5kB | 2.0kB |
+| Volcano | 1.7kB | **2.4kB** |
+| *random noise in every cell — the worst run-length encoding can do* | | **131kB** |
+
+Five real scenes is about 10kB against a localStorage that is usually 5MB; five of pure chaos
+is 660kB. The "this browser will not store anything" path already existed for the day it is
+neither.
+
+**Naming is optional, and that is the design rather than a shortcut.** A save you must name
+before it will take is a save you stop making. So `encodeScene` works out what is in the box
+— the three commonest materials, in words — and stores it, and an unnamed slot reads
+*"lava, stone, sand · 1.7kB · 4m ago"*. Typing a name replaces that; typing one into a slot
+you are not saving over renames it in place without touching the scene stored there.
+
+Only an overwrite asks. Saving into an empty slot cannot lose anything, and a confirm on a
+harmless action is what teaches people to tap through the one that is not — the same two-tap
+rule Clear uses.
+
+**What the checks are really for** is that five slots are five *separate* slots. One store key
+with a number appended is one character away from every save landing on top of the last, and
+that failure looks exactly like a working save until the day you go back for something.
+Verified by mutation — point every slot at one key and two independent checks go red. The
+independence check builds three scenes by hand rather than using presets, because four of the
+five presets are alive or pouring by design and a signature taken before saving and again
+after loading would be measuring the frames in between rather than the slot.
+
+The name field is 16px type scaled down to 60%, which looks like a trick and is not: anything
+under 16px makes iOS zoom the whole page when the field takes focus, and a page that zooms
+itself while you are naming a save does not zoom back.
+
 ## The empty hand
 
 Asked for as two things and built as one, because they turn out to be the same thing: *a way
@@ -2473,7 +2558,7 @@ the glass.
 ```
 npm i playwright
 node test/matchbox-sim.mjs     # 96 checks — the simulation
-node test/matchbox-ui.mjs      # 46 checks — the hand
+node test/matchbox-ui.mjs      # 50 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
 
