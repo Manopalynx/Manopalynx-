@@ -3483,7 +3483,10 @@ function chipFor(t){
   const c = t === VENT ? M[ventFeed].col : M[t].col;
   b.innerHTML = `<span class="sw" style="background:rgb(${c[0]},${c[1]},${c[2]})"></span>` +
                 `<span class="lb">${M[t].n}</span>`;
-  b.addEventListener('click', ()=>setTool(t));
+  /* Tapping the material you are already holding puts it down. Not the vent, which has
+     its own meaning for a second tap — it closes the picker — and that is the one chip in
+     the tray that already does something other than what it says. */
+  b.addEventListener('click', ()=>setTool(tool === t && t !== VENT ? 'look' : t));
   return b;
 }
 
@@ -3623,8 +3626,22 @@ const undoBtn = actionChip('Undo', ()=>undo(), false, 'undo');
 undoBtn.disabled = true;
 actsEl.appendChild(undoBtn);
 
-const eraseBtn = actionChip('Erase', ()=>setTool('erase'), false, 'erase');
+const eraseBtn = actionChip('Erase', ()=>setTool(tool==='erase' ? 'look' : 'erase'), false, 'erase');
 actsEl.appendChild(eraseBtn);
+
+/* An empty hand, and it is one state doing two jobs because they are the same job.
+
+   Asked for as two things: a way to put down whatever you are holding, so that a tap on
+   the scene does not place a material or apply a flame you did not mean to; and a way to
+   ask what something already in the box *is*, because the Cut scene's thermite took a
+   moment to recognise. An empty hand is exactly the tool that answers the second, since
+   the only thing left to do with a tap is look at what is under it.
+
+   Every chip in the tray toggles into this as well — tapping the material you are already
+   holding puts it down — so it is reachable without coming to the Tools drawer for it,
+   which is what "so you do not have to be placing something" actually asks for. */
+const lookBtn = actionChip('Look', ()=>setTool('look'), false, 'look');
+actsEl.appendChild(lookBtn);
 
 /* Clear asks first, and asking is where you say what you meant.
 
@@ -3946,9 +3963,13 @@ const SCENES = [
       // Moss on the damp footing beside the water, which is the one place it holds.
       for (let x=pl-3; x<=pr+3; x++) if (Math.random() < .6) put(x, f-14, MOSS);
 
-      // Seeds along the dry half, spaced so each has room to make a plant rather than a
-      // thicket. Measured: closer than five apart and they crowd each other out.
-      for (let x=cx+4; x<=R-4; x+=6) put(x, f-14, SEED);
+      /* Seeds along the dry half, spaced so each has room to make a plant rather than a
+         thicket — measured, closer than five apart and they crowd each other out — and
+         stopping short of the log rather than running under it. Four of eleven were being
+         laid where the log then landed on top of them and never came up: waste, and worse,
+         variance, because the bed's whole cascade starts from the first few that take. */
+      const lx = R - 24;
+      for (let x=cx+4; x<=lx-4; x+=6) put(x, f-14, SEED);
       for (let x=L+4; x<pl-4; x+=6)  put(x, f-14, SEED);
 
       /* The fallen log, and what is living in it. Deeper than it needs to look, with the
@@ -3962,7 +3983,6 @@ const SCENES = [
          pupates: at 210 cells of wood the Garden got one pupa from eight and failed
          outright once in ten runs with none at all, while the Chandler's 368-cell log gave
          two to four every time. The number that mattered was the wood, not the grubs. */
-      const lx = R - 24;
       sSlab(lx, f-31, lx+20, f-15, WOOD);
       for (let k=0;k<8;k++) put(lx + 3 + k*2, f-22, GRUB);
 
@@ -4465,6 +4485,7 @@ const hintEl = document.getElementById('hint');
 let drawn = false;                                 // has anything been drawn yet?
 
 const toolName = () => tool==='match' ? (matchLit > 0 ? 'Flame' : 'Match out')
+                     : tool==='look'  ? 'Empty hand'
                      : tool==='erase' ? 'Erase'
                      : tool===VENT    ? `Vent · ${M[ventFeed].n}`
                      : M[tool].n;
@@ -4476,6 +4497,9 @@ function sayTool(){
   // The panel says this now, in full, over the scene. The readout still carries it for
   // anyone who has the panel open and is looking at the tray instead.
   if (ventAsking){ say('Vent — pick what it pours', true); return; }
+  // Brush and shape mean nothing to an empty hand, and saying "brush 3" beside it invites
+  // you to wonder what a bigger empty hand would do.
+  if (tool === 'look'){ say('Empty hand  ·  touch anything to name it'); return; }
   const how = shape === 'free' ? '' : `  ·  ${shape}`;
   say(`${toolName()}  ·  brush ${brush}${how}`);
 }
@@ -4574,12 +4598,14 @@ function setTool(t){
   matsEl.querySelectorAll('.chip[data-t]').forEach(c =>
     c.setAttribute('aria-pressed', String(Number(c.dataset.t)===tool)));
   eraseBtn.setAttribute('aria-pressed', String(tool==='erase'));
+  lookBtn.setAttribute('aria-pressed', String(tool==='look'));
   sayTool();
   // The hint is an opening instruction, not a status line. Bringing it back every
   // time the tool changed put a line of text over the middle of the scene, which is
   // exactly where everything you are building is.
   if (!drawn){
     hintEl.textContent = tool==='match' ? 'Touch the dark to apply flame'
+                       : tool==='look'  ? 'Empty hand — touch anything to name it'
                        : tool==='erase' ? 'Erasing'
                        : `${M[tool].n} — draw in the dark`;
   }
@@ -4777,10 +4803,33 @@ function undo(){
 /* One cell, one rule. Everything that puts material into the box goes through here —
    the brush, a line, a rectangle — so a shape can never quietly behave differently
    from a stroke. */
+/* What is in a cell, said once so that dragging a finger and tapping with an empty hand
+   cannot drift apart. Air is "Air" rather than the table's own name for it, which is an
+   em dash — fine as a tray label for a material you cannot pick, useless as an answer to
+   "what is this". */
+function describeAt(x, y){
+  const i = idx(x,y), t = type[i], m = M[t];
+  const bits = [t === E ? 'Air' : m.n, `${Math.round(temp[i])}°C`];
+  if (m.fuel > 0){
+    const c = m.char !== undefined ? m.char : CHAR;
+    if (fuel[i] > 0 && temp[i] >= m.ig && life[i] >= c) bits.push('alight');
+    else if (fuel[i] <= 0) bits.push('spent');
+  }
+  return bits.join('  ·  ');
+}
+
 function paintCell(x, y, solid){
   if (!inb(x,y)) return;
   const i = idx(x,y);
-  if (tool === 'match'){
+  if (tool === 'look'){
+    /* Nothing. Unreachable through the pointer as it stands — `pointerdown` turns a look
+       away before a stroke or an anchor can start — and it is here anyway because this is
+       the one place every brush, line and rectangle meets. Verified by mutation: taking
+       the `pointerdown` guard out is caught, taking this one out is not, which is exactly
+       what "belt and braces" measures like and is worth writing down rather than leaving
+       for someone to discover and delete as dead. */
+    return;
+  } else if (tool === 'match'){
     temp[i] = Math.max(temp[i], MATCH_HEAT);
     // `become`, not `put`: the flame has to keep the heat we just applied. `put`
     // would hand this cell the resting temperature of a fresh flame, which is
@@ -4829,6 +4878,9 @@ function disc(cx, cy, r, solid){
 }
 
 function paintAt(cx, cy){
+  // An empty hand does not paint, it asks. Forced, because this is the answer to a
+  // question you just asked and a discovery holding the line would swallow it.
+  if (tool === 'look'){ if (inb(cx,cy)) say(describeAt(cx, cy), true); return; }
   if (tool === 'match' && matchLit <= 0) return;   // a spent match does nothing
   disc(cx, cy, brush);
   /* Say why nothing is going to happen.
@@ -4913,6 +4965,11 @@ function toCell(e){
 cv.addEventListener('pointerdown', e=>{
   e.preventDefault(); cv.setPointerCapture(e.pointerId);
   const [x,y] = toCell(e);
+  /* Looking is not drawing. No snapshot, because an Undo that undoes nothing is worse
+     than no Undo; no `drawn`, because the opening hint is an instruction you have not
+     followed yet; and no shape, because a line you cannot draw is a gesture with nothing
+     at the end of it. */
+  if (tool === 'look'){ if (inb(x,y)) say(describeAt(x,y), true); return; }
   drawn = true;
   hintEl.style.opacity = 0;
   // Before the first cell of the stroke, not after it. A line or a box does not touch
@@ -4925,7 +4982,7 @@ cv.addEventListener('pointerdown', e=>{
 
 cv.addEventListener('pointermove', e=>{
   const [x,y] = toCell(e);
-  if (inb(x,y)) say(`${M[type[idx(x,y)]].n}  ·  ${Math.round(temp[idx(x,y)])}°C`);
+  if (inb(x,y)) say(describeAt(x,y), tool === 'look');
   if (painting) paintAt(x,y);
   else if (anchor) ghost = [x,y];
 });

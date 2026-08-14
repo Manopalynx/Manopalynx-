@@ -72,6 +72,36 @@ load-bearing rather than tidy. The tray sits above the stage, so a row that wrap
 the tray taller and moves the scene — and a chip sized to its own text moves the row
 whenever that text changes.
 
+## The empty hand
+
+Asked for as two things and built as one, because they turn out to be the same thing: *a way
+to put down whatever you are holding*, so a tap cannot place a material or apply a flame you
+did not mean to; and *a way to ask what something already in the box is*, because the Cut
+scene's thermite took a moment to recognise.
+
+Once a tap cannot put anything down, the only thing left for it to do is say what is already
+under it. So **Look** is one tool state doing both jobs:
+
+- The stage answers instead of painting — `Thermite · 20°C`, `Wood · 312°C · alight`.
+- Nothing is placed, no `snapshot` is banked, and the opening hint stays up, because looking
+  is not drawing and an Undo that undoes nothing is worse than no Undo.
+- **Every material chip toggles into it.** Tapping the material you are already holding puts
+  it down, which is what "so you do not have to be placing something" actually asks for — the
+  Tools drawer is where the state is named, not where it has to be reached from. Not the
+  vent, which already means something else by a second tap.
+
+The naming already half existed: dragging a finger over the stage has always reported the
+cell under it. On a phone that was unreachable, because moving while touching *is* painting.
+The report is shared by both paths now (`describeAt`) so they cannot drift, and air reads as
+"Air" rather than the table's own name for it, which is an em dash — fine as a label for a
+material you cannot pick, useless as an answer to "what is this".
+
+**Two guards, and only one of them is reachable.** `pointerdown` turns a look away before a
+stroke can start, and `paintCell` refuses again at the one place every brush, line and
+rectangle meets. Verified by mutation: removing the first is caught, removing the second is
+not. That is what belt-and-braces measures like, and it is written into the source so nobody
+later finds the second one and deletes it as dead.
+
 ### The readout and the gauge are two overlays, and only one had both edges
 
 Reported from the phone: *"Moss needs water within reach — it will not survive here"* ran
@@ -298,7 +328,7 @@ Measured, at the suite's 143×220:
 
 | | |
 |---|---|
-| Garden, 200s | 78 stems, 35 flowers, 20 grass, **319 cells of rich soil** from 11 seeds; first moth ~31s |
+| Garden, 200s | 15–33 flowers and 134–303 cells of rich soil from 7 seeds, over 8 runs; 4–8 moths |
 | Chandler | first moth **32s**, candle still lit at **63s**, 4 moths in the room |
 | Thaw, left alone | Neutral bottoms at **10.4°C**, 1110 of 1144 ice still standing, fish alive |
 | Thaw, lit | Neutral tops at **21.6°C**, ice down to 720, snow 212 → 16 |
@@ -306,6 +336,12 @@ Measured, at the suite's 143×220:
 | Forge | 248 cells of coal fully burnt, peak **1296°C** |
 
 ### Three things the presets taught that the materials had not
+
+**Four of the Garden's eleven seeds were being laid where the log then landed on top of
+them.** They never came up — waste, and worse, variance, because the bed's whole cascade
+starts from the first few that take, and the check failed once on a run where none did. Seven
+seeds clear of the log give 15–33 flowers over eight runs where eleven with four buried gave
+16–29 and one outright failure.
 
 **A grub needs wood to live in, not just to eat.** The Garden's log was 210 cells for eight
 grubs and it produced *one* pupa, failing outright once in ten runs with none at all — a
@@ -2437,7 +2473,7 @@ the glass.
 ```
 npm i playwright
 node test/matchbox-sim.mjs     # 96 checks — the simulation
-node test/matchbox-ui.mjs      # 44 checks — the hand
+node test/matchbox-ui.mjs      # 46 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
 ```
 

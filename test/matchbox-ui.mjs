@@ -217,6 +217,118 @@ await check('leaving the Clear question alone destroys nothing', async p => {
   return null;
 });
 
+/* An empty hand, which was asked for as two things and is one.
+
+   "A way to empty your hand, so you don't accidentally set fire too early and so you don't
+   have to be placing something", and "press something already placed and it tells you what
+   it is". The second falls out of the first: once a tap cannot put anything down, the only
+   thing left for it to do is say what is already there.
+
+   The first half is the one worth guarding hardest. A hand that is supposed to be empty and
+   quietly places a cell is worse than no such tool, because you would reach for it *before*
+   doing something you could not take back. */
+await check('an empty hand changes nothing, and says what it touched', async p => {
+  const bad = [];
+  const cells = () => p.evaluate(() => { let n=0; for (let i=0;i<type.length;i++) if (type[i]!==0) n++; return n; });
+  const sig = () => p.evaluate(() => { let h=0; for (let i=0;i<type.length;i++) h=(h*31+type[i])|0; return h; });
+
+  await press(p, 'scene-forge');
+  await p.waitForTimeout(600);
+  const before = await sig(), n0 = await cells();
+  const undoWas = await p.evaluate(() => undoLabel);
+
+  const look = await reveal(p, 'look');
+  await look.click();
+  if (await p.evaluate(() => tool) !== 'look') return 'the Look chip did not empty the hand';
+  if (await look.getAttribute('aria-pressed') !== 'true') bad.push('the Look chip does not show as the one in hand');
+
+  /* Every way of touching the stage, because paintCell is the one place they all meet and a
+     check that only taps would miss a line that draws. */
+  const stage = await stageBox(p);
+  const pt = (fx, fy) => ({ x: stage.x + stage.width*fx, y: stage.y + stage.height*fy });
+  for (const shape of ['free', 'line', 'box']){
+    await p.locator('#shapes .chip', { hasText: new RegExp('^'+shape+'$', 'i') }).click();
+    const a = pt(0.3, 0.75), b = pt(0.7, 0.9);
+    await p.mouse.move(a.x, a.y); await p.mouse.down();
+    await p.mouse.move(b.x, b.y, { steps: 6 }); await p.mouse.up();
+    await p.waitForTimeout(120);
+    if (await sig() !== before) bad.push(`a ${shape} stroke with an empty hand changed the scene`);
+    if (await cells() !== n0) bad.push(`a ${shape} stroke with an empty hand changed the cell count`);
+  }
+  await p.locator('#shapes .chip', { hasText: /^free$/i }).click();
+
+  /* ...and it must not have banked an Undo for the nothing it did. Asked as "is the thing
+     Undo would take back still the one it was", not "is Undo disabled" — loading the preset
+     armed it perfectly legitimately, so the disabled state is the wrong question. */
+  if (await p.evaluate(() => undoLabel) !== undoWas)
+    bad.push(`an empty hand took Undo from "${undoWas}" to "${await p.evaluate(() => undoLabel)}"`);
+
+  /* And the half it was asked for: touch something and be told what it is. Thermite by
+     name, because that is the material that prompted this — the Cut scene's charge took a
+     moment to recognise. */
+  await p.evaluate(() => {
+    wipeAll();
+    const f = H-6;
+    for (let x=0;x<W;x++) for (let y=f;y<H;y++) put(x,y,STONE);
+    for (let x=(W>>1)-6; x<(W>>1)+6; x++) for (let y=f-8;y<f;y++) put(x,y,THERMITE);
+  });
+  await p.waitForTimeout(200);
+  const on = await p.evaluate(() => {
+    const f = H-6, r = cv.getBoundingClientRect();
+    return { x: r.left + ((W>>1)/W)*r.width, y: r.top + ((f-4)/H)*r.height };
+  });
+  await p.mouse.click(on.x, on.y);
+  await p.waitForTimeout(150);
+  const said = await p.locator('#ro').textContent();
+  if (!/thermite/i.test(said)) bad.push(`touching a bed of thermite with an empty hand said "${said}"`);
+  if (!/\d+°C/.test(said)) bad.push(`"${said}" names it but does not say how hot it is`);
+
+  // Air is "Air", not the table's own em dash for the material you cannot pick.
+  const sky = await p.evaluate(() => {
+    const r = cv.getBoundingClientRect();
+    return { x: r.left + r.width*0.5, y: r.top + r.height*0.2 };
+  });
+  await p.mouse.click(sky.x, sky.y);
+  await p.waitForTimeout(150);
+  const air = await p.locator('#ro').textContent();
+  if (!/air/i.test(air)) bad.push(`touching empty space said "${air}"`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+/* Tapping the material you are already holding puts it down. This is the half of "a way to
+   empty your hand" that does not need the Tools drawer, and it is the one that gets used. */
+await check('tapping the material you are holding puts it down', async p => {
+  const bad = [];
+  /* Empty first. The app opens holding Wood, which is the first chip in Fuel — so a check
+     that just taps it is testing the toggle in the direction it did not mean to and reads
+     "picking a material left the tool as look". */
+  await (await reveal(p, 'look')).click();
+  await p.locator('.tab', { hasText: /^fuel$/i }).click();
+  const wood = p.locator('#mats .chip[data-t]').first();
+  await wood.click();
+  const held = await p.evaluate(() => tool);
+  if (typeof held !== 'number') return `picking the first Fuel chip left the tool as ${held}`;
+  if (await wood.getAttribute('aria-pressed') !== 'true') bad.push('the material picked does not show as held');
+
+  await wood.click();
+  if (await p.evaluate(() => tool) !== 'look') bad.push('tapping it again did not put it down');
+  if (await wood.getAttribute('aria-pressed') !== 'false') bad.push('the chip still shows as held after being put down');
+
+  // A third tap picks it back up, or the toggle is a trap.
+  await wood.click();
+  if (await p.evaluate(() => tool) !== held) bad.push('tapping a third time did not pick it back up');
+
+  /* Not the vent, which already means something else by a second tap — it closes its
+     picker. One chip in the tray doing two different things on a second tap would make
+     both of them guesses. */
+  await p.locator('.tab', { hasText: /^hot$/i }).click();
+  const vent = p.locator('#mats .chip[data-t]').last();
+  await vent.click();
+  await vent.click();
+  if (await p.evaluate(() => tool) === 'look') bad.push('a second tap on Vent emptied the hand instead of closing its picker');
+  return bad.length ? bad.join('; ') : null;
+});
+
 await check('picking a material does not put the hint back over the scene', async p => {
   const s = await stageBox(p);
   await p.mouse.click(s.x + s.width*0.5, s.y + s.height*0.5);   // start drawing: hint goes
