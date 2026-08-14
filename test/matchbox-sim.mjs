@@ -3913,83 +3913,111 @@ await check(browser, 'a damaged or foreign save is survived and reported', () =>
    The match goes to the middle of what it is lighting, because that is where a finger
    goes. Aiming at the first matching cell instead put it in a corner against a wall and
    measured the gas room as a fizzle, 33 flames against the 80 it actually makes. */
+/* Every preset, held to what its own label says, measured over the time it actually takes.
+
+   The bar is the same for all five and it is not "does it look right": a scene that is a
+   pretty arrangement is the worst thing in the box, because it looks like a promise. So
+   each of these does what the tell says and then asks what happened thirty seconds to four
+   minutes later. Three of the six that were written for this drawer did not clear it and
+   are not in it — see the note where the sixth used to be. */
 await check(browser, 'every preset pays off when you do what its label says', () => {
   const bad = [];
-  const middle = t => { let sx=0, sy=0, n=0;
-    for (let y=0;y<H;y++) for (let x=0;x<W;x++) if (type[idx(x,y)]===t){ sx+=x; sy+=y; n++; }
-    return n ? [Math.round(sx/n), Math.round(sy/n)] : null; };
+  const N = t => __count(t);
+  const scene = n => SCENES.find(s => s.name === n);
   const edge = (t, pick) => { let best = null;
     for (let y=0;y<H;y++) for (let x=0;x<W;x++){
       if (type[idx(x,y)] !== t) continue;
       if (!best || (pick==='top' ? y<best[1] : x<best[0])) best = [x,y];
     }
     return best; };
-  const scene = n => SCENES.find(s => s.name === n);
 
-  // Candle — one touch of the wick tip, then it is on its own.
-  loadScene(scene('Candle'));
+  /* Garden — nothing at all, which is the point of it. Two clocks: the bed grows and
+     the log hatches. Measured at 78 stems, 35 flowers, 20 grass and 319 cells of rich soil
+     from eleven seeds, with the first moth at about thirty seconds. */
+  __room('Normal'); loadScene(scene('Garden'));
+  { const seeds = N(SEED), grubs = N(GRUB);
+    if (!seeds || !grubs) bad.push(`Garden arrived with ${seeds} seeds and ${grubs} grubs`);
+    let firstMoth = -1;
+    for (let k=1;k<=12000;k++){ __step(1); if (firstMoth<0 && N(MOTH)) firstMoth = k; }
+    if (N(FLOWER) < 8) bad.push(`Garden grew ${N(FLOWER)} flowers from ${seeds} seeds in three minutes`);
+    if (N(RICH) < 60) bad.push(`Garden made ${N(RICH)} cells of rich soil — the flowers are not feeding the bed`);
+    if (N(GRASS) < 5) bad.push(`Garden put out ${N(GRASS)} grass, so the rich soil is not doing anything`);
+    if (firstMoth < 0) bad.push('Garden never hatched a moth out of its log');
+    // ...and it has to still be a garden, not a flood.
+    if (N(WATER) < 100) bad.push(`Garden has ${N(WATER)} cells of water left — the pond is what keeps the bed damp`);
+  }
+
+  /* Chandler — one touch of the wick, and then the candle has to outlast the metamorphosis
+     or the moths arrive at a cold wick and the scene has no ending. Measured: first moth at
+     27 seconds, last flame at 69. Three wick depths were tried and the shortest won. */
+  __room('Normal'); loadScene(scene('Chandler'));
   { const w = edge(FUSE,'top');
-    if (!w) bad.push('Candle has no wick'); else {
+    if (!w) bad.push('Chandler has no wick'); else {
       __hold(w[0], w[1], 2, 120);
-      let alight=0, dark=0;
-      for (let k=0;k<2600;k++){ __step(1); if (__count(FIRE)>0){ alight++; dark=0; } else if (++dark>90) break; }
-      if (alight < 600) bad.push(`Candle stayed lit ${alight} ticks`);
+      let last = 0, firstMoth = -1;
+      for (let k=1;k<=6000;k++){ __step(1); if (N(FIRE)) last = k; if (firstMoth<0 && N(MOTH)) firstMoth = k; }
+      if (firstMoth < 0) bad.push('Chandler never hatched a moth');
+      else if (last < firstMoth + 600)
+        bad.push(`Chandler's first moth came at ${(firstMoth/60)|0}s and the candle was out at ${(last/60)|0}s`);
+      if (N(MOTH) < 2) bad.push(`Chandler had ${N(MOTH)} moths in the room at the end`);
     } }
 
-  // Fuse — the far end, and it must take its time getting there.
-  loadScene(scene('Fuse'));
-  { const e = edge(FUSE,'left'); const charge = __count(POWDER);
-    if (!e || !charge) bad.push('Fuse is missing its cord or its charge'); else {
-      __hold(e[0], e[1], 2, 90);
-      let firedAt = -1;
-      for (let k=0;k<4000;k++){ __step(1); if (__count(POWDER) < charge*0.9){ firedAt=k; break; } }
-      if (firedAt < 0) bad.push(`Fuse never reached the charge (${__count(POWDER)}/${charge} left)`);
-      else if (firedAt < 200) bad.push(`Fuse fired after ${firedAt} ticks — that is a wire`);
+  /* Thaw — the only scene that is about the room, so it is measured at the room. Both
+     directions from the same build: left alone the ice keeps and Neutral bottoms out around
+     10°C; light the woodpile and it tops 21 with the drifts all but gone. */
+  __room('Neutral'); loadScene(scene('Thaw'));
+  { const ice0 = N(ICE), snow0 = N(SNOW), fish0 = N(FISH);
+    if (fish0 < 2) bad.push(`Thaw arrived with ${fish0} fish`);
+    let coldest = 1e9;
+    for (let k=0;k<3600;k++){ __step(1); if (AMBIENT < coldest) coldest = AMBIENT; }
+    const keptIce = N(ICE), keptFish = N(FISH);
+    if (coldest > 15) bad.push(`Thaw left alone only took Neutral to ${coldest.toFixed(1)}°C`);
+    if (keptIce < ice0 * 0.85) bad.push(`Thaw lost ${ice0-keptIce} of ${ice0} ice with nobody touching it`);
+    if (!keptFish) bad.push('the fish died in the pond before anyone did anything');
+
+    __room('Neutral'); loadScene(scene('Thaw'));
+    const fu = edge(FUSE,'top');
+    if (!fu) bad.push('Thaw has no fuse on its woodpile'); else {
+      __hold(fu[0], fu[1], 2, 150);
+      let warmest = -1e9;
+      for (let k=0;k<9000;k++){ __step(1); if (AMBIENT > warmest) warmest = AMBIENT; }
+      if (warmest < coldest + 6)
+        bad.push(`Thaw cold bottomed at ${coldest.toFixed(1)}°C and lit topped at ${warmest.toFixed(1)} — the fork is not a fork`);
+      if (N(SNOW) > snow0 * 0.25) bad.push(`${N(SNOW)} of ${snow0} snow was still lying after the fire`);
+      if (N(ICE) > keptIce * 0.85) bad.push(`the fire left ${N(ICE)} ice against ${keptIce} for doing nothing`);
     } }
 
-  // Cut — the ribbon, not the thermite, and the plate ends up open.
-  loadScene(scene('Cut'));
-  { const m = edge(MAGNES,'top');
-    const cols = new Map();
-    for (let i=0;i<type.length;i++) if (type[i]===STEEL){ const x=i%W; (cols.get(x) || cols.set(x,[]).get(x)).push((i/W)|0); }
-    if (!m || !cols.size) bad.push('Cut is missing its ribbon or its plate'); else {
-      __hold(m[0], m[1], 2, 300);
-      for (let k=0;k<2600;k++) __step(1);
-      let breached = 0;
-      for (const [x, ys] of cols){
-        let solid = 0;
-        for (const y of ys){ const t = type[idx(x,y)]; if (t===STEEL||t===MOLTEN) solid++; }
-        if (!solid) breached++;
-      }
-      if (breached < 3) bad.push(`Cut breached ${breached} of ${cols.size} columns`);
+  /* Volcano — no input at all. It has to crest, and then what it does on the way down is
+     the scene: obsidian at the lake, glass on the beach, and the trees alight. The lake is
+     fourteen rows deep and butts against the cone for a reason — both were measured. */
+  __room('Normal'); loadScene(scene('Volcano'));
+  { const green0 = N(GREEN), obs0 = N(OBSIDIAN), gl0 = N(GLASS);
+    let mostLava = 0;
+    for (let k=0;k<9000;k++){ __step(1); if (N(LAVA) > mostLava) mostLava = N(LAVA); }
+    if (mostLava < 400) bad.push(`Volcano's shaft only ever held ${mostLava} cells of lava — it is not erupting`);
+    if (N(OBSIDIAN) <= obs0 + 4) bad.push(`Volcano made ${N(OBSIDIAN)-obs0} obsidian — the flow is not reaching the lake`);
+    if (N(GLASS) <= gl0 + 2) bad.push(`Volcano made ${N(GLASS)-gl0} glass — the flow is not reaching the beach`);
+    if (N(GREEN) > green0 * 0.75) bad.push(`${N(GREEN)} of ${green0} trees were still standing`);
+  }
+
+  /* Forge — the hardest fire in the box to start, and the discovery is what it still cannot
+     do. Measured: 248 cells of coal fully consumed and a peak of 1296°C, against steel's
+     melting point of 1400 and stone's 1250. Both halves are asserted, because "it got hot"
+     and "it did not melt the steel" are each half of what the scene is for. */
+  __room('Normal'); loadScene(scene('Forge'));
+  { const coal0 = N(COAL), steel0 = N(STEEL);
+    const fu = edge(FUSE,'left');
+    if (!fu || !coal0) bad.push('Forge is missing its cord or its coal'); else {
+      __hold(fu[0], fu[1], 2, 150);
+      let peak = -1e9;
+      for (let k=0;k<9000;k++){ __step(1); if (__maxT() > peak) peak = __maxT(); }
+      if (N(COAL) > coal0 * 0.3) bad.push(`Forge left ${N(COAL)} of ${coal0} coal unburnt — the bed never caught`);
+      if (peak < 1100) bad.push(`Forge peaked at ${Math.round(peak)}°C, which is not a forge`);
+      if (peak > 1400) bad.push(`Forge peaked at ${Math.round(peak)}°C — something with its own \`peak\` is alight in there`);
+      if (N(STEEL) < steel0) bad.push(`Forge lost ${steel0-N(STEEL)} cells of steel — a coal fire must not be able to`);
     } }
 
-  // Acid — it eats what is standing in it, and the tank holds.
-  loadScene(scene('Acid'));
-  { const steel0 = __count(STEEL), glass0 = __count(GLASS);
-    for (let k=0;k<2600;k++) __step(1);
-    if (steel0 - __count(STEEL) < 20) bad.push(`Acid ate ${steel0-__count(STEEL)} of ${steel0} steel cells`);
-    if (glass0 - __count(GLASS) > 0) bad.push(`Acid ate ${glass0-__count(GLASS)} of its own glass tank`); }
-
-  // Lava — a pour you have time to do something with.
-  loadScene(scene('Lava'));
-  { const n0 = __count(LAVA); let half = -1;
-    for (let k=1;k<=1200;k++){ __step(1); if (__count(LAVA) <= n0*0.5){ half=k; break; } }
-    if (half >= 0 && half < 600) bad.push(`Lava was half set after ${half} ticks`); }
-
-  // Gas — gathers, then goes off properly rather than fizzling.
-  loadScene(scene('Gas'));
-  { __step(120);
-    const pooled = __count(GAS);
-    const g = middle(GAS);
-    if (!g) bad.push('Gas dispersed before it could be lit'); else {
-      __hold(g[0], g[1], 3, 12);
-      let peakFire = 0;
-      for (let k=0;k<200;k++){ __step(1); peakFire = Math.max(peakFire, __count(FIRE)); }
-      if (peakFire < 40) bad.push(`Gas made ${peakFire} flames — that is a candle, not a bang`);
-      if (__count(GAS) > pooled*0.4) bad.push(`Gas left ${__count(GAS)} of ${pooled} cells unburned`);
-    } }
-
+  __room('Normal');
   return bad.length ? bad.join('; ') : null;
 });
 

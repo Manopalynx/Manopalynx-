@@ -222,6 +222,80 @@ Measured, on a bar of each with the match held at one end:
 | Wax | nothing. It needs a wick |
 | Stone, steel, sand, ash, glass, obsidian, acid | nothing at all |
 
+## The five presets
+
+Six were designed and five shipped. Every one is held to paying off *over time* by a check in
+`test/matchbox-sim.mjs`, and the three that were cut were cut by measurement rather than taste.
+
+| | what it asks of you | what it does |
+|---|---|---|
+| **Garden** | nothing at all | seeds → flowers → rich soil → grass, and a log that hatches moths |
+| **Chandler** | light the wick | grubs pupate and the moths cross the room to the flame |
+| **Thaw** | light the woodpile, *or* open the flask | the same build forks two ways, and the room narrates it |
+| **Volcano** | nothing at all | lava crests, makes obsidian at the lake and glass on the beach |
+| **Forge** | light the straw under the grate | the hardest fire in the box — and what it still cannot melt |
+
+Measured, at the suite's 143×220:
+
+| | |
+|---|---|
+| Garden, 200s | 78 stems, 35 flowers, 20 grass, **319 cells of rich soil** from 11 seeds; first moth ~30s |
+| Chandler | first moth **27s**, candle still lit at **69s**, 4–6 moths in the room |
+| Thaw, left alone | Neutral bottoms at **10.4°C**, 1110 of 1144 ice still standing, fish alive |
+| Thaw, lit | Neutral tops at **21.6°C**, ice down to 720, snow 212 → 16 |
+| Volcano | crests at **6s**, peaks above 3,000 cells of lava, 25 obsidian, 13 glass, 72 of 114 trees gone |
+| Forge | 248 cells of coal fully burnt, peak **1296°C** |
+
+### Three things the presets taught that the materials had not
+
+**A candle's life is set by its wick, not its wax — and the obvious wick is the worst one.**
+Three depths measured: a wick standing proud of the wax lasts **57s**, one run to the base
+lasts **48s** (it has the whole candle to draw on, and burns the whole candle — 374 of 374
+cells), and one half way down lasts **41s**. The guess in between was the one that sounded
+most like a candle. The shortest wick wins.
+
+**A coal fire cannot melt steel, and that is a fact about the table rather than a tuning
+problem.** Combustion cannot drive a cell past `FLAME_PEAK` 1200 unless the material carries
+its own `peak`, and coal carries none; measured, the hearth tops out at 1296°C against
+steel's melting point of 1400. Stone's 1250 *is* under it — but melting is `LATENT_MELT` 140
+of energy soaked up, not a line a temperature crosses, and three cells of lining shed it to
+the room faster than the peak delivers it. Measured over four minutes: peak lava, nought. So
+the Forge is the fire itself, and the discovery is what the fire is not enough for.
+
+**Wax cannot be a trigger anywhere near lava.** Three arrangements — over a pool, beside it,
+three rows clear of it — and every one melted inside three seconds from the pool's own heat.
+Wax goes at 62°C and lava sits at 1180.
+
+### The three that were cut
+
+- **A Rube Goldberg cascade.** Four versions. Beyond the wax problem above: **water does not
+  raise a lava pool, it quenches it** (138 cells of water in, 16 of obsidian out, all 180
+  cells of lava set to stone), so the flow that was to spill over a lip onto sand had nothing
+  left to spill. Carrying the signal by conduction instead worked for two stages — charge at
+  15s, straw alight at 18s — and then stopped, because **steel is a wire and not a battery**:
+  neither a ninety-cell bar nor a thirty-four-cell one ever warmed its far end from a brief
+  charge. Two of five stages firing is a machine that works four times in five, which is
+  worse than one that never ran.
+- **A thermite bench in the Forge.** Thermite at 2450°C is the only thing that can open the
+  billet, and it is a powder that catches at 950 sitting next to the best conductor in the
+  table. On the billet, on a plate beside the hearth, in a walled alcove thirty cells away —
+  every arrangement lit itself off the fire before anyone touched the ribbon, measured at
+  MAX_T with the whole ribbon gone. A label that says "when you want" must not go off while
+  you are watching something else.
+- **A sand hopper over the Volcano's pool.** Same wax problem, plus the bank stood higher
+  than its wall and poured itself in at build.
+
+### Two things that only the presets could have found
+
+**`sSlab` order is a leak.** The Cascade's reservoir drained at build twice — once because
+the plug stopped one cell short of its own wall, once because the wall stopped one row above
+the plug. Neither is visible in the source; both read as "the machine did not fire".
+
+**A four-neighbour rule needs a four-neighbour arrangement.** The Volcano's lake had a
+two-cell stone rim of its own, so lava running down the flank stopped on top of the rim —
+*diagonally* adjacent to the water, and `meets` is orthogonal. Measured: 3,088 cells of lava
+on the map and not one of obsidian. Removing the rim was the whole fix.
+
 ## The room
 
 Tap **Room** in Tools and the seven settings appear in the same row — Neutral, Freezing,
@@ -2184,12 +2258,9 @@ Gas. None arrives lit, because the match is the whole interaction and a scene th
 up already burning has spent it.
 
 They are the scenarios above rather than six pretty ones on purpose, and
-`test/matchbox-sim.mjs` lights each preset and asserts it pays off: the candle stays lit,
-the fuse takes its time, the plate ends up open, the acid eats the steel and not its own
-tank, the pour is still liquid, the gas bangs. **A preset is a promise on a button.**
-Geometry a few cells out builds a perfect-looking scene that cannot do the thing its own
-label says — measured, lifting the wick eight cells clear of the wax drops the candle
-from 1854 ticks to 202, and nothing about it looks wrong.
+`test/matchbox-sim.mjs` loads each preset, does what its label says, and then measures what
+happened thirty seconds to four minutes later — not what it looks like at tick zero. A scene
+that is a pretty arrangement is the worst thing in the box, because it looks like a promise.
 
 ## Saving
 

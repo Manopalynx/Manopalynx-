@@ -683,20 +683,24 @@ async function press(p, act) {
 await check('a preset puts a scene in the box and takes the hint away', async p => {
   // The box does not start empty — there is an opening scene — so the claim is that
   // the preset replaces it, not that it fills a void.
-  const before = await p.evaluate(() => ({ n: __cells(), wax: __count(WAX) }));
-  await press(p, 'scene-candle');
-  const after = await p.evaluate(() => ({ n: __cells(), wax: __count(WAX) }));
-  if (after.n < 200) return `the Candle preset left ${after.n} cells in the box`;
-  if (!after.wax) return 'the Candle preset put no wax in the box';
-  if (before.wax === after.wax) return 'the box looks the same as it did before, so nothing was loaded';
-  // The hint sits over the middle of the scene, which is where the candle is. The fade
+  const before = await p.evaluate(() => ({ n: __cells(), coal: __count(COAL) }));
+  await press(p, 'scene-forge');
+  const after = await p.evaluate(() => ({ n: __cells(), coal: __count(COAL) }));
+  if (after.n < 200) return `the Forge preset left ${after.n} cells in the box`;
+  if (!after.coal) return 'the Forge preset put no coal in the box';
+  if (before.coal === after.coal) return 'the box looks the same as it did before, so nothing was loaded';
+  // The hint sits over the middle of the scene, which is where the hearth is. The fade
   // is a CSS transition, so this waits it out rather than reading mid-animation and
   // calling a hint that is on its way out a hint that never left.
   await p.waitForTimeout(700);
   const op = await p.evaluate(() => getComputedStyle(document.getElementById('hint')).opacity);
   if (Number(op) > 0.01) return `the hint is still showing at opacity ${op} over the scene`;
+  /* Against the scene's own `tell` rather than a word from it. This looked for "wick",
+     which was the Candle's, and a check that hard-codes one preset's noun goes red the
+     day the presets change without anything being wrong. */
   const said = await p.locator('#ro').textContent();
-  if (!/wick/i.test(said)) return `the readout says "${said}" and never mentions what to do`;
+  const tell = await p.evaluate(() => SCENES.find(s => s.name === 'Forge').tell);
+  if (said.trim() !== tell) return `the readout says "${said}" rather than the scene's own "${tell}"`;
   return null;
 });
 
@@ -715,26 +719,30 @@ await check('every preset is reachable and none of them leaves the box empty', a
 // destroys something that cannot be got back, so it asks — the same two-tap rule Clear
 // uses, and for the same reason.
 await check('Save asks before it replaces a save, but not before the first one', async p => {
-  await press(p, 'scene-candle');
+  await press(p, 'scene-forge');
   const first = await press(p, 'save');
   if (/replace/i.test(await labelOf(first))) return 'the very first save asked to replace something';
   if (!await p.evaluate(() => !!localStorage.getItem(STORE_KEY))) return 'nothing was written';
 
-  await press(p, 'scene-cut');
+  await press(p, 'scene-volcano');
   const again = await press(p, 'save');
   if (!/replace/i.test(await labelOf(again))) return `a second save went straight through, reading "${await labelOf(again)}"`;
   if (await again.getAttribute('aria-pressed') !== 'true') return 'the armed Save is not styled as the danger it is';
   return null;
 });
 
-/* Candle rather than Cut, and the snapshot is taken after the save rather than before.
-   Unlike the simulation suite, this harness leaves the box running, so the scene is
-   free to move between one line of the check and the next — and Cut's thermite is a
-   powder, so its pile slumps at the edges. That measured as "24 cells came back
-   different" and looked exactly like a broken save format. A candle is wax, wick and
-   stone, all static, so the only thing that can change it is the load. */
+/* Forge, and the snapshot is taken after the save rather than before. Unlike the
+   simulation suite, this harness leaves the box running, so the scene is free to move
+   between one line of the check and the next — a powder pile slumps at its edges, and
+   anything alive walks. That measured as "24 cells came back different" and looked
+   exactly like a broken save format.
+
+   Of the five presets the Forge is the only one that holds still: the Garden and the
+   Chandler are both full of things that are alive by design, the Volcano starts pouring
+   the moment it loads, and the Thaw is melting. There is a guard below for this — if the
+   scene does move, the check says so instead of blaming the save. */
 await check('a scene saved and loaded through the buttons comes back', async p => {
-  await press(p, 'scene-candle');
+  await press(p, 'scene-forge');
   await press(p, 'save');
   const saved = await p.evaluate(() => Array.from(type));
   await p.waitForTimeout(400);
@@ -742,9 +750,9 @@ await check('a scene saved and loaded through the buttons comes back', async p =
     for (let i=0;i<type.length;i++) if (type[i]!==a[i]) d++; return d; }, saved);
   if (drift) return `the scene moved ${drift} cells on its own, so nothing can be concluded from a comparison`;
 
-  await press(p, 'scene-cut');                          // something else entirely
-  const between = await p.evaluate(() => __count(WAX));
-  if (between) return `${between} cells of wax survived loading a different preset, so this proves nothing`;
+  await press(p, 'scene-garden');                       // something else entirely
+  const between = await p.evaluate(() => __count(COAL));
+  if (between) return `${between} cells of coal survived loading a different preset, so this proves nothing`;
   await press(p, 'load');
   const back = await p.evaluate(a => {
     let diff = 0;
@@ -757,7 +765,7 @@ await check('a scene saved and loaded through the buttons comes back', async p =
 });
 
 await check('Load with nothing saved says so instead of wiping the scene', async p => {
-  await press(p, 'scene-candle');
+  await press(p, 'scene-forge');
   const before = await p.evaluate(() => __cells());
   await press(p, 'load');
   const after = await p.evaluate(() => __cells());
@@ -778,7 +786,7 @@ await check('a browser that refuses to store says so rather than breaking', asyn
     const boom = () => { throw new DOMException('denied', 'SecurityError'); };
     Object.defineProperty(window, 'localStorage', { configurable: true, get: boom });
   });
-  await press(p, 'scene-candle');
+  await press(p, 'scene-forge');
   const before = await p.evaluate(() => __cells());
   await press(p, 'save');
   const afterSave = await p.locator('#ro').textContent();
@@ -1104,16 +1112,22 @@ await check('Clear, a preset and Load can all be taken back', async p => {
   if (await sig() !== beforeClear) return 'the scene did not come back after undoing a Clear';
 
   const beforePreset = await sig();
-  await press(p, 'scene-candle');
+  await press(p, 'scene-forge');
   if (await sig() === beforePreset) return 'the preset changed nothing, so this proves nothing';
   await (await reveal(p, 'undo')).click();
   if (await sig() !== beforePreset) return 'the scene did not come back after undoing a preset';
 
-  // Candle for this leg rather than Cut: Cut's thermite is a powder and its pile slumps,
-  // so the scene drifts between taking the signature and undoing back to it. That measured
-  // as "the scene did not come back after undoing a Load" for an undo that was working.
+  /* The Forge for this leg, and it is the only preset that can do it: of the five, four
+     are alive or pouring by design and drift between taking the signature and undoing back
+     to it — which measures as "the scene did not come back after undoing a Load" for an
+     undo that is working perfectly.
+
+     The pause is not padding either. Even the Forge has a powder bed and a trough in it,
+     and both settle over the first few frames; measured, it holds still from about 400ms
+     and not before. */
   await press(p, 'save');
-  await press(p, 'scene-candle');
+  await press(p, 'scene-forge');
+  await p.waitForTimeout(600);
   if (!await stillness()) return 'the scene to be undone back to is still moving';
   const beforeLoad = await sig();
   await press(p, 'load');
