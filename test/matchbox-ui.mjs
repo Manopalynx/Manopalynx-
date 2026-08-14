@@ -1296,11 +1296,45 @@ await check('a worm drawn on the stage walks about on its own', async p => {
    being drawers, and Clear was the one that had to give up a word to fit. */
 await check('every chip is the same size, in every drawer, with no label cut off', async p => {
   const bad = [], seen = [];
+  /* The one check in this suite that lets the webfont through, and it has to.
+
+     Everything else blocks the network so the suite stays honest offline — and that is
+     exactly what hid this: Space Mono is wider than the fallback the tests were measuring,
+     so a drawer that fits here can be cut off on a phone, and was. Reported as POWD… and
+     RUBB… while every check was green. */
+  await p.unroute(u => /^https?:/.test(u.href));
+  await p.reload({ waitUntil: 'load' });
+  await p.waitForFunction(() => typeof W !== 'undefined' && W > 40);
+  const realFont = await p.evaluate(async () => {
+    try { await document.fonts.ready; } catch {}
+    return document.fonts.check("9.5px 'Space Mono'");
+  });
+  if (!realFont) return 'Space Mono did not load, so this check would be measuring the fallback';
+  await p.evaluate(() => fitLabels());
+
   const look = async (where) => {
     const r = await p.evaluate(() => {
       const chips = [...document.querySelectorAll('#mats .chip')];
-      const clipped = [...document.querySelectorAll('#mats .lb')]
-        .filter(l => l.scrollWidth > l.clientWidth + 0.5).map(l => l.textContent.trim());
+      /* Measured off a canvas against the *chip's* inner width, which is what fitLabels
+         now does and for the same reason: a label shrink-wraps its own text, so the
+         `scrollWidth > clientWidth` this used to ask was the text compared against itself
+         and it could barely ever fire. Reported from the phone as POWD… and RUBB… with
+         this check green at every width. */
+      const ls = [...document.querySelectorAll('#mats .lb')];
+      const clipped = [];
+      if (ls.length){
+        const cs = getComputedStyle(ls[0]);
+        const gap = parseFloat(cs.letterSpacing) || 0;
+        const cps = getComputedStyle(ls[0].parentElement);
+        const pad = (parseFloat(cps.paddingLeft)||0) + (parseFloat(cps.paddingRight)||0);
+        const c = document.createElement('canvas').getContext('2d');
+        c.font = cs.fontSize + ' ' + cs.fontFamily;
+        for (const l of ls){
+          const t = l.textContent;
+          if (c.measureText(t).width + gap * t.length > l.parentElement.clientWidth - pad)
+            clipped.push(t.trim());
+        }
+      }
       return { n: chips.length, clipped,
                w: chips.map(c => Math.round(c.getBoundingClientRect().width)),
                row: Math.round(document.getElementById('mats').getBoundingClientRect().width) };

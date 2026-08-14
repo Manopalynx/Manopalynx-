@@ -72,6 +72,37 @@ load-bearing rather than tidy. The tray sits above the stage, so a row that wrap
 the tray taller and moves the scene — and a chip sized to its own text moves the row
 whenever that text changes.
 
+### `fitLabels` was measuring the text against itself
+
+Reported from the phone as **POWD…** and **RUBB…** in the Fuel drawer, with every check
+green at every width. Two things were hiding it and they compounded.
+
+**The test compared a label to itself.** It asked `l.scrollWidth > l.clientWidth + 0.5`,
+and `l` is the label — which shrink-wraps its own text. Measured, "Wood" reports
+clientWidth 24 and scrollWidth 24; "Powder" reports 35 and 35. Equal, always, unless
+`max-width:100%` happened to clamp it, and then it had to overflow by half a pixel on top.
+The function that exists to stop labels clipping was very nearly a no-op.
+
+Every attempt to give that test headroom put every drawer straight onto the 6.5px floor,
+at every width — because *equal is not less*, so any headroom at all makes everything
+"clipped". That is the tell that the number had no room in it to begin with.
+
+**And the suite could not have seen it anyway,** because it blocks the network so it stays
+honest offline, and Space Mono is wider than the fallback it was measuring instead.
+
+The fix is to measure the real string at the real size off a canvas, against the **chip's**
+inner width rather than the label's:
+
+```
+"Powder" at 9.5px is 34.3px wide.
+A 47px chip has 39px of room.   A 42px chip has 34px.
+```
+
+Which is exactly the difference between this screen and the phone it was reported from, and
+exactly why it would not reproduce here at any width. One check in the UI suite now lets the
+webfont through and refuses to run without it, because measuring label fit against a font
+nobody sees is worse than not measuring it.
+
 ### Every chip is the same width in every drawer, and that is newer than it sounds
 
 "Every chip in a row is the same width" was true and was not enough, because it says
@@ -105,6 +136,11 @@ Two things fell out of measuring it:
 - **`fitLabels` had a floor of 7px and Magnesium clipped at 375px with it** — on the tray as
   shipped, before any of this. Found while measuring something else, which is the only way
   that kind of thing is found. The floor is 6.5px now, which clears it at every width.
+- **Free, Line and Box are not drawer chips.** They sit beside the brush slider and size to
+  their own labels, so the cap that keeps a drawer honest is meaningless there and was
+  actively wrong: at 49px, Free lost its E. Reported from the phone, and the check written
+  for the cap did not see it because that check looks inside `#mats` and this row is not in
+  `#mats`. It covers chips outside the drawer row now.
 - **Clear's "Everything" is "All".** It was the one label that could not be made to fit a
   chip the same width as every other chip, and the four chips read better as four short
   answers to "Clear what?" — Back, Fire, Life, All. The weight of the destructive one is
@@ -240,13 +276,18 @@ Measured, at the suite's 143×220:
 | | |
 |---|---|
 | Garden, 200s | 78 stems, 35 flowers, 20 grass, **319 cells of rich soil** from 11 seeds; first moth ~30s |
-| Chandler | first moth **27s**, candle still lit at **69s**, 4–6 moths in the room |
+| Chandler | first moth **32s**, candle still lit at **63s**, 4 moths in the room |
 | Thaw, left alone | Neutral bottoms at **10.4°C**, 1110 of 1144 ice still standing, fish alive |
 | Thaw, lit | Neutral tops at **21.6°C**, ice down to 720, snow 212 → 16 |
 | Volcano | crests at **6s**, peaks above 3,000 cells of lava, 25 obsidian, 13 glass, 72 of 114 trees gone |
 | Forge | 248 cells of coal fully burnt, peak **1296°C** |
 
 ### Three things the presets taught that the materials had not
+
+**A candle's width is its fuel.** `drawFuel` draws from the wax *beside* the wick, so
+narrowing the candle from twelve cells to eight — which looked better on the table — halved
+the burn from 69 seconds to 34, under the first moth's arrival. The table got wider and grew
+a second leg instead; the candle stayed twelve.
 
 **A candle's life is set by its wick, not its wax — and the obvious wick is the worst one.**
 Three depths measured: a wick standing proud of the wax lasts **57s**, one run to the base
