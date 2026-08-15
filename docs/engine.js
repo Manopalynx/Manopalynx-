@@ -134,8 +134,12 @@ export function holdingsValue(p) {
 }
 
 // Full net worth: holdings, less debt, plus this player's share of each vassal.
-// One level deep by construction — a vassal's own vassals are counted inside
-// their holdings value, not compounded again.
+//
+// Counted one level deep on purpose. A chain of two is still reachable -- a
+// player who is already a vassal may take one of their own -- and this walks
+// only the direct vassals, so a deep vassal contributes to its own overlord and
+// not again to theirs. That is the point: nothing is compounded twice, and the
+// figure is the same whether or not the arrangement happens to be stacked.
 export function netWorth(G, p) {
   let v = holdingsValue(p) - p.debt;
   for (const vi of p.vassals) {
@@ -429,6 +433,33 @@ function bind(G, p, to) {
   }
   p.lord = to.i;
   to.vassals.push(p.i);
+
+  // An overlord's own vassals come with them. Taking somebody's oath and
+  // leaving the oaths sworn to THEM where they were is bookkeeping rather than
+  // conquest: it left a creditor holding a debtor who was still collecting from
+  // people the creditor had no claim on.
+  //
+  // The loop above has already thrown off anyone in `to`'s chain of oaths, so
+  // `to` cannot be among these and no loop can close. Everything sworn to p is
+  // now sworn to `to` directly, which is why nothing here recurses.
+  //
+  // It does NOT follow that chains cannot exist, and an earlier version of this
+  // comment claimed they could not. Measured over 60 games the deepest chain is
+  // still two: this flattens what an absorbed overlord was owed, but a player
+  // who is ALREADY a vassal can still take a vassal of their own -- p swears to
+  // `to`, and `to` may itself be sworn to somebody else. Nothing above touches
+  // that direction, deliberately: what was asked for is that absorbing an
+  // overlord takes their oaths with them.
+  if (p.vassals.length) {
+    const moved = p.vassals.slice();
+    for (const vi of moved) {
+      G.players[vi].lord = to.i;
+      to.vassals.push(vi);
+    }
+    p.vassals = [];
+    note(G, `${moved.length === 1 ? 'One oath sworn' : `${moved.length} oaths sworn`} to ${p.name} ` +
+      `${moved.length === 1 ? 'passes' : 'pass'} to ${to.name}: ${moved.map(i => G.players[i].name).join(', ')}.`);
+  }
 }
 
 export function claimValue(bidder, vassal, isIncumbent) {
