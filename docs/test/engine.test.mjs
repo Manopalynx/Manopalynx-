@@ -1285,6 +1285,26 @@ test('a human short of a rent is asked, not stripped', () => {
 });
 
 test('an opponent is never asked — it settles automatically', () => {
+  // It can cover this one by pledging: 5 in hand plus 90 against Horizon,
+  // against a bare rent it can reach. So it raises rather than falling.
+  const G = game([{ name: 'S', kind: 'ai', persona: 'spector' }, { name: 'M', kind: 'human' }]);
+  const [ai, human] = G.players;
+  ai.cash = 5;
+  own(G, ai, SETS.eden.sq[0]);
+  own(G, human, SETS.agora.sq[0]);
+  ai.pos = SETS.agora.sq[0];
+  G.phase = 'landed';
+  resolveLanding(G);
+  assert.notEqual(G.phase, 'settle', 'opponents do not park');
+  assert.equal(holding(ai, SETS.eden.sq[0]).mortgaged, 1, 'it raised the money itself');
+  assert.equal(ai.lord, null, 'and did not have to swear for it');
+});
+
+test('nothing is sold down when selling down could not have saved it', () => {
+  // 5 in hand and 90 raisable against a bill of 175. Selling Horizon cannot
+  // settle the column, and pledging it on the way into vassalage would hand the
+  // overlord a square that earns nothing — the tithe is a share of rent
+  // collected, so the strip costs both of them.
   const G = game([{ name: 'S', kind: 'ai', persona: 'spector' }, { name: 'M', kind: 'human' }]);
   const [ai, human] = G.players;
   ai.cash = 5;
@@ -1293,8 +1313,10 @@ test('an opponent is never asked — it settles automatically', () => {
   ai.pos = SETS.agora.sq[0];
   G.phase = 'landed';
   resolveLanding(G);
-  assert.notEqual(G.phase, 'settle', 'opponents do not park');
-  assert.equal(holding(ai, SETS.eden.sq[0]).mortgaged, 1, 'it raised the money itself');
+  assert.notEqual(G.phase, 'settle', 'opponents still do not park');
+  assert.equal(ai.lord, human.i, 'it enters vassalage');
+  assert.equal(holding(ai, SETS.eden.sq[0]).mortgaged, 0, 'holding its square, unpledged');
+  assert.equal(ai.cash, 0, 'having handed over what it actually had');
 });
 
 test('nothing parks when there is nothing left to raise against', () => {

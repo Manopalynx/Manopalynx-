@@ -215,7 +215,23 @@ export function pay(G, from, to, amount) {
   // the figure it is given, so passing the gap made it stop one gap short: a
   // player owing 500 while holding 100 raised to 400, was still short, and was
   // bankrupted with sellable assets still on the board.
-  if (from.cash < amount) liquidate(G, from, amount);
+  // Selling down is only worth doing if it actually saves you.
+  //
+  // This used to run unconditionally, so a player who could not have covered
+  // the column however much they raised arrived in vassalage with every square
+  // pledged and every garrison sold — owning a board that earned nothing, for
+  // themselves or for the overlord who now held them. The tithe is a share of
+  // rent collected, so stripping the vassal on the way in is the overlord
+  // burning the thing they just took.
+  //
+  // Against the BANK it still strips, and deliberately: a marker compounds at
+  // 10% a turn, so raising against it is worth doing even when it falls short.
+  // A player creditor takes the oath instead, and an oath over a working estate
+  // is worth more to both of them.
+  if (from.cash < amount) {
+    const couldSettle = from.cash + raisableValue(G, from) >= amount;
+    if (couldSettle || !to) liquidate(G, from, amount);
+  }
   if (from.cash >= amount) {
     from.cash -= amount;
     if (to) to.cash += amount;
