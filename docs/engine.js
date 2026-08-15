@@ -315,6 +315,19 @@ export function payRent(G, from, to, amount) {
 export const money = v =>
   (v < 0 ? '-₡' : '₡') + Math.abs(Math.round(v)).toLocaleString('en-GB');
 
+// The short name a player goes by on screen. Opponents go by the name you would
+// use at the table, which is the LAST word -- "Varan", not "High Commander";
+// humans keep their first name.
+//
+// One definition because there were three, and two of them took the opposite
+// end of the same string. The board called him Vale and the trade sheet called
+// him Adran, off one persona named 'Adran Vale', and the trade sheet called
+// Varan "High". The two "vassal · X" labels -- one here, one in ui.js -- were
+// separately written and separately wrong. Anything rendering a player's name
+// short must call this; nothing may split the string itself.
+export const displayName = p =>
+  p.kind === 'ai' ? p.name.split(' ').pop() : p.name.split(' ')[0];
+
 // Everything a player could raise by pledging and selling down, without any of
 // it being decided for them.
 export function raisableValue(G, p) {
@@ -2129,7 +2142,7 @@ export function standings(G) {
     .map(p => ({
       player: p,
       worth: netWorth(G, p),
-      status: p.lord !== null ? `vassal · ${G.players[p.lord].name.split(' ')[0]}`
+      status: p.lord !== null ? `vassal · ${displayName(G.players[p.lord])}`
         : p.vassals.length ? `overlord ×${p.vassals.length}` : 'free'
     }))
     .sort((a, b) => b.worth - a.worth);

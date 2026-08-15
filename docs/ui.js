@@ -338,9 +338,9 @@ function resetSoundWatch() {
 }
 
 // Four chips have to fit 393pt without the last one sliding off the edge, and
-// "High Commander Varan" will never fit whole. Opponents go by the name you
-// would use at the table; humans keep their first name.
-const chipName = p => p.kind === 'ai' ? p.name.split(' ').pop() : p.name.split(' ')[0];
+// "High Commander Varan" will never fit whole. The rule lives in engine.js so
+// that every screen shortens a name the same way; see displayName there.
+const chipName = E.displayName;
 
 function renderBar() {
   const chips = G.players.map((p, i) => {
@@ -1524,7 +1524,7 @@ function drawTrade() {
       <b>${esc(BOARD[suggestion.get].n)}</b> would complete ${esc(SETS[BOARD[suggestion.get].s].n)} for you.</div>`;
   }
   s += `<div class="opts" style="margin-bottom:16px">${others.map(o =>
-    `<button class="opt${TR.to === o.i ? ' on' : ''}" data-fn="tradeSet|to|${o.i}">${esc(o.name.split(' ')[0])}</button>`).join('')}</div>`;
+    `<button class="opt${TR.to === o.i ? ' on' : ''}" data-fn="tradeSet|to|${o.i}">${esc(chipName(o))}</button>`).join('')}</div>`;
 
   // Tapping a square adds or removes it. Up to RULES.tradeMax a side, which is
   // what makes "two lesser worlds for the one that closes a set" possible at all.

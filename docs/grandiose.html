@@ -1299,6 +1299,19 @@ function payRent(G, from, to, amount) {
 const money = v =>
   (v < 0 ? '-₡' : '₡') + Math.abs(Math.round(v)).toLocaleString('en-GB');
 
+// The short name a player goes by on screen. Opponents go by the name you would
+// use at the table, which is the LAST word -- "Varan", not "High Commander";
+// humans keep their first name.
+//
+// One definition because there were three, and two of them took the opposite
+// end of the same string. The board called him Vale and the trade sheet called
+// him Adran, off one persona named 'Adran Vale', and the trade sheet called
+// Varan "High". The two "vassal · X" labels -- one here, one in ui.js -- were
+// separately written and separately wrong. Anything rendering a player's name
+// short must call this; nothing may split the string itself.
+const displayName = p =>
+  p.kind === 'ai' ? p.name.split(' ').pop() : p.name.split(' ')[0];
+
 // Everything a player could raise by pledging and selling down, without any of
 // it being decided for them.
 function raisableValue(G, p) {
@@ -3113,13 +3126,13 @@ function standings(G) {
     .map(p => ({
       player: p,
       worth: netWorth(G, p),
-      status: p.lord !== null ? `vassal · ${G.players[p.lord].name.split(' ')[0]}`
+      status: p.lord !== null ? `vassal · ${displayName(G.players[p.lord])}`
         : p.vassals.length ? `overlord ×${p.vassals.length}` : 'free'
     }))
     .sort((a, b) => b.worth - a.worth);
 }
 
-return { random, createGame, current, square, ownerOf, holding, ownsSet, countType, garrisonsOf, citadelsOf, holdingsValue, netWorth, upkeep, rentOf, paybackTurns, revoltThreshold, pay, liquidate, payRent, money, raisableValue, parkForSettlement, autoSettle, settleNow, claimValue, submitClaim, closeContest, releaseVassal, setTithe, declareIndependence, previewAt, landingPreview, cardEffect, roll, usePardon, payFacilityFee, amendCost, amendManifest, resolveLanding, applyCard, endTurn, swarmDistance, announceSwarm, playOnCircuits, extendGame, buy, openAuction, submitBid, closeAuction, canBuild, build, canRaiseCitadel, raiseCitadel, sellDevelopment, pledgeValue, redeemCost, pledge, mortgage, redeem, repayDebt, tradable, settleContract, setCompletingTargets, setBuildingTargets, denialTargets, seekContract, recordRefusal, refusalFor, refusalBlocks, contractIsLegal, proposeContract, respondToContract, netValue, aiValue, aiBid, aiWantsToBuy, threatPenalty, sqList, contractValue, aiAcceptsContract, aiCounter, aiRedeem, aiRepay, seekSale, openBoardFraction, aiPayFacilityFee, landingCost, aiAmend, aiTithe, aiRelease, aiDevelop, SAVE_VERSION, serialize, deserialize, standings };
+return { random, createGame, current, square, ownerOf, holding, ownsSet, countType, garrisonsOf, citadelsOf, holdingsValue, netWorth, upkeep, rentOf, paybackTurns, revoltThreshold, pay, liquidate, payRent, money, displayName, raisableValue, parkForSettlement, autoSettle, settleNow, claimValue, submitClaim, closeContest, releaseVassal, setTithe, declareIndependence, previewAt, landingPreview, cardEffect, roll, usePardon, payFacilityFee, amendCost, amendManifest, resolveLanding, applyCard, endTurn, swarmDistance, announceSwarm, playOnCircuits, extendGame, buy, openAuction, submitBid, closeAuction, canBuild, build, canRaiseCitadel, raiseCitadel, sellDevelopment, pledgeValue, redeemCost, pledge, mortgage, redeem, repayDebt, tradable, settleContract, setCompletingTargets, setBuildingTargets, denialTargets, seekContract, recordRefusal, refusalFor, refusalBlocks, contractIsLegal, proposeContract, respondToContract, netValue, aiValue, aiBid, aiWantsToBuy, threatPenalty, sqList, contractValue, aiAcceptsContract, aiCounter, aiRedeem, aiRepay, seekSale, openBoardFraction, aiPayFacilityFee, landingCost, aiAmend, aiTithe, aiRelease, aiDevelop, SAVE_VERSION, serialize, deserialize, standings };
 })();
 
 __m.score = (function () {
@@ -4995,9 +5008,9 @@ function resetSoundWatch() {
 }
 
 // Four chips have to fit 393pt without the last one sliding off the edge, and
-// "High Commander Varan" will never fit whole. Opponents go by the name you
-// would use at the table; humans keep their first name.
-const chipName = p => p.kind === 'ai' ? p.name.split(' ').pop() : p.name.split(' ')[0];
+// "High Commander Varan" will never fit whole. The rule lives in engine.js so
+// that every screen shortens a name the same way; see displayName there.
+const chipName = E.displayName;
 
 function renderBar() {
   const chips = G.players.map((p, i) => {
@@ -6181,7 +6194,7 @@ function drawTrade() {
       <b>${esc(BOARD[suggestion.get].n)}</b> would complete ${esc(SETS[BOARD[suggestion.get].s].n)} for you.</div>`;
   }
   s += `<div class="opts" style="margin-bottom:16px">${others.map(o =>
-    `<button class="opt${TR.to === o.i ? ' on' : ''}" data-fn="tradeSet|to|${o.i}">${esc(o.name.split(' ')[0])}</button>`).join('')}</div>`;
+    `<button class="opt${TR.to === o.i ? ' on' : ''}" data-fn="tradeSet|to|${o.i}">${esc(chipName(o))}</button>`).join('')}</div>`;
 
   // Tapping a square adds or removes it. Up to RULES.tradeMax a side, which is
   // what makes "two lesser worlds for the one that closes a set" possible at all.
