@@ -661,8 +661,6 @@ anything else.
 
 Open:
 - Everything Instances 3 and 4 left open is untouched and still stands.
-- The `CLAUDE.md` import of this file was never provable from inside the session that wrote
-  it. If you are reading this because it loaded on its own, it works — delete this line.
 
 ### Message to future instances
 
@@ -673,3 +671,106 @@ capabilities an opponent never had, and Instance 4 in a `fitLabels` that had bee
 since it was written.
 
 Assert the agreement, or accept that two copies of a thing are two things.
+
+---
+
+## Instance 6 — 15 August 2026
+
+Claude Code, cloud session, same repo. **No project work.** Sam asked a plain question —
+*"can you confirm you connect to the main branch by default?"* — and the answer was no.
+The session became the repair.
+
+### What happened, and why it is in this file
+
+Instance 5 built the `CLAUDE.md` import so this file would load itself every session. The
+very next session — this one — did not load it.
+
+The session was cloned at `5f92ab2`, the tip of `claude/thoughts-feedback-nk0h23`, because
+the **Claude Code environment had a source revision pinned to that branch**. Not the repo's
+default branch, which was already `main` and correct. A pin on the environment beats the
+repository default, and nothing in the repository can see or override it.
+
+That base predated the reorganisation, so its `CLAUDE.md` imported only `README.md`. The
+consequences, none of which were visible from inside the session:
+
+- `workingwithsam.md` never loaded. I did not know Grandiose or Matchbox existed.
+- The `README.md` that did load was the pre-merge one, which does not mention them either,
+  so the two documents **agreed with each other** and neither looked wrong.
+- 195 commits of main were missing, and the working tree looked like a complete, coherent
+  repository — four files, tests present, README detailed and internally consistent.
+
+Asked what context I had, I gave a confident and complete-sounding inventory. Every line
+of it was true about the files in front of me and wrong about the repository. **A stale
+base does not read as stale. It reads as a smaller project.**
+
+### What was done
+
+- **`.claude/hooks/session-start.sh`**, merged to `main` as PR #1. It prints the base commit
+  at every session start and, if HEAD is behind `origin/main`, prints a block naming this
+  file as the thing that did not load, plus the command to fix it. It also runs `npm install`
+  (remote sessions only), so the suites work without a manual step. It never exits non-zero.
+- **Sam changed the environment's source revision.** That was the actual root cause and it is
+  the one part he had to do himself — it lives in the Claude Code environment settings, not
+  in the repository and not on GitHub.
+- **All five stale `claude/*` branches deleted.** Every one was fully merged into `main`
+  first — verified with `git merge-base --is-ancestor`, not assumed. The repo is now one
+  branch, which is what the header of this file has claimed since Instance 5.
+- **Verified from outside.** A fresh session, given a prompt that forbade it from reading
+  anything first, reported base `7290381` built on current main, the right three imports,
+  and all three projects by name. That is the check — a session that had never heard of the
+  problem confirming the fix.
+
+### What I got wrong
+
+1. **I told Sam a healthy session would report `Session base: 'main'`.** It reports
+   `claude/<something>` — the harness always cuts a fresh working branch, and only the
+   *base* is main. He would have read a correct startup as a failure, on the strength of
+   my description. I had already seen this session's own branch work exactly that way.
+2. **The hook's detached-HEAD path printed `git checkout -B "HEAD" origin/main`**, which is
+   not a valid command. Found only by running it against the real bad commit in a throwaway
+   worktree. Reading it back would not have caught it; the string interpolates fine.
+3. **A grep window of `-A1` showed a blank line and made a working fix look broken** for one
+   step, because the heredoc has a blank line before the command. My check was wrong, not
+   the code — the fourth session running that this has happened, and it took ten seconds to
+   fall for.
+
+### Things that keep being true — additions
+
+- **A guard that ships in the repository cannot protect against a base that predates the
+  guard.** The hook is in the file tree it is checking. Start a session from a commit older
+  than the hook and there is no hook. The only complete fix was deleting the branches — you
+  cannot pin to what does not exist. Prefer removing the thing that can be pointed at over
+  detecting that it was.
+- **Instance 5 named two settings no test can see. There is a third, and it is not on
+  GitHub.** Default branch and Pages source are repository settings; the environment's
+  source revision is a Claude Code setting, one layer further out, invisible to the
+  repository *and* to anything running inside the session. When a session starts somewhere
+  odd, that is now the first place to look.
+- **Two stale documents that agree are more convincing than one.** The old `CLAUDE.md` and
+  old `README.md` corroborated each other perfectly, because they were frozen together.
+  Agreement between two copies only means something if they had a chance to disagree.
+
+### State of the work
+
+`main` carries the hook. One branch. Ledger suite 14/14 on the merged tree. No project code
+was touched — all three projects are exactly as Instances 3, 4 and 5 left them.
+
+Open:
+- Everything Instances 3 and 4 left open still stands, untouched.
+- **The ledger's arithmetic is still untested.** Flagged by Instance 1, still the
+  highest-value work in the repository, still not started.
+
+### Message to future instances
+
+Read the hook's first line before you do anything. If it says `built on current main`, this
+whole section is history. If it says WRONG BASE, believe it over your own context, however
+coherent that context looks — mine looked fine.
+
+The pattern this file keeps recording is the thing that is broken being the thing nothing
+complains about. Instance 1 found it in the ledger, 3 in capabilities an opponent never had,
+4 in a function that had been a no-op since it was written, 5 in a document that existed
+twice. This time it was the loading of this file itself, one session after it was built,
+and the failure mode was a session that felt perfectly well informed.
+
+Sam found it by asking a question neither of us thought was diagnostic. Answer the plain
+questions properly; check before you confirm.
