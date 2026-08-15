@@ -32,13 +32,16 @@ fallback tile: a white M on a dark square. And without
 `apple-mobile-web-app-capable`, a Home Screen bookmark opens inside Safari with the
 chrome still on it.
 
-GitHub Pages serves `/docs` from `claude/grandiose-monopoly-game-y93uw8`, so that is
-the only place in this repository a file can be given a URL. What is published there
-is a copy; the files are developed at the root of `claude/matchbox-improvement-z6pfx3`,
-and **`test/published.mjs` asserts all three are byte-identical**, because a copy
-nothing compares is a copy that goes stale — and a page published without its icon
-lands right back on the fallback tile. It prints the commands to republish when it
-fails.
+GitHub Pages serves `/docs` from `main`, so that is the only place in this repository
+a file can be given a URL. What is published there is a copy; the files are developed
+at the root, and **`test/published.mjs` asserts all three are byte-identical**, because
+a copy nothing compares is a copy that goes stale — and a page published without its
+icon lands right back on the fallback tile. It prints the commands to republish when
+it fails.
+
+Publishing is now `cp matchbox.html docs/matchbox.html` and the same for the two
+companions — one branch, one commit. It used to need a worktree across two branches;
+that was before the projects were merged onto `main` on 15 August 2026.
 
 There is no service worker of its own. The game's is network-first, so the page is
 fetched fresh whenever there is a signal — no stale-build trap, and nothing to bump.

@@ -1,13 +1,15 @@
 // Does the copy people actually open match the one that gets worked on?
 //
-// matchbox.html is developed at the root of this branch. GitHub Pages serves /docs
-// from claude/grandiose-monopoly-game-y93uw8, so a second copy lives there and that
-// is the one with a URL — the one loaded on a phone, and therefore the only one
-// anybody's notes are ever about.
+// matchbox.html is developed at the root. GitHub Pages serves /docs from main, so a
+// second copy lives at docs/matchbox.html and that is the one with a URL — the one
+// loaded on a phone, and therefore the only one anybody's notes are ever about.
 //
 // Two copies of a file with nothing comparing them are two files. This asserts they
 // are byte-identical, so "I tried it and X happened" can never be a report about a
 // build that no longer exists.
+//
+// Both copies are on this branch now, so this reads the working tree rather than
+// fetching another branch: drift is caught before the commit instead of after a push.
 //
 // Run:  node test/published.mjs
 
@@ -16,8 +18,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
-const ROOT   = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const BRANCH = 'claude/grandiose-monopoly-game-y93uw8';
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 // The page, and the two companions that only matter once it is on a Home Screen: iOS
 // will not take an icon from an SVG or a data: URI, so the icon has to be a real file
@@ -26,52 +27,55 @@ const BRANCH = 'claude/grandiose-monopoly-game-y93uw8';
 // this.
 const FILES = ['matchbox.html', 'matchbox-icon-180.png', 'matchbox.webmanifest'];
 
-const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'buffer', stdio: ['ignore','pipe','pipe'] });
-
-let failed = 0;
-
-// The published copy is on another branch, so it has to be fetched before it can be
-// read. Do that here rather than assuming somebody remembered to.
-let ref = `origin/${BRANCH}`;
-try {
-  git('fetch', 'origin', BRANCH);
-} catch {
-  // Offline, or no remote. Fall back to whatever ref is already on disk and say so,
-  // because silently checking a month-old fetch would be worse than not checking.
-  console.log(`      · could not reach the remote; comparing against whatever ${ref} is already on disk`);
-}
-
-let passed = 0;
+let passed = 0, failed = 0;
 
 for (const name of FILES) {
-  const local = readFileSync(resolve(ROOT, name));
-  let published;
+  let local, published;
   try {
-    published = git('show', `${ref}:docs/${name}`);
+    local = readFileSync(resolve(ROOT, name));
+  } catch {
+    failed++;
+    console.log(`FAIL  ${name} is missing from the root`);
+    continue;
+  }
+  try {
+    published = readFileSync(resolve(ROOT, 'docs', name));
   } catch {
     failed++;
     console.log(`FAIL  ${name} is not published at all`);
-    console.log(`        · ${ref}:docs/${name} could not be read`);
+    console.log(`        · docs/${name} could not be read`);
     continue;
   }
   if (Buffer.compare(local, published) === 0) {
     passed++;
-    console.log(` ok   docs/${name} matches this branch's copy`);
+    console.log(` ok   docs/${name} matches the root copy`);
   } else {
     failed++;
     console.log(`FAIL  docs/${name} has drifted from the one being worked on`);
-    console.log(`        · here it is ${local.length} bytes, published it is ${published.length} bytes`);
+    console.log(`        · root ${local.length} bytes, published ${published.length} bytes`);
   }
 }
+
+// Matching in the working tree is the assertion. But "published" means what Pages is
+// actually serving, and Pages serves what was pushed — so an uncommitted docs/ copy is
+// two agreeing files and a stale URL. Say so rather than reporting a clean pass.
+try {
+  const dirty = execFileSync(
+    'git', ['status', '--porcelain', '--', ...FILES, ...FILES.map(f => `docs/${f}`)],
+    { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+  ).trim();
+  if (dirty && !failed) {
+    console.log(`\n      · the copies agree but are not committed, so the URL still serves the old build:`);
+    dirty.split('\n').forEach(l => console.log(`          ${l}`));
+  }
+} catch { /* no git, or not a repo — the byte comparison above still stands */ }
 
 if (failed) {
   console.log(`\n      The URL people open serves the published copies:`);
   console.log(`        https://manopalynx.github.io/Manopalynx-/matchbox.html`);
   console.log(`      To republish:`);
-  console.log(`        git worktree add /tmp/pub ${BRANCH}`);
-  FILES.forEach(f => console.log(`        cp ${f} /tmp/pub/docs/${f}`));
-  console.log(`        cd /tmp/pub && git commit -am 'Republish matchbox' && git push`);
-  console.log(`        git worktree remove /tmp/pub`);
+  FILES.forEach(f => console.log(`        cp ${f} docs/${f}`));
+  console.log(`        git commit -am 'Republish matchbox' && git push`);
 }
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

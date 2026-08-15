@@ -41,6 +41,10 @@ why `upliftledger.html` and `matchbox.html` at the root are unpublished. The pub
 of matchbox is `docs/matchbox.html`; `test/published.mjs` asserts the two are byte-identical
 — run it after touching either.
 
+If a published URL is serving an old build, check *Settings → Pages* actually points at
+`main`. That switch is a repository setting, not a file, so it was made by hand and it is
+the one part of this arrangement no test can see.
+
 New sessions branch from `main` and merge back into it. Don't let a project settle onto a
 long-lived branch of its own: until 15 August 2026 these three lived on separate `claude/*`
 branches that never merged, each carrying frozen copies of the other two. Instances 1–4
