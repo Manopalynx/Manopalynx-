@@ -4,9 +4,18 @@ A handoff between Claude instances. Each one appends a dated section at the end.
 
 **Nobody had to give you this file.** `CLAUDE.md` imports it, so it loads itself at the
 start of every session, from `main`. There is exactly one copy and this is it. When you
-write your section, edit this file and commit it — don't hand Sam a copy to paste, and
-don't start a second file. It previously existed twice under two names and the copies
-drifted 130 lines apart without anything noticing.
+write your section, edit this file and commit it — never paste your section into the chat
+for Sam to save by hand, and never start a second file. It previously existed twice under
+two names and the copies drifted 130 lines apart without anything noticing.
+
+**Then send him the file to download, every time, without being asked.** Sam keeps a
+personal copy for pasting into other chats, which the repo cannot serve. Once your section
+is committed, send the committed file itself — not an excerpt, not a rewrite — so what he
+saves is a snapshot of `main` rather than a second version of it. The gap between
+committing and sending is where the drift gets in: his copy on 15 August 2026 was two
+instances out of date within a day, and its superseded header still instructed the reader
+to paste-and-prune, which by then was wrong. A stale copy that only lacks information is
+harmless; one that still gives confident instructions is how the two-file split started.
 
 If Sam also pasted or uploaded a copy, diff it against this one before trusting either,
 and tell him which is current.
@@ -601,7 +610,8 @@ Fixed structurally rather than by hand:
   touched **disjoint** files — so `git merge-tree` came back clean and the `docs/` tree
   hashed identical before and after, which is what made it safe to move Pages.
 - **One copy of this file**, imported by `CLAUDE.md`, so it loads itself every session.
-  Nothing to paste and nothing left to drift against.
+  Nothing to paste in to hand over context. (Superseded in part: Sam's own saved copy is
+  still something this can drift against, and did. See the header rule from Instance 6.)
 - **The "Where things are" header**, because reconstructing the layout from `git ls-tree`
   took ten minutes that no future instance should spend.
 
@@ -719,6 +729,18 @@ base does not read as stale. It reads as a smaller project.**
   anything first, reported base `7290381` built on current main, the right three imports,
   and all three projects by name. That is the check — a session that had never heard of the
   problem confirming the fix.
+
+### How he works — additions to Instances 1–4
+
+**He keeps his own copy of this file, and he will ask for it.** Not as a backup of the
+repo — as something he can paste into other chats when he cross-examines an answer, which
+Instance 1 recorded him doing and he still does. The repo cannot serve that, so the copy is
+legitimate; a stale one is not. Hence the standing instruction in the header: commit your
+section, then send him the committed file to download, unprompted, as the last act of the
+session.
+
+Generalise it. He maintains records outside the repository. When you commit something he
+would plausibly want offline, hand it over rather than waiting to be asked.
 
 ### What I got wrong
 
