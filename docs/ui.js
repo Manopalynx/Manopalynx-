@@ -1319,8 +1319,16 @@ function manageControls(p, h) {
     const back = h.citadel ? Math.floor(gc * 5 / 2) : Math.floor(gc / 2);
     c += `<button data-fn="sellDev|${h.sq}">− ${money(back)}</button>`;
   }
+  // Pledging and redeeming carry their figures too. Redeem is the one that was
+  // asked for -- a pledged square offered a button and no price, and the cost
+  // is the thing you are deciding about -- but a Pledge that stays silent
+  // beside a Redeem that does not would read as an oversight rather than a
+  // choice. Both are square-level, unlike the build prices on the heading:
+  // pledgeValue is half the list price and redeemCost is the marked-up way
+  // back, so the pair differs square by square and cannot be stated per set.
   if (!h.garrisons && !h.citadel) {
-    c += `<button data-fn="toggleMortgage|${h.sq}">${h.mortgaged ? 'Redeem' : 'Pledge'}</button>`;
+    const amount = h.mortgaged ? E.redeemCost(h.sq) : E.pledgeValue(h.sq);
+    c += `<button data-fn="toggleMortgage|${h.sq}">${h.mortgaged ? 'Redeem' : 'Pledge'} ${money(amount)}</button>`;
   }
   return c;
 }

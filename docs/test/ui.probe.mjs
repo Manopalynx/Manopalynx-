@@ -1009,8 +1009,18 @@ for (const device of DEVICES) {
     const p = G.players[G.cur];
     const eden = SETS.eden.sq;
     p.cash = 5000;
-    p.holdings = eden.map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
-    for (const q of G.players) if (q !== p) q.holdings = q.holdings.filter(h => !eden.includes(h.sq));
+    // Eden whole and unpledged, so the build and upkeep assertions below still
+    // have a complete set to work on -- plus ONE pledged square from another
+    // set, so the redeem half of the button check actually runs. Without it the
+    // sheet only ever renders Pledge and half that assertion is decoration.
+    const pledged = window.__BOARD().findIndex((b, i) => b.s && !eden.includes(i));
+    p.holdings = [
+      ...eden.map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 })),
+      { sq: pledged, garrisons: 0, citadel: 0, mortgaged: 1 }
+    ];
+    for (const q of G.players) {
+      if (q !== p) q.holdings = q.holdings.filter(h => !eden.includes(h.sq) && h.sq !== pledged);
+    }
     window.showManage();
     const rows = [...document.querySelectorAll('.sheet .rowState')].map(e => e.textContent);
     // The build and sell prices are set-level constants and live on the set
@@ -1020,8 +1030,12 @@ for (const device of DEVICES) {
     // worse than saying nothing because it reads as an answer.
     const costLines = [...document.querySelectorAll('.sheet .pgCost')].map(e => e.textContent.replace(/\s+/g, ' ').trim());
     // Nothing in this sheet may be clipped, which is the fault being fixed.
-    const clipped = [...document.querySelectorAll('.sheet .rowState, .sheet .pgCost span')]
+    const clipped = [...document.querySelectorAll('.sheet .rowState, .sheet .pgCost span, .sheet .rowbtns button')]
       .filter(e => e.scrollWidth > e.clientWidth + 0.5).map(e => e.textContent.trim());
+    // A pledged square must name what buying it back costs, and a live one what
+    // pledging it raises. Both are square-level and cannot go on the heading.
+    const pledgeBtns = [...document.querySelectorAll('.sheet [data-fn^="toggleMortgage|"]')]
+      .map(e => e.textContent.replace(/\s+/g, ' ').trim());
     const upkeepEmpty = document.querySelector('.sheet [data-mg="upkeep"]').textContent;
     // Build one, so upkeep is no longer zero and the breakdown has something to say.
     document.querySelector('.sheet [data-fn^="build|"]').click();
@@ -1030,7 +1044,7 @@ for (const device of DEVICES) {
     G.phase = 'end';
     window.__render();
     const endBtn = [...document.querySelectorAll('.act')].find(b => /End turn/.test(b.textContent));
-    return { rows, costLines, clipped, upkeepEmpty, upkeepBuilt, gc: SETS.eden.gc,
+    return { rows, costLines, clipped, pledgeBtns, upkeepEmpty, upkeepBuilt, gc: SETS.eden.gc,
              sellG: Math.floor(SETS.eden.gc / 2), sellC: Math.floor(SETS.eden.gc * 5 / 2),
              endLabel: endBtn ? endBtn.textContent.replace(/\s+/g, ' ').trim() : null };
   });
@@ -1043,8 +1057,14 @@ for (const device of DEVICES) {
   if (costs.costLines.length && !absent.length)
     pass(`the set heading states build and sell prices (${costLine})`);
   else fail(`heading prices wrong: line="${costLine}" missing=${absent.join(',')}`);
-  if (!costs.clipped.length) pass('no price or state line is clipped in the Holdings sheet');
+  if (!costs.clipped.length) pass('nothing is clipped in the Holdings sheet');
   else fail(`clipped in the Holdings sheet: ${costs.clipped.slice(0, 4).join(' | ')}`);
+  const pricedPledge = costs.pledgeBtns.filter(t => /₡\s?\d/.test(t));
+  const sawRedeem = costs.pledgeBtns.some(t => /^Redeem/.test(t));
+  const sawPledge = costs.pledgeBtns.some(t => /^Pledge/.test(t));
+  if (costs.pledgeBtns.length && pricedPledge.length === costs.pledgeBtns.length && sawRedeem && sawPledge)
+    pass(`pledge and redeem both name their price (${costs.pledgeBtns.filter(t => /^Redeem/.test(t))[0]}, ${costs.pledgeBtns.filter(t => /^Pledge/.test(t))[0]})`);
+  else fail(`pledge/redeem figures wrong: ${JSON.stringify(costs.pledgeBtns)} redeem=${sawRedeem} pledge=${sawPledge}`);
   if (/×/.test(costs.upkeepBuilt))
     pass(`upkeep is broken down once there is something to break down (${costs.upkeepBuilt})`);
   else fail(`upkeep shows no breakdown after building: "${costs.upkeepBuilt}"`);
