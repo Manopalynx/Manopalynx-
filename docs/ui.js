@@ -584,22 +584,24 @@ function bindActs() {
   });
 }
 
-// Open by default. The board is square and the screen is not, so shutting the
-// ledger leaves a gap nothing else can fill — that should be a choice the
-// player makes for a clearer board, not the state they are handed.
-let logOpen = true;
-function toggleLog() { logOpen = !logOpen; renderLog(); }
-
+// The ledger does not close any more.
+//
+// It used to be a button. Shutting it left a gap nothing else could fill --
+// the board is square and the screen is not -- so the reward for pressing it
+// was a mostly empty panel, and the usual way to press it was by accident,
+// reaching for the board. A control whose only outcomes are "no change" and
+// "looks broken" is not a choice worth offering, so it is a heading now and
+// not a tap target at all.
+//
+// The element keeps its size and place: it still names the ledger and counts
+// the entries, which is what anyone was reading it for.
 function renderLog() {
   const wrap = $('logWrap');
-  // In landscape the ledger has a column of its own and is always open; the
-  // toggle is hidden there, so the class must not be able to shut it.
-  const landscape = window.matchMedia('(orientation:landscape) and (max-height:560px)').matches;
-  wrap.classList.toggle('open', logOpen || landscape);
+  // Landscape gives the ledger a column of its own and hides the heading; the
+  // class is set unconditionally either way now.
+  wrap.classList.add('open');
   const count = G.log.length;
-  $('logToggle').innerHTML =
-    `<span>${logOpen ? 'The ledger' : esc(topLine())}</span><b>${logOpen ? '▾' : `▴ ${count}`}</b>`;
-  $('logToggle').onclick = toggleLog;
+  $('logHead').innerHTML = `<span>The ledger</span><b>${count}</b>`;
   $('log').innerHTML = G.log.map(l => {
     if (l.kind === 'leader') return `<div class="le leader">${esc(l.text)}</div>`;
     if (l.kind === 'voice') {
@@ -608,14 +610,6 @@ function renderLog() {
     }
     return `<div class="le"><span class="t">C${l.circuit}</span> ${esc(l.text)}</div>`;
   }).join('');
-}
-
-// The one line worth seeing when the ledger is shut.
-function topLine() {
-  const l = G.log[0];
-  if (!l) return '';
-  if (l.kind === 'voice') return `${chipName(G.players[l.who])}: ${l.text}`;
-  return l.text;
 }
 
 /* ============================================================ sheets */
@@ -808,7 +802,7 @@ function walk(path, done) {
 const ACTIONS = {
   act_roll, act_resolve, act_amend, act_end, act_rollAgain,
   showSquare, showManage, showTrade, showTithe, showRevolt, showFinal, showLedger, showDecks,
-  closeSheet, newGame, copyResult, toggleLog, act_payFee, act_pardon, showMenu, toggleScore, showPlayer,
+  closeSheet, newGame, copyResult, act_payFee, act_pardon, showMenu, toggleScore, showPlayer,
   showSettle, settlePledge, settleSellG, settleBreak, settleAuto, settleDone,
   buyNow, declineToAuction, takeCard, sealBid, sealClaim, endAuction, endContest,
   answerContract, build, raiseCitadel, sellDev, toggleMortgage, repay,
@@ -1316,7 +1310,15 @@ function manageControls(p, h) {
   let c = '';
   if (E.canBuild(G, p, h.sq)) c += `<button data-fn="build|${h.sq}">+G</button>`;
   if (E.canRaiseCitadel(G, p, h.sq)) c += `<button data-fn="raiseCitadel|${h.sq}">◆</button>`;
-  if (h.garrisons > 0 || h.citadel) c += `<button data-fn="sellDev|${h.sq}">−</button>`;
+  // What the sell button pays, on the button. It depends on what is standing
+  // there rather than on the set alone, so unlike the build prices it cannot
+  // live on the heading. Note a citadel does not clear the square -- it drops
+  // back to three garrisons, which is why it pays so much more.
+  if (h.garrisons > 0 || h.citadel) {
+    const gc = BOARD[h.sq].s ? SETS[BOARD[h.sq].s].gc : 0;
+    const back = h.citadel ? Math.floor(gc * 5 / 2) : Math.floor(gc / 2);
+    c += `<button data-fn="sellDev|${h.sq}">− ${money(back)}</button>`;
+  }
   if (!h.garrisons && !h.citadel) {
     c += `<button data-fn="toggleMortgage|${h.sq}">${h.mortgaged ? 'Redeem' : 'Pledge'}</button>`;
   }
@@ -1357,7 +1359,20 @@ function groupHoldings(holdings) {
       const held = groups.get(key).sort((a, b) => a.sq - b.sq);
       const total = key === '_fleet' ? FLEETS.length : key === '_util' ? UTILS.length
         : key.startsWith('_') ? held.length : SETS[key].sq.length;
-      return { key, label: label(key), colour: colour(key), held, total, complete: held.length >= total };
+      // Garrison cost is a property of the SET, not of a square, and so are the
+      // three figures derived from it. Fleets and utilities cannot be built on
+      // and carry none.
+      const gc = key.startsWith('_') ? 0 : SETS[key].gc;
+      return {
+        key, label: label(key), colour: colour(key), held, total,
+        complete: held.length >= total,
+        gc,
+        // Straight from the engine's own arithmetic: raiseCitadel charges gc,
+        // sellDevelopment pays gc/2 for a garrison and gc*5/2 for a citadel,
+        // both floored.
+        sellGarrison: Math.floor(gc / 2),
+        sellCitadel: Math.floor(gc * 5 / 2)
+      };
     });
 }
 
@@ -1420,9 +1435,23 @@ function showManage() {
   // refreshManage finds each row by [data-row] rather than by position, so
   // adding them cannot disturb the in-place update, and no row gains a line of
   // text. Growing a row is what made this list jump under a thumb once before.
-  for (const { colour, label, held, total, complete } of groupHoldings(p.holdings)) {
+  for (const { colour, label, held, total, complete, gc, sellGarrison, sellCitadel }
+       of groupHoldings(p.holdings)) {
     s += `<div class="pgHead" style="color:${colour}">${esc(label)}
       <span class="pgCount">${held.length} of ${total}${complete ? ' · complete' : ''}</span></div>`;
+    // What building here costs and what it sells back for. Shown once per set
+    // because every one of these is a set-level constant, and shown on every
+    // set rather than only the complete ones -- "what would this colour cost
+    // me" is a question you ask before you finish collecting it, not after.
+    //
+    // On the heading rather than in the rows on purpose. The row line already
+    // truncated mid-figure at "+G ₡2…" on a set with two buttons, and a row
+    // that grows to fit is the defect that walked this list out from under a
+    // thumb once before. The heading's height never changes.
+    if (gc) {
+      s += `<div class="pgCost"><span>+G ${money(gc)} · sell ${money(sellGarrison)}</span>
+        <span>◆ ${money(gc)} · sell ${money(sellCitadel)}</span></div>`;
+    }
     for (const h of held) {
       const b = BOARD[h.sq];
       s += `<div class="row" data-row="${h.sq}">
@@ -1462,15 +1491,13 @@ function refreshManage() {
   for (const h of p.holdings) {
     const row = root.querySelector(`[data-row="${h.sq}"]`);
     if (!row) continue;
-    // The +G button never said what it would take. The set's garrison cost is in
-    // the square panel, which is two taps away and the wrong moment.
-    const b = BOARD[h.sq];
-    const gc = b.s ? SETS[b.s].gc : 0;
-    let line = `${manageState(h)} · rent ${money(E.rentOf(G, h.sq, 7))}`;
-    if (E.canBuild(G, p, h.sq)) line += ` · +G ${money(gc)}`;
-    else if (E.canRaiseCitadel(G, p, h.sq)) line += ` · citadel ${money(gc)}`;
-    else if (gc && !h.mortgaged && h.garrisons < 3 && !h.citadel) line += ` · +G ${money(gc)}`;
-    row.querySelector('.rowState').textContent = line;
+    // The prices moved to the set heading, where they are stated in full and
+    // once. Appending them here ran the line past the two buttons on a
+    // buildable square and clipped it mid-figure -- "+G ₡2…" against a real
+    // cost of ₡200, which is worse than saying nothing, because it looks like
+    // an answer. What stays is what varies square by square.
+    row.querySelector('.rowState').textContent =
+      `${manageState(h)} · rent ${money(E.rentOf(G, h.sq, 7))}`;
     const controls = row.querySelector('.rowbtns');
     const next = manageControls(p, h);
     if (controls.innerHTML !== next) { controls.innerHTML = next; bindSheet(controls); }

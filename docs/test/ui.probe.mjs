@@ -1013,6 +1013,15 @@ for (const device of DEVICES) {
     for (const q of G.players) if (q !== p) q.holdings = q.holdings.filter(h => !eden.includes(h.sq));
     window.showManage();
     const rows = [...document.querySelectorAll('.sheet .rowState')].map(e => e.textContent);
+    // The build and sell prices are set-level constants and live on the set
+    // heading now, stated in full and once. They used to be appended to each
+    // row, where a buildable square carries two buttons and the line ran out of
+    // width -- it clipped to "+G ₡2…" against a real cost of ₡200, which is
+    // worse than saying nothing because it reads as an answer.
+    const costLines = [...document.querySelectorAll('.sheet .pgCost')].map(e => e.textContent.replace(/\s+/g, ' ').trim());
+    // Nothing in this sheet may be clipped, which is the fault being fixed.
+    const clipped = [...document.querySelectorAll('.sheet .rowState, .sheet .pgCost span')]
+      .filter(e => e.scrollWidth > e.clientWidth + 0.5).map(e => e.textContent.trim());
     const upkeepEmpty = document.querySelector('.sheet [data-mg="upkeep"]').textContent;
     // Build one, so upkeep is no longer zero and the breakdown has something to say.
     document.querySelector('.sheet [data-fn^="build|"]').click();
@@ -1021,12 +1030,21 @@ for (const device of DEVICES) {
     G.phase = 'end';
     window.__render();
     const endBtn = [...document.querySelectorAll('.act')].find(b => /End turn/.test(b.textContent));
-    return { rows, upkeepEmpty, upkeepBuilt, gc: SETS.eden.gc,
+    return { rows, costLines, clipped, upkeepEmpty, upkeepBuilt, gc: SETS.eden.gc,
+             sellG: Math.floor(SETS.eden.gc / 2), sellC: Math.floor(SETS.eden.gc * 5 / 2),
              endLabel: endBtn ? endBtn.textContent.replace(/\s+/g, ' ').trim() : null };
   });
-  if (costs.rows.some(r => r.includes(String(costs.gc))))
-    pass(`a holding row states what a garrison costs (${costs.rows[0]})`);
-  else fail(`no garrison cost on any Manage row: ${costs.rows.join(' | ')}`);
+  // All four figures, on the heading: what a garrison and a citadel cost, and
+  // what each sells back for. Asserted against the engine's own arithmetic
+  // rather than against literals.
+  const costLine = costs.costLines[0] || '';
+  const wantPrices = [costs.gc, costs.sellG, costs.sellC].map(String);
+  const absent = wantPrices.filter(n => !costLine.replace(/,/g, '').includes(n));
+  if (costs.costLines.length && !absent.length)
+    pass(`the set heading states build and sell prices (${costLine})`);
+  else fail(`heading prices wrong: line="${costLine}" missing=${absent.join(',')}`);
+  if (!costs.clipped.length) pass('no price or state line is clipped in the Holdings sheet');
+  else fail(`clipped in the Holdings sheet: ${costs.clipped.slice(0, 4).join(' | ')}`);
   if (/×/.test(costs.upkeepBuilt))
     pass(`upkeep is broken down once there is something to break down (${costs.upkeepBuilt})`);
   else fail(`upkeep shows no breakdown after building: "${costs.upkeepBuilt}"`);

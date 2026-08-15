@@ -117,6 +117,11 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
   font-family:var(--m);font-size:12px;letter-spacing:.04em;text-transform:uppercase;
   margin:14px 0 4px;padding-bottom:3px;border-bottom:1px solid var(--rule)}
 .pgHead .pgCount{color:var(--dim);font-size:11px;letter-spacing:.02em;text-transform:none}
+/* What a garrison and a citadel cost on this set, and what each sells back for.
+   Set-level constants, so they belong on the heading and not repeated per row --
+   and its height never changes, so it cannot move a row under a thumb. */
+.pgCost{display:flex;justify-content:space-between;gap:10px;font-family:var(--m);
+  font-size:11px;color:var(--dim);padding:0 2px 6px;letter-spacing:.01em}
 .pgRow{display:flex;align-items:baseline;gap:8px;padding:4px 0;font-size:14px}
 .pgRow .pgName{flex:1 1 auto;color:var(--body);min-width:0;overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap}
@@ -282,11 +287,11 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
      above it, rather than leaving a hole under the buttons. */
   margin-top:auto;border-top:1px solid var(--rule)}
 .logWrap.open{flex:1 1 auto;margin-top:0}
-.logToggle{width:100%;min-height:46px;border:none;border-radius:0;background:transparent;
+.logHead{width:100%;min-height:46px;border:none;border-radius:0;background:transparent;
   display:flex;align-items:center;justify-content:space-between;gap:10px;
   padding:8px 12px;text-align:left;font-family:var(--s);font-size:13.5px;color:var(--body)}
-.logToggle span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto}
-.logToggle b{font-family:var(--m);font-size:11px;color:var(--dim);flex:0 0 auto;
+.logHead span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto}
+.logHead b{font-family:var(--m);font-size:11px;color:var(--dim);flex:0 0 auto;
   letter-spacing:.06em}
 .log{display:none;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
   border-top:1px solid var(--rule);padding:8px 12px calc(var(--safe-b) + 10px);
@@ -415,7 +420,7 @@ td:first-child,th:first-child{text-align:left}
   .logWrap{grid-area:log;margin-top:0;min-height:0;border-top:1px solid var(--rule);
     margin-right:6px}
   .logWrap .log{display:block}          /* the column exists to hold it */
-  .logToggle{display:none}              /* and there is no slack to reclaim */
+  .logHead{display:none}                /* and there is no slack to reclaim */
   .log{padding-bottom:8px}
   .sheet{max-height:94dvh}
   .pchip{padding:5px 7px}
@@ -433,7 +438,7 @@ td:first-child,th:first-child{text-align:left}
   <div class="board" id="board"></div>
   <div class="acts" id="acts"></div>
   <div class="logWrap" id="logWrap">
-    <button class="logToggle" id="logToggle"></button>
+    <div class="logHead" id="logHead"></div>
     <div class="log" id="log"></div>
   </div>
 </div>
