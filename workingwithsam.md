@@ -576,3 +576,94 @@ one of them would have shipped a confident wrong answer to someone who cannot ru
 He cannot check your work. He is phone-only and his screenshots are the only instrument
 pointed at the real thing. That is not a reason to be careful in the abstract — it is the
 reason to verify before he sees it, every time, and to tell him plainly when you did not.
+
+---
+
+## Instance 5 — 15 August 2026
+
+Claude Code, cloud session, same repo. **No project work.** Sam brought this file itself
+for review and the session became a repository reorganisation. All three projects are
+untouched apart from their documents.
+
+### What changed, and why
+
+This file existed **twice**, under two names, on two branches — `workingwithsam.md`
+stopping at Instance 3, and `working-with-sam.md` current. They had drifted 130 lines
+apart and nothing in the repository was ever going to notice. Instances 1, 3 and 4 each
+rediscovered that defect class in code; this was the same thing, in the file that warns
+about it.
+
+Fixed structurally rather than by hand:
+
+- **`main` exists** and carries all three projects. They had been on three `claude/*`
+  branches that never merged, each holding frozen copies of the other two. The merge was
+  mechanical — all three shared one base (the ledger branch tip) and Grandiose and matchbox
+  touched **disjoint** files — so `git merge-tree` came back clean and the `docs/` tree
+  hashed identical before and after, which is what made it safe to move Pages.
+- **One copy of this file**, imported by `CLAUDE.md`, so it loads itself every session.
+  Nothing to paste and nothing left to drift against.
+- **The "Where things are" header**, because reconstructing the layout from `git ls-tree`
+  took ten minutes that no future instance should spend.
+
+Every instance section was left verbatim. Sam asked for that directly: the progression
+across sessions, and the mistakes that recur, are the point of them.
+
+### What I got wrong
+
+**I nearly reported a suite green that had crashed before running a single check.** I
+backgrounded the matchbox sim suite; the harness notification said *"completed (exit code
+0)"* and the tail of the log looked like ordinary output. The suite had died on
+`browserType.launch` and exited 1 — the 0 was my own wrapper `echo`, not the test. Trusting
+it would have told Sam all five suites passed on a merged tree while two had never run.
+
+Instance 3 and Instance 4 both close by saying *measure your measurements*. This is that
+again, one layer out: **an exit code is only as trustworthy as the thing you attached it
+to.** Read the suite's own summary line, and count its `ok` lines independently. When the
+suite really did finish, all three agreed — that agreement is the check, not any one of them.
+
+**The cause was a version trap now pinned shut.** `npm i playwright` installs the current
+release, which looks only for the Chromium build it shipped with. This environment has
+build 1194 (Chromium 141), so the correct pin is exactly `1.56.0`. `package.json` now
+carries it, without a caret — `^1.56.0` resolves straight back to the release that breaks.
+Symptom is *"Executable doesn't exist at .../chromium_headless_shell-1234"* and it kills
+every browser suite at launch, which reads as a broken repository rather than a wrong
+dependency. Run `npm i`, not `npm i playwright`, and set
+`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`.
+
+### Things that keep being true — additions
+
+- **A merge can make a document stale without touching it.** Bringing the projects together
+  turned three true statements false at once: `test/published.mjs` fetched the published copy
+  out of a branch by name, `MATCHBOX.md` described publishing as a two-branch worktree dance,
+  and the README listed matchbox but not Grandiose as "also in this repository". None of them
+  changed; the world around them did. After any structural move, grep for the old names.
+- **The one thing no test can see is a repository setting.** Pages pointing at `main`, and
+  `main` being the default branch, are settings rather than files. Nothing in the suite will
+  ever notice if they are wrong.
+
+### State of the work
+
+Merged, verified, pushed, tree clean. Every suite run on the merged tree:
+
+| suite | result |
+|---|---|
+| Grandiose, 13 files | 315 passed, 0 failed |
+| Matchbox sim | 96 passed, 0 failed |
+| Matchbox UI | 50 passed, 0 failed |
+| Ledger interaction | 14 passed, 0 failed |
+| Published copies | 3 passed, 0 failed |
+
+Open:
+- **Two repository settings only Sam can change** (see above). If a published URL serves an
+  old build, or a new session starts somewhere odd, check those before checking anything else.
+- Everything Instances 3 and 4 left open is untouched and still stands.
+
+### Message to future instances
+
+The reorganisation was the easy half. The half worth keeping: this file spent two weeks
+existing twice, and **both copies were confident**. Nothing compared them, so the drift was
+free to grow — which is exactly what Instance 1 found in the ledger, Instance 3 in the
+capabilities an opponent never had, and Instance 4 in a `fitLabels` that had been a no-op
+since it was written.
+
+Assert the agreement, or accept that two copies of a thing are two things.
