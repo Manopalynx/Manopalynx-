@@ -6,6 +6,10 @@ household £/mo against a monthly target, keep callbacks, and report at month en
 `upliftledger.html` is the whole application. No build step, no server, no install.
 Everything is stored in the browser's `localStorage` on the machine you open it on.
 
+> **Also in this repository:** `matchbox.html`, an unrelated single-file falling-sand
+> box with a heat model under it. Nothing to do with the ledger and it shares no code.
+> **[MATCHBOX.md](MATCHBOX.md)** carries its design, its measured figures and its tests.
+
 ## Running it
 
 Open `upliftledger.html` in a browser. That is the entire setup.

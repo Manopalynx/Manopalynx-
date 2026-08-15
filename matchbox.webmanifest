@@ -1,0 +1,13 @@
+{
+  "name": "Matchbox",
+  "short_name": "Matchbox",
+  "description": "A falling-sand box with a heat model under it.",
+  "start_url": "./matchbox.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#241F1B",
+  "theme_color": "#241F1B",
+  "icons": [
+    { "src": "matchbox-icon-180.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ]
+}
