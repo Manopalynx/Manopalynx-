@@ -1103,6 +1103,63 @@ for (const device of DEVICES) {
   if (bundle.ok && bundle.gets === 2 && bundle.gives === 2)
     pass('a contract can carry two squares each way');
   else fail(`bundle selection: picked=${bundle.ok}, ${bundle.gets} gets, ${bundle.gives} gives`);
+
+  // The contract sheet states what the other side is holding, and states it for
+  // the side actually SELECTED. Switching counterparty has to move the figure:
+  // a line that renders the first opponent's purse and never updates would look
+  // completely right on the screen Sam reported from, and be a lie on every
+  // other tab of it.
+  // Written to the seat count rather than assuming it. This probe's table is
+  // two seats at this point, so a check hard-coded to two opponents throws
+  // rather than reports -- and a check that throws tells you nothing about the
+  // thing it was written for.
+  const purse = await page.evaluate(() => {
+    const G = window.__G();
+    const me = G.players[G.cur];
+    const others = G.players.filter(p => p.i !== me.i);
+    G.phase = 'end';
+
+    // Everything this block disturbs, put back. It sets purses and switches the
+    // selected counterparty, and switching one clears the squares picked so
+    // far -- the direction check further down reads both, and reported a 900
+    // credit swing against the 100 on the table until this restore existed.
+    const purses = G.players.map(p => ({ p, cash: p.cash, debt: p.debt }));
+    const TR = window.__TR();
+    const before = { to: TR.to, get: [...TR.get], give: [...TR.give], cash: TR.cash, direction: TR.direction };
+
+    // Distinct purses so a figure belonging to the wrong seat cannot pass, and
+    // one marker so the debt half is exercised wherever there is a seat for it.
+    others.forEach((o, n) => { o.cash = 1234 + n * 1000; o.debt = n === 1 ? 456 : 0; });
+    const seen = [];
+    window.showTrade();
+    for (const o of others) {
+      document.querySelector(`.sheet [data-fn="tradeSet|to|${o.i}"]`)?.click();
+      const el = document.querySelector('.sheet [data-them="cash"]');
+      seen.push({
+        want: o.cash,
+        debt: o.debt,
+        text: el ? el.textContent.replace(/\s+/g, ' ').trim() : null
+      });
+    }
+    window.closeSheet();
+
+    for (const { p, cash, debt } of purses) { p.cash = cash; p.debt = debt; }
+    TR.to = before.to;
+    TR.get.length = 0; TR.get.push(...before.get);
+    TR.give.length = 0; TR.give.push(...before.give);
+    TR.cash = before.cash;
+    TR.direction = before.direction;
+    return { seats: G.players.length, seen };
+  });
+  const holds = (text, n) => !!text && text.replace(/[,₡]/g, '').includes(String(n));
+  const wrong = purse.seen.filter(s => !holds(s.text, s.want)
+    || (s.debt && !/debt/i.test(s.text || '')));
+  if (purse.seen.length && !wrong.length) {
+    const note = purse.seen.length > 1 ? 'and follows the tab' : `${purse.seats}-seat table, one opponent`;
+    pass(`the contract sheet shows the other side's purse, ${note}`);
+  } else {
+    fail(`counterparty purse wrong: ${JSON.stringify(wrong)}`);
+  }
   if (bundle.heads.some(h => /2 of 3/.test(h))) pass(`the sheet counts the bundle (${bundle.heads.join(' / ')})`);
   else fail(`no running count in the headings: ${bundle.heads.join(' / ')}`);
   if (/Completes/.test(bundle.sum)) pass(`the totals flag what a bundle completes (${bundle.sum})`);

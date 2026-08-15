@@ -1542,8 +1542,19 @@ function drawTrade() {
     s += `<div class="warnbox" style="border-color:var(--gold);background:rgba(217,164,65,.08)">
       <b>${esc(BOARD[suggestion.get].n)}</b> would complete ${esc(SETS[BOARD[suggestion.get].s].n)} for you.</div>`;
   }
-  s += `<div class="opts" style="margin-bottom:16px">${others.map(o =>
+  s += `<div class="opts" style="margin-bottom:10px">${others.map(o =>
     `<button class="opt${TR.to === o.i ? ' on' : ''}" data-fn="tradeSet|to|${o.i}">${esc(chipName(o))}</button>`).join('')}</div>`;
+
+  // What the other side is actually holding. Without it you are pricing a deal
+  // against a purse you cannot see -- and the purse is small: measured over 30
+  // games the whole table holds about 15% of the cash it started with from
+  // circuit 36 on, so an opponent sitting on 140 credits is normal rather than
+  // remarkable. Asking them to pay 500 is then not a hard bargain, it is a
+  // thing that cannot happen. Their marker shows too, because one blocks them
+  // from contracting at all.
+  s += `<div class="stat" data-them="cash" style="margin-bottom:16px">
+    <span>${esc(chipName(them))} holds</span>
+    <span>${money(them.cash)}${them.debt ? ` · <b style="color:var(--warn)">debt ${money(them.debt)}</b>` : ''}</span></div>`;
 
   // Tapping a square adds or removes it. Up to RULES.tradeMax a side, which is
   // what makes "two lesser worlds for the one that closes a set" possible at all.
