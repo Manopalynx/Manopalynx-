@@ -2560,7 +2560,18 @@ npm i playwright
 node test/matchbox-sim.mjs     # 96 checks — the simulation
 node test/matchbox-ui.mjs      # 50 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
+
+node test/compact.mjs         # a copy with the commentary stripped, for pasting into a chat
 ```
+
+`matchbox.html` is already self-contained — one Google Fonts `@import` is the only external
+thing in it, and it degrades to a fallback offline — so handing the whole file to something
+that can read one file needs no build step. It is ~300kB and about 75k tokens, of which the
+commentary is 63%. `test/compact.mjs` writes a stripped copy at ~113kB and ~29k tokens for
+when the reader only needs to see the thing work rather than know why every number is what
+it is. That output is deliberately not committed: a second copy with nothing comparing it to
+the first is the exact mistake `published.mjs` exists to catch. Regenerate it, and verify it
+by pointing the two suites at it — done that way it passes all 96 and all 50 unchanged.
 
 Chromium only. Neither needs a server; the page is loaded over `file://`.
 
