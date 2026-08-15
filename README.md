@@ -82,9 +82,13 @@ figures and assert the app produces them.
 ## Tests
 
 ```
-npm i playwright
+npm i                          # installs the pinned Playwright — see package.json
 node test/interaction.mjs
 ```
+
+Playwright is pinned to an exact version on purpose: each release only looks for the
+Chromium build it shipped with, so an unpinned install fails every browser suite at
+launch with *"Executable doesn't exist"*. `npm i playwright` is the wrong command now.
 
 Each scenario seeds `localStorage`, loads the real page, performs one interaction and
 asserts three things together: nothing threw, the entry count held, and the content

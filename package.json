@@ -1,0 +1,8 @@
+{
+  "name": "manopalynx",
+  "private": true,
+  "description": "Playwright is pinned exactly, not with a caret. The browser suites launch the Chromium already installed at PLAYWRIGHT_BROWSERS_PATH, and each Playwright release only looks for the one build it shipped with. ^1.56.0 resolves to a newer release that hunts for a build that is not there, and every browser suite dies on launch with 'Executable doesn't exist'. Check /opt/pw-browsers/chromium-*/chrome-linux/chrome --version and match it before changing this.",
+  "dependencies": {
+    "playwright": "1.56.0"
+  }
+}

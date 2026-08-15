@@ -2559,7 +2559,7 @@ the glass.
 ## Tests
 
 ```
-npm i playwright
+npm i                          # pinned Playwright; `npm i playwright` installs the wrong one
 node test/matchbox-sim.mjs     # 96 checks — the simulation
 node test/matchbox-ui.mjs      # 50 checks — the hand
 node test/published.mjs        #  3 checks — the copies with the URL still match
