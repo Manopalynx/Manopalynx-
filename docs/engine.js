@@ -1706,19 +1706,43 @@ function bundleThreat(after, who, gives) {
   return total;
 }
 
+// What one credit is worth to this player right now, as a multiple of face.
+//
+// A player sitting on plenty values a credit at face. One that is short values
+// it more, because the alternative uses of it -- an upkeep bill it cannot
+// cover, a marker compounding at 10% a turn -- are worth more than the board.
+// Scaled against sellNeed, which already names the figure each of them treats
+// as short, and measured against cash net of debt: money already owed is not
+// money in hand.
+//
+// Bounded by construction. `short` is clamped into 0..1, so the weight can
+// never leave 1 .. 1 + cashHunger however deep the hole gets, and a player with
+// a huge marker cannot be talked into anything by a single credit.
+export function liquidityWeight(p) {
+  const need = RULES.sellNeed[p.persona] ?? RULES.sellNeed.spector;
+  const hunger = RULES.cashHunger[p.persona] ?? RULES.cashHunger.spector;
+  const spare = Math.max(0, p.cash - p.debt);
+  const short = Math.max(0, Math.min(1, (need - spare) / Math.max(1, need)));
+  return 1 + hunger * short;
+}
+
 export function contractValue(G, who, get, give, cashIn, otherIdx) {
   const gets = sqList(get), gives = sqList(give);
+  // The cash leg only. The board legs are already in `who`'s own currency --
+  // aiValue prices them for this player -- and weighting those too would just
+  // scale the whole comparison and change nothing.
+  const cash = cashIn * liquidityWeight(who);
   if (otherIdx === undefined || otherIdx === null) {
     // No counterparty named: fall back to the old per-square sum. Only reachable
     // from a caller that predates bundles.
-    let v = cashIn;
+    let v = cash;
     for (const sq of gets) v += aiValue(G, who, sq);
     for (const sq of gives) { v -= aiValue(G, who, sq); v -= threatPenalty(G, who, sq); }
     return v;
   }
   const after = boardAfter(G, who.i, otherIdx, gets, gives);
   const gain = positionValue(after, after.players[who.i]) - positionValue(G, who);
-  return cashIn + gain - bundleThreat(after, who, gives);
+  return cash + gain - bundleThreat(after, who, gives);
 }
 
 const BAR = { spector: 60, varan: 240, vale: -40 };

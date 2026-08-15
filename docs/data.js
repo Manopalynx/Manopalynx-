@@ -19,7 +19,7 @@
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-export const BUILD = 'grandiose-v53';
+export const BUILD = 'grandiose-v54';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -419,6 +419,32 @@ export const RULES = {
   // the end; Vale is perfectly happy to address the crowd from where he is.
   facilityPayUntil: { spector: 0.30, varan: 0.10, vale: 0.55 },
   facilityFeeReserve: 350,       // and not if paying it would empty the purse
+
+  // ---- what a credit is worth when you have none ------------------------
+  // Opponents priced squares in LIST money while the game is played in much
+  // less than that. Measured over 30 games: 8,000 credits are dealt, the whole
+  // buyable board is 5,690, and by circuit 36 the board is entirely owned and
+  // the table holds about 1,400 between four -- 15% of the start, where it then
+  // sits. So the second half of every game is played on a sixth of the cash the
+  // price list was written for.
+  //
+  // Against that, an opponent wanting a median 3.3x list for one square is not
+  // greed, it is a unit mismatch: positionValue is denominated in list prices
+  // and the economy is not. Varan holding ~140 credits still asked ~950 for a
+  // 180 square, which is the offer Sam reported being refused.
+  //
+  // So a credit is worth MORE to a player who is short of them. contractValue
+  // weighs the cash leg by this, scaled against sellNeed -- the threshold that
+  // already says what each of them counts as short. It cuts both ways and that
+  // is the point: a broke opponent wants cash more, and also parts with it more
+  // reluctantly, which is exactly how being poor works.
+  //
+  // Varan's 0.6 is the lowest deliberately. seekSale already establishes that
+  // he keeps a thin purse on purpose and must not become the softest seller at
+  // the table just for being empty -- his sellNeed of 400 is the lowest too, so
+  // he reads as short less often for the same money. Vale's 1.2 matches his
+  // sellDiscount of 0.45: he is the one who would rather have the money.
+  cashHunger: { spector: 1.0, varan: 0.6, vale: 1.2 },
 
   // ---- letting a vassal go ---------------------------------------------
   // An overlord pays vassalUpkeep every turn and collects a tithe only when
