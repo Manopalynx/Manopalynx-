@@ -36,12 +36,22 @@ These are not tests. They are measuring instruments, run by hand when a number
 needs explaining:
 
 ```
+node docs/test/sweep.mjs [games]       # how often a game reaches its ending, by table
 node docs/test/balance.mjs [games]     # sweeps the economy levers
 node docs/test/diagnose.mjs [games]    # why games end the way they do
 node docs/test/auctions.mjs [games]    # how much of a game is auctions
 node docs/test/denial.mjs [games]      # how often Varan buys to block rather than to own
 node docs/test/ties.mjs                # how often a sealed bid ends level
+node docs/test/vassals.mjs [games]     # what holding a vassal costs, and how often it cannot be paid
+node docs/test/varan.mjs [games]       # what an opponent demands for one square, as a multiple of list
+node docs/test/money.mjs [games]       # the money supply across a game
 ```
+
+**Read the table name on any figure from `sweep.mjs`.** Three of its four tables
+seat two humans; the game as it is actually played is one human against three
+opponents, and that table is the last one. An effect can point one way on a
+two-human table and the other way on his — the vassal upkeep does exactly that —
+so a conquest figure without its table beside it means nothing.
 
 ## Why the engine is separate from the page
 

@@ -857,23 +857,43 @@ That single fact explained three separate complaints:
   list prices and the economy is not. It was a unit mismatch, not greed.
 - The conquest ending fires *because* of the scarcity. Bankruptcy is how absorption happens.
 
-**And therefore: every relief of the money pressure costs the conquest ending.** Measured
-four separate ways this session — halving vassal upkeep, releasing vassals freely,
-releasing on distress, cash-aware pricing. All four cost conquest, in proportion to how
-much pressure they removed. Sam's complaints and the game's designed ending are the same
-mechanism seen from two sides. **Do not treat that as a bug to fix. Price it and give him
-the choice.**
+From that I concluded, and told him, that **every relief of the money pressure costs the
+conquest ending** — measured four ways, all costing conquest in proportion to the pressure
+removed. Halving the vassal upkeep alone reads as 78% down to 57% at three seats.
+
+**That conclusion was half right, and the other half arrived by accident.** Late in the
+session Sam asked for the upkeep halved anyway, alongside a rule stopping `liquidate()`
+stripping a vassal on the way into vassalage. Measured together, on his own table, conquest
+went **up**: 35% → 45% at 72 circuits, 43% → 58% at 96, 47% → 62% at 120. Only 48 circuits
+fell, 28% → 22%.
+
+What I had missed: **the ending needs vassals HELD to the finish, not merely created.** The
+old bill did make vassals — and then bankrupted the overlords before they could hold anyone
+to the end. Stranded lord-turns fell 39% → 18% and releases 29 → 18, and that is where the
+extra conquests came from.
+
+So the honest version: money pressure creates arrangements and destroys the people holding
+them, and which effect dominates depends on the rest of the board. **Measure combinations,
+not levers.** Two changes that each look like a cost can be a gain together, and nothing
+short of running both at once will say so.
 
 ### What I got wrong
 
 Same pattern as every instance before. Measurement caught all of it; my own measurements
 were wrong nearly as often as the game was.
 
-1. **I told Sam halving the vassal upkeep would strengthen the conquest ending. It weakens
-   it.** I had measured on a four-seat table with one human; the project's own `sweep.mjs`
-   tables seat two humans and showed the opposite — three seats 78% down to 57% at 120
-   circuits. I stated the wrong direction confidently and had to walk it back a message
-   later. **The table shape was the variable, and I had not thought about it at all.**
+1. **I got the direction of the vassal upkeep wrong twice, in opposite directions.** First
+   I told Sam halving it would strengthen the ending; `sweep.mjs` said the reverse — three
+   seats 78% down to 57% — and I walked it back. Then, standing on that corrected figure, I
+   warned him halving it would cost the ending, and shipped it alongside the liquidation
+   rule: conquest rose at every length but the shortest. Both measurements were real.
+   **The first missed the table shape, the second missed the interaction.** A lever measured
+   alone tells you about the lever, not about the game.
+2. **An overclaim in code rather than to him.** I wrote in `bind` that transferring an
+   absorbed overlord's vassals meant "there is no longer such a thing as a vassal's vassal".
+   My own probe printed a deepest chain of 2 on the next run: a player who is ALREADY a
+   vassal can still take one of their own. Both that comment and `netWorth`'s were corrected
+   and `vassals.test.mjs` now pins the depth-two case, so changing it has to be deliberate.
 2. **My first `aiRelease` released whenever a lord was short.** Opponents shed the vassals
    the conquest ending needs and it fell 24 points. Gating it on a debt marker already
    outstanding — genuine distress, not a thin turn — brought the cost back to 8–15.
@@ -894,6 +914,26 @@ were wrong nearly as often as the game was.
    deliberate.
 7. **I put the wrong test count in a commit message** — 323 against 325 — and amended it
    before it reached `main`.
+8. **I wrote "probe green" into a commit message before I had the result.** The run I was
+   reading had died on a dead local server and printed a stack trace, not a summary. It
+   happened to be true when I checked afterwards. Instance 5's lesson one turn from being
+   repeated: an exit code is only as trustworthy as the thing you attached it to — and so is
+   a tail of output that merely looks like output.
+9. **A probe failure I never explained.** One run reported `no cash field` on the contract
+   sheet; it did not reproduce in three further runs or in a direct repro, and I could not
+   identify it. Told Sam it was unresolved rather than fixed. If it returns, it is real.
+10. **Half of two new checks never ran, both times because of the fixture.** The
+   counterparty-purse check could not test "follows the selected tab" on a two-seat table,
+   and the pledge/redeem check only ever saw `Pledge`, because nothing in the fixture was
+   pledged — and redeem was the half Sam had asked for. **Print what a check covered, not
+   only that it passed**: the first says `2-seat table, one opponent` in its own output,
+   which is the only reason the gap stayed visible.
+11. **I destroyed this file with a careless `str.replace`.** I took a slice from "State of
+   the work" to "### Message to future instances" — and `str.index` found Instance 1's copy
+   of that heading, not mine, so the slice was empty and `replace("", ...)` inserted the new
+   text between every character of a 984-line file. It came back as 2.4 million lines. Git
+   had it. **Anchor on something unique, assert the anchor matched exactly once, and check
+   the line count afterwards** — every edit in this file after that one does.
 
 ### Things that keep being true — additions
 
@@ -904,10 +944,15 @@ were wrong nearly as often as the game was.
   upkeep 48% of the time against a 19% baseline holding none, and you do not *become* an
   overlord by being poor — you become one by being the creditor somebody went bankrupt
   into. Lords should be richer than average.
-- **Ask what the instrument covers before believing it.** `sweep.mjs` has three tables and
-  every one seats two humans. **Sam plays one human and three opponents.** Every conquest
-  number in this repository before today was measured on a game he does not play. The
-  probe's trade table is two seats, so the multi-opponent case has no coverage either.
+- **Ask what the instrument covers before believing it.** `sweep.mjs` seated two humans at
+  all three of its tables. **Sam plays one human and three opponents.** Every conquest
+  number in this repository, for as long as that file has existed, described a game he does
+  not play — a real number from a real instrument, which is exactly what makes it
+  convincing. It had me report an effect backwards to him twice.
+  **Fixed this session**: his table is in there now and named, and the labels spell out the
+  composition instead of abbreviating to `2`, `3`, `4`, because composition was the
+  invisible part. `docs/README.md` carries the warning. The probe's trade table is still two
+  seats, so the multi-opponent trade case remains uncovered — the same defect, one file on.
 - **A request for a thing that already exists means it exists somewhere else.** "Group by
   colour in the holdings section" was already done — on the *player* sheet. The Manage
   sheet he actually builds and pledges from sorted by square index. Look for the second
@@ -922,18 +967,29 @@ were wrong nearly as often as the game was.
   entirely** — the proxy answers 403 to CONNECT. So the published page, the one thing Sam
   actually looks at, cannot be checked from here at all. Merge, then tell him to confirm
   the build marker reads the version you just shipped. He is the instrument.
-- **A flaky check is worse than no check.** `the background is alive` measures pixel
-  movement against a fixed threshold and reports 34, 200, 124, 619, 91 across viewports run
-  to run. One run dipped to 28 and failed. It is not wired to anything I changed. Left
-  alone and flagged, because guessing at a threshold would make it lie in the other
-  direction.
+- **A flaky check is worse than no check — it teaches you to read a red probe as noise.**
+  `the background is alive` reported 34, 200, 124, 619, 91, then 28 and 53 across runs on
+  one unchanged build against a threshold of 4, and tripped it twice in a session.
+  **The sampling window was not the cause; where it sampled was.** The corners are the right
+  place to ask whether the field is DRAWN — they are what the disc never reaches — and the
+  wrong place to ask whether it MOVES, because the sixteen twinklers are placed randomly
+  over the whole canvas and barely any land in a corner on an unlucky load. The two claims
+  now measure on the region each is about, taking the peak across four samples rather than
+  one arbitrary phase: 2327–2666 pixels across five viewports and two runs.
+  **When a threshold looks wrong, check what the sample can see before touching the number.**
+- **A figure that varies square by square cannot live on a heading, and vice versa.** The
+  garrison and citadel prices are properties of the SET, so repeating them per row ran the
+  line past the buttons and clipped it mid-figure — `+G ₡2…` against a real ₡200, which is
+  worse than silence because it reads as an answer. Pledge and redeem are the opposite,
+  square-level, so they belong on their own buttons. Ask which kind a number is before
+  choosing where to put it.
 
 ### State of the work
 
-v57 on `main`, one branch, working tree clean. 325 unit tests across 15 files, browser
-probe green on all five viewports, three new measuring instruments.
+v62 on `main`, one branch, working tree clean. **331 unit tests across 17 files**, browser
+probe green on all five viewports, four measuring instruments that did not exist before.
 
-Shipped this session:
+Shipped this session, each merged to `main` as it landed so Sam could play it:
 
 | build | what |
 |---|---|
@@ -942,43 +998,57 @@ Shipped this session:
 | v55 | Holdings sheet grouped by colour set |
 | v56 | contract sheet shows the other side's purse and marker |
 | v57 | sealed bid names the colour set and who already holds it |
+| v58 | doubles: settle the square, then roll again, in one press |
+| v59 | the ledger no longer collapses; Holdings states build and sell prices |
+| v60 | pledge and redeem name their price |
+| v61 | absorbing an overlord takes the oaths sworn to them |
+| v62 | vassal upkeep halved, and `liquidate()` stops stripping a vassal on the way in |
 
 New instruments, all `docs/test/`: `vassals.mjs` (the vassal economy), `varan.mjs` (what an
 opponent demands per square, by binary search on the real acceptance test), `money.mjs` (the
-money supply across a game). New suites: `names.test.mjs`, `pricing.test.mjs`.
+money supply across a game). New suites: `names.test.mjs`, `pricing.test.mjs`,
+`vassals.test.mjs`. `sweep.mjs` gained Sam's own table and lost its misleading labels.
+
+**Everything on his original Grandiose list is shipped.** The two numbers that decide how
+the vassal economy feels are now the ones he chose rather than the ones it was born with.
 
 Open, in the order I would take them:
 
-- **The vassal upkeep decision is Sam's and still unanswered.** Leave it and conquest sits
-  at 78% at three seats; halve it and the drain goes but conquest falls to 57%. Both
-  measured. `data.js` carries the numbers at `vassalUpkeep`.
-- **Doubles** — settle the square, then roll again. He specified it exactly: the player
-  settles where they land before the next throw. The engine already has `rollAgain` and
-  `doublesRun` and `endTurn` already says a doubles roll buys another; the friction is the
-  UI making you press End turn to reach it. Likely UI-only, untraced.
-- **Vassals should transfer when you absorb their overlord.** Real design change —
-  `netWorth` is commented "one level deep by construction".
-- **Partial payment into vassalage** — hand over the cash, keep the properties, stay in the
-  game earning for both. Touches `holdingsValue`, which is both what the final sheet prints
-  and the key the winner is sorted by. That is the field Instance 3 saw go NaN.
-- **The screen jumps** on turn start and end turn. Not diagnosed. Probe it before theorising
-  — the ledger's ~200px jump took four measured strategies to prove it was not scroll.
+- **Chains of two.** A player who is already a vassal can take a vassal of their own, and
+  the deep one contributes nothing to the top overlord. Left standing and pinned by a test.
+  Flattening it fully is a design decision nobody has needed yet.
+- **48 circuits is the one length v62 cost.** Conquest 28% → 22% there while every longer
+  length rose. If short games start to feel flat, that is the number to look at first.
+- **The probe has no multi-opponent trade table.** The case Sam actually plays is uncovered
+  for contracts exactly the way `sweep.mjs` was uncovered for endings.
+- **One unexplained probe failure**, `no cash field`, seen once and never again.
 - Everything Instances 3 and 4 left open still stands, untouched.
 
 ### Message to future instances
 
-The measurements this session were worth more than the code. Three instruments now exist
-that did not, and each one killed something I was confident about — including, twice,
+The measurements this session were worth more than the code. Four instruments now exist
+that did not, and each one killed something I was confident about — including, three times,
 something I had already told Sam.
 
-The specific trap here is **the shape of the table you measure on.** I got a real number,
-from a real instrument, on a game Sam does not play, and reported the wrong direction of an
-effect because of it. `sweep.mjs` has seated two humans since it was written and nobody had
-noticed, because a number that arrives with a table next to it looks like a fact.
+**The trap I fell into twice is the shape of what you measure on.** First the table:
+`sweep.mjs` had seated two humans since it was written and Sam plays one against three, so
+a real number from a real instrument described a game he does not play, and I reported the
+direction of an effect backwards because of it. That one is fixed — his table is in there
+now. Then the *combination*: standing on the corrected figure I warned him that halving the
+vassal upkeep would cost the ending, and shipped it beside a second change that made
+conquest rise at every length but the shortest. Both measurements were honest. Neither was
+the answer, because I had measured levers and the game is played with all of them at once.
 
-And the economy finding generalises past this game: every complaint Sam raised about money
-was true, and every fix for it costs the ending, because the shortage *is* the ending. When
-a thing he reports as broken turns out to be load-bearing, say so with the figures and let
-him decide. He took "here are both numbers, it is your call" better than he would have
-taken a quiet rebalance, and he still has not spent that decision — which is fine. It is
-his to spend.
+So: **a number is only true about the thing you varied, on the table you varied it on.**
+When a change is going out beside another change, measure them together before saying what
+they will do — the interaction is not the sum, and here it had the opposite sign.
+
+The economy finding survives in a narrower form. Money pressure both creates arrangements
+and destroys the people holding them, and which dominates depends on the rest of the board.
+The instinct that made it work was Sam's, not mine: he asked for the upkeep halved on the
+plain ground that an arrangement nobody wants to keep is a tax rather than a mechanic, and
+he was right where my figures said he would not be.
+
+Which is the thing to carry: when he reports something as broken, the report is data even
+when your measurements disagree. Bring him the numbers, say plainly which way they point,
+and let him spend the decision. He has now spent two, and both improved the game.
