@@ -31,7 +31,7 @@
 
 import { RULES, BOARD, SETS } from '../data.js';
 import { playGame } from './harness.mjs';
-import { netWorth, upkeep } from '../engine.js';
+import { upkeep } from '../engine.js';
 
 const HUMAN = n => ({ name: n, kind: 'human' });
 const AI = (n, p) => ({ name: n, kind: 'ai', persona: p });
@@ -107,4 +107,4 @@ console.log(`\n  Cash peaks at circuit ${peak.c} on ${peak.v} credits, ${Math.ro
 console.log(`  By circuit ${last} the table holds ${end}, which is ${Math.round(end / started * 100)}% of the start`);
 console.log(`  and ${Math.round(end / Math.max(1, peak.v) * 100)}% of the peak.`);
 console.log(`  Cash per player at the end: ${Math.round(end / SEATS.length)}. A single garrison on the`);
-console.log(`  cheapest set costs ${Math.min(...Object.values(await import('../data.js').then(m => m.SETS)).map(s => s.gc))}.\n`);
+console.log(`  cheapest set costs ${Math.min(...Object.values(SETS).map(s => s.gc))}.\n`);
