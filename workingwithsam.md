@@ -653,10 +653,16 @@ Merged, verified, pushed, tree clean. Every suite run on the merged tree:
 | Ledger interaction | 14 passed, 0 failed |
 | Published copies | 3 passed, 0 failed |
 
+Both repository settings were made and confirmed the same day: `main` is the default branch
+(verified — the remote's `HEAD` points at it), and Pages builds from `/docs` on `main`
+(verified from the settings screen). Nothing in the suite can see either, so if a published
+URL serves an old build, or a session starts somewhere odd, check those two before checking
+anything else.
+
 Open:
-- **Two repository settings only Sam can change** (see above). If a published URL serves an
-  old build, or a new session starts somewhere odd, check those before checking anything else.
 - Everything Instances 3 and 4 left open is untouched and still stands.
+- The `CLAUDE.md` import of this file was never provable from inside the session that wrote
+  it. If you are reading this because it loaded on its own, it works — delete this line.
 
 ### Message to future instances
 
