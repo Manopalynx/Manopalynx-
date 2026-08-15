@@ -6,9 +6,13 @@ household £/mo against a monthly target, keep callbacks, and report at month en
 `upliftledger.html` is the whole application. No build step, no server, no install.
 Everything is stored in the browser's `localStorage` on the machine you open it on.
 
-> **Also in this repository:** `matchbox.html`, an unrelated single-file falling-sand
-> box with a heat model under it. Nothing to do with the ledger and it shares no code.
-> **[MATCHBOX.md](MATCHBOX.md)** carries its design, its measured figures and its tests.
+> **Also in this repository**, unrelated to the ledger and sharing no code with it:
+> - `matchbox.html`, a single-file falling-sand box with a heat model under it.
+>   **[MATCHBOX.md](MATCHBOX.md)** carries its design, measured figures and tests.
+> - `docs/`, *Grandiose* — a Monopoly-shaped game set in Sam's novel, and the only
+>   thing GitHub Pages publishes. **[docs/README.md](docs/README.md)** carries its detail.
+>
+> `workingwithsam.md` is the running handover between sessions and maps all three.
 
 ## Running it
 

@@ -1,15 +1,51 @@
 # Working with Sam — running context
 
 A handoff between Claude instances. Each one appends a dated section at the end.
-Paste the whole file into a new chat to hand over the context this one had to earn.
 
-**Keep it pruned.** This gets pasted into every future session, so it costs context every
-time. Correct entries in place rather than stacking contradictory versions, and delete
-what has gone stale. If it stops being worth its length, cut it back hard.
+**Nobody had to give you this file.** `CLAUDE.md` imports it, so it loads itself at the
+start of every session, from `main`. There is exactly one copy and this is it. When you
+write your section, edit this file and commit it — don't hand Sam a copy to paste, and
+don't start a second file. It previously existed twice under two names and the copies
+drifted 130 lines apart without anything noticing.
 
-**Don't duplicate the repo.** `CLAUDE.md` imports `README.md` automatically, so the
-target browser, how to run the tests, known issues and coverage gaps arrive on their own.
-This file is for what the repo can't say.
+If Sam also pasted or uploaded a copy, diff it against this one before trusting either,
+and tell him which is current.
+
+**Keep the instance sections.** Sam has asked for these to stay: the progression across
+sessions, and the mistakes that recur, are the point of the file. Prune *within* a section
+when something in it goes stale or gets superseded — don't collapse or merge the sections
+themselves.
+
+**Don't duplicate the repo.** `CLAUDE.md` also imports `README.md`, so the ledger's target
+browser, tests, known issues and coverage gaps arrive on their own, and each project
+carries its own document (below). This file is for what those can't say.
+
+---
+
+## Where things are
+
+One branch, `main`, carries all three projects. They share no code — three separate things
+that happen to live in one repository.
+
+| project | what it is | files | its document |
+|---|---|---|---|
+| **Ledger** | sales-desk call and uplift ledger; the original project | `upliftledger.html`, `test/interaction.mjs` | `README.md` |
+| **Grandiose** | Monopoly-shaped game set in Sam's novel | `docs/` | `docs/README.md` |
+| **Matchbox** | single-file falling-sand toy with a heat model | `matchbox.html`, `test/matchbox-*.mjs` | `MATCHBOX.md` |
+
+**Read the project's own document before forming a view of it.** Each carries the design
+detail and every measured figure. Don't re-derive them.
+
+**GitHub Pages serves `/docs` from `main`.** That is why the folder is called `docs`, and
+why `upliftledger.html` and `matchbox.html` at the root are unpublished. The published copy
+of matchbox is `docs/matchbox.html`; `test/published.mjs` asserts the two are byte-identical
+— run it after touching either.
+
+New sessions branch from `main` and merge back into it. Don't let a project settle onto a
+long-lived branch of its own: until 15 August 2026 these three lived on separate `claude/*`
+branches that never merged, each carrying frozen copies of the other two. Instances 1–4
+below were written under that arrangement, so a branch name in one of those sections is
+history, not an instruction.
 
 ---
 
@@ -406,3 +442,133 @@ And the pattern across all three instances now: the thing that is broken is usua
 thing nothing complains about. Nine defects, then seven, then five capabilities an
 opponent never had and a rule that never once fired — none of them threw, warned, or
 looked wrong on screen.
+
+---
+
+## Instance 4 — 15 August 2026
+
+Claude Code, cloud session, same repo. **A third project**: `matchbox.html` at the repo
+root — a single-file falling-sand toy with a heat model under it. Not the ledger, not
+Grandiose. A long multi-day span, a dozen or so batches.
+
+**`MATCHBOX.md` carries the design and every measured figure — read it, do not re-derive
+it.** What follows is only what the repo cannot say.
+
+### Setup
+
+- Branch `claude/matchbox-improvement-z6pfx3`. The file is developed at the root; the copy
+  with a URL lives at `docs/matchbox.html` on the Grandiose branch, because Pages serves
+  `/docs` from there. Publish with a worktree, then **`node test/published.mjs`** — it
+  asserts the two are byte-identical, so "I tried it and X happened" is never a report
+  about a build that no longer exists.
+- **`matchbox.html` is already self-contained.** Unlike Grandiose it needs no bundle step;
+  one Google Fonts `@import` is the only external thing and it degrades fine. ~300kB,
+  ~75k tokens. A comment-stripped copy is ~115kB / ~29k tokens and passes both suites
+  unchanged — comments are 63% of the file.
+- Two suites: `test/matchbox-sim.mjs` (96 checks, the simulation) and
+  `test/matchbox-ui.mjs` (50, the hand). **The sim suite runs longer than a 600s bash
+  timeout** — background it and poll for "passed,".
+- He is on an iPhone 16 PWA. His grid is **131×153**; the sim suite runs 143×220 and the
+  UI suite 390×844. Scenes must be laid out from `f` and `cx` and clamped, or they run off
+  the bottom of his screen and not of mine.
+
+### How he works — additions to Instances 1–3
+
+Everything above held. New:
+
+**Standing instruction, and honour it every turn:** *"do it in the order you think makes
+sense and at the end of each turn say what you plan to do with the next turn so I can spot
+any suggestions before implementing."* End every reply with a concrete plan for the next
+one. He does use it to redirect.
+
+**He sends structured design proposals now** — a table of name, verb and rationale
+(*"Mud / slump-dry / changes terrain"*, *"Mercury / conduct-displace / unusual fluid
+physics"*). Answer each on its own merits with a measurement, not a vibe.
+
+**He challenges a pitch, and he is right to.** I pitched mud warmly; he asked whether it
+was worth having *"when we already have dirt and rich dirt"*. Measuring killed it — and
+the collision was not where either of us expected. Dirt and rich soil are 16.6 apart on the
+palette metric and fine; the problem is **oil**, because a dark brown slowish liquid is
+what oil already looks like. Four of five candidate browns failed against it.
+
+**Once he has the evidence he decides tersely and exactly.** *"For time do pause, quarter,
+half, Normal, double."* That is the whole specification and it is complete. Build it.
+
+### What I got wrong — and it is the same shape as Instance 3
+
+**My probes were wrong more often than the app was.** I rediscovered this independently,
+which is the argument for it being in this file:
+
+1. **Printed `__maxT()` at the end of a run and labelled it "peak" — twice.** Reported that
+   two scenes never caught fire when both had reached 1200°C and cooled again. The measured
+   number was real; the word next to it was a lie.
+2. **Measured the volcano's crater at a cell the cone did not occupy**, concluded the vent
+   was broken. The vent was fine; the shaft was capped by two rows of its own cone, which
+   is a different bug that the wrong probe hid.
+3. **Deleted molten wax's own `flow` field while trying to measure it** — passed `null` to
+   a helper whose contract was "leave it alone" — and reported that wax spreads like water.
+4. **Compared colours with plain CIEDE2000 when the suite uses `survives()`**, which
+   discards six points of lightness because the draw loop's tint noise covers that much.
+   I said 7.8 against ice; the suite said 5.5 and was right.
+
+**Checks that compare a scene across time need a scene that holds still.** Four of the five
+presets are alive or pouring by design. I wrote that same bug three separate times before
+it stuck.
+
+**A metric that cannot express the question collapses when you add tolerance to it.** The
+best lesson of the session. `fitLabels` asked `scrollWidth > clientWidth + 0.5` — and the
+label shrink-wraps its own text, so those two are *equal* whenever it fits. Every attempt
+to give it headroom put every drawer straight onto the minimum font at every width. **That
+is the tell**: when a tolerance change flips everything at once, the number has no room in
+it and you are measuring the wrong thing. Measure the text off a canvas against the chip.
+
+**The suites block the network, so they never saw the real webfont.** Space Mono is wider
+than the fallback, so a whole class of clipped labels was invisible to a green suite. One
+UI check now lets the font through and refuses to run without it.
+
+Confident claims killed by measurement, as usual: that a coal forge could melt steel (it
+cannot — combustion caps at `FLAME_PEAK` 1200 and steel melts at 1400); that wax could be a
+trigger near lava (three arrangements, every one self-fired inside three seconds); that
+steel could carry a signal along a bar (it is a wire, not a battery — a brief charge never
+warms the far end).
+
+### Things that keep being true — additions
+
+- **The thing that is broken is the thing nothing complains about.** Third session running.
+  `fitLabels` had been very nearly a no-op since it was written; `spend()` clamped at
+  `AMBIENT`, so the coldest thing in the box could not make anything colder than the room;
+  a chip `max-width` of 112px was a rule no drawer ever reached. None threw or looked wrong.
+- **Mutation-test every check you write.** Several of mine passed with the bug present. If
+  removing the fix does not turn the check red, the check is decoration.
+- **Derive, never restate.** `--chipn` from the drawers, `SAVE_V` in one place, `CAPS` from
+  the table. Every number written twice in this file has eventually disagreed with itself —
+  including a save format that the page rejected because encode said 4 and load said 3.
+- **A preset that cannot be made to pay off is the worst thing in the box, because it looks
+  like a promise.** Three of six designed scenes were cut on measurement rather than taste.
+  Say plainly which and why; he took that better than five working scenes and a vague sixth.
+
+### State of the work
+
+96 sim checks, 50 UI, 3 published, tree clean and pushed. Neutral room, weather, liquid
+nitrogen, five presets, an empty hand, five speeds and five save slots all shipped and
+measured. He stopped here to start something else and will come back.
+
+Open, in the order I would take them:
+- **The Cascade** — a Rube Goldberg preset, cut after four attempts. Everything learned is
+  written into the source where it used to be. Worth one more try built around a **long fuse
+  as its clock**, which is the only signal measured to carry reliably over distance.
+- **Mercury** — approved in principle, unbuilt. Measure before promising: solids are static
+  in this engine, so the steel-floating-on-mercury moment may simply not appear. Powders and
+  liquids would layer on it; that may be all of it.
+- **Glue and slime** — the interesting halves both need cell-to-cell connectivity, which the
+  file does not have. Leave until there is a reason to build that for its own sake.
+
+### Message to future instances
+
+The pattern is now three sessions old and it was mine again this time: **measure your
+measurements.** Four of my errors here were in the probe rather than the program, and every
+one of them would have shipped a confident wrong answer to someone who cannot run a test.
+
+He cannot check your work. He is phone-only and his screenshots are the only instrument
+pointed at the real thing. That is not a reason to be careful in the abstract — it is the
+reason to verify before he sees it, every time, and to tell him plainly when you did not.
