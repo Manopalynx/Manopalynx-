@@ -1644,17 +1644,45 @@ for (const device of DEVICES) {
       return out;
     };
     const first = corners();
-    // Longer than the shortest twinkle period (2600ms). At 1400ms this sampled
-    // part of a cycle and the count swung between 23 and 286 across viewports
-    // on one build — close enough to the threshold to fail on phase alone.
-    await new Promise(r => setTimeout(r, 2800));
-    const second = corners();
-    let lit = 0, changed = 0, peak = 0;
-    for (let i = 0; i < first.length; i++) {
-      if (first[i] > 8) lit++;
-      const d = Math.abs(first[i] - second[i]);
-      if (d > 3) changed++;
-      if (d > peak) peak = d;
+    let lit = 0;
+    for (const a of first) if (a > 8) lit++;
+
+    // LIVENESS is measured over the whole canvas, not the corners, and that is
+    // the fix for a check that had been failing at random.
+    //
+    // The corners are the right place to ask whether the field is DRAWN -- they
+    // are what the disc never reaches. They are the wrong place to ask whether
+    // it MOVES: the sixteen twinklers are placed with Math.random over the
+    // whole canvas, the corner region is about a fifth of it, so on an unlucky
+    // load barely any land there and a live background reports almost no
+    // movement. Across runs on one unchanged build this came in at 34, 200,
+    // 124, 619, 91 and then 28 and 53 pixels, tripping a threshold of 4.
+    // Lengthening the window to 2800ms had already been tried and is not the
+    // cause; where it sampled was.
+    //
+    // Every twinkler is in frame over the whole canvas, and the peak across
+    // several samples is taken rather than one arbitrary phase of the cycle, so
+    // the answer no longer depends on which moment or which seed it caught.
+    const step = 4;                       // every 4th pixel, for speed
+    const frame = () => {
+      const d = g.getImageData(0, 0, W, H).data;
+      const out = [];
+      for (let i = 0; i < W * H; i += step) out.push(d[i * 4 + 3]);
+      return out;
+    };
+    const base = frame();
+    let changed = 0, peak = 0;
+    for (let n = 0; n < 4; n++) {
+      await new Promise(r => setTimeout(r, 700));
+      const now = frame();
+      let c = 0, pk = 0;
+      for (let i = 0; i < base.length; i++) {
+        const d = Math.abs(base[i] - now[i]);
+        if (d > 3) c++;
+        if (d > pk) pk = d;
+      }
+      if (c > changed) changed = c;
+      if (pk > peak) peak = pk;
     }
     return { sampled: first.length, lit, changed, peak,
              pct: +(100 * changed / Math.max(1, lit)).toFixed(1) };
