@@ -1086,6 +1086,51 @@ function declineToAuction(sitOut) {
   tick();
 }
 
+// Who already holds what of this square's group. The thing you need at a sealed
+// bid and could not see: a square is worth one price to somebody holding none of
+// its colour and quite another to the player one short of the set, and that
+// player is sitting at the table with you.
+//
+// Ownership is public -- it is painted on the board -- so showing it in a sheet
+// only one player may look at gives nothing away. What it removes is having to
+// hold the board in your head at the one moment the sheet covers it.
+//
+// Members come from the same arrays the rest of the game counts sets with, so
+// this cannot disagree with the board about what a set is.
+function groupStanding(sq) {
+  const b = BOARD[sq];
+  const members = b.s ? SETS[b.s].sq : b.t === 'f' ? FLEETS : b.t === 'u' ? UTILS : null;
+  if (!members) return null;
+  const counts = G.players
+    .map(p => ({ p, n: members.filter(i => { const o = E.ownerOf(G, i); return o && o.i === p.i; }).length }))
+    .filter(x => x.n > 0)
+    .sort((a, b2) => b2.n - a.n);
+  return {
+    label: b.s ? SETS[b.s].n : b.t === 'f' ? 'Fleets' : 'Utilities',
+    colour: colourOf(b) || 'var(--dim)',
+    total: members.length,
+    free: members.filter(i => !E.ownerOf(G, i)).length,
+    counts
+  };
+}
+
+// The group rows for a sheet about one square. Empty string when the square
+// belongs to no group at all, so a caller can drop it in unconditionally.
+function standingRows(sq) {
+  const st = groupStanding(sq);
+  if (!st) return '';
+  const held = st.total - st.free;
+  let s = `<div class="stat"><span><span class="swatch" style="background:${st.colour}"></span>${esc(st.label)}</span>
+    <span>${held} of ${st.total} held</span></div>`;
+  for (const { p, n } of st.counts) {
+    const closes = n === st.total - 1 && st.free === 1;
+    s += `<div class="stat sub2"><span>${esc(chipName(p))}</span>
+      <span>${n} of ${st.total}${closes ? ' · this closes it' : ''}</span></div>`;
+  }
+  if (!st.counts.length) s += `<div class="stat sub2"><span>nobody holds any of it yet</span><span></span></div>`;
+  return s;
+}
+
 function showBid() {
   const a = G.auction;
   const p = G.players[a.queue[a.at]];
@@ -1098,6 +1143,7 @@ function showBid() {
     ${a.queue.length > 1 ? `<div class="warnbox"><b>Pass the phone to ${esc(p.name)}.</b>
       Nobody sees any bid until every bid is in.</div>` : ''}
     <div class="stat"><span>List price</span><span>${money(b.pr)}</span></div>
+    ${standingRows(a.sq)}
     <div class="stat"><span>You hold</span><span>${money(p.cash)}</span></div>
     <div class="stat"><span>Landing frequency</span><span>${TRAFFIC[a.sq].toFixed(2)}%</span></div>
     ${b.s ? `<div class="stat"><span>Set payback</span><span>${E.paybackTurns(b.s, TRAFFIC)} turns</span></div>` : ''}

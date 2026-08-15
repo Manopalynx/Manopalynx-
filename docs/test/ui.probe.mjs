@@ -1151,6 +1151,54 @@ for (const device of DEVICES) {
     TR.direction = before.direction;
     return { seats: G.players.length, seen };
   });
+  // The sealed-bid sheet names the square's colour group and says who already
+  // holds what of it. Driven through the real phase machine -- openAuction then
+  // a tick -- rather than by calling the renderer, so the routing is exercised
+  // too. showBid is not in ACTIONS and so is not on window; that is not a
+  // reason to reach past the game to reach it.
+  const auction = await page.evaluate(() => {
+    const G = window.__G(), E = window.__E(), SETS = window.__SETS();
+    const eden = SETS.eden.sq;
+    const snapshot = {
+      phase: G.phase,
+      auction: G.auction,
+      holdings: G.players.map(p => ({ p, h: p.holdings }))
+    };
+    const me = G.players[G.cur];
+    const other = G.players.find(q => q !== me);
+    // Two of Eden to the other seat, the third unowned and going under the
+    // hammer -- so they are one short with exactly one free, which is the case
+    // the sheet is meant to make impossible to miss.
+    for (const q of G.players) q.holdings = [];
+    other.holdings = [eden[0], eden[1]].map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+
+    E.openAuction(G, eden[2]);
+    window.__tick();
+    const sheet = document.querySelector('.sheet');
+    // The set name off the SWATCH ROW, not off the whole sheet. Read from the
+    // sheet at large it was true with the feature deleted -- the name turns up
+    // elsewhere -- so that third of the assertion was decoration until it was
+    // pinned to the row it is actually about.
+    const headRow = sheet ? [...sheet.querySelectorAll('.stat')].find(e => e.querySelector('.swatch')) : null;
+    const text = headRow ? headRow.textContent.replace(/\s+/g, ' ').trim() : '';
+    const swatches = sheet ? sheet.querySelectorAll('.swatch').length : 0;
+    const subs = sheet ? [...sheet.querySelectorAll('.stat.sub2')].map(e => e.textContent.replace(/\s+/g, ' ').trim()) : [];
+
+    window.closeSheet();
+    G.phase = snapshot.phase;
+    G.auction = snapshot.auction;
+    for (const { p, h } of snapshot.holdings) p.holdings = h;
+    return { text, swatches, subs, setName: SETS.eden.n, them: other.name };
+  });
+  const named = auction.text.includes(auction.setName);
+  const counted = auction.subs.some(s => /2 of 3/.test(s));
+  const closes = auction.subs.some(s => /closes it/i.test(s));
+  if (named && auction.swatches >= 1 && counted && closes) {
+    pass(`the bid sheet names the set and who holds it (${auction.subs.join(' | ')})`);
+  } else {
+    fail(`bid sheet standing wrong: named=${named} swatches=${auction.swatches} subs=${JSON.stringify(auction.subs)}`);
+  }
+
   const holds = (text, n) => !!text && text.replace(/[,₡]/g, '').includes(String(n));
   const wrong = purse.seen.filter(s => !holds(s.text, s.want)
     || (s.debt && !/debt/i.test(s.text || '')));
