@@ -1546,6 +1546,37 @@ for (const device of DEVICES) {
   else if (built.spent === built.gc && built.fromPool === 1 && built.garrisons === 1) {
     pass('building through Manage charges the set cost and draws from the pool');
   } else fail(`building misbehaved: ${JSON.stringify(built)}`);
+
+  // The Holdings sheet groups by set the same way the player sheet does, and
+  // the headings must sit BETWEEN rows rather than inside one. refreshManage
+  // finds rows by [data-row], so a heading cannot disturb it -- but a heading
+  // rendered inside a row would grow the row, and growing a row in this exact
+  // list is what once walked it out from under a thumb mid-tap.
+  const grouped = await page.evaluate(() => {
+    const G = window.__G ? window.__G() : null;
+    const p = G.players[G.cur];
+    const eden = window.__SETS().eden.sq;
+    p.holdings = [
+      ...eden.map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 })),
+      { sq: window.__BOARD().findIndex(b => b.t === 'f'), garrisons: 0, citadel: 0, mortgaged: 0 }
+    ];
+    window.showManage();
+    const sheet = document.querySelector('.sheet');
+    const heads = [...sheet.querySelectorAll('.pgHead')];
+    return {
+      heads: heads.map(h => h.textContent.trim().split('\n')[0].trim()),
+      insideARow: heads.filter(h => h.closest('[data-row]')).length,
+      rows: sheet.querySelectorAll('[data-row]').length,
+      // Every row still finds itself by attribute, which is what the in-place
+      // refresh depends on.
+      refreshable: p.holdings.every(h => !!sheet.querySelector(`[data-row="${h.sq}"]`))
+    };
+  });
+  if (grouped.heads.length >= 2 && grouped.insideARow === 0 && grouped.refreshable) {
+    pass(`the Holdings sheet groups by set (${grouped.heads.join(', ')}) with ${grouped.rows} rows intact`);
+  } else {
+    fail(`Holdings grouping wrong: ${JSON.stringify(grouped)}`);
+  }
   await page.evaluate(() => window.closeSheet());
 
   if (errors.length) {

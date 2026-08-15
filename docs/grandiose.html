@@ -464,7 +464,7 @@ __m.data = (function () {
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-const BUILD = 'grandiose-v54';
+const BUILD = 'grandiose-v55';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -5972,6 +5972,36 @@ function manageControls(p, h) {
 //
 // Rent is the figure that actually decides a trade, so it is the one shown
 // against each square, at its current development.
+// Holdings arranged by colour set, because a set is the unit that changes rent,
+// and "2 of 3" is the thing you are actually reading for. Fleets, utilities and
+// anything setless fall to the end under their own headings.
+//
+// One implementation on purpose. The player sheet grouped its list and the
+// Holdings sheet you actually build from did not, which is how "group by
+// colour" came back as a request for a thing that already half existed.
+// Returned in a fixed order so two sheets cannot disagree about it either.
+function groupHoldings(holdings) {
+  const groups = new Map();
+  for (const h of holdings) {
+    const b = BOARD[h.sq];
+    const key = b.s || (b.t === 'f' ? '_fleet' : b.t === 'u' ? '_util' : '_other');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(h);
+  }
+  const label = key => key === '_fleet' ? 'Fleets' : key === '_util' ? 'Utilities'
+    : key === '_other' ? 'Other' : SETS[key].n;
+  const colour = key => key === '_fleet' ? 'var(--fleet)' : key === '_util' ? 'var(--util)'
+    : key === '_other' ? 'var(--dim)' : SETS[key].c;
+  return [...groups.keys()]
+    .sort((a, b) => (a.startsWith('_') ? 1 : 0) - (b.startsWith('_') ? 1 : 0) || a.localeCompare(b))
+    .map(key => {
+      const held = groups.get(key).sort((a, b) => a.sq - b.sq);
+      const total = key === '_fleet' ? FLEETS.length : key === '_util' ? UTILS.length
+        : key.startsWith('_') ? held.length : SETS[key].sq.length;
+      return { key, label: label(key), colour: colour(key), held, total, complete: held.length >= total };
+    });
+}
+
 function showPlayer(i) {
   const p = G.players[i];
   if (!p) return;
@@ -5995,30 +6025,10 @@ function showPlayer(i) {
   if (!p.holdings.length) {
     s += `<p style="color:var(--dim);font-size:15px;margin-top:14px">Holds nothing yet.</p>`;
   } else {
-    // Grouped by colour set, because a set is the unit that changes rent, and
-    // "2 of 3" is the thing you are actually reading for.
-    const groups = new Map();
-    for (const h of p.holdings) {
-      const b = BOARD[h.sq];
-      const key = b.s || (b.t === 'f' ? '_fleet' : b.t === 'u' ? '_util' : '_other');
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(h);
-    }
-    const label = key => key === '_fleet' ? 'Fleets' : key === '_util' ? 'Utilities'
-      : key === '_other' ? 'Other' : SETS[key].n;
-    const colour = key => key === '_fleet' ? 'var(--fleet)' : key === '_util' ? 'var(--util)'
-      : key === '_other' ? 'var(--dim)' : SETS[key].c;
-    const order = [...groups.keys()].sort((a, b) =>
-      (a.startsWith('_') ? 1 : 0) - (b.startsWith('_') ? 1 : 0) || a.localeCompare(b));
-
-    for (const key of order) {
-      const hs = groups.get(key).sort((a, b) => a.sq - b.sq);
-      const total = key === '_fleet' ? FLEETS.length : key === '_util' ? UTILS.length
-        : key.startsWith('_') ? hs.length : SETS[key].sq.length;
-      const complete = hs.length >= total;
-      s += `<div class="pgHead" style="color:${colour(key)}">${esc(label(key))}
-        <span class="pgCount">${hs.length} of ${total}${complete ? ' · complete' : ''}</span></div>`;
-      for (const h of hs) {
+    for (const { colour, label, held, total, complete } of groupHoldings(p.holdings)) {
+      s += `<div class="pgHead" style="color:${colour}">${esc(label)}
+        <span class="pgCount">${held.length} of ${total}${complete ? ' · complete' : ''}</span></div>`;
+      for (const h of held) {
         const b = BOARD[h.sq];
         const rent = E.rentOf(G, h.sq);
         const dev = h.citadel ? 'citadel' : h.garrisons ? `${h.garrisons} garrison${h.garrisons === 1 ? '' : 's'}` : 'bare';
@@ -6046,12 +6056,21 @@ function showManage() {
   }
   if (!p.holdings.length) s += `<p style="color:var(--dim);font-size:15px;margin-top:14px">Nothing held.</p>`;
 
-  for (const h of [...p.holdings].sort((a, b) => a.sq - b.sq)) {
-    const b = BOARD[h.sq];
-    s += `<div class="row" data-row="${h.sq}">
-      <div class="rowMain"><div class="rowName" style="color:${b.s ? SETS[b.s].c : 'var(--body)'}">${esc(b.n)}</div>
-      <div class="rowState"></div></div>
-      <div class="rowbtns">${manageControls(p, h)}</div></div>`;
+  // Grouped by set, the same way and in the same order as the player sheet --
+  // see groupHoldings. The headings sit BETWEEN rows and never inside one:
+  // refreshManage finds each row by [data-row] rather than by position, so
+  // adding them cannot disturb the in-place update, and no row gains a line of
+  // text. Growing a row is what made this list jump under a thumb once before.
+  for (const { colour, label, held, total, complete } of groupHoldings(p.holdings)) {
+    s += `<div class="pgHead" style="color:${colour}">${esc(label)}
+      <span class="pgCount">${held.length} of ${total}${complete ? ' · complete' : ''}</span></div>`;
+    for (const h of held) {
+      const b = BOARD[h.sq];
+      s += `<div class="row" data-row="${h.sq}">
+        <div class="rowMain"><div class="rowName" style="color:${b.s ? SETS[b.s].c : 'var(--body)'}">${esc(b.n)}</div>
+        <div class="rowState"></div></div>
+        <div class="rowbtns">${manageControls(p, h)}</div></div>`;
+    }
   }
   if (p.debt) s += btns([[`Repay ${money(Math.min(p.cash, p.debt))}`, 'repay', 'dgr wide']]);
   s += btns([['Done', 'closeSheet', 'pri wide']]);
