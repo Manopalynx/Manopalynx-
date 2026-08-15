@@ -21,7 +21,7 @@ Playable. Engine, interface, offline support and save/resume are all in.
 ```
 data.js      board, decks, opponents, economy constants — data only
 engine.js    the rules. No DOM, no timers, no Math.random
-test/        180 passing (plus a browser probe across five viewports)
+test/        325 passing (plus a browser probe across five viewports)
 ```
 
 ## Running the tests

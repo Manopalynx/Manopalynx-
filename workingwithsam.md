@@ -796,3 +796,189 @@ and the failure mode was a session that felt perfectly well informed.
 
 Sam found it by asking a question neither of us thought was diagnostic. Answer the plain
 questions properly; check before you confirm.
+
+---
+
+## Instance 7 — 15 August 2026
+
+Claude Code, cloud session, same repo. Began as a check that Instance 6's repair had
+worked, became a long **Grandiose** session. Four builds shipped, v53 to v57, each merged
+to `main` mid-session so Sam could play it before the next one started.
+
+`docs/README.md` carries the design detail. This is only what it cannot say.
+
+### The repair held
+
+The hook printed `built on current main` and this file loaded itself. Instance 6's whole
+section is now history — read its first paragraph and move on.
+
+One thing it got right that is worth restating: the base commit is the check, not the
+branch name. This session's branch was `claude/session-context-review-n3ghxw` and that is
+normal.
+
+### How he works — additions to Instances 1–6
+
+Everything above held. New:
+
+**He asks for a checklist at the end of every message.** *"A good way to keep track is to
+write a checklist at the end of each message of what we want to look at and change and do
+it in an order you think works best."* Do it. Group it — decisions he owes, things done,
+things left, housekeeping — and keep the order yours.
+
+**He wants each change merged to `main` as it lands, not batched.** *"Push after each round
+to the main version so I can test each change as we go."* That means a `BUILD` bump per
+change, and it is worth the churn: he found the v52/v53 gap himself by looking at a
+screenshot and asking whether my changes would affect his phone. They had not, because
+nothing was on `main` yet.
+
+**The ledger is now on a monthly cycle.** He is trialling it at work and will collect notes
+for a session at each month end rather than changing it mid-month. That is his decision and
+it is a good one — it is the project with commercial numbers and untested arithmetic, and
+changing it mid-trial changes the thing being measured. A month of his real entries is also
+the fixture the arithmetic tests have never had.
+
+**His screenshots confirm as well as report.** I predicted the trade sheet would render
+"High" for `High Commander Varan`; he sent a screenshot showing exactly that before I had
+merged anything. Give him a falsifiable prediction and he will check it faster than any
+probe can.
+
+### The finding the rest of the session hung from
+
+**The economy is deflationary and the deflation is the clock.** 8,000 credits are dealt.
+The whole buyable board is 5,690. By circuit 36 every square is owned and the table holds
+about 1,400 between four — 15% of the start — and it stays there. So the second half of
+every game is played on a sixth of the cash the price list was written for.
+`docs/test/money.mjs` measures it.
+
+That single fact explained three separate complaints:
+
+- Opponents could not cover vassal upkeep 48% of the time. There is barely any money.
+- Opponents demanded a median 3.3x list for a square. Their valuation is denominated in
+  list prices and the economy is not. It was a unit mismatch, not greed.
+- The conquest ending fires *because* of the scarcity. Bankruptcy is how absorption happens.
+
+**And therefore: every relief of the money pressure costs the conquest ending.** Measured
+four separate ways this session — halving vassal upkeep, releasing vassals freely,
+releasing on distress, cash-aware pricing. All four cost conquest, in proportion to how
+much pressure they removed. Sam's complaints and the game's designed ending are the same
+mechanism seen from two sides. **Do not treat that as a bug to fix. Price it and give him
+the choice.**
+
+### What I got wrong
+
+Same pattern as every instance before. Measurement caught all of it; my own measurements
+were wrong nearly as often as the game was.
+
+1. **I told Sam halving the vassal upkeep would strengthen the conquest ending. It weakens
+   it.** I had measured on a four-seat table with one human; the project's own `sweep.mjs`
+   tables seat two humans and showed the opposite — three seats 78% down to 57% at 120
+   circuits. I stated the wrong direction confidently and had to walk it back a message
+   later. **The table shape was the variable, and I had not thought about it at all.**
+2. **My first `aiRelease` released whenever a lord was short.** Opponents shed the vassals
+   the conquest ending needs and it fell 24 points. Gating it on a debt marker already
+   outstanding — genuine distress, not a thin turn — brought the cost back to 8–15.
+3. **I nearly shipped a tithe figure in no unit at all.** `strength` has TWO writers:
+   `payRent` adds the credit tithed, `endTurn` adds the tithe RATE as the revolt clock.
+   Summing its gains mixes a currency with a rate. The log route is worse — `payRent`
+   writes its note BEFORE `pay()` reports whether the payment settled. I cut the column and
+   wrote both traps into `vassals.mjs` rather than ship a precise-looking wrong number.
+4. **A third of one probe assertion was decoration.** It read the set name off the whole
+   sheet; the name appears elsewhere, so it was true with the feature deleted. Only the
+   mutation test found it. It reads the swatch row now.
+5. **I broke an existing probe check with state pollution.** My new check set player purses
+   and switched counterparty — which clears the squares picked so far — and the direction
+   check below it then read a 900-credit swing against the 100 on the table. My block now
+   restores everything it touches. The existing check caught me, which is the probe working.
+6. **I styled with `var(--dgr)`, which does not exist.** `dgr` is a button class. An unknown
+   custom property silently inherits, so it would have rendered as ordinary text and looked
+   deliberate.
+7. **I put the wrong test count in a commit message** — 323 against 325 — and amended it
+   before it reached `main`.
+
+### Things that keep being true — additions
+
+- **The defect class from Instance 3 is not exhausted.** `releaseVassal` had exactly one
+  caller: the human button in `ui.js`. No opponent had ever let a vassal go, in any game.
+  That is the sixth. **Re-run the sweep whenever the action surface grows** — Instance 3's
+  five, then this. The measurement that proved it: opponent lords could not cover their
+  upkeep 48% of the time against a 19% baseline holding none, and you do not *become* an
+  overlord by being poor — you become one by being the creditor somebody went bankrupt
+  into. Lords should be richer than average.
+- **Ask what the instrument covers before believing it.** `sweep.mjs` has three tables and
+  every one seats two humans. **Sam plays one human and three opponents.** Every conquest
+  number in this repository before today was measured on a game he does not play. The
+  probe's trade table is two seats, so the multi-opponent case has no coverage either.
+- **A request for a thing that already exists means it exists somewhere else.** "Group by
+  colour in the holdings section" was already done — on the *player* sheet. The Manage
+  sheet he actually builds and pledges from sorted by square index. Look for the second
+  implementation before building the first.
+- **One string, split at both ends.** `chipName` took the last word, the trade sheet took
+  the first, off one persona named `Adran Vale`. Two further sites rendered the same
+  `vassal · X` label, written separately and disagreeing. `names.test.mjs` now forbids any
+  file splitting a player name for itself. Assert the agreement.
+- **The thing that cannot be verified from inside the session has moved again.** Instances
+  5 and 6 named the Pages source, the default branch and the environment's source revision.
+  There is a fourth: **this sandbox's network policy blocks `manopalynx.github.io`
+  entirely** — the proxy answers 403 to CONNECT. So the published page, the one thing Sam
+  actually looks at, cannot be checked from here at all. Merge, then tell him to confirm
+  the build marker reads the version you just shipped. He is the instrument.
+- **A flaky check is worse than no check.** `the background is alive` measures pixel
+  movement against a fixed threshold and reports 34, 200, 124, 619, 91 across viewports run
+  to run. One run dipped to 28 and failed. It is not wired to anything I changed. Left
+  alone and flagged, because guessing at a threshold would make it lie in the other
+  direction.
+
+### State of the work
+
+v57 on `main`, one branch, working tree clean. 325 unit tests across 15 files, browser
+probe green on all five viewports, three new measuring instruments.
+
+Shipped this session:
+
+| build | what |
+|---|---|
+| v53 | opponents can release a vassal; one short name per player |
+| v54 | cash-aware pricing — a credit is worth more to a player who has none |
+| v55 | Holdings sheet grouped by colour set |
+| v56 | contract sheet shows the other side's purse and marker |
+| v57 | sealed bid names the colour set and who already holds it |
+
+New instruments, all `docs/test/`: `vassals.mjs` (the vassal economy), `varan.mjs` (what an
+opponent demands per square, by binary search on the real acceptance test), `money.mjs` (the
+money supply across a game). New suites: `names.test.mjs`, `pricing.test.mjs`.
+
+Open, in the order I would take them:
+
+- **The vassal upkeep decision is Sam's and still unanswered.** Leave it and conquest sits
+  at 78% at three seats; halve it and the drain goes but conquest falls to 57%. Both
+  measured. `data.js` carries the numbers at `vassalUpkeep`.
+- **Doubles** — settle the square, then roll again. He specified it exactly: the player
+  settles where they land before the next throw. The engine already has `rollAgain` and
+  `doublesRun` and `endTurn` already says a doubles roll buys another; the friction is the
+  UI making you press End turn to reach it. Likely UI-only, untraced.
+- **Vassals should transfer when you absorb their overlord.** Real design change —
+  `netWorth` is commented "one level deep by construction".
+- **Partial payment into vassalage** — hand over the cash, keep the properties, stay in the
+  game earning for both. Touches `holdingsValue`, which is both what the final sheet prints
+  and the key the winner is sorted by. That is the field Instance 3 saw go NaN.
+- **The screen jumps** on turn start and end turn. Not diagnosed. Probe it before theorising
+  — the ledger's ~200px jump took four measured strategies to prove it was not scroll.
+- Everything Instances 3 and 4 left open still stands, untouched.
+
+### Message to future instances
+
+The measurements this session were worth more than the code. Three instruments now exist
+that did not, and each one killed something I was confident about — including, twice,
+something I had already told Sam.
+
+The specific trap here is **the shape of the table you measure on.** I got a real number,
+from a real instrument, on a game Sam does not play, and reported the wrong direction of an
+effect because of it. `sweep.mjs` has seated two humans since it was written and nobody had
+noticed, because a number that arrives with a table next to it looks like a fact.
+
+And the economy finding generalises past this game: every complaint Sam raised about money
+was true, and every fix for it costs the ending, because the shortage *is* the ending. When
+a thing he reports as broken turns out to be load-bearing, say so with the figures and let
+him decide. He took "here are both numbers, it is your call" better than he would have
+taken a quiet rebalance, and he still has not spent that decision — which is fine. It is
+his to spend.
