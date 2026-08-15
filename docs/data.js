@@ -19,7 +19,7 @@
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-export const BUILD = 'grandiose-v52';
+export const BUILD = 'grandiose-v53';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -303,7 +303,27 @@ export const RULES = {
   amendsPerGame: 3,
   garrisonUpkeep: 10,            // per garrison, per turn
   citadelUpkeep: 30,             // per citadel, per turn
-  vassalUpkeep: [75, 200, 375, 500],  // by number of vassals held
+  // By number of vassals held. LEFT ALONE ON PURPOSE, and the reason is the
+  // most useful thing measured about this game so far.
+  //
+  // The bill is punishing: an opponent holding a vassal could not cover it out
+  // of cash 56% of the time and carried a debt marker 36% of the time, and it
+  // falls just as hard on a human. Halving it fixes exactly that -- stranding
+  // to 27%, markers to 14%.
+  //
+  // It also costs the conquest ending, because THIS BILL IS WHAT CREATES
+  // VASSALS. Absorption needs somebody bankrupted into somebody else, and the
+  // upkeep is a large part of what does the bankrupting. Relieve it and there
+  // are fewer arrangements to win by. Measured with sweep.mjs at 60 games a
+  // cell, halved against shipped: three seats 70% -> 52% at 96 circuits and
+  // 78% -> 57% at 120; four seats 80% -> 65% at 120. The two-seat row, which
+  // has no opponent in it, is identical to the digit either way -- which is
+  // what says the difference is the change and not the noise.
+  //
+  // So the drain Sam reported and the ending the game is built around are the
+  // same mechanism seen from two sides. Lowering this number is a design
+  // decision about which of them matters more, not a fix, and it is his.
+  vassalUpkeep: [75, 200, 375, 500],
   debtInterest: 0.10,            // per turn, on a bank debt marker
   // Redemption is 55% of list — half back plus a tenth in interest. Held as a
   // ratio rather than 0.55 because the float form rounds a credit wrong on
@@ -399,6 +419,32 @@ export const RULES = {
   // the end; Vale is perfectly happy to address the crowd from where he is.
   facilityPayUntil: { spector: 0.30, varan: 0.10, vale: 0.55 },
   facilityFeeReserve: 350,       // and not if paying it would empty the purse
+
+  // ---- letting a vassal go ---------------------------------------------
+  // An overlord pays vassalUpkeep every turn and collects a tithe only when
+  // somebody lands on the vassal's squares, which is rare -- a vassal is by
+  // definition somebody who ran out of money. The arrangement is a price paid
+  // for the conquest ending and for the share of their holdings that counts,
+  // not an income. So it has to be affordable, and there has to be a way out.
+  //
+  // Until this existed there was not one: releaseVassal had a single caller,
+  // the human button in ui.js. Measured over 40 games before it was wired up,
+  // an opponent holding a vassal could not cover that turn's upkeep line 48%
+  // of the time against a 19% baseline holding none, and 48 opponents were
+  // still holding one when the game ended.
+  //
+  // The multiple is of the whole upkeep bill, not the vassal's share of it, so
+  // garrisons and citadels count toward the squeeze that ends the arrangement.
+  // Varan's 0.5 makes him hold on until he is in half again as deep as the
+  // others -- he audits, and an instrument he signed is not lightly torn up.
+  // Vale's 1.5 lets go early, the same instinct as his sellDiscount of 0.45.
+  //
+  // A marker outstanding is required as well as the cash test -- see aiRelease.
+  // Releasing merely on a thin turn shed the vassals the conquest ending needs
+  // and cost 24 points of it. Gated on distress it costs 8 to 15 at the long
+  // circuits and clears the compounding markers that were the real complaint:
+  // an opponent lord carried one 36% of the time before this and 5% after.
+  vassalLetGo: { spector: 1.0, varan: 0.5, vale: 1.5 },
 
   // ---- amending the manifest -------------------------------------------
   // Also human-only. A nudge of one square costs ₡500 and there are three a

@@ -82,6 +82,32 @@ const blank = () => ({
   freeTurns: 0, freePoor: 0
 });
 
+// Releases are counted from the log rather than from p.lord transitions,
+// because a release and a declaration of independence both land the vassal on
+// lord === null and the two are indistinguishable from the field alone.
+//
+// G.log is trimmed to 120 entries, so this walks the newest entries only as far
+// as the first one it has already seen. If a turn ever produced 120 notes the
+// walk would silently miss some -- `overflow` counts that, and must stay 0 for
+// the release figures to mean anything.
+const seen = new WeakSet();
+const releasesBy = new Map();
+let overflow = 0;
+
+function harvestLog(g) {
+  let i = 0;
+  for (; i < g.log.length; i++) {
+    const e = g.log[i];
+    if (seen.has(e)) break;
+    seen.add(e);
+    const m = e.kind === 'note' && / releases /.test(e.text)
+      ? e.text.slice(0, e.text.indexOf(' releases '))
+      : null;
+    if (m) releasesBy.set(m, (releasesBy.get(m) || 0) + 1);
+  }
+  if (i === g.log.length && g.log.length >= 120) overflow++;
+}
+
 // Kept apart so a human lord cannot be mistaken for an opponent one: the human
 // CAN release, so their figures are the control group.
 const ai = blank(), human = blank();
@@ -94,6 +120,7 @@ for (let seed = 1; seed <= N; seed++) {
   const G = playGame({
     seats: SEATS, seed, circuits: CIRCUITS,
     onTurn: g => {
+      harvestLog(g);
       for (const p of g.players) {
         const was = prevLord.has(p.i) ? prevLord.get(p.i) : null;
         const now = p.lord;
@@ -159,5 +186,9 @@ console.log('              formed  freed  moved  lordTurns  upkeep/t  stranded  
 row('opponent', ai);
 row('human', human);
 
-console.log(`\n  Releases by an opponent: 0, structurally -- nothing outside ui.js calls releaseVassal.`);
+console.log('\n  Releases, counted from the log, by who let go:');
+const names = [...releasesBy.entries()].sort((a, b) => b[1] - a[1]);
+if (!names.length) console.log('    none at all -- the mechanism never fired.');
+for (const [who, n] of names) console.log(`    ${who.padEnd(24)}${String(n).padStart(5)}`);
+console.log(`\n  Log walks that hit the 120-entry trim without finding a seen entry: ${overflow}.`);
 console.log(`  Opponents still holding a vassal when the game ended: ${ai.heldAtEnd}.\n`);
