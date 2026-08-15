@@ -19,7 +19,7 @@
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-export const BUILD = 'grandiose-v61';
+export const BUILD = 'grandiose-v62';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -303,27 +303,29 @@ export const RULES = {
   amendsPerGame: 3,
   garrisonUpkeep: 10,            // per garrison, per turn
   citadelUpkeep: 30,             // per citadel, per turn
-  // By number of vassals held. LEFT ALONE ON PURPOSE, and the reason is the
-  // most useful thing measured about this game so far.
+  // By number of vassals held. Halved from [75, 200, 375, 500] on Sam's call,
+  // after the trade-off below had been measured and put to him.
   //
-  // The bill is punishing: an opponent holding a vassal could not cover it out
-  // of cash 56% of the time and carried a debt marker 36% of the time, and it
-  // falls just as hard on a human. Halving it fixes exactly that -- stranding
-  // to 27%, markers to 14%.
+  // The old bill was punishing: an opponent holding a vassal could not cover it
+  // out of cash 56% of the time and carried a debt marker 36% of the time, and
+  // it fell just as hard on a human. His reason is the one that decides it --
+  // "the upkeep from the squares and the vassals often mean they don't generate
+  // enough to justify keeping them". An arrangement nobody wants to keep is not
+  // a mechanic, it is a tax.
   //
-  // It also costs the conquest ending, because THIS BILL IS WHAT CREATES
-  // VASSALS. Absorption needs somebody bankrupted into somebody else, and the
-  // upkeep is a large part of what does the bankrupting. Relieve it and there
-  // are fewer arrangements to win by. Measured with sweep.mjs at 60 games a
-  // cell, halved against shipped: three seats 70% -> 52% at 96 circuits and
-  // 78% -> 57% at 120; four seats 80% -> 65% at 120. The two-seat row, which
-  // has no opponent in it, is identical to the digit either way -- which is
-  // what says the difference is the change and not the noise.
+  // What it costs is the conquest ending, because THIS BILL IS PART OF WHAT
+  // CREATES VASSALS. Absorption needs somebody bankrupted into somebody else,
+  // and the upkeep does much of the bankrupting. Measured with sweep.mjs at 60
+  // games a cell, halved against the old figure: three seats 70% -> 52% at 96
+  // circuits and 78% -> 57% at 120; four seats 80% -> 65% at 120. The two-seat
+  // row, which has no opponent in it, was identical to the digit either way --
+  // which is what said the difference was the change and not the noise.
   //
-  // So the drain Sam reported and the ending the game is built around are the
-  // same mechanism seen from two sides. Lowering this number is a design
-  // decision about which of them matters more, not a fix, and it is his.
-  vassalUpkeep: [75, 200, 375, 500],
+  // It ships alongside the liquidation rule in pay(), which stopped stripping a
+  // vassal on the way into the arrangement. The two push the same way, so the
+  // figure that matters is the COMBINED one, and it is in the commit message
+  // that shipped them rather than guessed at here.
+  vassalUpkeep: [40, 100, 190, 250],
   debtInterest: 0.10,            // per turn, on a bank debt marker
   // Redemption is 55% of list — half back plus a tenth in interest. Held as a
   // ratio rather than 0.55 because the float form rounds a credit wrong on
@@ -470,6 +472,12 @@ export const RULES = {
   // and cost 24 points of it. Gated on distress it costs 8 to 15 at the long
   // circuits and clears the compounding markers that were the real complaint:
   // an opponent lord carried one 36% of the time before this and 5% after.
+  //
+  // Those figures were taken at the OLD vassalUpkeep, before it was halved and
+  // before pay() stopped stripping a vassal on the way in. Both made the
+  // arrangement affordable, so this valve now fires far less often than it was
+  // tuned to: markers on an opponent lord measure 1% and releases fell from 29
+  // to 18 across 40 games. Retune it against fresh numbers, not against these.
   vassalLetGo: { spector: 1.0, varan: 0.5, vale: 1.5 },
 
   // ---- amending the manifest -------------------------------------------
