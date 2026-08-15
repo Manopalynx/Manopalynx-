@@ -335,6 +335,11 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
 .card{border-left:3px solid var(--gold);padding:14px 16px;background:var(--deep);
   border-radius:0 8px 8px 0;font-size:16px;line-height:1.5;margin:12px 0}
 .card em{color:var(--gold);font-style:italic}
+/* The author's own words, told apart from lines written for the game. Same
+   distinction the square panel already draws with .flav.quoted. */
+.card.quoted{font-style:italic;color:var(--tx)}
+.card .attrib{display:block;margin-top:8px;font-family:var(--m);font-size:10px;
+  letter-spacing:.06em;color:var(--dim);font-style:normal}
 /* What the card does, in plain terms, under the words it is dressed in.
    Indented to 19px to sit under the card's text rather than its gold rule
    (3px border + 16px padding). The longest card in either deck leaves 18px

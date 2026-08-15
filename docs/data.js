@@ -19,7 +19,7 @@
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-export const BUILD = 'grandiose-v62';
+export const BUILD = 'grandiose-v63';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -232,6 +232,61 @@ export const SWARM_STAGES = [
 ];
 
 /* ------------------------------------------------------------------ opponents */
+// What an opponent says when a contract is put to them.
+//
+// Same convention as the board squares: `qv: 1` marks the author's own words,
+// lifted from the novel and trimmed only at their ends. No `qv` means the line
+// was written for the game and is the first thing to strike if it does not
+// sound like the book. The interface shows the two differently -- quoted lines
+// in italic against a gold rule, written ones plainly -- so the distinction is
+// visible at the table and not only in this file.
+//
+// Only one of these is the author's. Varan is the single persona who accepts
+// anything on the page: "Very well," he says at the summit, each word paid out
+// like a tooth, "The Dominion accepts." Spector and Vale are never shown
+// agreeing to a bargain, so their lines are written to their voices as the book
+// gives them -- Spector unhurried and complete, accounting for everything
+// without a remainder; Vale warm, the man who waves across a market at someone
+// he knows and crouches to the level of a child who shouted something.
+export const CONTRACT_LINES = {
+  spector: {
+    yes: [
+      { t: 'The arithmetic favours it. Done.' },
+      { t: 'Accepted. It prices correctly.' },
+      { t: 'Agreed. I have accounted for it, and there is no remainder.' }
+    ],
+    no: [
+      { t: 'No. Your side is worth more than mine.' },
+      { t: 'Declined. The numbers do not meet.' }
+    ]
+  },
+  varan: {
+    yes: [
+      // CANON. Spoken at the summit, accepting terms he resents.
+      { t: 'The Dominion accepts. But mark this: we underestimated your people once.', qv: 1 },
+      { t: 'Filed, and against my better judgement.' },
+      { t: 'Approved. Do not read anything into it.' },
+      { t: 'Acknowledged. You will not get the flattery as well.' }
+    ],
+    no: [
+      { t: 'Denied.' },
+      { t: 'I am not in the business of improving your position.' },
+      { t: 'No. Next.' }
+    ]
+  },
+  vale: {
+    yes: [
+      { t: 'Delightful. Let us shake on it.' },
+      { t: 'Yes! I do enjoy an arrangement.' },
+      { t: 'Done, and gladly. I would rather be owed a favour than a world.' }
+    ],
+    no: [
+      { t: 'Ah — I think not, on reflection.' },
+      { t: 'A charming idea, and no.' }
+    ]
+  }
+};
+
 export const PERSONAS = {
   spector: {
     n: 'Spector', c: '#5ECFC8',

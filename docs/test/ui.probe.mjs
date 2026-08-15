@@ -1792,6 +1792,197 @@ for (const device of DEVICES) {
   }
   await page.evaluate(() => window.closeSheet());
 
+  // ---- the table Sam actually plays: one human, three opponents ----
+  //
+  // Everything above runs on a two-seat game, which is why two checks written
+  // this session could only ever exercise half of what they claimed: the
+  // counterparty purse could not test "follows the selected tab" with one
+  // opponent to select, and no contract could be put to a choice of seats. That
+  // is the same blind spot sweep.mjs had -- a real instrument measuring a game
+  // he does not play -- so this starts a fresh four-seat game and checks the
+  // contract sheet there.
+  await page.goto(URL, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#begin');
+  for (const who of ['spector', 'varan', 'vale']) await page.click(`[data-a="${who}"]`);
+  await page.click('#begin');
+  await page.waitForSelector('#game:not(.hidden)');
+
+  const many = await page.evaluate(async () => {
+    const G = window.__G(), SETS = window.__SETS(), BOARD = window.__BOARD();
+    if (G.players.length !== 4) return `expected four seats, got ${G.players.length}`;
+    const me = G.players[0];
+    const others = G.players.filter(p => p.i !== me.i);
+    if (others.some(p => p.kind !== 'ai')) return 'the three opponents did not all seat';
+
+    // A square each, from a different set, so every counterparty has something
+    // to trade and the sheet has to rebuild per seat.
+    const spare = BOARD.map((b, i) => [b, i]).filter(([b]) => b.pr && b.s).map(([, i]) => i);
+    me.holdings = [{ sq: spare[0], garrisons: 0, citadel: 0, mortgaged: 0 }];
+    me.cash = 5000; me.debt = 0;
+    others.forEach((o, n) => {
+      o.holdings = [{ sq: spare[3 + n * 3], garrisons: 0, citadel: 0, mortgaged: 0 }];
+      o.cash = 400 + n * 700; o.debt = 0;
+    });
+    G.phase = 'end';
+    window.showTrade();
+
+    const tabs = [...document.querySelectorAll('.sheet [data-fn^="tradeSet|to|"]')];
+    const seen = [];
+    for (const o of others) {
+      const tab = document.querySelector(`.sheet [data-fn="tradeSet|to|${o.i}"]`);
+      if (!tab) { seen.push({ who: o.name, missing: true }); continue; }
+      tab.click();
+      const purse = document.querySelector('.sheet [data-them="cash"]');
+      const rows = document.querySelectorAll('.sheet [data-fn^="tradeSet|get|"]').length;
+      seen.push({
+        who: o.name, want: o.cash, rows,
+        text: purse ? purse.textContent.replace(/\s+/g, ' ').trim() : null
+      });
+    }
+    window.closeSheet();
+    return { tabs: tabs.length, seen, names: others.map(o => o.name) };
+  });
+
+  if (typeof many === 'string') fail(many);
+  else {
+    if (many.tabs === 3) pass('the contract sheet offers all three opponents');
+    else fail(`contract sheet shows ${many.tabs} counterparty tabs on a four-seat table`);
+    const wrong = many.seen.filter(s => s.missing
+      || !(s.text || '').replace(/[,₡]/g, '').includes(String(s.want)));
+    if (!wrong.length) {
+      pass(`and the purse follows the tab across three seats (${many.seen.map(s => s.want).join(', ')})`);
+    } else {
+      fail(`purse did not follow the tab: ${JSON.stringify(wrong)}`);
+    }
+    const noRows = many.seen.filter(s => !s.missing && !s.rows);
+    if (!noRows.length) pass('each opponent\'s own squares are offered');
+    else fail(`no squares listed for ${noRows.map(s => s.who).join(', ')}`);
+  }
+
+  // Agreeing to a contract raises a screen, and the opponent speaks on it.
+  // Refusing already did; accepting moved the squares in silence.
+  //
+  // Run against ALL THREE opponents rather than whichever seat comes first.
+  // Against one it only ever exercised Spector, and Varan is the only persona
+  // with a line taken from the novel -- so the branch that marks the author's
+  // words on screen never ran, which is the same half-a-check this session has
+  // now produced three times.
+  const spoke = [];
+  for (const seat of [1, 2, 3]) {
+    const one = await page.evaluate(async (i) => {
+      const G = window.__G(), BOARD = window.__BOARD();
+      const me = G.players[0], them = G.players[i];
+      if (!them || them.kind !== 'ai') return `seat ${i} is not an opponent`;
+      if (!them.holdings.length) return `seat ${i} holds nothing to buy`;
+      them.cash = 0; them.debt = 0;          // hungry, so the offer below carries
+      me.cash = 9000; me.debt = 0;
+      const sq = them.holdings[0].sq;
+      G.phase = 'end';
+      window.showTrade();
+      document.querySelector(`.sheet [data-fn="tradeSet|to|${them.i}"]`)?.click();
+      document.querySelector(`.sheet [data-fn="tradeSet|get|${sq}"]`)?.click();
+      const cash = document.getElementById('trCash');
+      if (!cash) return `no cash field for seat ${i}`;
+      cash.value = String(BOARD[sq].pr * 6);      // far over any asking price
+      cash.dispatchEvent(new Event('input'));
+      const held = them.holdings.length;
+      document.querySelector('.sheet [data-fn="sendTrade"]')?.click();
+      await new Promise(r => setTimeout(r, 60));
+      const sheet = document.querySelector('.sheet');
+      const card = sheet ? sheet.querySelector('.card') : null;
+      const out = {
+        persona: them.persona,
+        heading: sheet ? (sheet.querySelector('h3')?.textContent || '').trim() : null,
+        quote: card ? card.textContent.replace(/\s+/g, ' ').trim() : null,
+        quoted: card ? card.classList.contains('quoted') : null,
+        moved: them.holdings.length === held - 1
+      };
+      window.closeSheet();
+      return out;
+    }, seat);
+    if (typeof one === 'string') { fail(one); spoke.length = 0; break; }
+    spoke.push(one);
+  }
+
+  if (spoke.length === 3) {
+    const LINES = await page.evaluate(() => window.__CONTRACT_LINES());
+    const bad = [];
+    for (const r of spoke) {
+      if (r.heading !== 'Agreed') { bad.push(`${r.persona}: heading "${r.heading}"`); continue; }
+      if (!r.moved) { bad.push(`${r.persona}: square did not change hands`); continue; }
+      const match = (LINES[r.persona].yes || []).find(l => r.quote && r.quote.includes(l.t));
+      if (!match) { bad.push(`${r.persona}: line is not one of theirs — ${r.quote}`); continue; }
+      // The author's lines are marked in the data and must be marked on screen.
+      if (!!match.qv !== r.quoted) {
+        bad.push(`${r.persona}: data says qv=${!!match.qv}, screen says ${r.quoted}`);
+      }
+    }
+    if (!bad.length) {
+      const quotedSeen = spoke.filter(r => r.quoted).length;
+      pass(`accepting raises a screen and each opponent speaks in turn ` +
+           `(${spoke.map(r => r.persona).join(', ')}; ${quotedSeen} in the author's own words)`);
+    } else {
+      fail(`acceptance screen: ${bad.join(' | ')}`);
+    }
+  }
+
+  // The author's words have to be MARKED on screen, and the line above cannot
+  // promise to exercise that: Varan holds the only quoted line among four, and
+  // which one he says is down to the seeded RNG -- it reported "0 in the
+  // author's own words" every run. So this forces his quoted line to be the
+  // only one available, renders it through the real path, and puts the list
+  // back. Without this the marking branch is written and never executed.
+  const marked = await page.evaluate(async () => {
+    const G = window.__G(), BOARD = window.__BOARD(), LINES = window.__CONTRACT_LINES();
+    const them = G.players.find(p => p.persona === 'varan');
+    const quoted = LINES.varan.yes.find(l => l.qv);
+    if (!them) return 'Varan is not at this table';
+    if (!quoted) return 'no quoted line in the data to render';
+    const keep = LINES.varan.yes;
+    LINES.varan.yes = [quoted];                     // force it
+    try {
+      const me = G.players[0];
+      if (!them.holdings.length) {
+        them.holdings = [{ sq: BOARD.findIndex(b => b.pr && b.s), garrisons: 0, citadel: 0, mortgaged: 0 }];
+      }
+      // Varan is the dearest seat and adds a flat premium against whoever leads
+      // the table, which by now is me. pr * 6 was enough in the loop above and
+      // was refused here, so this offers a figure no valuation can reach --
+      // the check is about how the line RENDERS, not about his price.
+      them.cash = 0; them.debt = 0; me.cash = 400000; me.debt = 0;
+      const sq = them.holdings[0].sq;
+      G.phase = 'end';
+      window.showTrade();
+      document.querySelector(`.sheet [data-fn="tradeSet|to|${them.i}"]`)?.click();
+      document.querySelector(`.sheet [data-fn="tradeSet|get|${sq}"]`)?.click();
+      const cash = document.getElementById('trCash');
+      cash.value = String(BOARD[sq].pr * 100);
+      cash.dispatchEvent(new Event('input'));
+      document.querySelector('.sheet [data-fn="sendTrade"]')?.click();
+      await new Promise(r => setTimeout(r, 60));
+      const card = document.querySelector('.sheet .card');
+      const out = {
+        text: quoted.t,
+        shown: card ? card.textContent.replace(/\s+/g, ' ').trim() : null,
+        quoted: card ? card.classList.contains('quoted') : null,
+        attrib: card ? !!card.querySelector('.attrib') : null
+      };
+      window.closeSheet();
+      return out;
+    } finally {
+      LINES.varan.yes = keep;                       // put it back
+    }
+  });
+
+  if (typeof marked === 'string') fail(marked);
+  else if (!marked.shown || !marked.shown.includes(marked.text)) {
+    fail(`the forced quoted line was not shown: ${marked.shown}`);
+  } else if (!marked.quoted || !marked.attrib) {
+    fail(`the author's line rendered unmarked (quoted=${marked.quoted}, attribution=${marked.attrib})`);
+  } else {
+    pass("a line taken from the novel is marked as the author's on screen");
+  }
+
   if (errors.length) {
     fail(`${errors.length} runtime error(s)`);
     [...new Set(errors)].slice(0, 6).forEach(e => console.log('        ' + e));

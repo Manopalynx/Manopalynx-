@@ -335,6 +335,11 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
 .card{border-left:3px solid var(--gold);padding:14px 16px;background:var(--deep);
   border-radius:0 8px 8px 0;font-size:16px;line-height:1.5;margin:12px 0}
 .card em{color:var(--gold);font-style:italic}
+/* The author's own words, told apart from lines written for the game. Same
+   distinction the square panel already draws with .flav.quoted. */
+.card.quoted{font-style:italic;color:var(--tx)}
+.card .attrib{display:block;margin-top:8px;font-family:var(--m);font-size:10px;
+  letter-spacing:.06em;color:var(--dim);font-style:normal}
 /* What the card does, in plain terms, under the words it is dressed in.
    Indented to 19px to sit under the card's text rather than its gold rule
    (3px border + 16px padding). The longest card in either deck leaves 18px
@@ -469,7 +474,7 @@ __m.data = (function () {
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-const BUILD = 'grandiose-v62';
+const BUILD = 'grandiose-v63';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -682,6 +687,61 @@ const SWARM_STAGES = [
 ];
 
 /* ------------------------------------------------------------------ opponents */
+// What an opponent says when a contract is put to them.
+//
+// Same convention as the board squares: `qv: 1` marks the author's own words,
+// lifted from the novel and trimmed only at their ends. No `qv` means the line
+// was written for the game and is the first thing to strike if it does not
+// sound like the book. The interface shows the two differently -- quoted lines
+// in italic against a gold rule, written ones plainly -- so the distinction is
+// visible at the table and not only in this file.
+//
+// Only one of these is the author's. Varan is the single persona who accepts
+// anything on the page: "Very well," he says at the summit, each word paid out
+// like a tooth, "The Dominion accepts." Spector and Vale are never shown
+// agreeing to a bargain, so their lines are written to their voices as the book
+// gives them -- Spector unhurried and complete, accounting for everything
+// without a remainder; Vale warm, the man who waves across a market at someone
+// he knows and crouches to the level of a child who shouted something.
+const CONTRACT_LINES = {
+  spector: {
+    yes: [
+      { t: 'The arithmetic favours it. Done.' },
+      { t: 'Accepted. It prices correctly.' },
+      { t: 'Agreed. I have accounted for it, and there is no remainder.' }
+    ],
+    no: [
+      { t: 'No. Your side is worth more than mine.' },
+      { t: 'Declined. The numbers do not meet.' }
+    ]
+  },
+  varan: {
+    yes: [
+      // CANON. Spoken at the summit, accepting terms he resents.
+      { t: 'The Dominion accepts. But mark this: we underestimated your people once.', qv: 1 },
+      { t: 'Filed, and against my better judgement.' },
+      { t: 'Approved. Do not read anything into it.' },
+      { t: 'Acknowledged. You will not get the flattery as well.' }
+    ],
+    no: [
+      { t: 'Denied.' },
+      { t: 'I am not in the business of improving your position.' },
+      { t: 'No. Next.' }
+    ]
+  },
+  vale: {
+    yes: [
+      { t: 'Delightful. Let us shake on it.' },
+      { t: 'Yes! I do enjoy an arrangement.' },
+      { t: 'Done, and gladly. I would rather be owed a favour than a world.' }
+    ],
+    no: [
+      { t: 'Ah — I think not, on reflection.' },
+      { t: 'A charming idea, and no.' }
+    ]
+  }
+};
+
 const PERSONAS = {
   spector: {
     n: 'Spector', c: '#5ECFC8',
@@ -1016,7 +1076,7 @@ const RULES = {
   facilityFee: 150               // an Overseer is an official, and officials have a price
 };
 
-return { BUILD, SETS, BOARD, N, GO, JAIL, GOTO, FLEETS, UTILS, FLEET_RENT, TRAFFIC, CONTINGENCY, COLUMN, SWARM_STAGES, PERSONAS, LEADER_LINES, EPIGRAPH, RULES };
+return { BUILD, SETS, BOARD, N, GO, JAIL, GOTO, FLEETS, UTILS, FLEET_RENT, TRAFFIC, CONTINGENCY, COLUMN, SWARM_STAGES, CONTRACT_LINES, PERSONAS, LEADER_LINES, EPIGRAPH, RULES };
 })();
 
 __m.engine = (function () {
@@ -1035,7 +1095,7 @@ __m.engine = (function () {
 
 const {
   SETS, BOARD, N, GO, JAIL, GOTO, FLEETS, UTILS, FLEET_RENT, TRAFFIC, SWARM_STAGES,
-  CONTINGENCY, COLUMN, PERSONAS, LEADER_LINES, RULES
+  CONTINGENCY, COLUMN, PERSONAS, LEADER_LINES, CONTRACT_LINES, RULES
 } = __m.data;
 
 /* ============================================================ random */
@@ -2553,13 +2613,18 @@ function proposeContract(G, c) {
   }
   const proposer = G.players[c.from];
   const accepted = aiAcceptsContract(G, them, proposer, c);
-  const lines = CONTRACT_LINES[them.persona] || { yes: ['—'], no: ['—'] };
-  G.log.unshift({
-    kind: 'voice', who: them.i, circuit: G.circuit,
-    text: pick(G, accepted ? lines.yes : lines.no)
-  });
+  const lines = CONTRACT_LINES[them.persona] || { yes: [{ t: '—' }], no: [{ t: '—' }] };
+  // Returned to the caller as well as logged. The sheet used to read it back off
+  // G.log[0], which held only while nothing else was written after it --
+  // settleContract writes several notes, so on an ACCEPTED contract the top of
+  // the log is a transfer note and not the line anybody said.
+  const said = pick(G, accepted ? lines.yes : lines.no);
+  G.log.unshift({ kind: 'voice', who: them.i, circuit: G.circuit, text: said.t, qv: said.qv });
   trim(G);
-  if (accepted) { settleContract(G, c); return { ok: true, pending: false, accepted: true }; }
+  if (accepted) {
+    settleContract(G, c);
+    return { ok: true, pending: false, accepted: true, said };
+  }
 
   recordRefusal(G, c);
   note(G, `${them.name} refuses the contract.`);
@@ -2573,7 +2638,7 @@ function proposeContract(G, c) {
     G.log.unshift({ kind: 'voice', who: them.i, circuit: G.circuit, text: line });
     trim(G);
   }
-  return { ok: true, pending: false, accepted: false, counter };
+  return { ok: true, pending: false, accepted: false, counter, said };
 }
 
 function respondToContract(G, accept) {
@@ -2590,21 +2655,6 @@ function respondToContract(G, accept) {
   settleContract(G, c);
   return true;
 }
-
-const CONTRACT_LINES = {
-  spector: {
-    yes: ['The arithmetic favours it. Done.', 'Accepted. It prices correctly.'],
-    no: ['No. Your side is worth more than mine.', 'Declined. The numbers do not meet.']
-  },
-  varan: {
-    yes: ['Filed, and against my better judgement.', 'Approved. Do not read anything into it.'],
-    no: ['Denied.', 'I am not in the business of improving your position.', 'No. Next.']
-  },
-  vale: {
-    yes: ['Delightful. Let us shake on it.', 'Yes! I do enjoy an arrangement.'],
-    no: ['Ah — I think not, on reflection.', 'A charming idea, and no.']
-  }
-};
 
 /* ============================================================ opponents */
 // What a square is worth to `p` once buying it out of pledge is allowed for.
@@ -4785,7 +4835,7 @@ __m.ui = (function () {
 
 const {
   SETS, BOARD, N, JAIL, GOTO, FLEETS, UTILS, TRAFFIC, FLEET_RENT, PERSONAS, RULES, EPIGRAPH, CONTINGENCY, COLUMN,
-  BUILD
+  CONTRACT_LINES, BUILD
 } = __m.data;
 const E = __m.engine;
 const { Score, moodFor } = __m.score;
@@ -6579,6 +6629,17 @@ function refreshTrade() {
   if (propose) propose.disabled = TR.get === null && TR.give === null;
 }
 
+// What an opponent said, and whose words they are. `qv` marks the author's own,
+// lifted from the novel; anything without it was written for the game. The
+// square panel already draws that distinction and this draws the same one, so a
+// line Sam did not write is identifiable on the screen rather than only in
+// data.js.
+function saidBlock(said) {
+  if (!said || !said.t) return '';
+  return `<div class="card${said.qv ? ' quoted' : ''}">“${esc(said.t)}”${
+    said.qv ? '<span class="attrib">HIS OWN WORDS — GRANDIOSE</span>' : ''}</div>`;
+}
+
 function sendTrade() {
   readTradeCash();
   const proposal = { ...TR };
@@ -6592,9 +6653,30 @@ function sendTrade() {
     return;
   }
   if (r.pending) { tick(); return; }              // a human must answer
+
+  // Agreeing used to happen in silence: the squares moved, the sheet closed,
+  // and the only sign anybody had spoken was a line in the ledger. A refusal
+  // got a screen. Now both do, and both quote the opponent.
+  if (r.accepted) {
+    const them = G.players[proposal.to];
+    const names = list => E.sqList(list).map(sq => BOARD[sq].n);
+    const got = names(proposal.get), gave = names(proposal.give);
+    const row = (label, value) =>
+      `<div class="stat"><span>${label}</span><span>${esc(value)}</span></div>`;
+    sheet(`<h3>Agreed</h3><div class="sub">${esc(them.name)}</div>
+      ${saidBlock(r.said)}
+      ${got.length ? row('You receive', got.join(' · ')) : ''}
+      ${gave.length ? row('You give', gave.join(' · ')) : ''}
+      ${proposal.cash ? row(proposal.direction === 1 ? 'You pay' : 'They pay',
+                            money(proposal.cash)) : ''}
+      ${btns([['Close', 'closeSheet', 'pri wide']])}`);
+    save(); render();
+    return;
+  }
+
   if (!r.accepted) {
     const them = G.players[proposal.to];
-    const line = G.log[0];
+    const line = r.said;
     if (r.counter) {
       COUNTER = r.counter;
       const me = G.players[proposal.from];
@@ -6604,7 +6686,7 @@ function sendTrade() {
       // the affordability check belongs on their purse rather than yours.
       const selling = proposal.direction === 2;
       sheet(`<h3>Refused — but they name a price</h3><div class="sub">${esc(them.name)}</div>
-        <div class="card">“${esc(line ? line.text : '')}”</div>
+        ${saidBlock(line)}
         <div class="stat"><span>You asked</span><span>${money(proposal.cash)}</span></div>
         <div class="stat"><span>${selling ? 'They will pay' : 'They want'}</span>
           <span>${money(r.counter.cash)}</span></div>
@@ -6625,7 +6707,7 @@ function sendTrade() {
       }
     } else {
       sheet(`<h3>Refused</h3><div class="sub">${esc(them.name)}</div>
-        <div class="card">“${esc(line ? line.text : 'No.')}”</div>
+        ${saidBlock(line || { t: 'No.' })}
         ${btns([['Close', 'closeSheet', 'pri wide']])}`);
     }
   }
@@ -6915,6 +6997,7 @@ window.__tick = () => tick();
 // three boards apart. The probe compares them, so it needs both.
 window.__E = () => E;
 window.__CON = () => CONTINGENCY;
+window.__CONTRACT_LINES = () => CONTRACT_LINES;
 window.__COL = () => COLUMN;
 // Cards are dealt by tick(), never by a button, so the sheet has no handle of
 // its own to reach for.

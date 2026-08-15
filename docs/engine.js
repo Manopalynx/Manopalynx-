@@ -12,7 +12,7 @@
 
 import {
   SETS, BOARD, N, GO, JAIL, GOTO, FLEETS, UTILS, FLEET_RENT, TRAFFIC, SWARM_STAGES,
-  CONTINGENCY, COLUMN, PERSONAS, LEADER_LINES, RULES
+  CONTINGENCY, COLUMN, PERSONAS, LEADER_LINES, CONTRACT_LINES, RULES
 } from './data.js';
 
 /* ============================================================ random */
@@ -1530,13 +1530,18 @@ export function proposeContract(G, c) {
   }
   const proposer = G.players[c.from];
   const accepted = aiAcceptsContract(G, them, proposer, c);
-  const lines = CONTRACT_LINES[them.persona] || { yes: ['—'], no: ['—'] };
-  G.log.unshift({
-    kind: 'voice', who: them.i, circuit: G.circuit,
-    text: pick(G, accepted ? lines.yes : lines.no)
-  });
+  const lines = CONTRACT_LINES[them.persona] || { yes: [{ t: '—' }], no: [{ t: '—' }] };
+  // Returned to the caller as well as logged. The sheet used to read it back off
+  // G.log[0], which held only while nothing else was written after it --
+  // settleContract writes several notes, so on an ACCEPTED contract the top of
+  // the log is a transfer note and not the line anybody said.
+  const said = pick(G, accepted ? lines.yes : lines.no);
+  G.log.unshift({ kind: 'voice', who: them.i, circuit: G.circuit, text: said.t, qv: said.qv });
   trim(G);
-  if (accepted) { settleContract(G, c); return { ok: true, pending: false, accepted: true }; }
+  if (accepted) {
+    settleContract(G, c);
+    return { ok: true, pending: false, accepted: true, said };
+  }
 
   recordRefusal(G, c);
   note(G, `${them.name} refuses the contract.`);
@@ -1550,7 +1555,7 @@ export function proposeContract(G, c) {
     G.log.unshift({ kind: 'voice', who: them.i, circuit: G.circuit, text: line });
     trim(G);
   }
-  return { ok: true, pending: false, accepted: false, counter };
+  return { ok: true, pending: false, accepted: false, counter, said };
 }
 
 export function respondToContract(G, accept) {
@@ -1567,21 +1572,6 @@ export function respondToContract(G, accept) {
   settleContract(G, c);
   return true;
 }
-
-const CONTRACT_LINES = {
-  spector: {
-    yes: ['The arithmetic favours it. Done.', 'Accepted. It prices correctly.'],
-    no: ['No. Your side is worth more than mine.', 'Declined. The numbers do not meet.']
-  },
-  varan: {
-    yes: ['Filed, and against my better judgement.', 'Approved. Do not read anything into it.'],
-    no: ['Denied.', 'I am not in the business of improving your position.', 'No. Next.']
-  },
-  vale: {
-    yes: ['Delightful. Let us shake on it.', 'Yes! I do enjoy an arrangement.'],
-    no: ['Ah — I think not, on reflection.', 'A charming idea, and no.']
-  }
-};
 
 /* ============================================================ opponents */
 // What a square is worth to `p` once buying it out of pledge is allowed for.

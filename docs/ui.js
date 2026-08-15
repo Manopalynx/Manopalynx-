@@ -5,7 +5,7 @@
 
 import {
   SETS, BOARD, N, JAIL, GOTO, FLEETS, UTILS, TRAFFIC, FLEET_RENT, PERSONAS, RULES, EPIGRAPH, CONTINGENCY, COLUMN,
-  BUILD
+  CONTRACT_LINES, BUILD
 } from './data.js';
 import * as E from './engine.js';
 import { Score, moodFor } from './score.js';
@@ -1799,6 +1799,17 @@ function refreshTrade() {
   if (propose) propose.disabled = TR.get === null && TR.give === null;
 }
 
+// What an opponent said, and whose words they are. `qv` marks the author's own,
+// lifted from the novel; anything without it was written for the game. The
+// square panel already draws that distinction and this draws the same one, so a
+// line Sam did not write is identifiable on the screen rather than only in
+// data.js.
+function saidBlock(said) {
+  if (!said || !said.t) return '';
+  return `<div class="card${said.qv ? ' quoted' : ''}">“${esc(said.t)}”${
+    said.qv ? '<span class="attrib">HIS OWN WORDS — GRANDIOSE</span>' : ''}</div>`;
+}
+
 function sendTrade() {
   readTradeCash();
   const proposal = { ...TR };
@@ -1812,9 +1823,30 @@ function sendTrade() {
     return;
   }
   if (r.pending) { tick(); return; }              // a human must answer
+
+  // Agreeing used to happen in silence: the squares moved, the sheet closed,
+  // and the only sign anybody had spoken was a line in the ledger. A refusal
+  // got a screen. Now both do, and both quote the opponent.
+  if (r.accepted) {
+    const them = G.players[proposal.to];
+    const names = list => E.sqList(list).map(sq => BOARD[sq].n);
+    const got = names(proposal.get), gave = names(proposal.give);
+    const row = (label, value) =>
+      `<div class="stat"><span>${label}</span><span>${esc(value)}</span></div>`;
+    sheet(`<h3>Agreed</h3><div class="sub">${esc(them.name)}</div>
+      ${saidBlock(r.said)}
+      ${got.length ? row('You receive', got.join(' · ')) : ''}
+      ${gave.length ? row('You give', gave.join(' · ')) : ''}
+      ${proposal.cash ? row(proposal.direction === 1 ? 'You pay' : 'They pay',
+                            money(proposal.cash)) : ''}
+      ${btns([['Close', 'closeSheet', 'pri wide']])}`);
+    save(); render();
+    return;
+  }
+
   if (!r.accepted) {
     const them = G.players[proposal.to];
-    const line = G.log[0];
+    const line = r.said;
     if (r.counter) {
       COUNTER = r.counter;
       const me = G.players[proposal.from];
@@ -1824,7 +1856,7 @@ function sendTrade() {
       // the affordability check belongs on their purse rather than yours.
       const selling = proposal.direction === 2;
       sheet(`<h3>Refused — but they name a price</h3><div class="sub">${esc(them.name)}</div>
-        <div class="card">“${esc(line ? line.text : '')}”</div>
+        ${saidBlock(line)}
         <div class="stat"><span>You asked</span><span>${money(proposal.cash)}</span></div>
         <div class="stat"><span>${selling ? 'They will pay' : 'They want'}</span>
           <span>${money(r.counter.cash)}</span></div>
@@ -1845,7 +1877,7 @@ function sendTrade() {
       }
     } else {
       sheet(`<h3>Refused</h3><div class="sub">${esc(them.name)}</div>
-        <div class="card">“${esc(line ? line.text : 'No.')}”</div>
+        ${saidBlock(line || { t: 'No.' })}
         ${btns([['Close', 'closeSheet', 'pri wide']])}`);
     }
   }
@@ -2135,6 +2167,7 @@ window.__tick = () => tick();
 // three boards apart. The probe compares them, so it needs both.
 window.__E = () => E;
 window.__CON = () => CONTINGENCY;
+window.__CONTRACT_LINES = () => CONTRACT_LINES;
 window.__COL = () => COLUMN;
 // Cards are dealt by tick(), never by a button, so the sheet has no handle of
 // its own to reach for.
