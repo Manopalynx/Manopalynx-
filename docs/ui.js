@@ -505,12 +505,28 @@ function renderActions() {
     return;
   }
 
+  // Doubles buy another roll, and the engine has always known it: endTurn with
+  // rollAgain set goes straight back to the roll phase and charges no upkeep.
+  // What it did NOT do was say so. The only way through was a button marked
+  // "End turn", which is the opposite of what it does here, and then a second
+  // press to roll. Settle the square, then roll again, in one press.
+  //
+  // Not optional, so it is not offered as a choice: endTurn always routes back
+  // to the roll while rollAgain stands. End turn is disabled until it is taken.
+  const owesRoll = G.phase === 'end' && G.rollAgain && !p.inFacility;
+  const lastSafe = RULES.doublesToDetention - 1;
+
   const primary = G.phase === 'roll'
     ? actBtn('Roll', 'act_roll()', 'pri',
         p.inFacility ? `held · attempt ${p.attempts + 1} of ${RULES.facilityAttempts}` : '&nbsp;')
     : G.phase === 'landed'
       ? (() => { const q = phraseLanding(E.landingPreview(G)); return actBtn(q.label, 'act_resolve()', 'pri', q.sub); })()
-      : actBtn('Roll', '', '', '&nbsp;', true);
+      : owesRoll
+        ? actBtn('Roll again', 'act_rollAgain()', 'pri',
+            G.doublesRun >= lastSafe
+              ? `${G.doublesRun} doubles · a third is filed`
+              : `doubles · no upkeep yet`)
+        : actBtn('Roll', '', '', '&nbsp;', true);
 
   const canAmend = G.phase === 'landed' && p.amends > 0 && p.cash >= E.amendCost(p);
   // While detained the second slot settles with the Overseer instead of amending
@@ -535,8 +551,10 @@ function renderActions() {
     + relational
     // Upkeep is charged by ending the turn, so this is where it belongs. It was
     // only ever visible inside the Manage sheet, which is not where you pay it.
-    + actBtn('End turn', 'act_end()', G.phase === 'end' ? 'pri' : '',
-        E.upkeep(p) ? `upkeep ${money(E.upkeep(p))}` : '&nbsp;', G.phase !== 'end');
+    + actBtn('End turn', 'act_end()', G.phase === 'end' && !owesRoll ? 'pri' : '',
+        owesRoll ? 'after the doubles roll'
+          : E.upkeep(p) ? `upkeep ${money(E.upkeep(p))}` : '&nbsp;',
+        G.phase !== 'end' || owesRoll);
   bindActs();
 }
 
@@ -788,7 +806,7 @@ function walk(path, done) {
 
 /* ============================================================ actions */
 const ACTIONS = {
-  act_roll, act_resolve, act_amend, act_end,
+  act_roll, act_resolve, act_amend, act_end, act_rollAgain,
   showSquare, showManage, showTrade, showTithe, showRevolt, showFinal, showLedger, showDecks,
   closeSheet, newGame, copyResult, toggleLog, act_payFee, act_pardon, showMenu, toggleScore, showPlayer,
   showSettle, settlePledge, settleSellG, settleBreak, settleAuto, settleDone,
@@ -864,6 +882,21 @@ function act_end() {
   if (G.phase !== 'end') return;
   E.endTurn(G);
   tick();
+}
+
+// Take the roll the doubles bought, without the trip through a button marked
+// "End turn". endTurn does the routing -- it clears rollAgain, returns the
+// phase to 'roll' and charges no upkeep -- and then this rolls it, so settling
+// the square and throwing again is one press rather than two.
+//
+// It checks the phase actually moved before rolling rather than assuming it.
+// endTurn declines to move at all once the game is over, and a player detained
+// on the way here keeps the turn-ending path instead.
+function act_rollAgain() {
+  if (G.phase !== 'end' || !G.rollAgain) return;
+  E.endTurn(G);
+  if (G.phase !== 'roll') { tick(); return; }
+  act_roll();
 }
 
 function runCard() {

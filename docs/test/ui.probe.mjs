@@ -1151,6 +1151,48 @@ for (const device of DEVICES) {
     TR.direction = before.direction;
     return { seats: G.players.length, seen };
   });
+  // Doubles: settle the square, then roll again, in one press. The engine has
+  // always routed endTurn back to the roll phase while rollAgain stands; what
+  // this checks is that the interface SAYS so and does it in one tap, and that
+  // the upkeep really is still owed afterwards rather than quietly taken twice.
+  const dbl = await page.evaluate(async () => {
+    const G = window.__G();
+    const before = { phase: G.phase, rollAgain: G.rollAgain, run: G.doublesRun, cur: G.cur };
+    const p = G.players[G.cur];
+    p.inFacility = false;
+    G.phase = 'end';
+    G.rollAgain = true;
+    G.doublesRun = 1;
+    window.__render();
+
+    const btnFor = label => [...document.querySelectorAll('#acts button')]
+      .find(b => b.textContent.trim().startsWith(label));
+    const again = btnFor('Roll again');
+    const end = btnFor('End turn');
+    const seen = {
+      offered: !!again,
+      sub: again ? again.textContent.replace(/\s+/g, ' ').trim() : null,
+      // You cannot decline the roll, so the turn-ending path must not be live.
+      endDisabled: end ? (end.disabled || end.getAttribute('aria-disabled') === 'true') : null,
+      cashBefore: p.cash,
+      turnBefore: G.turn
+    };
+    if (again) again.click();
+    await new Promise(r => setTimeout(r, 900));
+    seen.phaseAfter = G.phase;
+    seen.stillMyTurn = G.cur === before.cur;
+    seen.rollAgainCleared = G.rollAgain === false || G.doublesRun > 1;
+
+    G.phase = before.phase; G.rollAgain = before.rollAgain; G.doublesRun = before.run;
+    window.__render();
+    return seen;
+  });
+  if (!dbl.offered) fail('no "Roll again" offered after a doubles roll');
+  else if (dbl.endDisabled !== true) fail('"End turn" was still live while a doubles roll was owed');
+  else if (dbl.phaseAfter === 'end' && dbl.stillMyTurn) fail('"Roll again" did not roll — still sitting in the end phase');
+  else if (!dbl.stillMyTurn) fail('"Roll again" passed the turn on instead of rolling again');
+  else pass(`doubles roll again in one press (${dbl.sub}, then ${dbl.phaseAfter})`);
+
   // The sealed-bid sheet names the square's colour group and says who already
   // holds what of it. Driven through the real phase machine -- openAuction then
   // a tick -- rather than by calling the renderer, so the routing is exercised
