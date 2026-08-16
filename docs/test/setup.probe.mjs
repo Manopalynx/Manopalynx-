@@ -111,6 +111,54 @@ for (const device of DEVICES) {
   if (stillFour === 0) pass('a full table takes no opponent');
   else fail(`${stillFour} opponents joined a full table`);
 
+  // ---- the purse, which is now chosen rather than fixed ----
+  // The figure a seat is dealt reaches the table through createGame, not
+  // through RULES, so the way to check it is to start a game and read a purse.
+  // Reading the button's own label back would pass with the option wired to
+  // nothing at all.
+  const purse = await page.evaluate(async () => {
+    const btns = [...document.querySelectorAll('[data-c]')].map(b => +b.dataset.c);
+    const on = document.querySelector('[data-c].on');
+    const dflt = on ? +on.dataset.c : null;
+    // Pick something that is NOT the default, so a wired-up option and a
+    // hard-coded one look different.
+    const other = btns.find(v => v !== dflt);
+    document.querySelector(`[data-c="${other}"]`).click();
+    return { btns, dflt, other,
+             note: (document.querySelector('[data-c]').closest('.fld') || document).innerText };
+  });
+  if (purse.btns.length >= 2) pass(`the purse is offered at ${purse.btns.length} figures `
+    + `(${purse.btns.map(v => '₡' + v).join(', ')})`);
+  else fail(`only ${purse.btns.length} purse options`);
+  if (purse.dflt === 2000) pass('and opens on the figure everything is balanced against (₡2000)');
+  else fail(`the setup opens on ₡${purse.dflt}`);
+  // "More money is harder" is the counter-intuitive half and the reason the
+  // note exists at all; a screen that offers the number without it misleads.
+  if (/harder/i.test(purse.note)) pass('and says plainly that more money is harder');
+  else fail('the purse note does not warn that more money is harder');
+
+  await page.click('[data-h="1"]');
+  await page.click('[data-a="spector"]');
+  await page.click('#begin');
+  await page.waitForSelector('#game:not(.hidden)');
+  const dealt = await page.evaluate(() => {
+    const G = window.__G();
+    return { cash: G.players.map(p => p.cash), stored: G.startingCash };
+  });
+  if (dealt.cash.every(c => c === purse.other) && dealt.stored === purse.other)
+    pass(`a chosen purse reaches the table (₡${purse.other} to every seat)`);
+  else fail(`chose ₡${purse.other}, seats were dealt ${JSON.stringify(dealt.cash)}`);
+  // The menu names it, so a screenshot says which game was being played.
+  const said = await page.evaluate(() => { window.showMenu(); return document.getElementById('buildLine').innerText; });
+  // Strip the thousands separator before comparing — money() renders ₡1,000
+  // and the digits alone do not appear anywhere in that string.
+  if (said.replace(/,/g, '').includes(String(purse.other))) pass('and the menu names it beside the build');
+  else fail(`the build line does not name the purse: "${said.replace(/\n/g, ' ')}"`);
+  await page.evaluate(() => window.closeSheet());
+
+  await page.goto(URL, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#begin');
+
   // ---- the sheet that meets a player before their first game ----
   // One seat and no opponents is refused, correctly. Its Close button was
   // written data-fn="closeSheet()" against forty-odd written without the

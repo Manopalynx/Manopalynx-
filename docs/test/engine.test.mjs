@@ -528,6 +528,30 @@ test('passing the ledger opening pays 200 exactly once per lap', () => {
 // The lap payment against an outstanding marker. RULES.lapRepaysDebt is the
 // only route out of a marker that a marker cannot block, so these pin the
 // arithmetic of it and the fact that clearing one restores what it took away.
+// The purse each seat is dealt is chosen at setup now, so it is a property of
+// the GAME rather than a read of RULES at deal time. These pin that it is
+// honoured, that it defaults, and that it survives a save -- a game resumed
+// with the wrong purse would not announce itself, it would just play wrong.
+test('a game is dealt the purse it was created with', () => {
+  const G = createGame({ seats: seats4, seed: 1, startingCash: 3000 });
+  for (const p of G.players) assert.equal(p.cash, 3000);
+  assert.equal(G.startingCash, 3000, 'and the game remembers it');
+});
+
+test('a game created without a purse falls back to the rule', () => {
+  const G = createGame({ seats: seats4, seed: 1 });
+  for (const p of G.players) assert.equal(p.cash, RULES.startingCash);
+  assert.equal(G.startingCash, RULES.startingCash);
+  assert.notEqual(RULES.startingCash, 3000,
+    'the default must differ from the figure above, or neither test proves anything');
+});
+
+test('a non-default purse survives a save and resume', () => {
+  const G = createGame({ seats: seats4, seed: 1, startingCash: 1000 });
+  const back = deserialize(serialize(G));
+  assert.equal(back.startingCash, 1000);
+});
+
 test('the lap payment goes against a debt marker before it reaches the purse', () => {
   const G = game();
   const [a] = G.players;

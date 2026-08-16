@@ -37,11 +37,17 @@ function shuffled(G, n) {
 }
 
 /* ============================================================ setup */
-export function createGame({ seats, seed = 1, circuits = 72 } = {}) {
+// startingCash is a per-GAME figure rather than a read of RULES at deal time,
+// because the setup screen now offers it and a saved game has to resume with
+// the purse it was dealt. It defaults to the rule, so every existing caller --
+// and every test that asserts against RULES.startingCash -- is unchanged.
+export function createGame({ seats, seed = 1, circuits = 72,
+                             startingCash = RULES.startingCash } = {}) {
   const G = {
     seed,
     rngState: seed >>> 0,
     circuits,
+    startingCash,
     players: [],
     cur: 0,
     circuit: 1,
@@ -73,7 +79,7 @@ export function createGame({ seats, seed = 1, circuits = 72 } = {}) {
     name: s.name,
     kind: s.kind,                  // 'human' | 'ai'
     persona: s.persona || null,
-    cash: RULES.startingCash,
+    cash: startingCash,
     pos: 0,
     inFacility: false,
     attempts: 0,

@@ -67,8 +67,27 @@ const setup = {
   humans: 1,
   names: ['Samuel', 'Vex', 'Rourke', 'Ondh'],
   ais: [],
-  circuits: 72
+  circuits: 72,
+  cash: RULES.startingCash
 };
+
+// The purse each seat is dealt. Every figure the game is balanced around comes
+// from the default, and the note on the screen says which one that is, because
+// an option offered without one is a trap for the player who picks it once and
+// then wonders why the game reads differently.
+//
+// The labels are not decoration. Measured over 200 games a cell on a four-seat
+// table, one human: MORE MONEY IS HARDER, which is the opposite of what a
+// player will assume. The opponents build with it and charge you for it, and a
+// human's win rate falls the whole way up the range. Anyone who reads "4000"
+// as "an easy game" has been misled by the number alone.
+const CASH_CHOICES = [
+  [1000, 'Lean', 'Barely a purse. The board is bought slowly and on credit.'],
+  [1500, 'Tight', 'Room for a set, not for a mistake.'],
+  [2000, 'Standard', 'What every figure in the game is balanced against.'],
+  [3000, 'Flush', 'The board goes up fast, and the rents with it.'],
+  [4000, 'Ruinous', 'Everyone can build everything. Somebody will be absorbed.']
+];
 
 function drawSetup() {
   const saved = loadSaved();
@@ -106,6 +125,16 @@ function drawSetup() {
       <p class="note" style="margin-top:10px">Something is coming from outside the galaxy and
       it does not negotiate. This is how long you have before it gets here — and whoever holds
       the most when it does, held the most. The deep array will keep you posted.</p>
+    </div>
+    <div class="fld"><label>Credits dealt to each seat</label>
+      <div class="opts">${CASH_CHOICES.map(([v, n]) =>
+        `<button class="opt${setup.cash === v ? ' on' : ''}" data-c="${v}">${money(v)}</button>`).join('')}</div>
+      <p class="note" style="margin-top:10px"><b>${esc(CASH_CHOICES.find(c => c[0] === setup.cash)[1])}.</b>
+      ${esc(CASH_CHOICES.find(c => c[0] === setup.cash)[2])}
+      ${setup.cash === RULES.startingCash ? ''
+        : `<br><br>Every target and price in the game is calibrated against
+           ${money(RULES.startingCash)}. More money is <b>harder</b>, not easier — the opponents
+           build with it and charge you for it.`}</p>
     </div>
     <div class="fld"><label>Sound</label>
       <div class="opts">${[['1', 'On'], ['0', 'Off']].map(([v, n]) =>
@@ -154,6 +183,9 @@ function drawSetup() {
   $('setup').querySelectorAll('[data-t]').forEach(b => b.onclick = () => {
     setup.circuits = +b.dataset.t; drawSetup();
   });
+  $('setup').querySelectorAll('[data-c]').forEach(b => b.onclick = () => {
+    setup.cash = +b.dataset.c; drawSetup();
+  });
   $('begin').onclick = begin;
   if ($('resume')) $('resume').onclick = () => { G = saved; startShell(); };
 }
@@ -171,7 +203,8 @@ function begin() {
   }
   setup.ais.forEach(k => seats.push({ name: PERSONAS[k].n, kind: 'ai', persona: k }));
   resetSoundWatch();
-  G = E.createGame({ seats, seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0, circuits: setup.circuits });
+  G = E.createGame({ seats, seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0,
+    circuits: setup.circuits, startingCash: setup.cash });
   G.log.unshift({ kind: 'leader', circuit: 1, text: 'Nine systems are burning their drives to readiness. Begin.' });
   clearSave();
   startShell();
@@ -978,9 +1011,11 @@ function showMenu() {
     only starting a new one does.</p>
     <p style="font-size:12px;color:var(--dim);line-height:1.6;margin-top:10px;
        font-variant-numeric:tabular-nums" id="buildLine">
-    Build <b>${esc(BUILD)}</b> · seed <b>${G.seed >>> 0}</b><br>
-    Quote both of these in a bug report — the build says whether you are on the
-    current version, and the seed replays the same dice and the same opponents.</p>`);
+    Build <b>${esc(BUILD)}</b> · seed <b>${G.seed >>> 0}</b>
+    · ${G.circuits} circuits · dealt <b>${money(G.startingCash ?? RULES.startingCash)}</b><br>
+    Quote these in a bug report — the build says whether you are on the current
+    version, the seed replays the same dice and the same opponents, and the last
+    two say which game was being played, since both are now chosen at setup.</p>`);
 }
 // Through Sound.setOn rather than Score.toggle, so the choice is written down
 // and the setup screen comes back up agreeing with it next launch.
