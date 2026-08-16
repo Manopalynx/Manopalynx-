@@ -2175,6 +2175,47 @@ for (const device of DEVICES) {
     fail(`figures crowd the edge: ${tight.map(([k, v]) => `${k} ${v}px`).join(', ')}`);
   }
 
+  // ---- what changed while somebody else was acting ----
+  const digest = await page.evaluate(async () => {
+    const G = window.__G();
+    G.digest = []; G.digestSeen = 0;
+    const me = G.players[0];
+    G.cur = me.i; G.phase = 'roll'; G.over = false;
+    // Two that concern the player only as a spectator, and one they were party
+    // to — which they answered on a sheet of their own and must not be told
+    // about again.
+    G.digest.push({ tag: 'set', text: 'Vex completes Eden.', circuit: 4, who: [1] });
+    G.digest.push({ tag: 'swarm', text: 'The deep array logs a bearing it cannot resolve.', circuit: 4, who: [] });
+    G.digest.push({ tag: 'trade', text: 'You and Vex settle a contract.', circuit: 4, who: [me.i, 1] });
+    window.__tick();
+    const sheet = document.querySelector('.sheet');
+    const first = {
+      heading: sheet ? (sheet.querySelector('h3')?.textContent || '').trim() : null,
+      text: sheet ? sheet.textContent.replace(/\s+/g, ' ') : '',
+      rows: sheet ? sheet.querySelectorAll('.stat').length : 0
+    };
+    // Acknowledge, then come back to the same turn: it must not raise again.
+    document.querySelector('.sheet [data-fn="closeSheet"]')?.click();
+    await new Promise(r => setTimeout(r, 40));
+    G.phase = 'roll';
+    window.__tick();
+    const again = !!document.querySelector('.sheet');
+    return { first, again, seen: G.digestSeen, total: G.digest.length };
+  });
+  if (digest.first.heading !== 'While you were away') {
+    fail(`the digest did not appear at the top of a turn (heading "${digest.first.heading}")`);
+  } else if (digest.first.rows !== 2) {
+    fail(`the digest listed ${digest.first.rows} items, expected 2 — the one the player was party to should be dropped`);
+  } else if (/You and Vex settle/.test(digest.first.text)) {
+    fail('the digest repeated a contract the player answered themselves');
+  } else if (!/completes Eden/.test(digest.first.text) || !/deep array/.test(digest.first.text)) {
+    fail(`the digest is missing an item: ${digest.first.text.slice(0, 120)}`);
+  } else if (digest.again) {
+    fail('the digest raised itself again after being acknowledged');
+  } else {
+    pass(`the digest reports what changed and stands down once acknowledged (${digest.first.rows} items)`);
+  }
+
   if (errors.length) {
     fail(`${errors.length} runtime error(s)`);
     [...new Set(errors)].slice(0, 6).forEach(e => console.log('        ' + e));

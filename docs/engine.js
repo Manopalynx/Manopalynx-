@@ -55,6 +55,7 @@ export function createGame({ seats, seed = 1, circuits = 72 } = {}) {
     garrisonPool: RULES.garrisonPool,
     citadelPool: RULES.citadelPool,
     log: [],
+    digest: [],       // board-changing events since the human last acted
     over: false,
     winner: null,
     endReason: null,
@@ -205,6 +206,20 @@ function persona(G, p, key) {
 }
 const trim = G => { if (G.log.length > 120) G.log.pop(); };
 
+// Things worth being TOLD about, as opposed to things worth being able to look
+// up. The ledger already records everything; this is the short list that
+// changes the board while somebody else is acting, so a player coming back to
+// their turn is not expected to have watched it happen.
+//
+// Kept apart from the log rather than filtered out of it: the log trims at 120
+// entries, and a digest that quietly lost its oldest item would be worse than
+// none. `who` carries the seats involved so the interface can drop the ones the
+// player was party to and has already seen on a sheet of their own.
+const record = (G, tag, text, who = []) => {
+  if (!G.digest) G.digest = [];
+  G.digest.push({ tag, text, circuit: G.circuit, who });
+};
+
 /* ============================================================ money */
 // Returns true if settled in full. A shortfall against another PLAYER becomes
 // vassalage; a shortfall against the BANK becomes a debt marker. Nobody is
@@ -244,6 +259,7 @@ export function pay(G, from, to, amount) {
   else {
     from.debt += short;
     note(G, `${from.name} cannot settle with the bank. Restructuring — debt marker ${money(short)} at ${Math.round(RULES.debtInterest * 100)}% per turn.`);
+    record(G, 'debt', `${from.name} takes a debt marker of ${money(short)}.`, [from.i]);
     leaderSays(G, 'Debt is not a wound. It is an entry, and entries can be settled. Slowly.');
   }
   return false;
@@ -423,6 +439,7 @@ function vassalise(G, p, to) {
   bind(G, p, to);
   p.strength = 0;
   note(G, `${p.name} cannot settle the column and enters vassalage under ${to.name}.`);
+  record(G, 'vassalage', `${p.name} enters vassalage under ${to.name}.`, [p.i, to.i]);
   leaderSays(G, `A price was reached. ${p.name} keeps a flag and loses the arithmetic behind it. I have signed such an instrument myself.`);
   if (to.kind === 'ai') persona(G, to, 'vassal');
   if (p.kind === 'ai') persona(G, p, 'fell');
@@ -497,6 +514,8 @@ function openContest(G, vassal, incumbent, claimant) {
     else G.contest.queue.push(x.i);
   }
   note(G, `${vassal.name} falls, but is already sworn to ${incumbent.name}. ${claimant.name} presses a competing claim.`);
+  record(G, 'contest', `${claimant.name} presses a claim on ${vassal.name}, sworn to ${incumbent.name}.`,
+    [vassal.i, incumbent.i, claimant.i]);
   leaderSays(G, 'Two creditors, one debtor, and only one column it can post to. This is the oldest argument there is.');
   if (!G.contest.queue.length) resolveContest(G);
 }
@@ -527,6 +546,8 @@ function resolveContest(G) {
   }
   c.resolved = true;
   note(G, `${winner.name} takes the claim on ${v.name} for ${money(c.bids[winner.i] || 0)}.`);
+  record(G, 'contest', `${winner.name} takes the claim on ${v.name} for ${money(c.bids[winner.i] || 0)}.`,
+    [v.i, winner.i]);
   checkVictory(G);
 }
 
@@ -545,6 +566,7 @@ export function releaseVassal(G, lord, vassalIndex) {
   v.lord = null;
   v.strength = 0;                 // there is nothing left to bury it against
   note(G, `${lord.name} releases ${v.name}. The arrangement ends, and the upkeep with it.`);
+  record(G, 'release', `${lord.name} releases ${v.name}.`, [lord.i, v.i]);
   leaderSays(G, 'An instrument torn up is still an instrument. Somebody kept the copy.');
   checkVictory(G);
   return true;
@@ -904,6 +926,7 @@ export function endTurn(G) {
 // Everything after upkeep is settled: interest, then the next player.
 function finishTurn(G) {
   const p = current(G);
+  noteCompletedSets(G);
   // Every turn under the arrangement is a turn counted.
   //
   // Strength used to come only from the overlord's cut of rent the VASSAL
@@ -965,7 +988,35 @@ export function announceSwarm(G) {
   if (reached < (G.swarmMark ?? 0)) return;
   if (reached < 0) return;
   leaderSays(G, `${SWARM_STAGES[reached].t} ${swarmDistance(G)} circuits.`);
+  // Four of these in a game, written to escalate. They are the only thing in
+  // the digest that is not a move somebody made, and the reason the ending
+  // arrives as pressure rather than as a number running out -- which only lands
+  // if all four are actually read, and in order.
+  record(G, 'swarm', `${SWARM_STAGES[reached].t} ${swarmDistance(G)} circuits.`);
   G.swarmMark = reached + 1;
+}
+
+// A colour set falling wholly into one pair of hands, by whatever route: bought,
+// won at auction, traded for, or inherited when somebody was absorbed. Found by
+// DIFFING ownership against the last turn rather than by recording it at each of
+// those four sites, so a fifth route cannot quietly miss it -- and absorption is
+// exactly such a route, since it moves a whole estate at once without any square
+// being bought.
+//
+// It matters more than most things in the digest: completing a set doubles the
+// bare rent across it and unlocks building, so the board charges differently
+// from that moment on.
+function noteCompletedSets(G) {
+  const held = G.setsHeld || {};
+  for (const key of Object.keys(SETS)) {
+    const owners = SETS[key].sq.map(i => ownerOf(G, i));
+    const whole = owners[0] && owners.every(o => o && o.i === owners[0].i) ? owners[0].i : null;
+    if (whole !== null && held[key] !== whole) {
+      record(G, 'set', `${G.players[whole].name} completes ${SETS[key].n}.`, [whole]);
+    }
+    held[key] = whole;
+  }
+  G.setsHeld = held;
 }
 
 // How many circuits carrying on should add, which is not the same question at
@@ -1145,6 +1196,7 @@ export function raiseCitadel(G, p, sq) {
   h.citadel = 1; h.garrisons = 0;
   G.citadelPool--; G.garrisonPool += 3;
   note(G, `${p.name} raises a citadel on ${BOARD[sq].n} — three garrisons return to the pool.`);
+  record(G, 'citadel', `${p.name} raises a citadel on ${BOARD[sq].n}. Rent there is now ${money(BOARD[sq].r[4])}.`, [p.i]);
   return true;
 }
 
@@ -1266,6 +1318,8 @@ export function settleContract(G, { from, to, give, get, cash, direction }) {
   if (gives.length) parts.push(`${b.name} takes ${names(gives)}`);
   if (amount) parts.push(`${money(amount)} to ${direction === 1 ? b.name : a.name}`);
   note(G, `Contract settled — ${parts.join(', ') || 'nothing changed hands'}.`);
+  record(G, 'trade', `${a.name} and ${b.name} settle a contract — ${
+    parts.join(', ') || 'nothing changed hands'}.`, [from, to]);
   leaderSays(G, pick(G, [
     'A price was agreed. That is the whole of it.',
     'Two ledgers reconciled. Both parties believe they won. One of them is right.',
