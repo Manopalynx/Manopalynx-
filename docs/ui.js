@@ -138,7 +138,7 @@ function drawSetup() {
       the most when it does, held the most. The deep array will keep you posted.</p>
     </div>
     <div class="fld"><label>Credits dealt to each seat</label>
-      <div class="opts">${CASH_CHOICES.map(([v, n]) =>
+      <div class="opts trio">${CASH_CHOICES.map(([v, n]) =>
         `<button class="opt${setup.cash === v ? ' on' : ''}" data-c="${v}">${money(v)}${
            dfltMark(v === RULES.startingCash)}</button>`).join('')}</div>
       <p class="note" style="margin-top:10px"><b>${esc(CASH_CHOICES.find(c => c[0] === setup.cash)[1])}.</b>

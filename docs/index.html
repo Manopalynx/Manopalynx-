@@ -64,6 +64,12 @@ button:disabled{opacity:.28}
      wraps -- the five purse options wrap 4+1 at 393pt and that is fine. */
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
 .opt.on{border-color:var(--gold);color:var(--gold);background:rgba(217,164,65,.10)}
+/* Five options wrap 4+1 on a phone, and the orphan then stretches to the full
+   width and reads like a different kind of thing from the four above it. A
+   basis of 30% fits three to a row and no more, so it breaks 3+2 and both rows
+   look chosen. Only on the row that needs it; every other picker has two or
+   three options and is already even. */
+.opts.trio .opt{flex:1 1 30%}
 /* Which option is the one every figure in the game is calibrated against.
    SELECTED and DEFAULT are different facts and the screen has to show both at
    once: the gold ring says what you have picked, this says what the game was

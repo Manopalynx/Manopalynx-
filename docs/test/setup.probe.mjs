@@ -180,6 +180,20 @@ for (const device of DEVICES) {
   else fail(`only ${purse.btns.length} purse options`);
   if (purse.dflt === 2000) pass('and opens on the figure everything is balanced against (₡2000)');
   else fail(`the setup opens on ₡${purse.dflt}`);
+  // Five options wrapped 4+1, and the orphan stretched to full width and read
+  // like a different kind of control from the four above it. 3+2 is the only
+  // other break a phone gives; anything leaving one on a row of its own is the
+  // defect coming back.
+  const wrap = await page.evaluate(() => {
+    const rows = {};
+    for (const b of document.querySelectorAll('[data-c]')) {
+      const t = Math.round(b.getBoundingClientRect().top);
+      (rows[t] = rows[t] || []).push(1);
+    }
+    return Object.values(rows).map(r => r.length);
+  });
+  if (wrap.length && !wrap.some(n => n === 1)) pass(`the purse row breaks ${wrap.join('+')} with no orphan`);
+  else fail(`the purse options wrap ${wrap.join('+')} at ${device.width}px`);
   // "More money is harder" is the counter-intuitive half and the reason the
   // note exists at all; a screen that offers the number without it misleads.
   if (/harder/i.test(purse.note)) pass('and says plainly that more money is harder');
