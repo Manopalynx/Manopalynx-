@@ -213,6 +213,26 @@ const edgeOf = i => {
 };
 
 const pipOf = p => PIPS[p.i % PIPS.length];
+// The number on a square: its price until somebody owns it, then what it costs
+// to land on. Once bought, the price is a fact about the past -- the live
+// question is what this square charges now, and it moves with every garrison
+// and citadel raised on it.
+//
+// Utilities cannot state a figure at all. Their rent is a MULTIPLE of the roll
+// (4x, or 10x when one player holds both), so any credit amount here would be
+// a number that is only true for a seven. They show the multiplier instead,
+// taken from rentOf with a roll of one so the 4-and-10 rule lives in the engine
+// and not in a second copy here.
+//
+// A pledged square charges nothing and says so, rather than showing a rent it
+// will not collect.
+function cellFigure(i, b, owner, held) {
+  if (!owner) return b.pr;
+  if (held && held.mortgaged) return '—';
+  if (b.t === 'u') return `×${E.rentOf(G, i, 1)}`;
+  return E.rentOf(G, i);
+}
+
 const colourOf = b => b.s ? SETS[b.s].c : b.t === 'f' ? 'var(--fleet)' : b.t === 'u' ? 'var(--util)' : null;
 
 /* ------------------------------------------------------- square marks */
@@ -483,7 +503,7 @@ function renderBoard() {
       ${colour ? `<div class="cbar" style="background:${colour}"></div>` : ''}
       ${ico ? `<svg class="cico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ico}</svg>` : ''}
       <div class="code">${esc(b.a)}</div>
-      ${b.pr ? `<div class="cpr">${b.pr}</div>` : ''}
+      ${b.pr ? `<div class="cpr${owner ? ' rent' : ''}">${cellFigure(i, b, owner, held)}</div>` : ''}
       ${dev ? `<div class="grr">${dev}</div>` : ''}
       <div class="toks">${toks}</div></div>`;
   });

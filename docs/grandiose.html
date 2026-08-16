@@ -176,7 +176,12 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
    the cell carries a code, and the centre panel names the square in full. */
 .cell .code{font-family:var(--m);font-size:10px;line-height:1.1;color:var(--body);
   margin-top:1px;letter-spacing:-.06em}
-.cell .cpr{font-family:var(--m);font-size:8px;color:var(--dim);margin-top:auto}
+.cell /* The figure on a square. Dim while it is a price nobody has paid; once owned
+   it is what landing there costs, and it brightens so the two cannot be read as
+   the same kind of number. See cellFigure in ui.js. */
+.cpr{font-family:var(--m);font-size:8px;color:var(--dim);margin-top:auto;
+  white-space:nowrap;overflow:hidden;text-overflow:clip}
+.cpr.rent{color:var(--tx);font-weight:600}
 /* The eighteen non-property squares carry a drawn mark.
    ABSOLUTELY placed, and that is the whole design. A mark stacked above the
    code was measured and does not fit: a left- or right-edge cell is 30.4px tall
@@ -484,7 +489,7 @@ __m.data = (function () {
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-const BUILD = 'grandiose-v64';
+const BUILD = 'grandiose-v65';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -5053,6 +5058,26 @@ const edgeOf = i => {
 };
 
 const pipOf = p => PIPS[p.i % PIPS.length];
+// The number on a square: its price until somebody owns it, then what it costs
+// to land on. Once bought, the price is a fact about the past -- the live
+// question is what this square charges now, and it moves with every garrison
+// and citadel raised on it.
+//
+// Utilities cannot state a figure at all. Their rent is a MULTIPLE of the roll
+// (4x, or 10x when one player holds both), so any credit amount here would be
+// a number that is only true for a seven. They show the multiplier instead,
+// taken from rentOf with a roll of one so the 4-and-10 rule lives in the engine
+// and not in a second copy here.
+//
+// A pledged square charges nothing and says so, rather than showing a rent it
+// will not collect.
+function cellFigure(i, b, owner, held) {
+  if (!owner) return b.pr;
+  if (held && held.mortgaged) return '—';
+  if (b.t === 'u') return `×${E.rentOf(G, i, 1)}`;
+  return E.rentOf(G, i);
+}
+
 const colourOf = b => b.s ? SETS[b.s].c : b.t === 'f' ? 'var(--fleet)' : b.t === 'u' ? 'var(--util)' : null;
 
 /* ------------------------------------------------------- square marks */
@@ -5323,7 +5348,7 @@ function renderBoard() {
       ${colour ? `<div class="cbar" style="background:${colour}"></div>` : ''}
       ${ico ? `<svg class="cico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ico}</svg>` : ''}
       <div class="code">${esc(b.a)}</div>
-      ${b.pr ? `<div class="cpr">${b.pr}</div>` : ''}
+      ${b.pr ? `<div class="cpr${owner ? ' rent' : ''}">${cellFigure(i, b, owner, held)}</div>` : ''}
       ${dev ? `<div class="grr">${dev}</div>` : ''}
       <div class="toks">${toks}</div></div>`;
   });

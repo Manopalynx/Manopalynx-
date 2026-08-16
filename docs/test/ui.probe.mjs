@@ -2059,6 +2059,82 @@ for (const device of DEVICES) {
     }
   }
 
+  // ---- the number on a square: price until owned, then what it charges ----
+  const figures = await page.evaluate(() => {
+    const G = window.__G(), BOARD = window.__BOARD(), SETS = window.__SETS(), E = window.__E();
+    const me = G.players[0], them = G.players[1];
+    for (const p of G.players) { p.holdings = []; p.lord = null; p.vassals = []; p.debt = 0; }
+    const eden = SETS.eden.sq;
+    const utils = BOARD.map((b, i) => [b, i]).filter(([b]) => b.t === 'u').map(([, i]) => i);
+    const unowned = BOARD.findIndex((b, i) => b.pr && b.s && !eden.includes(i));
+
+    // Eden entire, so eden[0] bare is the DOUBLED rent a complete set charges --
+    // the first version of this check expected r[0] and read 28 against 14,
+    // which was the rule working and the expectation wrong. A lone square from
+    // another set covers the undoubled case beside it.
+    const lone = SETS.ven.sq[0];
+    me.holdings = [
+      { sq: eden[0], garrisons: 0, citadel: 0, mortgaged: 0 },   // bare, set complete
+      { sq: eden[1], garrisons: 2, citadel: 0, mortgaged: 0 },   // two garrisons
+      { sq: eden[2], garrisons: 0, citadel: 1, mortgaged: 0 },   // citadel
+      { sq: lone, garrisons: 0, citadel: 0, mortgaged: 0 },      // bare, set incomplete
+      { sq: utils[0], garrisons: 0, citadel: 0, mortgaged: 0 }   // one utility of two
+    ];
+    them.holdings = [{ sq: unowned + 0, garrisons: 0, citadel: 0, mortgaged: 1 }];  // pledged
+    window.__render();
+
+    const read = i => {
+      const el = document.querySelector(`.cell[data-i="${i}"] .cpr`);
+      if (!el) return null;
+      return {
+        text: el.textContent.trim(),
+        rent: el.classList.contains('rent'),
+        clipped: el.scrollWidth > el.clientWidth + 0.5
+      };
+    };
+    const out = {
+      unownedIdx: utils[1],
+      unowned: read(utils[1]), unownedPrice: BOARD[utils[1]].pr,
+      bare: read(eden[0]), bareWant: BOARD[eden[0]].r[0] * 2,
+      lone: read(lone), loneWant: BOARD[lone].r[0],
+      two: read(eden[1]), twoWant: BOARD[eden[1]].r[2],
+      cit: read(eden[2]), citWant: BOARD[eden[2]].r[4],
+      util: read(utils[0]),
+      pledged: read(them.holdings[0].sq)
+    };
+    // Both utilities to one player: the multiplier must move 4 -> 10.
+    me.holdings.push({ sq: utils[1], garrisons: 0, citadel: 0, mortgaged: 0 });
+    window.__render();
+    out.bothUtils = read(utils[0]);
+    // Every figure on the board, for clipping.
+    out.anyClipped = [...document.querySelectorAll('.cell .cpr')]
+      .filter(e => e.scrollWidth > e.clientWidth + 0.5).map(e => e.textContent.trim());
+    return out;
+  });
+
+  const eq = (got, want, label) => got && got.text === String(want)
+    ? null : `${label}: showed "${got && got.text}" wanted "${want}"`;
+  const figureFaults = [
+    eq(figures.unowned, figures.unownedPrice, 'an unowned square'),
+    eq(figures.bare, figures.bareWant, 'a bare holding in a complete set'),
+    eq(figures.lone, figures.loneWant, 'a bare holding in an incomplete set'),
+    eq(figures.two, figures.twoWant, 'two garrisons'),
+    eq(figures.cit, figures.citWant, 'a citadel'),
+    eq(figures.util, '×4', 'one utility'),
+    eq(figures.bothUtils, '×10', 'both utilities'),
+    eq(figures.pledged, '—', 'a pledged square'),
+    figures.unowned && figures.unowned.rent ? 'an unowned square is styled as rent' : null,
+    figures.cit && !figures.cit.rent ? 'a citadel rent is not styled as rent' : null
+  ].filter(Boolean);
+  if (!figureFaults.length) {
+    pass(`a square shows price then rent (bare ${figures.lone.text}, set ${figures.bare.text}, 2G ${figures.two.text}, ` +
+         `citadel ${figures.cit.text}, utility ${figures.util.text}/${figures.bothUtils.text}, pledged ${figures.pledged.text})`);
+  } else {
+    fail(`square figures wrong — ${figureFaults.join(' | ')}`);
+  }
+  if (!figures.anyClipped.length) pass('no figure is clipped by its cell');
+  else fail(`clipped figures: ${figures.anyClipped.slice(0, 6).join(', ')}`);
+
   if (errors.length) {
     fail(`${errors.length} runtime error(s)`);
     [...new Set(errors)].slice(0, 6).forEach(e => console.log('        ' + e));

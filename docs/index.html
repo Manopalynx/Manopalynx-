@@ -176,7 +176,12 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
    the cell carries a code, and the centre panel names the square in full. */
 .cell .code{font-family:var(--m);font-size:10px;line-height:1.1;color:var(--body);
   margin-top:1px;letter-spacing:-.06em}
-.cell .cpr{font-family:var(--m);font-size:8px;color:var(--dim);margin-top:auto}
+.cell /* The figure on a square. Dim while it is a price nobody has paid; once owned
+   it is what landing there costs, and it brightens so the two cannot be read as
+   the same kind of number. See cellFigure in ui.js. */
+.cpr{font-family:var(--m);font-size:8px;color:var(--dim);margin-top:auto;
+  white-space:nowrap;overflow:hidden;text-overflow:clip}
+.cpr.rent{color:var(--tx);font-weight:600}
 /* The eighteen non-property squares carry a drawn mark.
    ABSOLUTELY placed, and that is the whole design. A mark stacked above the
    code was measured and does not fit: a left- or right-edge cell is 30.4px tall
