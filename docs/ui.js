@@ -344,16 +344,33 @@ const chipName = E.displayName;
 
 function renderBar() {
   const chips = G.players.map((p, i) => {
-    const rel = p.lord !== null
-      ? `<div class="vs">vassal · ${esc(chipName(G.players[p.lord]))}</div>`
-      : p.vassals.length ? `<div class="vs">overlord ×${p.vassals.length}</div>` : '';
+    // ONE status line, always rendered, even when it has nothing to say.
+    //
+    // It used to appear only when there was something to report, so the chip
+    // grew by a line the moment a player took a marker or entered vassalage --
+    // and vassalage grows TWO chips at once, the new vassal's and the new
+    // overlord's. The chip row sits above the board, so the whole screen
+    // stepped down under a thumb mid-turn. That is the row-jump defect this
+    // repository keeps re-finding: text added to an element moves what is
+    // beneath it, and no amount of scroll handling fixes a layout that changed
+    // height. A reserved line cannot.
+    //
+    // Both facts share the line rather than stacking, so the reserve is one
+    // line and not two; .vs is nowrap and ellipsises if a long pair meets a
+    // narrow chip.
+    const bits = [];
+    if (p.debt) bits.push(`debt ${money(p.debt)}`);
+    if (p.lord !== null) bits.push(`vassal · ${chipName(G.players[p.lord])}`);
+    else if (p.vassals.length) bits.push(`overlord ×${p.vassals.length}`);
+    const rel = `<div class="vs"${p.debt ? ' style="color:var(--warn)"' : ''}>${
+      bits.length ? esc(bits.join(' · ')) : '&nbsp;'}</div>`;
     const held = p.holdings.length;
     return `<button class="pchip${i === G.cur ? ' act' : ''}" data-who="${i}"
         aria-label="${esc(p.name)} — ${held} holding${held === 1 ? '' : 's'}">
       <div class="nm"><span class="pip" style="background:${pipOf(p)}"></span><span class="who">${esc(chipName(p))}</span></div>
       <div class="cashRow"><span class="cash">${money(p.cash)}</span>
         <span class="chipMore" aria-hidden="true">${held}<span class="chev">›</span></span></div>
-      ${p.debt ? `<div class="vs" style="color:var(--warn)">debt ${money(p.debt)}</div>` : ''}${rel}</button>`;
+      ${rel}</button>`;
   }).join('');
   $('bar').innerHTML = chips + `<button class="menuBtn" id="menuBtn" aria-label="Menu">☰</button>`;
   $('menuBtn').onclick = () => { Score.resume(); showMenu(); };
@@ -1999,6 +2016,14 @@ function showContract() {
         ? `${esc(to.name)} also receives ${money(c.cash)}`
         : `${esc(to.name)} also pays ${money(c.cash)}`)
       : 'No credits change hands.'}</div>
+    <!-- Both purses. The sheet where YOU propose has stated the other side's
+         since v56; this one, where they propose to you, stated neither -- and
+         it is the side that matters more, because being asked to pay ₡500
+         reads completely differently at ₡600 in hand than at ₡6,000. Whether
+         they can cover their own half is worth seeing too. -->
+    <div class="stat" data-purse="you"><span>You hold</span><span>${money(to.cash)}</span></div>
+    <div class="stat" data-purse="them"><span>${esc(chipName(from))} holds</span>
+      <span>${money(from.cash)}${from.debt ? ` · <b style="color:var(--warn)">debt ${money(from.debt)}</b>` : ''}</span></div>
     ${btns([['Accept', 'answerContract|1', 'pri'], ['Refuse', 'answerContract|0', 'dgr']])}`);
 }
 function answerContract(accept) {

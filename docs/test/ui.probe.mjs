@@ -1983,6 +1983,82 @@ for (const device of DEVICES) {
     pass("a line taken from the novel is marked as the author's on screen");
   }
 
+  // ---- the chip row must not change height when the board changes ----
+  //
+  // Becoming a vassal used to add a line to a player chip, and vassalage grows
+  // TWO chips at once -- the new vassal's and the new overlord's. The chip row
+  // sits above the board, so the whole screen stepped down mid-turn. Measured
+  // rather than inspected: the heights and the board's own top, before and
+  // after, through a real vassalage.
+  const chipJump = await page.evaluate(async () => {
+    const G = window.__G(), E = window.__E();
+    const heights = () => [...document.querySelectorAll('.pchip')]
+      .map(c => +c.getBoundingClientRect().height.toFixed(1));
+    const boardTop = () => +document.getElementById('board').getBoundingClientRect().top.toFixed(1);
+
+    for (const p of G.players) { p.lord = null; p.vassals = []; p.debt = 0; }
+    window.__render();
+    const before = { chips: heights(), board: boardTop() };
+
+    // A real bankruptcy into another player, which is the only route in.
+    const debtor = G.players[1], creditor = G.players[0];
+    debtor.cash = 0; debtor.holdings = []; creditor.cash = 5000;
+    E.pay(G, debtor, creditor, 400);
+    window.__render();
+    const after = { chips: heights(), board: boardTop() };
+
+    return {
+      before, after,
+      sworn: debtor.lord === creditor.i,
+      status: [...document.querySelectorAll('.pchip .vs')].length,
+      chips: document.querySelectorAll('.pchip').length
+    };
+  });
+  if (!chipJump.sworn) fail('the probe could not create a vassal to measure the jump');
+  else {
+    const grew = chipJump.before.chips.some((h, i) => Math.abs(h - chipJump.after.chips[i]) > 0.5);
+    const moved = Math.abs(chipJump.before.board - chipJump.after.board);
+    if (!grew && moved <= 0.5) {
+      pass(`the chip row holds its height through a vassalage (board moved ${moved}px)`);
+    } else {
+      fail(`vassalage moved the board ${moved}px; chips ${chipJump.before.chips} -> ${chipJump.after.chips}`);
+    }
+    // Every chip reserves the line whether or not it has anything to say.
+    if (chipJump.status === chipJump.chips) pass('every chip reserves its status line');
+    else fail(`${chipJump.status} status lines across ${chipJump.chips} chips — the reserve is conditional`);
+  }
+
+  // ---- an offer made TO you states both purses ----
+  const offered = await page.evaluate(async () => {
+    const G = window.__G(), E = window.__E(), BOARD = window.__BOARD();
+    const me = G.players[0], them = G.players.find(p => p.kind === 'ai');
+    for (const p of G.players) { p.lord = null; p.vassals = []; p.debt = 0; }
+    const sq = BOARD.findIndex(b => b.pr && b.s);
+    them.holdings = [{ sq, garrisons: 0, citadel: 0, mortgaged: 0 }];
+    me.holdings = []; me.cash = 3210; them.cash = 987;
+    G.phase = 'end';
+    const r = E.proposeContract(G, { from: them.i, to: me.i, get: null, give: sq, cash: 100, direction: 2 });
+    if (!r || !r.pending) return `the offer did not park for an answer (${JSON.stringify(r)})`;
+    window.__tick();
+    const read = sel => {
+      const el = document.querySelector(`.sheet [data-purse="${sel}"]`);
+      return el ? el.textContent.replace(/\s+/g, ' ').trim() : null;
+    };
+    const out = { you: read('you'), them: read('them') };
+    window.closeSheet();
+    G.contract = null; G.phase = 'end';
+    return out;
+  });
+  if (typeof offered === 'string') fail(offered);
+  else {
+    const has = (t, n) => !!t && t.replace(/[,₡]/g, '').includes(String(n));
+    if (has(offered.you, 3210) && has(offered.them, 987)) {
+      pass(`an offer made to you states both purses (${offered.you} / ${offered.them})`);
+    } else {
+      fail(`purses missing from the offer sheet: you="${offered.you}" them="${offered.them}"`);
+    }
+  }
+
   if (errors.length) {
     fail(`${errors.length} runtime error(s)`);
     [...new Set(errors)].slice(0, 6).forEach(e => console.log('        ' + e));
