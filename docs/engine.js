@@ -224,6 +224,10 @@ const record = (G, tag, text, who = []) => {
 // Returns true if settled in full. A shortfall against another PLAYER becomes
 // vassalage; a shortfall against the BANK becomes a debt marker. Nobody is
 // ever removed from the table — that is the whole design.
+// A marker may not grow past RULES.debtCap. Zero or absent means no ceiling,
+// which is what every measurement before this was taken against.
+const capDebt = d => (RULES.debtCap ? Math.min(d, RULES.debtCap) : d);
+
 export function pay(G, from, to, amount) {
   if (amount <= 0) return true;
   // The FULL amount, not the shortfall. liquidate() raises until cash reaches
@@ -257,9 +261,8 @@ export function pay(G, from, to, amount) {
   from.cash = 0;
   if (to) vassalise(G, from, to);
   else {
-    from.debt += short;
+    from.debt = capDebt(from.debt + short);
     note(G, `${from.name} cannot settle with the bank. Restructuring — debt marker ${money(short)} at ${Math.round(RULES.debtInterest * 100)}% per turn.`);
-    record(G, 'debt', `${from.name} takes a debt marker of ${money(short)}.`, [from.i]);
     leaderSays(G, 'Debt is not a wound. It is an entry, and entries can be settled. Slowly.');
   }
   return false;
@@ -942,7 +945,7 @@ function finishTurn(G) {
   // through settleNow instead — both routes come through this function, and
   // exactly once.
   for (const vi of p.vassals) G.players[vi].strength += p.tithe;
-  if (p.debt) p.debt += Math.ceil(p.debt * RULES.debtInterest);
+  if (p.debt) p.debt = capDebt(p.debt + Math.ceil(p.debt * RULES.debtInterest));
   if (G.phase === 'contest' || G.over) return;
 
   G.cur = (G.cur + 1) % G.players.length;

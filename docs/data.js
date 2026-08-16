@@ -19,7 +19,7 @@
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-export const BUILD = 'grandiose-v69';
+export const BUILD = 'grandiose-v70';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -381,6 +381,20 @@ export const RULES = {
   // figure that matters is the COMBINED one, and it is in the commit message
   // that shipped them rather than guessed at here.
   vassalUpkeep: [40, 100, 190, 250],
+  // The most a marker may ever stand at. Interest compounds at debtInterest a
+  // turn, which is unbounded: measured over 40 games at 72 circuits the worst
+  // marker reached ₡4,084, 16% of debt-turns were over ₡1,000, and the longest
+  // spell ran 145 turns — a player who took one early was out of the game and
+  // could not tell that from being merely behind.
+  //
+  // A cap does not forgive the marker. It still blocks buying, building and
+  // contracting until it is cleared; it just stops the hole digging itself. At
+  // 200 a single lap of the board pays it off exactly, which is the shape Sam
+  // asked for: a round out rather than a death sentence.
+  //
+  // Applied to the marker whenever it is written, not only to the interest, so
+  // a single ruinous bill cannot open a hole deeper than the cap either.
+  debtCap: 200,
   debtInterest: 0.10,            // per turn, on a bank debt marker
   // Redemption is 55% of list — half back plus a tenth in interest. Held as a
   // ratio rather than 0.55 because the float form rounds a credit wrong on

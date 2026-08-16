@@ -1964,7 +1964,7 @@ function takeCounter() {
 // so it survives a save and a resumed game.
 const DIGEST_LABEL = {
   trade: 'Contract', vassalage: 'Vassalage', contest: 'Claim', release: 'Released',
-  set: 'Colour set', citadel: 'Citadel', debt: 'Debt marker', swarm: 'The deep array'
+  set: 'Colour set', citadel: 'Citadel', swarm: 'The deep array'
 };
 
 function showDigest(p) {

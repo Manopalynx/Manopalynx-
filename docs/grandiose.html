@@ -499,7 +499,7 @@ __m.data = (function () {
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-const BUILD = 'grandiose-v69';
+const BUILD = 'grandiose-v70';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -861,6 +861,20 @@ const RULES = {
   // figure that matters is the COMBINED one, and it is in the commit message
   // that shipped them rather than guessed at here.
   vassalUpkeep: [40, 100, 190, 250],
+  // The most a marker may ever stand at. Interest compounds at debtInterest a
+  // turn, which is unbounded: measured over 40 games at 72 circuits the worst
+  // marker reached ₡4,084, 16% of debt-turns were over ₡1,000, and the longest
+  // spell ran 145 turns — a player who took one early was out of the game and
+  // could not tell that from being merely behind.
+  //
+  // A cap does not forgive the marker. It still blocks buying, building and
+  // contracting until it is cleared; it just stops the hole digging itself. At
+  // 200 a single lap of the board pays it off exactly, which is the shape Sam
+  // asked for: a round out rather than a death sentence.
+  //
+  // Applied to the marker whenever it is written, not only to the interest, so
+  // a single ruinous bill cannot open a hole deeper than the cap either.
+  debtCap: 200,
   debtInterest: 0.10,            // per turn, on a bank debt marker
   // Redemption is 55% of list — half back plus a tenth in interest. Held as a
   // ratio rather than 0.55 because the float form rounds a credit wrong on
@@ -1332,6 +1346,10 @@ const record = (G, tag, text, who = []) => {
 // Returns true if settled in full. A shortfall against another PLAYER becomes
 // vassalage; a shortfall against the BANK becomes a debt marker. Nobody is
 // ever removed from the table — that is the whole design.
+// A marker may not grow past RULES.debtCap. Zero or absent means no ceiling,
+// which is what every measurement before this was taken against.
+const capDebt = d => (RULES.debtCap ? Math.min(d, RULES.debtCap) : d);
+
 function pay(G, from, to, amount) {
   if (amount <= 0) return true;
   // The FULL amount, not the shortfall. liquidate() raises until cash reaches
@@ -1365,9 +1383,8 @@ function pay(G, from, to, amount) {
   from.cash = 0;
   if (to) vassalise(G, from, to);
   else {
-    from.debt += short;
+    from.debt = capDebt(from.debt + short);
     note(G, `${from.name} cannot settle with the bank. Restructuring — debt marker ${money(short)} at ${Math.round(RULES.debtInterest * 100)}% per turn.`);
-    record(G, 'debt', `${from.name} takes a debt marker of ${money(short)}.`, [from.i]);
     leaderSays(G, 'Debt is not a wound. It is an entry, and entries can be settled. Slowly.');
   }
   return false;
@@ -2050,7 +2067,7 @@ function finishTurn(G) {
   // through settleNow instead — both routes come through this function, and
   // exactly once.
   for (const vi of p.vassals) G.players[vi].strength += p.tithe;
-  if (p.debt) p.debt += Math.ceil(p.debt * RULES.debtInterest);
+  if (p.debt) p.debt = capDebt(p.debt + Math.ceil(p.debt * RULES.debtInterest));
   if (G.phase === 'contest' || G.over) return;
 
   G.cur = (G.cur + 1) % G.players.length;
@@ -6873,7 +6890,7 @@ function takeCounter() {
 // so it survives a save and a resumed game.
 const DIGEST_LABEL = {
   trade: 'Contract', vassalage: 'Vassalage', contest: 'Claim', release: 'Released',
-  set: 'Colour set', citadel: 'Citadel', debt: 'Debt marker', swarm: 'The deep array'
+  set: 'Colour set', citadel: 'Citadel', swarm: 'The deep array'
 };
 
 function showDigest(p) {

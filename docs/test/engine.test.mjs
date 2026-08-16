@@ -272,21 +272,48 @@ test('a payment within cash simply moves', () => {
 });
 
 test('a shortfall against the bank becomes a debt marker for exactly the gap', () => {
+  // Under the cap, so the gap itself is the marker. Above it the cap wins --
+  // see the two tests below.
   const G = game();
   const [a] = G.players;
   a.cash = 100;
-  assert.equal(pay(G, a, null, 400), false);
+  assert.ok(RULES.debtCap >= 150, 'this fixture assumes the cap is not tighter than the gap');
+  assert.equal(pay(G, a, null, 250), false);
   assert.equal(a.cash, 0);
-  assert.equal(a.debt, 300);
+  assert.equal(a.debt, 150);
+});
+
+test('a marker cannot open deeper than the cap, however large the bill', () => {
+  // A single ruinous bill used to write the whole gap. Left uncapped it also
+  // compounded, and 40 games at 72 circuits reached ₡4,084 with spells running
+  // 145 turns -- a player who took one early was out and could not tell that
+  // from being merely behind.
+  const G = game();
+  const [a] = G.players;
+  a.cash = 0;
+  assert.equal(pay(G, a, null, 5000), false);
+  assert.equal(a.debt, RULES.debtCap);
 });
 
 test('debt accrues 10% a turn, rounded up', () => {
   const G = game();
   const [a] = G.players;
-  a.debt = 305;
+  // Small enough that a turn's interest stays under the cap, so the rounding
+  // is what is being measured and not the ceiling.
+  const start = Math.max(1, Math.floor(RULES.debtCap / 2) - 5);
+  a.debt = start;
   G.phase = 'end';
   endTurn(G);
-  assert.equal(a.debt, 305 + 31);      // ceil(30.5)
+  assert.equal(a.debt, start + Math.ceil(start * RULES.debtInterest));
+});
+
+test('interest stops at the cap rather than compounding past it', () => {
+  const G = game();
+  const [a] = G.players;
+  a.debt = RULES.debtCap;
+  G.phase = 'end';
+  endTurn(G);
+  assert.equal(a.debt, RULES.debtCap, 'a marker at the ceiling does not grow');
 });
 
 test('liquidation raises what was asked for and stops', () => {
