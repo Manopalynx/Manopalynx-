@@ -525,6 +525,63 @@ test('passing the ledger opening pays 200 exactly once per lap', () => {
   assert.equal(a.cash, RULES.startingCash + RULES.passGo);
 });
 
+// The lap payment against an outstanding marker. RULES.lapRepaysDebt is the
+// only route out of a marker that a marker cannot block, so these pin the
+// arithmetic of it and the fact that clearing one restores what it took away.
+test('the lap payment goes against a debt marker before it reaches the purse', () => {
+  const G = game();
+  const [a] = G.players;
+  a.pos = 37;
+  a.debt = 120;
+  const cash = a.cash;
+
+  roll(G, 3, 4);                    // 37 + 7 = 44 -> 4, passing 0
+
+  assert.equal(a.debt, 0, 'a marker smaller than the payment is cleared');
+  assert.equal(a.cash, cash + RULES.passGo - 120, 'and the remainder still arrives');
+});
+
+test('a marker larger than the lap payment takes all of it', () => {
+  const G = game();
+  const [a] = G.players;
+  a.pos = 37;
+  a.debt = RULES.passGo + 90;
+  const cash = a.cash;
+
+  roll(G, 3, 4);
+
+  assert.equal(a.debt, 90, 'the payment comes off the marker');
+  assert.equal(a.cash, cash, 'and nothing reaches the purse');
+});
+
+test('clearing a marker on the lap restores what the marker blocked', () => {
+  // The point of the rule rather than its arithmetic. A marker blocks buying,
+  // which is most of why a player under one cannot earn their way out.
+  const G = game();
+  const [a] = G.players;
+  a.pos = 37;
+  a.debt = 50;
+  assert.equal(buy(G, a, 6), false, 'blocked while the marker stands');
+
+  roll(G, 3, 4);
+
+  assert.equal(a.debt, 0);
+  assert.equal(buy(G, a, 6), true, 'and free the moment it is cleared');
+});
+
+test('the card preview names the marker rather than promising the purse', () => {
+  // A preview that says "collecting ₡200" to somebody whose marker is about to
+  // take it is a lie told where the player is reading carefully.
+  const G = game();
+  const [a] = G.players;
+  a.pos = 37; a.debt = 120;
+  const e = cardEffect(G, { x: 'Advance to the ledger opening.', go: 0 }, a);
+  assert.ok(e.passesStart);
+  assert.equal(e.awardToDebt, 120, 'the marker takes what it is owed');
+  assert.equal(e.award, RULES.passGo - 120, 'and only the rest is called a collection');
+  assert.equal(e.awardToDebt + e.award, RULES.passGo, 'the two always sum to the lap payment');
+});
+
 test('landing exactly on the ledger opening still pays', () => {
   const G = game();
   const [a] = G.players;

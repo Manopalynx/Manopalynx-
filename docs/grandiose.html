@@ -499,7 +499,7 @@ __m.data = (function () {
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-const BUILD = 'grandiose-v72';
+const BUILD = 'grandiose-v73';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -901,6 +901,30 @@ const RULES = {
   // a single ruinous bill cannot open a hole deeper than the cap either.
   debtCap: 200,
   debtInterest: 0.10,            // per turn, on a bank debt marker
+  // The lap payment goes against an outstanding marker before it reaches the
+  // purse. What is left over, if the marker was smaller than the payment,
+  // arrives as cash in the ordinary way.
+  //
+  // The cap in v70 was the first attempt at the same problem and it did not
+  // touch it. It stopped the marker LOOKING hopeless -- it had reached ₡4,084 --
+  // and left the spell exactly as long, because the size of the marker was
+  // never what made a player stuck. debt.mjs says what did: a marker blocks
+  // buying, building, trading and bidding, so it removes every route by which
+  // a player would earn their way out of it. Over a spell that ENDS a player
+  // makes ₡145 of ground; over one that never ends, ₡22 across the whole rest
+  // of the game. Not sinking. Flat, and waiting.
+  //
+  // So the route out has to be one a player cannot be blocked from taking, and
+  // there is exactly one thing left that arrives whatever your state: the lap.
+  // At a ₡200 cap and a ₡200 lap it pays a maxed marker off in one circuit,
+  // which is the shape Sam asked for -- "essentially out for a round around
+  // the board" rather than out for good.
+  //
+  // This is deliberately NOT charity. The player still spends the whole lap
+  // unable to buy, build, trade or bid, and still hands over the ₡200 they
+  // would otherwise have banked. It converts an open-ended sentence into a
+  // known one.
+  lapRepaysDebt: true,
   // Redemption is 55% of list — half back plus a tenth in interest. Held as a
   // ratio rather than 0.55 because the float form rounds a credit wrong on
   // Cradle (400 * 0.55 === 220.00000000000003).
@@ -1787,12 +1811,39 @@ function advance(G, p, steps, { backwards = false, award = true } = {}) {
   for (let k = 0; k < steps; k++) {
     p.pos = (((p.pos + (backwards ? -1 : 1)) % N) + N) % N;
     path.push(p.pos);
-    if (!backwards && award && p.pos === GO) {
-      p.cash += RULES.passGo;
-      note(G, `${p.name} passes the ledger opening. +${money(RULES.passGo)}.`);
-    }
+    if (!backwards && award && p.pos === GO) awardLap(G, p, RULES.passGo);
   }
   return path;
+}
+
+// The lap payment, which goes against an outstanding marker before it reaches
+// the purse. See RULES.lapRepaysDebt for why: a marker blocks buying, building,
+// trading and bidding, so it takes away every route by which a player would
+// earn their way out of it, and the lap is the one thing that arrives whatever
+// state you are in. Everything left after the marker is cash as usual.
+//
+// Deliberately not routed through repayDebt(): that pays out of `cash`, and the
+// award has not been banked yet. Paying it in and then taking it out again
+// would report two movements for one event -- the same shape as the overlord
+// paying their own vassal the gross and taking the tithe back, which v71 fixed.
+// How a lap payment splits, for anything that needs to say so BEFORE it lands
+// -- the card preview names the figure a player is about to collect, and a
+// preview that promises ₡200 to a purse the marker is going to take it from is
+// a lie told in the one place the player is reading carefully.
+const lapSplit = (p, amount = RULES.passGo) => {
+  const toDebt = RULES.lapRepaysDebt ? Math.min(p.debt, amount) : 0;
+  return { toDebt, toCash: amount - toDebt };
+};
+
+function awardLap(G, p, amount) {
+  const { toDebt: cut } = lapSplit(p, amount);
+  p.debt -= cut;
+  p.cash += amount - cut;
+  if (!cut) { note(G, `${p.name} passes the ledger opening. +${money(amount)}.`); return; }
+  note(G, p.debt
+    ? `${p.name} passes the ledger opening. ${money(cut)} is taken against the debt marker — ${money(p.debt)} outstanding.`
+    : `${p.name} passes the ledger opening. ${money(cut)} clears the debt marker`
+      + `${amount - cut ? `, and ${money(amount - cut)} reaches the purse` : ''}. They may buy and trade again.`);
 }
 
 function forwardDistanceTo(from, targets) {
@@ -1847,7 +1898,9 @@ function cardEffect(G, card, who = current(G)) {
     pardon: card.pardon || null,
     detention: !!card.jail,
     to: null, name: null,
-    passesStart: false, award: RULES.passGo,
+    // award is what reaches the purse and awardToDebt what the marker takes;
+    // together they are always the lap payment.
+    passesStart: false, award: lapSplit(who).toCash, awardToDebt: lapSplit(who).toDebt,
     then: null
   };
   if (card.each) {
@@ -3431,7 +3484,7 @@ function standings(G) {
     .sort((a, b) => b.worth - a.worth);
 }
 
-return { random, createGame, current, square, ownerOf, holding, ownsSet, countType, garrisonsOf, citadelsOf, holdingsValue, netWorth, upkeep, rentOf, paybackTurns, revoltThreshold, pay, liquidate, payRent, money, displayName, raisableValue, parkForSettlement, autoSettle, settleNow, claimValue, submitClaim, closeContest, releaseVassal, setTithe, declareIndependence, previewAt, landingPreview, cardEffect, roll, usePardon, payFacilityFee, amendCost, amendManifest, resolveLanding, applyCard, endTurn, swarmDistance, announceSwarm, playOnCircuits, extendGame, buy, openAuction, submitBid, closeAuction, canBuild, build, canRaiseCitadel, raiseCitadel, sellDevelopment, pledgeValue, redeemCost, pledge, mortgage, redeem, repayDebt, tradable, settleContract, setCompletingTargets, setBuildingTargets, denialTargets, seekContract, recordRefusal, refusalFor, refusalBlocks, contractIsLegal, proposeContract, respondToContract, netValue, aiValue, aiBid, aiWantsToBuy, threatPenalty, sqList, liquidityWeight, contractValue, aiAcceptsContract, aiCounter, aiRedeem, aiRepay, seekSale, openBoardFraction, aiPayFacilityFee, landingCost, aiAmend, aiTithe, aiRelease, aiDevelop, SAVE_VERSION, serialize, deserialize, standings };
+return { random, createGame, current, square, ownerOf, holding, ownsSet, countType, garrisonsOf, citadelsOf, holdingsValue, netWorth, upkeep, rentOf, paybackTurns, revoltThreshold, pay, liquidate, payRent, money, displayName, raisableValue, parkForSettlement, autoSettle, settleNow, claimValue, submitClaim, closeContest, releaseVassal, setTithe, declareIndependence, lapSplit, previewAt, landingPreview, cardEffect, roll, usePardon, payFacilityFee, amendCost, amendManifest, resolveLanding, applyCard, endTurn, swarmDistance, announceSwarm, playOnCircuits, extendGame, buy, openAuction, submitBid, closeAuction, canBuild, build, canRaiseCitadel, raiseCitadel, sellDevelopment, pledgeValue, redeemCost, pledge, mortgage, redeem, repayDebt, tradable, settleContract, setCompletingTargets, setBuildingTargets, denialTargets, seekContract, recordRefusal, refusalFor, refusalBlocks, contractIsLegal, proposeContract, respondToContract, netValue, aiValue, aiBid, aiWantsToBuy, threatPenalty, sqList, liquidityWeight, contractValue, aiAcceptsContract, aiCounter, aiRedeem, aiRepay, seekSale, openBoardFraction, aiPayFacilityFee, landingCost, aiAmend, aiTithe, aiRelease, aiDevelop, SAVE_VERSION, serialize, deserialize, standings };
 })();
 
 __m.score = (function () {
@@ -6306,8 +6359,15 @@ function cardEffectLines(e) {
   }
   if (e.detention) out.push('Straight to Overseer Detention, without passing the ledger opening');
   else if (e.to !== null) {
-    out.push(`Move to ${esc(e.name)}`
-      + (e.passesStart ? `, collecting ${money(e.award)} as the ledger opens` : ''));
+    // With a marker outstanding the ledger opening pays it before it pays you,
+    // so say which. Promising a purse the money the marker is about to take is
+    // the wrong thing to tell somebody reading a card preview.
+    const lap = !e.passesStart ? ''
+      : e.awardToDebt && e.award ? `, ${money(e.awardToDebt)} against the debt marker`
+        + ` and ${money(e.award)} to you as the ledger opens`
+      : e.awardToDebt ? `, ${money(e.awardToDebt)} against the debt marker as the ledger opens`
+      : `, collecting ${money(e.award)} as the ledger opens`;
+    out.push(`Move to ${esc(e.name)}${lap}`);
     const t = e.then;
     if (t) {
       if (t.kind === 'rent') out.push(`Held by ${esc(chipName(G.players[t.to]))} — you will pay ${money(t.amount)} on arrival`);

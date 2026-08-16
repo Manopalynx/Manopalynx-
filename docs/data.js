@@ -19,7 +19,7 @@
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-export const BUILD = 'grandiose-v72';
+export const BUILD = 'grandiose-v73';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -421,6 +421,30 @@ export const RULES = {
   // a single ruinous bill cannot open a hole deeper than the cap either.
   debtCap: 200,
   debtInterest: 0.10,            // per turn, on a bank debt marker
+  // The lap payment goes against an outstanding marker before it reaches the
+  // purse. What is left over, if the marker was smaller than the payment,
+  // arrives as cash in the ordinary way.
+  //
+  // The cap in v70 was the first attempt at the same problem and it did not
+  // touch it. It stopped the marker LOOKING hopeless -- it had reached ₡4,084 --
+  // and left the spell exactly as long, because the size of the marker was
+  // never what made a player stuck. debt.mjs says what did: a marker blocks
+  // buying, building, trading and bidding, so it removes every route by which
+  // a player would earn their way out of it. Over a spell that ENDS a player
+  // makes ₡145 of ground; over one that never ends, ₡22 across the whole rest
+  // of the game. Not sinking. Flat, and waiting.
+  //
+  // So the route out has to be one a player cannot be blocked from taking, and
+  // there is exactly one thing left that arrives whatever your state: the lap.
+  // At a ₡200 cap and a ₡200 lap it pays a maxed marker off in one circuit,
+  // which is the shape Sam asked for -- "essentially out for a round around
+  // the board" rather than out for good.
+  //
+  // This is deliberately NOT charity. The player still spends the whole lap
+  // unable to buy, build, trade or bid, and still hands over the ₡200 they
+  // would otherwise have banked. It converts an open-ended sentence into a
+  // known one.
+  lapRepaysDebt: true,
   // Redemption is 55% of list — half back plus a tenth in interest. Held as a
   // ratio rather than 0.55 because the float form rounds a credit wrong on
   // Cradle (400 * 0.55 === 220.00000000000003).

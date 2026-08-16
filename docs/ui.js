@@ -1337,8 +1337,15 @@ function cardEffectLines(e) {
   }
   if (e.detention) out.push('Straight to Overseer Detention, without passing the ledger opening');
   else if (e.to !== null) {
-    out.push(`Move to ${esc(e.name)}`
-      + (e.passesStart ? `, collecting ${money(e.award)} as the ledger opens` : ''));
+    // With a marker outstanding the ledger opening pays it before it pays you,
+    // so say which. Promising a purse the money the marker is about to take is
+    // the wrong thing to tell somebody reading a card preview.
+    const lap = !e.passesStart ? ''
+      : e.awardToDebt && e.award ? `, ${money(e.awardToDebt)} against the debt marker`
+        + ` and ${money(e.award)} to you as the ledger opens`
+      : e.awardToDebt ? `, ${money(e.awardToDebt)} against the debt marker as the ledger opens`
+      : `, collecting ${money(e.award)} as the ledger opens`;
+    out.push(`Move to ${esc(e.name)}${lap}`);
     const t = e.then;
     if (t) {
       if (t.kind === 'rent') out.push(`Held by ${esc(chipName(G.players[t.to]))} — you will pay ${money(t.amount)} on arrival`);

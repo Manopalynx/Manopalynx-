@@ -640,12 +640,39 @@ function advance(G, p, steps, { backwards = false, award = true } = {}) {
   for (let k = 0; k < steps; k++) {
     p.pos = (((p.pos + (backwards ? -1 : 1)) % N) + N) % N;
     path.push(p.pos);
-    if (!backwards && award && p.pos === GO) {
-      p.cash += RULES.passGo;
-      note(G, `${p.name} passes the ledger opening. +${money(RULES.passGo)}.`);
-    }
+    if (!backwards && award && p.pos === GO) awardLap(G, p, RULES.passGo);
   }
   return path;
+}
+
+// The lap payment, which goes against an outstanding marker before it reaches
+// the purse. See RULES.lapRepaysDebt for why: a marker blocks buying, building,
+// trading and bidding, so it takes away every route by which a player would
+// earn their way out of it, and the lap is the one thing that arrives whatever
+// state you are in. Everything left after the marker is cash as usual.
+//
+// Deliberately not routed through repayDebt(): that pays out of `cash`, and the
+// award has not been banked yet. Paying it in and then taking it out again
+// would report two movements for one event -- the same shape as the overlord
+// paying their own vassal the gross and taking the tithe back, which v71 fixed.
+// How a lap payment splits, for anything that needs to say so BEFORE it lands
+// -- the card preview names the figure a player is about to collect, and a
+// preview that promises ₡200 to a purse the marker is going to take it from is
+// a lie told in the one place the player is reading carefully.
+export const lapSplit = (p, amount = RULES.passGo) => {
+  const toDebt = RULES.lapRepaysDebt ? Math.min(p.debt, amount) : 0;
+  return { toDebt, toCash: amount - toDebt };
+};
+
+function awardLap(G, p, amount) {
+  const { toDebt: cut } = lapSplit(p, amount);
+  p.debt -= cut;
+  p.cash += amount - cut;
+  if (!cut) { note(G, `${p.name} passes the ledger opening. +${money(amount)}.`); return; }
+  note(G, p.debt
+    ? `${p.name} passes the ledger opening. ${money(cut)} is taken against the debt marker — ${money(p.debt)} outstanding.`
+    : `${p.name} passes the ledger opening. ${money(cut)} clears the debt marker`
+      + `${amount - cut ? `, and ${money(amount - cut)} reaches the purse` : ''}. They may buy and trade again.`);
 }
 
 function forwardDistanceTo(from, targets) {
@@ -700,7 +727,9 @@ export function cardEffect(G, card, who = current(G)) {
     pardon: card.pardon || null,
     detention: !!card.jail,
     to: null, name: null,
-    passesStart: false, award: RULES.passGo,
+    // award is what reaches the purse and awardToDebt what the marker takes;
+    // together they are always the lap payment.
+    passesStart: false, award: lapSplit(who).toCash, awardToDebt: lapSplit(who).toDebt,
     then: null
   };
   if (card.each) {

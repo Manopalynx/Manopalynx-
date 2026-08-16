@@ -241,6 +241,25 @@ for (const device of DEVICES) {
   // ---- the contract sheet ----
   const trade = await page.evaluate(async () => {
     const G = window.__G(), SETS = window.__SETS();
+    // WAIT FOR THE TABLE TO GO QUIET FIRST. The fuzzer above leaves whatever
+    // turn it stopped mid-way, and an opponent's turn is a chain of setTimeout
+    // callbacks that each end in tick() -- which, for an opponent phase, calls
+    // showCard/showOffer/showBid and REPLACES the sheet root. Forcing G.cur to
+    // a human does not cancel those; they are already scheduled. So a timer
+    // from the previous seat could land in the middle of this check and take
+    // the contract sheet away, leaving TR set (module state, untouched) and no
+    // #trCash in the document.
+    //
+    // That is what the unexplained `no cash field` was. It failed once, went
+    // into the open list for want of a diagnosis, and came back a session
+    // later. `busy` is true exactly while an opponent has a callback
+    // outstanding, so waiting for it to be false twice running is waiting for
+    // the chain to finish rather than guessing at a delay.
+    for (let k = 0, quiet = 0; k < 60 && quiet < 2; k++) {
+      quiet = window.__busy() ? 0 : quiet + 1;
+      await new Promise(r => setTimeout(r, 60));
+    }
+    if (window.__busy()) return 'the table never went quiet — an opponent turn is still running';
     while (G.players[G.cur].kind !== 'human') G.cur = (G.cur + 1) % G.players.length;
     const me = G.players[G.cur];
     const them = G.players.find(q => q !== me);
@@ -279,7 +298,15 @@ for (const device of DEVICES) {
 
     // 2. the cash field starts empty rather than at a literal zero
     const cash = document.getElementById('trCash');
-    if (!cash) return 'no cash field';
+    // Say what IS on screen when it is missing. This failed once, unexplained,
+    // and reported four words -- which was enough to know something was wrong
+    // and not enough to know what, so it went in the open list and came back.
+    if (!cash) {
+      const sh = document.querySelector('.sheet');
+      return 'no cash field — sheet says '
+        + (sh ? JSON.stringify((sh.querySelector('h3') || sh).textContent.slice(0, 80))
+             : 'THERE IS NO SHEET');
+    }
     const startedEmpty = cash.value === '';
 
     // 3. the totals are shown, and follow what is selected
