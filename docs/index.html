@@ -58,8 +58,20 @@ button:disabled{opacity:.28}
   text-transform:uppercase;color:var(--dim);margin-bottom:10px}
 .opts{display:flex;gap:8px;flex-wrap:wrap}
 .opt{flex:1 1 0;min-width:70px;min-height:48px;background:var(--panel);color:var(--dim);
-  padding:12px 8px;font-size:14px}
+  padding:12px 8px;font-size:14px;
+  /* A column so a button can carry a caption under its value without the
+     caption pushing the value off-centre, and without changing how the row
+     wraps -- the five purse options wrap 4+1 at 393pt and that is fine. */
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
 .opt.on{border-color:var(--gold);color:var(--gold);background:rgba(217,164,65,.10)}
+/* Which option is the one every figure in the game is calibrated against.
+   SELECTED and DEFAULT are different facts and the screen has to show both at
+   once: the gold ring says what you have picked, this says what the game was
+   balanced with. Marked only where departing from it changes the calibration
+   -- not on the seat count, and not on sound, which is a saved preference
+   rather than a setting the game is tuned around. */
+.opt .dflt{font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+  opacity:.6;font-family:var(--m)}
 input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(--bright);
   border:1px solid var(--rule);border-radius:6px;padding:14px;font-family:var(--m);
   font-size:17px;margin-bottom:10px}

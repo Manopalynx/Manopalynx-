@@ -21,7 +21,7 @@ Playable. Engine, interface, offline support and save/resume are all in.
 ```
 data.js      board, decks, opponents, economy constants — data only
 engine.js    the rules. No DOM, no timers, no Math.random
-test/        325 passing (plus a browser probe across five viewports)
+test/        350 passing (plus two browser probes across five viewports)
 ```
 
 ## Running the tests
@@ -45,7 +45,51 @@ node docs/test/ties.mjs                # how often a sealed bid ends level
 node docs/test/vassals.mjs [games]     # what holding a vassal costs, and how often it cannot be paid
 node docs/test/varan.mjs [games]       # what an opponent demands for one square, as a multiple of list
 node docs/test/money.mjs [games]       # the money supply across a game
+node docs/test/upkeep.mjs [games] [g/c]  # whether a garrison pays for the bill it brings
+node docs/test/debt.mjs [games] [on|off] # how long a debt marker lasts, and what it blocks
 ```
+
+### What the harness's human seat can and cannot do
+
+**Every "the human wins X%" figure in this file is a floor, not a prediction.**
+The harness's auto-player is deliberately unsophisticated — it exists to drive
+every code path to the end of a game, not to play well — and the limit on what
+it can do is simply what `harness.mjs` imports from the engine. It rolls,
+resolves a landing, takes a card, buys or sends a square to auction, bids,
+claims in a contest, builds **garrisons**, proposes a contract and answers one.
+
+It has no path at all to: raising a **citadel**, setting the **tithe** as an
+overlord, **releasing** a vassal, **declaring independence**, **repaying** a
+marker deliberately, **pledging** or **redeeming** by choice, **selling**
+developments by choice, **amending the manifest**, paying the Overseer or
+spending a **pardon** early, or taking a **counter-offer**. Choosing how to
+settle a bill is missing too, and that one is deliberate — the harness always
+takes the automatic route and the browser probe exercises the manual sheet.
+
+The opponents do all of it. Measured over 300 games at 96 circuits, one human
+against three:
+
+| | human seat | per opponent |
+|---|---|---|
+| citadels raised | **0** | 156.7 |
+| tithe rate changed | **0** | 148.7 |
+| pledges redeemed | 79 | 590.3 |
+| left an arrangement | 16 | 140.7 |
+
+Zero citadels in three hundred games, and the citadel is the biggest rent earner
+on the board.
+
+So: **the balance figures are sound** — conquest rate, spell length, how fast the
+board is bought are properties of the board and the opponents, and three seats in
+four play fully. What is skewed is anything about the human seat specifically.
+Every missing capability is one that helps a player *survive*, so "the human ends
+sworn X%" is an upper bound on a real player's risk and the conquest rate is
+somewhat flattered by one seat being easier to absorb than it should be.
+Comparisons are unaffected — both sides of every before/after used the same
+policy.
+
+Known and left, on Sam's call. If the win-rate column ever needs to mean
+something, citadels and repaying a marker are the two to add first.
 
 **Read the table name on any figure from `sweep.mjs`.** Three of its four tables
 seat two humans; the game as it is actually played is one human against three
@@ -669,6 +713,50 @@ Current, 120 games each: two humans **57/120**, plus one opponent **45/120**,
 plus two **20/120**, one human against three **50/120**. Vassalage appears
 somewhere in **103 of 120** four-seat games. All enforced as tests.
 
+### Short games are mostly setup, and no lever fixes that
+
+48 circuits has stayed near 21% while every longer length has risen with each
+change this year — the vassal upkeep, the building upkeep, the lap repayment.
+That is structural rather than a tuning problem, and the measurement that says so
+is how long the board takes to be bought:
+
+| length | board fully owned | by circuit | any vassalage at all | conquest |
+|---|---|---|---|---|
+| 48 circ | 88% of games | 29 | 79% | 21% |
+| 72 circ | 93% | 30 | 95% | 53% |
+| 96 circ | 94% | 30 | 94% | 75% |
+| 120 circ | 94% | 30 | 96% | 82% |
+
+The buying phase costs ~30 circuits **whatever length was chosen**, so a
+48-circuit game has 18 circuits of endgame where a 96 has 66. Absorption needs
+somebody bankrupted into somebody else and then held to the finish, and 18
+circuits is not enough for that chain to run.
+
+**And starting cash does not shorten the opening.** That was the obvious guess
+and it is wrong: the board is fully owned by circuit 29–31 at every figure from
+₡1000 to ₡4000, because the opening is limited by *landing* on squares rather
+than by affording them. A bigger purse does move 48-circuit conquest 23% → 34%,
+by a different route — more building, bigger rents, faster bankruptcies once the
+board is owned — but it does not make a short game stop being mostly setup.
+
+### Chains of two, and why they are left alone
+
+A player who is already a vassal may take a vassal of their own, so A → B → C is
+reachable. `netWorth` walks only DIRECT vassals, so C counts toward B and not
+again toward A: the player at the top of a stack gets nothing from the bottom of
+it. That is deliberate — nothing is compounded twice, and a player's score is the
+same whether or not an arrangement happens to be stacked.
+
+Measured over 300 games a length on Sam's table, it is a curiosity rather than a
+mechanic: a chain appears in 3% of 48-circuit games rising to 10% at 120, on
+0.2–0.6% of turns, with the human involved in 1–5%. **Never deeper than two, in
+1,200 games.**
+
+Left standing on Sam's call, and pinned by a test in `vassals.test.mjs` so it
+cannot change by accident. Both ways of "fixing" it are worse: counting deep
+vassals toward the top overlord double-counts them, and forbidding a vassal from
+taking a vassal means somebody who is owed money sometimes simply is not paid.
+
 
 ## How the three of them trade
 
@@ -724,6 +812,41 @@ Names come from the book. Three squares were changed and each is commented in `d
   when the assessment concludes. The Neurex is the one thing in the book with no price —
   *"no official to blind, no tithe to pay, no arrangement"* — and it was the only square you
   could pay to escape.
+
+## What the setup screen offers, and what it costs
+
+Three of the settings change the game rather than the presentation, and each
+opens on the figure everything else is calibrated against. **The screen marks
+which that is** — a caption reading `default` under the value — because the gold
+ring says only what you have *picked*, and after one change those are two
+different facts. `data.js` carries the measurements behind each.
+
+| setting | default | what leaving it does |
+|---|---|---|
+| circuits | 72 | 48 is mostly setup (see Balance); longer raises absorption steeply |
+| credits dealt | ₡2,000 | **more money is harder** — see below |
+| Neutral Anchorage | pays nothing | the house rule raises absorption; it is fuel, not a lifeline |
+
+Both of the counter-intuitive ones are counter-intuitive in the *same* direction,
+and for the same reason: a credit that is not destroyed stays in the room and
+becomes rent, and rent concentrates where destruction merely levels. So loosening
+the economy makes the takeover *more* likely, not less.
+
+**Credits dealt.** 200 games a cell at 96 circuits on Sam's table: from ₡2,000 to
+₡4,000 the human's win rate falls 44% → 20% and they end the game sworn to
+somebody 49% → 77%. The opponents build with the extra money and charge for it. A
+player reading "4,000" as an easy game would be badly misled, so the note on the
+screen says so and a probe check asserts the word is on it.
+
+**The anchorage pot.** Taxes, card penalties and the Overseer's fee gather at the
+anchorage instead of leaving the game; whoever lands takes the lot, and it pays a
+debt marker before a purse. Not fed by upkeep, which is ₡24.7k a game on its own
+and would swamp it. 400 games a cell: conquest 76% → 79% at 96 circuits and 83% →
+89% at 120, with the human's own win rate falling 44% → 40%. Payouts land 4.7–7.4
+times a game at a median of ₡380, against a table holding about ₡1,200 between
+four mid-game. It is not a recovery route — debt spells are 89% ended at 8 turns
+median with it off and 86% at 8 with it on, because the lap repayment had already
+fixed that.
 
 ## Playing it
 

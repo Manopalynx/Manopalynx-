@@ -63,11 +63,16 @@ function clearSave() {
 // it is a man naming a destination, and built a faction out of two words.
 //
 // All four are one word, which is what the player chips show.
+// The length the game opens on. Named rather than written twice, because the
+// screen now marks it as the default and a mark that disagrees with the value
+// it marks is worse than no mark at all.
+const DEFAULT_CIRCUITS = 72;
+
 const setup = {
   humans: 1,
   names: ['Samuel', 'Vex', 'Rourke', 'Ondh'],
   ais: [],
-  circuits: 72,
+  circuits: DEFAULT_CIRCUITS,
   cash: RULES.startingCash,
   pot: RULES.anchoragePot
 };
@@ -82,6 +87,10 @@ const setup = {
 // player will assume. The opponents build with it and charge you for it, and a
 // human's win rate falls the whole way up the range. Anyone who reads "4000"
 // as "an easy game" has been misled by the number alone.
+// Written once and used by all three pickers, so the mark can never disagree
+// with the value it is marking. `is` is the comparison the caller already has.
+const dfltMark = is => is ? '<span class="dflt">default</span>' : '';
+
 const CASH_CHOICES = [
   [1000, 'Lean', 'Barely a purse. The board is bought slowly and on credit.'],
   [1500, 'Tight', 'Room for a set, not for a mistake.'],
@@ -122,14 +131,16 @@ function drawSetup() {
     </div>
     <div class="fld"><label>Circuits before the swarm arrives</label>
       <div class="opts">${[48, 72, 120].map(k =>
-        `<button class="opt${setup.circuits === k ? ' on' : ''}" data-t="${k}">${k}</button>`).join('')}</div>
+        `<button class="opt${setup.circuits === k ? ' on' : ''}" data-t="${k}">${k}${
+           dfltMark(k === DEFAULT_CIRCUITS)}</button>`).join('')}</div>
       <p class="note" style="margin-top:10px">Something is coming from outside the galaxy and
       it does not negotiate. This is how long you have before it gets here — and whoever holds
       the most when it does, held the most. The deep array will keep you posted.</p>
     </div>
     <div class="fld"><label>Credits dealt to each seat</label>
       <div class="opts">${CASH_CHOICES.map(([v, n]) =>
-        `<button class="opt${setup.cash === v ? ' on' : ''}" data-c="${v}">${money(v)}</button>`).join('')}</div>
+        `<button class="opt${setup.cash === v ? ' on' : ''}" data-c="${v}">${money(v)}${
+           dfltMark(v === RULES.startingCash)}</button>`).join('')}</div>
       <p class="note" style="margin-top:10px"><b>${esc(CASH_CHOICES.find(c => c[0] === setup.cash)[1])}.</b>
       ${esc(CASH_CHOICES.find(c => c[0] === setup.cash)[2])}
       ${setup.cash === RULES.startingCash ? ''
@@ -139,7 +150,8 @@ function drawSetup() {
     </div>
     <div class="fld"><label>Neutral Anchorage</label>
       <div class="opts">${[['0', 'Pays nothing'], ['1', 'Unclaimed tribute']].map(([v, n]) =>
-        `<button class="opt${(setup.pot ? '1' : '0') === v ? ' on' : ''}" data-p="${v}">${n}</button>`).join('')}</div>
+        `<button class="opt${(setup.pot ? '1' : '0') === v ? ' on' : ''}" data-p="${v}">${n}${
+           dfltMark((v === '1') === RULES.anchoragePot)}</button>`).join('')}</div>
       <p class="note" style="margin-top:10px">${setup.pot
         ? `A house rule. Taxes, card penalties and the Overseer's fee gather at the anchorage
            instead of leaving the game, and whoever lands there takes the lot — about

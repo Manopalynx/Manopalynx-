@@ -111,6 +111,54 @@ for (const device of DEVICES) {
   if (stillFour === 0) pass('a full table takes no opponent');
   else fail(`${stillFour} opponents joined a full table`);
 
+  // ---- which option is the calibrated one ----
+  // SELECTED and DEFAULT are two different facts and the screen shows both: a
+  // gold ring for what you picked, a caption for what the game is balanced
+  // against. They coincide on a fresh screen, which is exactly why a check that
+  // only looked at the fresh screen would prove nothing — so this moves the
+  // selection away and asserts the mark STAYS where the default is.
+  const marks = await page.evaluate(() => {
+    const read = () => [...document.querySelectorAll('.opt')]
+      .filter(b => b.querySelector('.dflt'))
+      .map(b => ({ key: b.dataset.t || b.dataset.c || b.dataset.p || b.dataset.h,
+                   on: b.classList.contains('on'),
+                   // Does the caption fit inside its own button, at this width?
+                   clipped: b.querySelector('.dflt').getBoundingClientRect().width
+                            > b.getBoundingClientRect().width - 2 }));
+    const before = read();
+    // Move every picker off its default.
+    document.querySelector('[data-t="48"]').click();
+    document.querySelector('[data-c="4000"]').click();
+    document.querySelector('[data-p="1"]').click();
+    const after = read();
+    // Put them back, so the checks below start where they expect to.
+    document.querySelector('[data-t="72"]').click();
+    document.querySelector('[data-c="2000"]').click();
+    document.querySelector('[data-p="0"]').click();
+    return { before, after,
+             seatMarked: !!document.querySelector('[data-h] .dflt'),
+             soundMarked: !!document.querySelector('[data-snd] .dflt') };
+  });
+  if (marks.before.length === 3)
+    pass(`three settings name their default (${marks.before.map(m => m.key).join(', ')})`);
+  else fail(`${marks.before.length} defaults marked: ${JSON.stringify(marks.before.map(m => m.key))}`);
+  if (marks.before.every(m => m.on)) pass('and a fresh screen opens on every one of them');
+  else fail(`the screen does not open on its own defaults: ${JSON.stringify(marks.before)}`);
+  // The real check. With the selection moved away, the mark must not follow it.
+  if (marks.after.length === 3 && marks.after.every(m => !m.on))
+    pass('the mark stays with the default when the selection moves away');
+  else fail(`the default mark followed the selection: ${JSON.stringify(marks.after)}`);
+  if (marks.after.map(m => m.key).join() === marks.before.map(m => m.key).join())
+    pass('and marks the same options either way');
+  else fail(`marked ${marks.before.map(m => m.key)} then ${marks.after.map(m => m.key)}`);
+  if (![...marks.before, ...marks.after].some(m => m.clipped)) pass('no caption is wider than its button');
+  else fail(`a default caption overflows its button at ${device.width}px`);
+  // Marked only where departing changes the calibration. The seat count and the
+  // sound are not settings the game is tuned around, and marking them would
+  // spend the signal on things that do not carry it.
+  if (!marks.seatMarked && !marks.soundMarked) pass('and the seat count and sound carry no such claim');
+  else fail(`a default mark appears on ${marks.seatMarked ? 'the seat count' : 'the sound'}`);
+
   // ---- the purse, which is now chosen rather than fixed ----
   // The figure a seat is dealt reaches the table through createGame, not
   // through RULES, so the way to check it is to start a game and read a purse.

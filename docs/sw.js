@@ -10,7 +10,7 @@
 // Must match BUILD in data.js exactly — test/build.test.mjs asserts it, because
 // the menu shows BUILD and it would be worse than useless if it named a build
 // the cache was not actually serving.
-const CACHE = 'grandiose-v75';
+const CACHE = 'grandiose-v76';
 const FILES = [
   './',
   './index.html',
