@@ -212,14 +212,21 @@ test('net worth does not compound a vassal chain twice', () => {
 
 /* ============================================================ upkeep */
 
-test('upkeep is 10 per garrison and 30 per citadel', () => {
+// Both of these restated the rates as 10 and 30 and had to be edited when the
+// rates moved, which is a test that checks the number it was written beside
+// rather than the rule. They derive from RULES now, so changing a rate is a
+// one-line change in data.js and these keep guarding the SHAPE: that the two
+// kinds are counted separately, and that a citadel replaces rather than adds.
+test('upkeep counts garrisons and citadels separately, at their own rates', () => {
   const G = game();
   const [a] = G.players;
   own(G, a, 16, { garrisons: 3 });
   own(G, a, 18, { citadel: 1 });
   assert.equal(garrisonsOf(a), 3);
   assert.equal(citadelsOf(a), 1);
-  assert.equal(upkeep(a), 3 * 10 + 1 * 30);
+  assert.equal(upkeep(a), 3 * RULES.garrisonUpkeep + 1 * RULES.citadelUpkeep);
+  assert.notEqual(RULES.garrisonUpkeep, RULES.citadelUpkeep,
+    'the two rates must differ, or this could not tell them apart');
 });
 
 test('a citadel replaces its garrisons rather than adding to them', () => {
@@ -227,7 +234,8 @@ test('a citadel replaces its garrisons rather than adding to them', () => {
   const [a] = G.players;
   own(G, a, 16, { citadel: 1, garrisons: 3 });
   assert.equal(garrisonsOf(a), 0, 'a citadel square must not also count garrisons');
-  assert.equal(upkeep(a), 30);
+  assert.equal(upkeep(a), RULES.citadelUpkeep,
+    'the citadel rate alone, with nothing left over from the garrisons it replaced');
 });
 
 test('holding vassals adds a fixed overhead by count', () => {
