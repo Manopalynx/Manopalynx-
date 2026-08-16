@@ -499,7 +499,7 @@ __m.data = (function () {
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-const BUILD = 'grandiose-v68';
+const BUILD = 'grandiose-v69';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -5661,7 +5661,15 @@ function tick() {
   switch (G.phase) {
     case 'roll':
       if (p.kind === 'ai') { busy = true; render(); later(act_roll, 750); }
-      else { busy = false; if (showDigest(p)) return; }
+      else {
+        // render() runs at the top of tick, BEFORE this decides `busy` — so the
+        // bar underneath was still drawn as "…is deciding" from the opponent's
+        // turn, and the digest returning early meant nothing ever redrew it.
+        // Acknowledging revealed a dead action bar. Draw it again now that busy
+        // is known; the sheet lives in its own root and is untouched by this.
+        busy = false;
+        if (showDigest(p)) { render(); return; }
+      }
       break;
 
     case 'landed':
@@ -7163,6 +7171,11 @@ window.__tick = () => tick();
 window.__E = () => E;
 window.__CON = () => CONTINGENCY;
 window.__CONTRACT_LINES = () => CONTRACT_LINES;
+// `busy` is the flag that draws the bar as "…is deciding" while somebody else
+// acts. Exposed because the digest bug only exists when it is still TRUE as the
+// human's turn opens — a probe that sets up the turn by hand never reaches that
+// state, so the check for it passed with the fix removed.
+window.__busy = v => { if (v !== undefined) busy = v; return busy; };
 window.__COL = () => COLUMN;
 // Cards are dealt by tick(), never by a button, so the sheet has no handle of
 // its own to reach for.

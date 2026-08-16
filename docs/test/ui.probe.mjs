@@ -2181,6 +2181,10 @@ for (const device of DEVICES) {
     G.digest = []; G.digestSeen = 0;
     const me = G.players[0];
     G.cur = me.i; G.phase = 'roll'; G.over = false;
+    // The state the bug needs: the opponent has just finished and `busy` is
+    // still set, so tick's render at the top draws a disabled bar before the
+    // switch clears it. Without this the check passes with the fix removed.
+    window.__busy(true);
     // Two that concern the player only as a spectator, and one they were party
     // to — which they answered on a sheet of their own and must not be told
     // about again.
@@ -2194,13 +2198,21 @@ for (const device of DEVICES) {
       text: sheet ? sheet.textContent.replace(/\s+/g, ' ') : '',
       rows: sheet ? sheet.querySelectorAll('.stat').length : 0
     };
-    // Acknowledge, then come back to the same turn: it must not raise again.
+    // Acknowledge, then come back to the same turn: it must not raise again,
+    // and the turn must be PLAYABLE. The first version of this check stopped at
+    // "the sheet went away" and missed that the action bar underneath was still
+    // the opponent's disabled "…is deciding", leaving the game unusable.
     document.querySelector('.sheet [data-fn="closeSheet"]')?.click();
     await new Promise(r => setTimeout(r, 40));
+    const bar = document.getElementById('acts');
+    const playable = {
+      deciding: /is deciding/i.test(bar ? bar.textContent : ''),
+      live: [...(bar ? bar.querySelectorAll('button') : [])].filter(b => !b.disabled).length
+    };
     G.phase = 'roll';
     window.__tick();
     const again = !!document.querySelector('.sheet');
-    return { first, again, seen: G.digestSeen, total: G.digest.length };
+    return { first, again, playable, seen: G.digestSeen, total: G.digest.length };
   });
   if (digest.first.heading !== 'While you were away') {
     fail(`the digest did not appear at the top of a turn (heading "${digest.first.heading}")`);
@@ -2212,8 +2224,12 @@ for (const device of DEVICES) {
     fail(`the digest is missing an item: ${digest.first.text.slice(0, 120)}`);
   } else if (digest.again) {
     fail('the digest raised itself again after being acknowledged');
+  } else if (digest.playable.deciding || !digest.playable.live) {
+    fail(`acknowledging left a dead action bar (deciding=${digest.playable.deciding}, ` +
+         `live buttons=${digest.playable.live}) — the turn cannot be played`);
   } else {
-    pass(`the digest reports what changed and stands down once acknowledged (${digest.first.rows} items)`);
+    pass(`the digest reports what changed, stands down, and hands back a live turn ` +
+         `(${digest.first.rows} items, ${digest.playable.live} buttons)`);
   }
 
   if (errors.length) {
