@@ -335,15 +335,30 @@ export function payRent(G, from, to, amount) {
     lord = G.players[to.lord];
     cut = Math.floor(amount * lord.tithe / 100);
   }
-  if (lord && lord.i === from.i) {
-    note(G, `${from.name} pays ${money(amount)} to ${to.name}, of which ${money(cut)} returns as tithe — net ${money(amount - cut)}. A vassal cannot fully charge its overlord.`);
+  // An overlord landing on their own vassal pays the NET, and pays it once.
+  //
+  // It used to hand over the gross and take the tithe back afterwards, which is
+  // the same arithmetic and a different game: pay() was called with the full
+  // figure, so an overlord who could not cover the GROSS liquidated, and if that
+  // still fell short entered vassalage under their own vassal — over a bill they
+  // partly owed themselves. Worse, the cut only moved `if (settled)`, so a lord
+  // who went under paid the whole rent and got nothing back at all.
+  //
+  // Measured at 0.8 times a game, and one bill in thirty-two above ₡200 gross,
+  // so it was rare rather than harmless.
+  const selfLord = !!lord && lord.i === from.i;
+  const due = selfLord ? amount - cut : amount;
+  if (selfLord) {
+    note(G, `${from.name} pays ${money(due)} to ${to.name} — ${money(cut)} of the rent is tithed straight back and never leaves. A vassal cannot fully charge its overlord.`);
   } else {
     note(G, `${from.name} pays ${money(amount)} to ${to.name}${cut ? ` — ${money(cut)} tithed onward to ${lord.name}` : ''}.`);
   }
-  const settled = pay(G, from, to, amount);
+  const settled = pay(G, from, to, due);
   if (settled && cut) {
-    to.cash -= cut;
-    lord.cash += cut;
+    // The clock still ticks either way. The tithe was levied; netting it off is
+    // a matter of which hand it passes through, and an overlord must not be able
+    // to slow a vassal's revolt by landing on them.
+    if (!selfLord) { to.cash -= cut; lord.cash += cut; }
     to.strength += cut;      // every credit tithed is a credit counted
   }
   if (from.kind === 'ai') persona(G, from, 'rent');
@@ -599,6 +614,9 @@ export function declareIndependence(G, p) {
   p.strength = 0;
   p.declarations++;
   note(G, `${p.name} declares. The arrangement with ${lord.name} is ended.`);
+  // The only one of the four vassal events that is a DEFEAT for the overlord,
+  // and the one the digest was missing.
+  record(G, 'independence', `${p.name} declares independence from ${lord.name}.`, [p.i, lord.i]);
   leaderSays(G, 'They kept a second ledger. Of course they did. I taught the galaxy how.');
   return true;
 }

@@ -16,7 +16,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, pay, netWorth, holdingsValue } from '../engine.js';
+import { createGame, pay, payRent, netWorth, holdingsValue } from '../engine.js';
 import { checkInvariants } from './harness.mjs';
 import { BOARD } from '../data.js';
 
@@ -121,4 +121,59 @@ test('a chain of two is still reachable, and that is the current limit', () => {
   while (at.lord !== null && depth < 8) { depth++; at = G.players[at.lord]; }
   assert.equal(depth, 2, 'so the chain is two deep');
   checkInvariants(G, 'with a chain of two');
+});
+
+test('an overlord pays their own vassal the net, once', () => {
+  // NOTE: this passes under the OLD gross-then-refund path too, and says so
+  // rather than pretending otherwise — paying 200 and taking 50 back lands on
+  // the same balances as paying 150. It pins the arithmetic; the test below is
+  // the one that can tell the two apart, because the difference only exists
+  // when the overlord cannot cover the gross.
+  const G = game(17);
+  const [lord, v] = G.players;
+  v.lord = lord.i; lord.vassals.push(v.i);
+  lord.tithe = 25;
+  const sq = BOARD.findIndex(b => b.pr && b.s);
+  v.holdings = [{ sq, garrisons: 0, citadel: 0, mortgaged: 0 }];
+  lord.cash = 1000; v.cash = 0;
+  const rent = 200, cut = Math.floor(rent * lord.tithe / 100);
+
+  payRent(G, lord, v, rent);
+
+  assert.equal(lord.cash, 1000 - (rent - cut), 'the overlord is out the net, not the gross');
+  assert.equal(v.cash, rent - cut, 'and the vassal receives the net');
+  assert.equal(v.strength, cut, 'the revolt clock still ticks by the tithe levied');
+});
+
+test('an overlord short of the gross but good for the net does not fall', () => {
+  // The whole point of paying the net. Gross 200, tithe 25% so net 150; the
+  // overlord holds 160. Paying the gross would have liquidated them and, with
+  // nothing to raise, sworn them to their own vassal.
+  const G = game(19);
+  const [lord, v] = G.players;
+  v.lord = lord.i; lord.vassals.push(v.i);
+  lord.tithe = 25;
+  lord.cash = 160; lord.holdings = [];
+  v.cash = 0; v.holdings = [];
+
+  payRent(G, lord, v, 200);
+
+  assert.equal(lord.lord, null, 'the overlord is still nobody’s vassal');
+  assert.equal(lord.cash, 10, 'having paid the net of 150');
+  assert.equal(v.cash, 150);
+  checkInvariants(G, 'after an overlord pays their own vassal');
+});
+
+test('rent to somebody else’s vassal still tithes onward', () => {
+  const G = game(23);
+  const [payer, v, lord] = G.players;
+  v.lord = lord.i; lord.vassals.push(v.i);
+  lord.tithe = 25; lord.cash = 0;
+  payer.cash = 1000; v.cash = 0;
+
+  payRent(G, payer, v, 200);
+
+  assert.equal(payer.cash, 800, 'the payer is out the full rent');
+  assert.equal(v.cash, 150, 'the vassal keeps the rest');
+  assert.equal(lord.cash, 50, 'and the overlord takes the cut');
 });
