@@ -1455,7 +1455,7 @@ function manageControls(p, h) {
   // back to three garrisons, which is why it pays so much more.
   if (h.garrisons > 0 || h.citadel) {
     const gc = BOARD[h.sq].s ? SETS[BOARD[h.sq].s].gc : 0;
-    const back = h.citadel ? Math.floor(gc * 5 / 2) : Math.floor(gc / 2);
+    const back = E.developmentSaleValue(h.sq);
     c += `<button data-fn="sellDev|${h.sq}">− ${money(back)}</button>`;
   }
   // Pledging and redeeming carry their figures too. Redeem is the one that was
@@ -1510,15 +1510,19 @@ function groupHoldings(holdings) {
       // three figures derived from it. Fleets and utilities cannot be built on
       // and carry none.
       const gc = key.startsWith('_') ? 0 : SETS[key].gc;
+      // Both sale figures come from the engine rather than being recomputed
+      // here. They were written out as gc/2 and gc*5/2 in this file and in
+      // three places in engine.js, and the citadel figure was wrong in all
+      // four -- a screen quoting its own arithmetic cannot disagree with the
+      // rule if it never does its own arithmetic. Any square in the set
+      // answers, because the cost is a property of the SET.
+      const anySq = key.startsWith('_') ? null : SETS[key].sq[0];
       return {
         key, label: label(key), colour: colour(key), held, total,
         complete: held.length >= total,
         gc,
-        // Straight from the engine's own arithmetic: raiseCitadel charges gc,
-        // sellDevelopment pays gc/2 for a garrison and gc*5/2 for a citadel,
-        // both floored.
-        sellGarrison: Math.floor(gc / 2),
-        sellCitadel: Math.floor(gc * 5 / 2)
+        sellGarrison: anySq === null ? 0 : E.developmentSaleValue(anySq),
+        sellCitadel: anySq === null ? 0 : E.developmentSaleValue(anySq)
       };
     });
 }
@@ -2209,11 +2213,11 @@ function showSettle() {
       margin-right:8px;background:${b.s ? SETS[b.s].c : 'var(--fleet)'}"></span>`;
     if (h.citadel) {
       return `<button class="pick" data-fn="settleBreak|${h.sq}">${swatch}Break the citadel on ${esc(b.n)}
-        <span class="sub2">raises ${money(Math.floor(SETS[b.s].gc * 5 / 2))} · rent falls to ${money(b.r[3])}</span></button>`;
+        <span class="sub2">raises ${money(E.developmentSaleValue(h.sq))} · rent falls to ${money(b.r[3])}</span></button>`;
     }
     if (h.garrisons > 0) {
       return `<button class="pick" data-fn="settleSellG|${h.sq}">${swatch}Sell a garrison on ${esc(b.n)}
-        <span class="sub2">raises ${money(Math.floor(SETS[b.s].gc / 2))} · ${h.garrisons} there now</span></button>`;
+        <span class="sub2">raises ${money(E.developmentSaleValue(h.sq))} · ${h.garrisons} there now</span></button>`;
     }
     if (h.mortgaged) {
       return `<button class="pick" disabled>${swatch}${esc(b.n)}

@@ -325,9 +325,13 @@ export function liquidate(G, p, need) {
     if (cit) {
       const gc = SETS[BOARD[cit.sq].s].gc;
       citadels++;
-      if (G.garrisonPool < 3) { cit.citadel = 0; cit.garrisons = 0; G.citadelPool++; p.cash += Math.floor(gc * 5 / 2); continue; }
+      if (G.garrisonPool < 3) {
+        cit.citadel = 0; cit.garrisons = 0; G.citadelPool++;
+        p.cash += brokenStackValue(cit.sq);          // the step and its three
+        continue;
+      }
       cit.citadel = 0; cit.garrisons = 3; G.citadelPool++; G.garrisonPool -= 3;
-      p.cash += Math.floor(gc * 5 / 2);
+      p.cash += developmentSaleValue(cit.sq);
       continue;
     }
     break;
@@ -411,8 +415,12 @@ export function raisableValue(G, p) {
   for (const h of p.holdings) {
     const b = BOARD[h.sq];
     const gc = b.s ? SETS[b.s].gc : 0;
-    if (h.citadel) v += Math.floor(gc * 5 / 2);
-    else v += h.garrisons * Math.floor(gc / 2);
+    // A citadel can be broken and then its three garrisons sold in turn, so
+    // what it can RAISE is the whole stack even though one sale returns the
+    // step alone. This is the figure pay() decides bankruptcy on, so it has to
+    // be what a player could actually get, not what one tap gives them.
+    if (h.citadel) v += brokenStackValue(h.sq);
+    else v += h.garrisons * developmentSaleValue(h.sq);
     if (!h.mortgaged) v += pledgeValue(h.sq);
   }
   return v;
@@ -1316,18 +1324,49 @@ export function raiseCitadel(G, p, sq) {
   return true;
 }
 
+// WHAT THE BANK PAYS FOR A DEVELOPMENT, and the only place that decides it.
+// The figure was written out as `gc * 5 / 2` in six separate places -- four in
+// this file and two in the interface -- and it was wrong in all six.
+//
+// A citadel is worth HALF OF ONE GARRISON'S COST, exactly like a garrison,
+// because the citadel STEP cost gc and the three garrisons it replaced are
+// handed back to the BOARD rather than sold. Pricing it against the whole
+// stack paid a player for three garrisons that were still standing there.
+//
+// That made a money pump, and Sam found it by playing: sell a citadel for
+// 5gc/2, raise it again for gc, and the board is exactly where it started with
+// 3gc/2 more in your purse. Repeatable for as long as you care to tap. On The
+// Compact that is +₡225 a cycle; on Agora +₡300. pump.test.mjs now drives every
+// reversible action round its own loop and fails if any of them makes money.
+//
+// It also meant a citadel stack did not depreciate AT ALL: sell the citadel for
+// 5gc/2 and then its three garrisons for 3gc/2 and you had all 4gc back, where
+// garrisons alone return half. Building was free to reverse, which is a
+// separate thing wrong with the same number.
+// Zero for a fleet or a utility, which carry no set and cannot be built on.
+// raisableValue walks EVERY holding, so this is reached with those squares and
+// the old inline arithmetic guarded for it -- a guard that has to move here
+// with the figure, or the sweep that walks a whole board throws.
+export const developmentSaleValue = sq => {
+  const b = BOARD[sq];
+  return b && b.s ? Math.floor(SETS[b.s].gc / 2) : 0;
+};
+
+// A citadel broken when the pool cannot take its three garrisons loses the
+// whole stack -- the step and the three under it -- so it is paid for all four.
+const brokenStackValue = sq => developmentSaleValue(sq) * 4;
+
 export function sellDevelopment(G, p, sq) {
   const h = holding(p, sq);
   if (!h) return false;
-  const gc = SETS[BOARD[sq].s].gc;
   if (h.citadel) {
     if (G.garrisonPool < 3) return false;      // cannot break a citadel the pool cannot absorb
     h.citadel = 0; h.garrisons = 3;
     G.citadelPool++; G.garrisonPool -= 3;
-    p.cash += Math.floor(gc * 5 / 2);
+    p.cash += developmentSaleValue(sq);
     return true;
   }
-  if (h.garrisons > 0) { h.garrisons--; G.garrisonPool++; p.cash += Math.floor(gc / 2); return true; }
+  if (h.garrisons > 0) { h.garrisons--; G.garrisonPool++; p.cash += developmentSaleValue(sq); return true; }
   return false;
 }
 

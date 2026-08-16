@@ -1111,8 +1111,14 @@ for (const device of DEVICES) {
     G.phase = 'end';
     window.__render();
     const endBtn = [...document.querySelectorAll('.act')].find(b => /End turn/.test(b.textContent));
+    // FROM THE ENGINE, not recomputed here. The comment below has always said
+    // "asserted against the engine's own arithmetic rather than against
+    // literals" and this line did the arithmetic itself -- so when the citadel
+    // sale price turned out to be wrong, this check was the SEVENTH copy of the
+    // wrong number and failed on the fix rather than on the defect.
     return { rows, costLines, clipped, pledgeBtns, upkeepEmpty, upkeepBuilt, gc: SETS.eden.gc,
-             sellG: Math.floor(SETS.eden.gc / 2), sellC: Math.floor(SETS.eden.gc * 5 / 2),
+             sellG: window.__E().developmentSaleValue(SETS.eden.sq[0]),
+             sellC: window.__E().developmentSaleValue(SETS.eden.sq[0]),
              endLabel: endBtn ? endBtn.textContent.replace(/\s+/g, ' ').trim() : null };
   });
   // All four figures, on the heading: what a garrison and a citadel cost, and
@@ -1826,6 +1832,45 @@ for (const device of DEVICES) {
   else if (built.spent === built.gc && built.fromPool === 1 && built.garrisons === 1) {
     pass('building through Manage charges the set cost and draws from the pool');
   } else fail(`building misbehaved: ${JSON.stringify(built)}`);
+
+  // A REVERSIBLE ACTION MUST NOT PAY, driven through the real buttons.
+  //
+  // pump.test.mjs sweeps every loop against the engine; this asserts the same
+  // property through the interface, because the defect Sam found lived as much
+  // in ui.js as in engine.js — the sale figure was written out in six places
+  // and the two on screen were among the wrong ones. So this checks BOTH that
+  // the loop costs money and that the sheet quotes the same figure the engine
+  // charges. A screen agreeing with itself and disagreeing with the rules is
+  // exactly what this was.
+  const pump = await page.evaluate(async () => {
+    const G = window.__G(), SETS = window.__SETS(), E = window.__E();
+    const p = G.players[G.cur];
+    p.cash = 50000; p.debt = 0;
+    const set = SETS.com;
+    p.holdings = set.sq.map(sq => ({ sq, garrisons: 0, citadel: 0, mortgaged: 0 }));
+    for (const q of G.players) if (q !== p) q.holdings = q.holdings.filter(h => !set.sq.includes(h.sq));
+    const h = p.holdings[0];
+    h.citadel = 1; G.citadelPool--;
+    window.showManage();
+    const quoted = (document.querySelector('.sheet').innerText.match(/◆\s*₡[\d,]+\s*·\s*sell\s*₡([\d,]+)/) || [])[1];
+    const before = p.cash;
+    const state = () => JSON.stringify([h.citadel, h.garrisons, G.citadelPool, G.garrisonPool]);
+    const stateBefore = state();
+    for (let k = 0; k < 5; k++) { window.sellDev(h.sq); window.raiseCitadel(h.sq); }
+    return {
+      quoted: quoted ? +quoted.replace(/,/g, '') : null,
+      engine: E ? E.developmentSaleValue(h.sq) : null,
+      perCycle: (p.cash - before) / 5,
+      restored: stateBefore === state()
+    };
+  });
+  if (pump.restored && pump.perCycle < 0)
+    pass(`selling a citadel and raising it again costs ₡${-pump.perCycle} a cycle`);
+  else if (!pump.restored) fail('the citadel loop did not return the board to its starting state');
+  else fail(`selling a citadel and raising it again PAYS ₡${pump.perCycle} a cycle — a money pump`);
+  if (pump.engine !== null && pump.quoted === pump.engine)
+    pass(`and the sheet quotes the figure the engine charges (₡${pump.quoted})`);
+  else fail(`the sheet says sell ₡${pump.quoted}, the engine pays ₡${pump.engine}`);
 
   // The Holdings sheet groups by set the same way the player sheet does, and
   // the headings must sit BETWEEN rows rather than inside one. refreshManage
