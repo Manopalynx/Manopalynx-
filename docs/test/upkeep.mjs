@@ -36,20 +36,31 @@
 //   Citadels are all but dead at ₡30: 0.04 held per player-turn. At ₡15 that is
 //   0.14 — three and a half times as many. A mechanic priced out of the game.
 //
-// AND THE PRICE OF FIXING IT — 300 games, 96 circuits, Sam's table:
+// AND THE PRICE OF FIXING IT — 1000 games, 96 circuits, Sam's table:
 //
-//   garrison   conquest ending   human wins   human ends sworn
-//     ₡10            51%             47%            34%
-//     ₡7             72%             48%            42%
-//     ₡5             79%             42%            50%
+//   rate        conquest ending   human wins   human ends sworn
+//   ₡10/₡30           50%             45%            36%
+//   ₡7/₡21            71%             43%            47%
+//   ₡5/₡20            77%             42%            51%
+//   ₡5/₡15            80%             40%            52%
 //
 //   Every credit taken off the bill is a credit that stays in the room and
 //   turns into rent, and rent concentrates where upkeep merely destroys. So the
 //   designed ending arrives more often AND the human is absorbed more often;
-//   there is no rate that buys one without the other. The knee is at ₡7: it
-//   takes 21 points of conquest for 8 points of being sworn and leaves the win
-//   rate flat, where the next step buys 7 more for another 8 and 6 points of
-//   win rate. Measure both columns before moving this number again.
+//   no rate buys one without the other.
+//
+//   USE A THOUSAND GAMES FOR THIS TABLE. At 300 the same measurement showed a
+//   knee at ₡7 — 21 points of conquest for 8 of being sworn with the win rate
+//   FLAT — and I reported that to Sam as the recommendation. There is no knee.
+//   The win-rate column moves about 5 points across the whole range and at 300
+//   games that is inside the noise, so a monotone gradient read as a corner. It
+//   is roughly two points of conquest per point of being sworn, all the way
+//   down, and picking a rate is picking a spot on a line rather than finding
+//   the good one.
+//
+//   And the human here is the harness policy — builds whenever it comfortably
+//   can, buys at list plus a cushion — not Sam. The direction of the win column
+//   is trustworthy because the same policy plays every rate; its level is not.
 import { BOARD, SETS, TRAFFIC, RULES } from '../data.js';
 import { playGame } from './harness.mjs';
 import { upkeep, garrisonsOf, citadelsOf } from '../engine.js';
@@ -77,8 +88,15 @@ function staticTable(nOpp) {
       // unit of the decision even though the bill is per garrison.
       const gain = s.sq.reduce((a, i) =>
         a + nOpp * TRAFFIC[i] / 100 * (rentAt(i, n) - rentAt(i, n - 1)), 0);
-      // A citadel replaces three garrisons: ₡30 instead of ₡30, so no change.
-      const bill = n === 4 ? 0 : s.sq.length * RULES.garrisonUpkeep;
+      // Derive the step's bill from the two rates rather than assuming the
+      // citadel replaces three garrisons at the same money. It did at ₡10/₡30
+      // -- 30 against 30, so the citadel step was free -- and that coincidence
+      // was written in here as a constant `0`, which quietly stops being true
+      // the moment the two rates are moved by different amounts. At ₡5/₡20 the
+      // citadel costs ₡5 a square MORE than the garrisons it replaces.
+      const bill = s.sq.length * (n === 4
+        ? RULES.citadelUpkeep - 3 * RULES.garrisonUpkeep
+        : RULES.garrisonUpkeep);
       const net = gain - bill;
       cells.push(`${(net >= 0 ? '+' : '') + Math.round(net)}`.padStart(7));
     }
@@ -133,15 +151,16 @@ function dynamic(N, circuits) {
 }
 
 const N = +(process.argv[2] || 30);
-// Second argument scales BOTH building upkeep figures, so the same instrument
-// can be pointed at a proposed rate without a second copy of it drifting away
-// from this one. `node upkeep.mjs 30 0.5` is the halved rate.
-const scale = +(process.argv[3] || 1);
-if (scale !== 1) {
-  RULES.garrisonUpkeep = Math.round(RULES.garrisonUpkeep * scale);
-  RULES.citadelUpkeep = Math.round(RULES.citadelUpkeep * scale);
-  console.log(`\n  ** building upkeep scaled ×${scale} — garrison `
-    + `${money(RULES.garrisonUpkeep)}, citadel ${money(RULES.citadelUpkeep)} **`);
+// Second argument names the two rates outright — `node upkeep.mjs 30 5/20` —
+// rather than scaling them together, so the instrument can be pointed at a
+// proposal that moves them by different amounts. It scaled them by one factor
+// until Sam asked for ₡5/₡20, which no single factor can express.
+if (process.argv[3]) {
+  const [g, c] = process.argv[3].split('/').map(Number);
+  RULES.garrisonUpkeep = g; RULES.citadelUpkeep = c;
+  console.log(`\n  ** garrison ${money(g)}, citadel ${money(c)} — a citadel is `
+    + `${money(Math.abs(c - 3 * g))} ${c >= 3 * g ? 'more' : 'less'} than the three `
+    + `garrisons it replaces **`);
 }
 staticTable(3);
 staticTable(2);
