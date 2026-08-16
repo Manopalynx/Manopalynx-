@@ -22,7 +22,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { RULES, SETS } from '../data.js';
-import { createGame, upkeep, vassalUpkeep, releaseSaving } from '../engine.js';
+import { createGame, upkeep, vassalUpkeep, releaseSaving, vassalStep } from '../engine.js';
 
 const src = readFileSync(fileURLToPath(new URL('../ui.js', import.meta.url)), 'utf8');
 
@@ -64,11 +64,11 @@ test('the vassal upkeep is a part of the bill, not the whole of it', () => {
   const sq = SETS.eden.sq[0];
   me.holdings = [{ sq, garrisons: 3, citadel: 0, mortgaged: 0 }];
 
-  assert.ok(vassalUpkeep(me) > 0, 'holding somebody costs something');
-  assert.ok(upkeep(me) > vassalUpkeep(me),
+  assert.ok(vassalUpkeep(G, me) > 0, 'holding somebody costs something');
+  assert.ok(upkeep(G, me) > vassalUpkeep(G, me),
     'a player with garrisons pays more than their vassal line — a screen quoting '
     + 'the total as the cost of the vassal is overstating what releasing them saves');
-  assert.equal(upkeep(me), vassalUpkeep(me) + 3 * RULES.garrisonUpkeep,
+  assert.equal(upkeep(G, me), vassalUpkeep(G, me) + 3 * RULES.garrisonUpkeep,
     'and the two parts account for the whole bill');
 });
 
@@ -82,12 +82,37 @@ test('releasing a vassal saves the step down, not the whole vassal line', () => 
   const [me, a, b] = G.players;
   for (const v of [a, b]) { v.lord = me.i; me.vassals.push(v.i); }
 
-  assert.equal(releaseSaving(me), RULES.vassalUpkeep[1] - RULES.vassalUpkeep[0],
+  assert.equal(releaseSaving(G, me), RULES.vassalUpkeep[1] - RULES.vassalUpkeep[0],
     'holding two, letting one go saves the step between the two rates');
-  assert.ok(releaseSaving(me) < vassalUpkeep(me),
+  assert.ok(releaseSaving(G, me) < vassalUpkeep(G, me),
     'which is less than the whole vassal line');
 
   me.vassals = [a.i]; b.lord = null;
-  assert.equal(releaseSaving(me), RULES.vassalUpkeep[0],
+  assert.equal(releaseSaving(G, me), RULES.vassalUpkeep[0],
     'holding one, letting them go ends the line entirely');
+});
+
+// The competing-claim sheet asks the step from both ends: what the vassal a
+// player already holds is costing them, and what taking one more would cost.
+// They are the same arithmetic and the first version of the sheet used one
+// figure for both, which is right only for a challenger holding nobody.
+test('the vassal step is the cost of the n-th vassal, from either end', () => {
+  const seats = [1, 2, 3, 4].map(i =>
+    ({ name: 'P' + i, kind: i === 1 ? 'human' : 'ai', persona: 'spector' }));
+  const G = createGame({ seats, seed: 1 });
+  const v = G.rates.vassal;
+
+  assert.equal(vassalStep(G, 0), 0, 'holding nobody, there is no step');
+  assert.equal(vassalStep(G, 1), v[0], 'the first costs the first rate');
+  assert.equal(vassalStep(G, 2), v[1] - v[0], 'the second costs the difference');
+  assert.equal(vassalStep(G, 3), v[2] - v[1]);
+  assert.notEqual(vassalStep(G, 2), vassalStep(G, 1),
+    'the steps must differ, or a sheet using one for both could not be wrong');
+
+  // Releasing is the step at your CURRENT count; taking one more is the step
+  // above it. A sheet quoting the same number for both overstates one of them.
+  const [me, a, b] = G.players;
+  for (const x of [a, b]) { x.lord = me.i; me.vassals.push(x.i); }
+  assert.equal(releaseSaving(G, me), vassalStep(G, 2), 'letting one of two go');
+  assert.equal(vassalStep(G, me.vassals.length + 1), vassalStep(G, 3), 'taking a third');
 });

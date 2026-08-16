@@ -43,7 +43,8 @@ function shuffled(G, n) {
 // and every test that asserts against RULES.startingCash -- is unchanged.
 export function createGame({ seats, seed = 1, circuits = 72,
                              startingCash = RULES.startingCash,
-                             anchoragePot = RULES.anchoragePot } = {}) {
+                             anchoragePot = RULES.anchoragePot,
+                             upkeepBuildings = 1, upkeepVassals = 1 } = {}) {
   const G = {
     seed,
     rngState: seed >>> 0,
@@ -73,6 +74,16 @@ export function createGame({ seats, seed = 1, circuits = 72,
     swarmMark: 0,       // how many deep-array reports have been made
     swarmFrom: 1,       // and the circuit they are measured from — see extendGame
     anchoragePot,       // the house rule, chosen at setup
+    // THE EFFECTIVE UPKEEP RATES, resolved once here rather than multiplied at
+    // every read. Two reasons: the multiplication happens in one place, and a
+    // saved game keeps the rates it was DEALT even if the rules move under it.
+    // Everything that charges or displays upkeep reads these, never RULES.
+    rates: {
+      garrison: Math.round(RULES.garrisonUpkeep * upkeepBuildings),
+      citadel: Math.round(RULES.citadelUpkeep * upkeepBuildings),
+      vassal: RULES.vassalUpkeep.map(x => Math.round(x * upkeepVassals))
+    },
+    upkeepBuildings, upkeepVassals,   // kept so a screen can name the choice
     pot: 0,             // unclaimed tribute at the anchorage — see toPot
     doublesRun: 0,      // consecutive doubles this turn
     rollAgain: false    // a doubles roll buys another before the turn settles
@@ -158,27 +169,44 @@ export function netWorth(G, p) {
   return v;
 }
 
+// A game made before the rates existed has none, so fall back to the rules.
+// Saves are whole-G JSON, so this is the only compatibility seam the multipliers
+// need — without it a game resumed across this version charges nothing at all.
+const ratesOf = G => G.rates || {
+  garrison: RULES.garrisonUpkeep, citadel: RULES.citadelUpkeep, vassal: RULES.vassalUpkeep
+};
+
 // What the VASSALS cost, on their own. upkeep() returns the whole bill --
 // garrisons, citadels and vassals together -- and the tithe sheet was printing
 // that total under the words "holding them costs ₡80 every turn. Release one
 // and that stops." It does not stop: most of that figure was buildings, which
 // go on costing exactly what they cost. The number was right and the sentence
 // attached to it was false, which is worse than a stale number.
-export const vassalUpkeep = p => p.vassals.length
-  ? RULES.vassalUpkeep[Math.min(p.vassals.length - 1, RULES.vassalUpkeep.length - 1)]
-  : 0;
+export const vassalUpkeep = (G, p) => {
+  const v = ratesOf(G).vassal;
+  return p.vassals.length ? v[Math.min(p.vassals.length - 1, v.length - 1)] : 0;
+};
 
 // And what releasing ONE of them would actually save: the step down, not the
 // whole vassal line, because the bill is charged by count rather than per head.
-export const releaseSaving = p => vassalUpkeep(p)
-  - (p.vassals.length > 1
-      ? RULES.vassalUpkeep[Math.min(p.vassals.length - 2, RULES.vassalUpkeep.length - 1)]
-      : 0);
+export const releaseSaving = (G, p) => vassalStep(G, p.vassals.length);
 
-export function upkeep(p) {
-  return garrisonsOf(p) * RULES.garrisonUpkeep
-       + citadelsOf(p) * RULES.citadelUpkeep
-       + vassalUpkeep(p);
+// THE STEP: what going from n-1 vassals to n costs per turn. The bill is
+// charged by COUNT rather than per head, so this is the only honest way to
+// answer either question a player asks about one vassal -- what releasing this
+// one saves (the step at their current count) and what taking one more would
+// cost (the step at one above it). Written once because the two are the same
+// arithmetic asked from opposite ends, and I got it wrong the first time by
+// treating them as one figure.
+export const vassalStep = (G, n) => {
+  const v = ratesOf(G).vassal;
+  const at = k => k > 0 ? v[Math.min(k - 1, v.length - 1)] : 0;
+  return at(n) - at(n - 1);
+};
+
+export function upkeep(G, p) {
+  const r = ratesOf(G);
+  return garrisonsOf(p) * r.garrison + citadelsOf(p) * r.citadel + vassalUpkeep(G, p);
 }
 
 export function rentOf(G, i, roll = 7) {
@@ -1074,7 +1102,7 @@ export function endTurn(G) {
   }
   G.rollAgain = false;
   G.doublesRun = 0;
-  const u = upkeep(p);
+  const u = upkeep(G, p);
   if (u > 0) {
     if (parkForSettlement(G, p, null, u, 'upkeep')) return;
     pay(G, p, null, u);
@@ -2356,7 +2384,7 @@ export function aiRelease(G, p) {
     // vassals it needed for the conquest ending: measured at 63% of games down
     // to 46% before this line was added.
     if (!p.debt) break;
-    if (p.cash >= upkeep(p) * k) break;
+    if (p.cash >= upkeep(G, p) * k) break;
     const cheapest = [...p.vassals]
       .sort((a, b) => holdingsValue(G.players[a]) - holdingsValue(G.players[b]))[0];
     if (!releaseVassal(G, p, cheapest)) break;

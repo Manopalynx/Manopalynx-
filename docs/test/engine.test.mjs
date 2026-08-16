@@ -224,7 +224,7 @@ test('upkeep counts garrisons and citadels separately, at their own rates', () =
   own(G, a, 18, { citadel: 1 });
   assert.equal(garrisonsOf(a), 3);
   assert.equal(citadelsOf(a), 1);
-  assert.equal(upkeep(a), 3 * RULES.garrisonUpkeep + 1 * RULES.citadelUpkeep);
+  assert.equal(upkeep(G, a), 3 * G.rates.garrison + 1 * G.rates.citadel);
   assert.notEqual(RULES.garrisonUpkeep, RULES.citadelUpkeep,
     'the two rates must differ, or this could not tell them apart');
 });
@@ -234,7 +234,7 @@ test('a citadel replaces its garrisons rather than adding to them', () => {
   const [a] = G.players;
   own(G, a, 16, { citadel: 1, garrisons: 3 });
   assert.equal(garrisonsOf(a), 0, 'a citadel square must not also count garrisons');
-  assert.equal(upkeep(a), RULES.citadelUpkeep,
+  assert.equal(upkeep(G, a), G.rates.citadel,
     'the citadel rate alone, with nothing left over from the garrisons it replaced');
 });
 
@@ -242,11 +242,11 @@ test('holding vassals adds a fixed overhead by count', () => {
   const G = game(seats4);
   const [a, b, c, d] = G.players;
   a.vassals = [b.i];
-  assert.equal(upkeep(a), RULES.vassalUpkeep[0]);
+  assert.equal(upkeep(G, a), G.rates.vassal[0]);
   a.vassals = [b.i, c.i];
-  assert.equal(upkeep(a), RULES.vassalUpkeep[1]);
+  assert.equal(upkeep(G, a), G.rates.vassal[1]);
   a.vassals = [b.i, c.i, d.i];
-  assert.equal(upkeep(a), RULES.vassalUpkeep[2]);
+  assert.equal(upkeep(G, a), G.rates.vassal[2]);
 });
 
 /* ============================================================ payback */
@@ -570,7 +570,7 @@ test('upkeep does NOT feed the pot', () => {
   const before = G.pot;
   endTurn(G);
   assert.equal(G.pot, before, 'an upkeep bill leaves the game as it always did');
-  assert.ok(upkeep(a) > 0, 'and there was a bill to leave, or this proves nothing');
+  assert.ok(upkeep(G, a) > 0, 'and there was a bill to leave, or this proves nothing');
 });
 
 test('landing at the anchorage takes the pot, and empties it', () => {
@@ -620,6 +620,83 @@ test('the pot only collects what actually left the payer', () => {
   resolveLanding(G);
   assert.equal(G.pot, 60, 'only the ₡60 they had');
   assert.ok(a.debt > 0, 'and the rest is a marker');
+});
+
+/* ============================================== the upkeep multipliers */
+// Two dials, chosen at setup, resolved into G.rates ONCE at deal time rather
+// than multiplied at every read. That is what makes a saved game keep the rates
+// it was dealt even if the rules move underneath it, and it is the property
+// worth pinning: everything that charges upkeep reads the game, not the rules.
+test('the multipliers resolve into the rates the game will charge', () => {
+  const G = createGame({ seats: seats4, seed: 1, upkeepBuildings: 2, upkeepVassals: 0.5 });
+  assert.equal(G.rates.garrison, RULES.garrisonUpkeep * 2);
+  assert.equal(G.rates.citadel, RULES.citadelUpkeep * 2);
+  assert.deepEqual(G.rates.vassal, RULES.vassalUpkeep.map(x => Math.round(x / 2)));
+});
+
+test('the two dials move only their own half of the bill', () => {
+  const build = m => {
+    const G = createGame({ seats: seats4, seed: 1, ...m });
+    const [a, b] = G.players;
+    own(G, a, 16, { garrisons: 3 });
+    b.lord = a.i; a.vassals.push(b.i);
+    return { G, a };
+  };
+  const base = build({});
+  const dearBuildings = build({ upkeepBuildings: 2 });
+  const dearVassals = build({ upkeepVassals: 2 });
+
+  const g = 3 * RULES.garrisonUpkeep, v = RULES.vassalUpkeep[0];
+  assert.equal(upkeep(base.G, base.a), g + v);
+  assert.equal(upkeep(dearBuildings.G, dearBuildings.a), 2 * g + v,
+    'the buildings dial must not touch the vassal line');
+  assert.equal(upkeep(dearVassals.G, dearVassals.a), g + 2 * v,
+    'and the vassal dial must not touch the buildings');
+});
+
+test('at zero an upkeep line costs nothing at all', () => {
+  const G = createGame({ seats: seats4, seed: 1, upkeepBuildings: 0, upkeepVassals: 0 });
+  const [a, b] = G.players;
+  own(G, a, 16, { garrisons: 3 });
+  own(G, a, 18, { citadel: 1 });
+  b.lord = a.i; a.vassals.push(b.i);
+  assert.equal(upkeep(G, a), 0);
+  // And the same board on a standard game must cost something, or the check
+  // above would pass on a fixture that simply holds nothing.
+  const std = createGame({ seats: seats4, seed: 1 });
+  const [c, d] = std.players;
+  own(std, c, 16, { garrisons: 3 });
+  own(std, c, 18, { citadel: 1 });
+  d.lord = c.i; c.vassals.push(d.i);
+  assert.ok(upkeep(std, c) > 0, 'the same holdings cost something at 1×');
+});
+
+test('a game created without the dials charges the rules', () => {
+  const G = createGame({ seats: seats4, seed: 1 });
+  assert.equal(G.rates.garrison, RULES.garrisonUpkeep);
+  assert.deepEqual(G.rates.vassal, RULES.vassalUpkeep);
+});
+
+test('the chosen rates survive a save and resume', () => {
+  const G = createGame({ seats: seats4, seed: 1, upkeepBuildings: 0, upkeepVassals: 2 });
+  const back = deserialize(serialize(G));
+  assert.equal(back.rates.garrison, 0);
+  assert.deepEqual(back.rates.vassal, RULES.vassalUpkeep.map(x => x * 2));
+  const [a, b] = back.players;
+  own(back, a, 16, { garrisons: 3 });
+  b.lord = a.i; a.vassals.push(b.i);
+  assert.equal(upkeep(back, a), RULES.vassalUpkeep[0] * 2,
+    'a resumed game charges what it was dealt, not what the rules now say');
+});
+
+test('a save made before the dials existed still charges something', () => {
+  // The one compatibility seam. Without the fallback a game resumed across this
+  // version would have no rates at all and charge nothing, silently.
+  const G = createGame({ seats: seats4, seed: 1 });
+  delete G.rates;
+  const [a] = G.players;
+  own(G, a, 16, { garrisons: 3 });
+  assert.equal(upkeep(G, a), 3 * RULES.garrisonUpkeep, 'it falls back to the rules');
 });
 
 test('a game is dealt the purse it was created with', () => {
@@ -1513,12 +1590,12 @@ test('an overlord can let a vassal go, and stops paying for them', () => {
   const G = game(seats4);
   const [lord, vassal] = G.players;
   lord.vassals = [vassal.i]; vassal.lord = lord.i; vassal.strength = 900;
-  const withVassal = upkeep(lord);
+  const withVassal = upkeep(G, lord);
   assert.equal(releaseVassal(G, lord, vassal.i), true);
   assert.equal(vassal.lord, null);
   assert.deepEqual(lord.vassals, []);
   assert.equal(vassal.strength, 0);
-  assert.ok(upkeep(lord) < withVassal, 'the upkeep should fall when the vassal goes');
+  assert.ok(upkeep(G, lord) < withVassal, 'the upkeep should fall when the vassal goes');
   assert.equal(releaseVassal(G, lord, vassal.i), false, 'and cannot be done twice');
 });
 

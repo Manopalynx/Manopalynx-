@@ -65,7 +65,7 @@ for (let seed = 1; seed <= N; seed++) {
       const board = g.players.reduce((n, p) =>
         n + p.holdings.reduce((m, h) => m + BOARD[h.sq].pr, 0), 0);
       const debt = g.players.reduce((n, p) => n + p.debt, 0);
-      const up = g.players.reduce((n, p) => n + upkeep(p), 0);
+      const up = g.players.reduce((n, p) => n + upkeep(g, p), 0);
       push(cashAt, g.circuit, cash);
       push(boardAt, g.circuit, board);
       push(debtAt, g.circuit, debt);

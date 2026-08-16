@@ -121,12 +121,12 @@ function dynamic(N, circuits) {
           if (p.out) continue;
           const g = garrisonsOf(p), c = citadelsOf(p);
           gTurns += g; cTurns += c; turns++;
-          if (p.vassals.length) vTurns += upkeep(p) - g * RULES.garrisonUpkeep
+          if (p.vassals.length) vTurns += upkeep(G, p) - g * RULES.garrisonUpkeep
             - c * RULES.citadelUpkeep;
           const was = seen.get(p.i);
           if (was !== undefined) { if (g > was) built += g - was; else if (g < was) sold += was - g; }
           seen.set(p.i, g);
-          const u = upkeep(p);
+          const u = upkeep(G, p);
           if (u && p.cash < u) { short++; shortOf += u - p.cash; }
         }
       }

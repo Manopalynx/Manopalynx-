@@ -521,7 +521,7 @@ __m.data = (function () {
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-const BUILD = 'grandiose-v80';
+const BUILD = 'grandiose-v81';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -1258,7 +1258,8 @@ function shuffled(G, n) {
 // and every test that asserts against RULES.startingCash -- is unchanged.
 function createGame({ seats, seed = 1, circuits = 72,
                              startingCash = RULES.startingCash,
-                             anchoragePot = RULES.anchoragePot } = {}) {
+                             anchoragePot = RULES.anchoragePot,
+                             upkeepBuildings = 1, upkeepVassals = 1 } = {}) {
   const G = {
     seed,
     rngState: seed >>> 0,
@@ -1288,6 +1289,16 @@ function createGame({ seats, seed = 1, circuits = 72,
     swarmMark: 0,       // how many deep-array reports have been made
     swarmFrom: 1,       // and the circuit they are measured from — see extendGame
     anchoragePot,       // the house rule, chosen at setup
+    // THE EFFECTIVE UPKEEP RATES, resolved once here rather than multiplied at
+    // every read. Two reasons: the multiplication happens in one place, and a
+    // saved game keeps the rates it was DEALT even if the rules move under it.
+    // Everything that charges or displays upkeep reads these, never RULES.
+    rates: {
+      garrison: Math.round(RULES.garrisonUpkeep * upkeepBuildings),
+      citadel: Math.round(RULES.citadelUpkeep * upkeepBuildings),
+      vassal: RULES.vassalUpkeep.map(x => Math.round(x * upkeepVassals))
+    },
+    upkeepBuildings, upkeepVassals,   // kept so a screen can name the choice
     pot: 0,             // unclaimed tribute at the anchorage — see toPot
     doublesRun: 0,      // consecutive doubles this turn
     rollAgain: false    // a doubles roll buys another before the turn settles
@@ -1373,27 +1384,44 @@ function netWorth(G, p) {
   return v;
 }
 
+// A game made before the rates existed has none, so fall back to the rules.
+// Saves are whole-G JSON, so this is the only compatibility seam the multipliers
+// need — without it a game resumed across this version charges nothing at all.
+const ratesOf = G => G.rates || {
+  garrison: RULES.garrisonUpkeep, citadel: RULES.citadelUpkeep, vassal: RULES.vassalUpkeep
+};
+
 // What the VASSALS cost, on their own. upkeep() returns the whole bill --
 // garrisons, citadels and vassals together -- and the tithe sheet was printing
 // that total under the words "holding them costs ₡80 every turn. Release one
 // and that stops." It does not stop: most of that figure was buildings, which
 // go on costing exactly what they cost. The number was right and the sentence
 // attached to it was false, which is worse than a stale number.
-const vassalUpkeep = p => p.vassals.length
-  ? RULES.vassalUpkeep[Math.min(p.vassals.length - 1, RULES.vassalUpkeep.length - 1)]
-  : 0;
+const vassalUpkeep = (G, p) => {
+  const v = ratesOf(G).vassal;
+  return p.vassals.length ? v[Math.min(p.vassals.length - 1, v.length - 1)] : 0;
+};
 
 // And what releasing ONE of them would actually save: the step down, not the
 // whole vassal line, because the bill is charged by count rather than per head.
-const releaseSaving = p => vassalUpkeep(p)
-  - (p.vassals.length > 1
-      ? RULES.vassalUpkeep[Math.min(p.vassals.length - 2, RULES.vassalUpkeep.length - 1)]
-      : 0);
+const releaseSaving = (G, p) => vassalStep(G, p.vassals.length);
 
-function upkeep(p) {
-  return garrisonsOf(p) * RULES.garrisonUpkeep
-       + citadelsOf(p) * RULES.citadelUpkeep
-       + vassalUpkeep(p);
+// THE STEP: what going from n-1 vassals to n costs per turn. The bill is
+// charged by COUNT rather than per head, so this is the only honest way to
+// answer either question a player asks about one vassal -- what releasing this
+// one saves (the step at their current count) and what taking one more would
+// cost (the step at one above it). Written once because the two are the same
+// arithmetic asked from opposite ends, and I got it wrong the first time by
+// treating them as one figure.
+const vassalStep = (G, n) => {
+  const v = ratesOf(G).vassal;
+  const at = k => k > 0 ? v[Math.min(k - 1, v.length - 1)] : 0;
+  return at(n) - at(n - 1);
+};
+
+function upkeep(G, p) {
+  const r = ratesOf(G);
+  return garrisonsOf(p) * r.garrison + citadelsOf(p) * r.citadel + vassalUpkeep(G, p);
 }
 
 function rentOf(G, i, roll = 7) {
@@ -2289,7 +2317,7 @@ function endTurn(G) {
   }
   G.rollAgain = false;
   G.doublesRun = 0;
-  const u = upkeep(p);
+  const u = upkeep(G, p);
   if (u > 0) {
     if (parkForSettlement(G, p, null, u, 'upkeep')) return;
     pay(G, p, null, u);
@@ -3571,7 +3599,7 @@ function aiRelease(G, p) {
     // vassals it needed for the conquest ending: measured at 63% of games down
     // to 46% before this line was added.
     if (!p.debt) break;
-    if (p.cash >= upkeep(p) * k) break;
+    if (p.cash >= upkeep(G, p) * k) break;
     const cheapest = [...p.vassals]
       .sort((a, b) => holdingsValue(G.players[a]) - holdingsValue(G.players[b]))[0];
     if (!releaseVassal(G, p, cheapest)) break;
@@ -3669,7 +3697,7 @@ function standings(G) {
     .sort((a, b) => b.worth - a.worth);
 }
 
-return { random, createGame, current, square, ownerOf, holding, ownsSet, countType, garrisonsOf, citadelsOf, holdingsValue, netWorth, vassalUpkeep, releaseSaving, upkeep, rentOf, paybackTurns, revoltThreshold, pay, liquidate, rentSplit, payRent, money, displayName, raisableValue, parkForSettlement, autoSettle, settleNow, claimPot, claimValue, submitClaim, closeContest, releaseVassal, setTithe, declareIndependence, lapSplit, previewAt, landingPreview, cardEffect, roll, usePardon, payFacilityFee, amendCost, amendManifest, resolveLanding, applyCard, endTurn, swarmDistance, announceSwarm, playOnCircuits, extendGame, buy, openAuction, submitBid, closeAuction, canBuild, build, canRaiseCitadel, raiseCitadel, developmentSaleValue, sellDevelopment, pledgeValue, redeemCost, pledge, mortgage, redeem, repayDebt, tradable, settleContract, setCompletingTargets, setBuildingTargets, denialTargets, seekContract, recordRefusal, refusalFor, refusalBlocks, contractIsLegal, proposeContract, respondToContract, netValue, aiValue, aiBid, aiWantsToBuy, threatPenalty, sqList, liquidityWeight, contractValue, aiAcceptsContract, aiCounter, aiRedeem, aiRepay, seekSale, openBoardFraction, aiPayFacilityFee, landingCost, aiAmend, aiTithe, aiRelease, aiDevelop, SAVE_VERSION, serialize, deserialize, standings };
+return { random, createGame, current, square, ownerOf, holding, ownsSet, countType, garrisonsOf, citadelsOf, holdingsValue, netWorth, vassalUpkeep, releaseSaving, vassalStep, upkeep, rentOf, paybackTurns, revoltThreshold, pay, liquidate, rentSplit, payRent, money, displayName, raisableValue, parkForSettlement, autoSettle, settleNow, claimPot, claimValue, submitClaim, closeContest, releaseVassal, setTithe, declareIndependence, lapSplit, previewAt, landingPreview, cardEffect, roll, usePardon, payFacilityFee, amendCost, amendManifest, resolveLanding, applyCard, endTurn, swarmDistance, announceSwarm, playOnCircuits, extendGame, buy, openAuction, submitBid, closeAuction, canBuild, build, canRaiseCitadel, raiseCitadel, developmentSaleValue, sellDevelopment, pledgeValue, redeemCost, pledge, mortgage, redeem, repayDebt, tradable, settleContract, setCompletingTargets, setBuildingTargets, denialTargets, seekContract, recordRefusal, refusalFor, refusalBlocks, contractIsLegal, proposeContract, respondToContract, netValue, aiValue, aiBid, aiWantsToBuy, threatPenalty, sqList, liquidityWeight, contractValue, aiAcceptsContract, aiCounter, aiRedeem, aiRepay, seekSale, openBoardFraction, aiPayFacilityFee, landingCost, aiAmend, aiTithe, aiRelease, aiDevelop, SAVE_VERSION, serialize, deserialize, standings };
 })();
 
 __m.score = (function () {
@@ -5401,7 +5429,9 @@ const setup = {
   ais: [],
   circuits: DEFAULT_CIRCUITS,
   cash: RULES.startingCash,
-  pot: RULES.anchoragePot
+  pot: RULES.anchoragePot,
+  upB: 1,
+  upV: 1
 };
 
 // The purse each seat is dealt. Every figure the game is balanced around comes
@@ -5417,6 +5447,28 @@ const setup = {
 // Written once and used by all three pickers, so the mark can never disagree
 // with the value it is marking. `is` is the comparison the caller already has.
 const dfltMark = is => is ? '<span class="dflt">default</span>' : '';
+
+// The two upkeep dials, measured over 400 games a cell at 96 circuits on Sam's
+// table before any of these labels were written.
+//
+// BUILDINGS IS THE STRONG ONE and it is NOT monotonic, which is the finding
+// worth carrying: conquest runs 83% / 85% / 75% / 61% / 50% across 0x to 2x, so
+// the peak is at a HALF and zero is slightly below it. Free buildings do not
+// mean more absorption -- absorption needs somebody bankrupted, and at 0x
+// nothing bankrupts anybody except rent. What 0x does do is punish the player
+// hardest of the five: the human's win rate falls to 34% against 44% at 1x,
+// because the opponents build everything and charge for it. "No upkeep" sounds
+// like a kindness and is the least kind setting on the dial.
+//
+// VASSALS IS THE GENTLE ONE and it is monotonic: 81% / 80% / 75% / 68% / 60%.
+// Turning it off barely moves the human's own fortunes either way.
+const UPKEEP_CHOICES = [
+  [0, 'None', 'Nothing to keep. Build freely — and so will they.'],
+  [0.5, 'Light', 'Half the bill.'],
+  [1, 'Standard', 'What every figure in the game is balanced against.'],
+  [1.5, 'Heavy', 'Half again. Fewer things stay built.'],
+  [2, 'Punishing', 'Double. A long, attritional game.']
+];
 
 const CASH_CHOICES = [
   [1000, 'Lean', 'Barely a purse. The board is bought slowly and on credit.'],
@@ -5474,6 +5526,31 @@ function drawSetup() {
         : `<br><br>Every target and price in the game is calibrated against
            ${money(RULES.startingCash)}. More money is <b>harder</b>, not easier — the opponents
            build with it and charge you for it.`}</p>
+    </div>
+    <div class="fld"><label>Upkeep — what you have built</label>
+      <div class="opts trio">${UPKEEP_CHOICES.map(([v, n]) =>
+        `<button class="opt${setup.upB === v ? ' on' : ''}" data-ub="${v}">${v}×${
+          dfltMark(v === 1)}</button>`).join('')}</div>
+      <p class="note" style="margin-top:10px"><b>${esc(UPKEEP_CHOICES.find(c => c[0] === setup.upB)[1])}.</b>
+      ${esc(UPKEEP_CHOICES.find(c => c[0] === setup.upB)[2])}
+      ${setup.upB === 1 ? '' : setup.upB < 1
+        ? `<br><br>Cheaper buildings mean more money in the room and bigger rents, so the
+           takeover arrives <b>more</b> often, not less — and at <b>0×</b> it turns against
+           you hardest of all, because the opponents build everything and charge you for it.`
+        : `<br><br>A dearer bill destroys money and slows everything down: fewer things stay
+           built, fewer players are bankrupted into one another, and more games run to the
+           circuit limit instead of ending in a takeover.`}</p>
+    </div>
+    <div class="fld"><label>Upkeep — vassals you hold</label>
+      <div class="opts trio">${UPKEEP_CHOICES.map(([v, n]) =>
+        `<button class="opt${setup.upV === v ? ' on' : ''}" data-uv="${v}">${v}×${
+          dfltMark(v === 1)}</button>`).join('')}</div>
+      <p class="note" style="margin-top:10px"><b>${esc(UPKEEP_CHOICES.find(c => c[0] === setup.upV)[1])}.</b>
+      ${setup.upV === 0 ? 'Holding somebody costs nothing at all.'
+        : 'What it costs to hold somebody, charged by how many you hold rather than per head.'}
+      ${setup.upV === 1 ? '' : `<br><br>A gentler dial than the buildings one — it moves the
+        takeover by about ten points across its whole range and leaves your own chances
+        much where they were.`}</p>
     </div>
     <div class="fld"><label>Neutral Anchorage</label>
       <div class="opts">${[['0', 'Pays nothing'], ['1', 'Unclaimed tribute']].map(([v, n]) =>
@@ -5542,6 +5619,12 @@ function drawSetup() {
   $('setup').querySelectorAll('[data-p]').forEach(b => b.onclick = () => {
     setup.pot = b.dataset.p === '1'; drawSetup();
   });
+  $('setup').querySelectorAll('[data-ub]').forEach(b => b.onclick = () => {
+    setup.upB = +b.dataset.ub; drawSetup();
+  });
+  $('setup').querySelectorAll('[data-uv]').forEach(b => b.onclick = () => {
+    setup.upV = +b.dataset.uv; drawSetup();
+  });
   $('begin').onclick = begin;
   if ($('resume')) $('resume').onclick = () => { G = saved; startShell(); };
 }
@@ -5560,7 +5643,8 @@ function begin() {
   setup.ais.forEach(k => seats.push({ name: PERSONAS[k].n, kind: 'ai', persona: k }));
   resetSoundWatch();
   G = E.createGame({ seats, seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0,
-    circuits: setup.circuits, startingCash: setup.cash, anchoragePot: setup.pot });
+    circuits: setup.circuits, startingCash: setup.cash, anchoragePot: setup.pot,
+    upkeepBuildings: setup.upB, upkeepVassals: setup.upV });
   G.log.unshift({ kind: 'leader', circuit: 1, text: 'Nine systems are burning their drives to readiness. Begin.' });
   clearSave();
   startShell();
@@ -5988,7 +6072,7 @@ function renderActions() {
     // only ever visible inside the Manage sheet, which is not where you pay it.
     + actBtn('End turn', 'act_end()', G.phase === 'end' && !owesRoll ? 'pri' : '',
         owesRoll ? 'after the doubles roll'
-          : E.upkeep(p) ? `upkeep ${money(E.upkeep(p))}` : '&nbsp;',
+          : E.upkeep(G, p) ? `upkeep ${money(E.upkeep(G, p))}` : '&nbsp;',
         G.phase !== 'end' || owesRoll);
   bindActs();
 }
@@ -6383,7 +6467,9 @@ function showMenu() {
     <p style="font-size:12px;color:var(--dim);line-height:1.6;margin-top:10px;
        font-variant-numeric:tabular-nums" id="buildLine">
     Build <b>${esc(BUILD)}</b> · seed <b>${G.seed >>> 0}</b>
-    · ${G.circuits} circuits · dealt <b>${money(G.startingCash ?? RULES.startingCash)}</b>${G.anchoragePot ? ' · anchorage pot' : ''}<br>
+    · ${G.circuits} circuits · dealt <b>${money(G.startingCash ?? RULES.startingCash)}</b>${G.anchoragePot ? ' · anchorage pot' : ''}${
+      (G.upkeepBuildings ?? 1) !== 1 ? ` · buildings ${G.upkeepBuildings}×` : ''}${
+      (G.upkeepVassals ?? 1) !== 1 ? ` · vassals ${G.upkeepVassals}×` : ''}<br>
     Quote these in a bug report — the build says whether you are on the current
     version, the seed replays the same dice and the same opponents, and the last
     two say which game was being played, since both are now chosen at setup.</p>`);
@@ -6687,15 +6773,53 @@ function showClaim() {
   const p = G.players[c.queue[c.at]];
   const v = G.players[c.vassal];
   const incumbent = p.i === c.incumbent;
-  sheet(`<h3>Competing claim</h3><div class="sub">${esc(v.name)} · ${esc(p.name)} only</div>
-    ${c.queue.length > 1 ? `<div class="warnbox"><b>Pass the phone to ${esc(p.name)}.</b></div>` : ''}
+  // THREE PLAYERS ARE INVOLVED and the sheet used to name none of them in its
+  // figures: "Their holdings ₡540" meant the VASSAL's, not the rival's, and
+  // "Your cash" sat under it as if the two were a comparison. Sam read it as
+  // saying nothing about either side, which is the correct reading of it.
+  //
+  // So every row now names whose it is, and the three questions a claim
+  // actually turns on are answered: what the prize is worth TO YOU (the tithe
+  // share, not the vassal's gross holdings), what it will cost you every turn
+  // to hold them, and how the two of you stand on vassals — which matters
+  // because the bill is charged by count and because holding them to the end
+  // is the conquest ending.
+  //
+  // WHAT IS DELIBERATELY NOT HERE is the rival's purse. The trade sheet shows a
+  // counterparty's cash and should, because there you are pricing an offer
+  // somebody must accept. A sealed bid is the opposite: knowing they hold ₡120
+  // turns the whole mechanic into "bid ₡121", and the guessing IS the mechanic.
+  // Their vassal count is public on the chips already; their cash is not.
+  const rival = G.players[incumbent ? c.claimant : c.incumbent];
+  const share = Math.floor(E.holdingsValue(v) * p.tithe / 100);
+  // The incumbent is already paying the step at their current count; a
+  // challenger would be paying the step at one above it. Same arithmetic, asked
+  // from opposite ends -- see vassalStep in engine.js.
+  const cost = E.vassalStep(G, p.vassals.length + (incumbent ? 0 : 1));
+  sheet(`<h3>Competing claim</h3>
+    <div class="sub">for ${esc(v.name)} · ${esc(p.name)} only</div>
+    ${c.queue.length > 1 ? `<div class="warnbox"><b>Pass the phone to ${esc(p.name)}.</b>
+      Neither claim is seen until both are in.</div>` : ''}
     <p style="font-size:14.5px;line-height:1.5;color:var(--dim)">
     ${incumbent
-      ? `You already hold ${esc(v.name)}. ${esc(G.players[c.claimant].name)} is trying to take them.`
-      : `${esc(v.name)} cannot settle with you — but ${esc(G.players[c.incumbent].name)} already holds their oath.`}
-    Sealed, once. The higher claim pays it to the bank and takes the vassal. A tie holds for the incumbent.</p>
-    <div class="stat"><span>Their holdings</span><span>${money(E.holdingsValue(v))}</span></div>
-    <div class="stat"><span>Your cash</span><span>${money(p.cash)}</span></div>
+      ? `You hold ${esc(v.name)}. <b>${esc(chipName(rival))}</b> is trying to take them from you.`
+      : `${esc(v.name)} cannot settle with you — and <b>${esc(chipName(rival))}</b> already holds their oath.`}
+    Sealed and once each. The higher claim pays it <b>to the bank</b> and takes the vassal;
+    a tie holds for ${incumbent ? 'you' : esc(chipName(rival))}, who ${incumbent ? 'hold' : 'holds'} them now.</p>
+
+    <div class="sub" style="margin:16px 0 6px">What is at stake</div>
+    <div class="stat"><span>${esc(chipName(v))} holds</span><span>${money(E.holdingsValue(v))}</span></div>
+    <div class="stat"><span>Worth to you at ${p.tithe}%</span><span>${money(share)}</span></div>
+    <div class="stat"><span>${incumbent ? 'Costing you' : 'Would cost you'}</span>
+      <span>${money(cost)}/turn</span></div>
+
+    <div class="sub" style="margin:16px 0 6px">Where you stand</div>
+    <div class="stat"><span>Your cash — all you may claim</span><span>${money(p.cash)}</span></div>
+    <div class="stat"><span>You hold</span><span>${p.vassals.length} vassal${p.vassals.length === 1 ? '' : 's'}</span></div>
+    <div class="stat"><span>${esc(chipName(rival))} holds</span>
+      <span>${rival.vassals.length} vassal${rival.vassals.length === 1 ? '' : 's'}</span></div>
+    <p style="font-size:13px;color:var(--dim);line-height:1.5;margin-top:8px">
+    You cannot see what they will claim. Whatever you seal is gone whether you win or not.</p>
     <input type="number" id="bidIn" inputmode="numeric" placeholder="0" min="0" max="${p.cash}" style="margin-top:14px">
     ${btns([['Seal it', `sealClaim|${p.i}`, 'pri wide']])}`);
   setTimeout(() => { const el = $('bidIn'); if (el) el.focus(); }, 80);
@@ -6966,10 +7090,12 @@ function refreshManage() {
   const g = p.holdings.reduce((n, h) => n + h.garrisons, 0);
   const c = p.holdings.filter(h => h.citadel).length;
   const parts = [];
-  if (g) parts.push(`${g}×${money(RULES.garrisonUpkeep)}`);
-  if (c) parts.push(`${c}×${money(RULES.citadelUpkeep)}`);
+  // The GAME's rates, which a multiplier may have moved away from the rules.
+  const r = G.rates || RULES;
+  if (g) parts.push(`${g}×${money(r.garrison ?? RULES.garrisonUpkeep)}`);
+  if (c) parts.push(`${c}×${money(r.citadel ?? RULES.citadelUpkeep)}`);
   if (p.vassals.length) parts.push(`${p.vassals.length} vassal${p.vassals.length === 1 ? '' : 's'}`);
-  set('[data-mg="upkeep"]', money(E.upkeep(p)) + (parts.length ? ` · ${parts.join(' + ')}` : ''));
+  set('[data-mg="upkeep"]', money(E.upkeep(G, p)) + (parts.length ? ` · ${parts.join(' + ')}` : ''));
   set('[data-mg="pools"]', `${G.garrisonPool} garrisons · ${G.citadelPool} citadels`);
 
   for (const h of p.holdings) {
@@ -7006,7 +7132,7 @@ function showTithe() {
   const p = E.current(G);
   sheet(`<h3>Tithe rate</h3>
     <div class="sub">${p.vassals.length} vassal${p.vassals.length > 1 ? 's' : ''}
-      · ${money(E.vassalUpkeep(p))}/turn of your ${money(E.upkeep(p))} upkeep</div>
+      · ${money(E.vassalUpkeep(G, p))}/turn of your ${money(E.upkeep(G, p))} upkeep</div>
     <p style="font-size:14.5px;color:var(--dim);line-height:1.5">This share of everything your vassals
     hold counts toward your total — and every turn under it arms them. Squeeze harder and they are
     worth more to you, for less long. You cannot see how close they are.</p>
@@ -7016,9 +7142,9 @@ function showTithe() {
       `<button class="opt${p.tithe === r ? ' on' : ''}" data-fn="setTithe|${r}">${r}%</button>`).join('')}</div>
     <div class="sub" style="margin:20px 0 6px">Let them go</div>
     <p style="font-size:13.5px;color:var(--dim);line-height:1.5;margin:0 0 8px">
-    The vassal line is ${money(E.vassalUpkeep(p))} of your ${money(E.upkeep(p))} upkeep;
+    The vassal line is ${money(E.vassalUpkeep(G, p))} of your ${money(E.upkeep(G, p))} upkeep;
     the rest is what you have built and goes on costing it. Letting one go saves
-    ${money(E.releaseSaving(p))} a turn${p.vassals.length > 1
+    ${money(E.releaseSaving(G, p))} a turn${p.vassals.length > 1
       ? ' — the bill is charged by how many you hold, not per head' : ''},
     along with the tithe and whatever they have buried against you.</p>
     ${p.vassals.map(vi => `<button class="pick" data-fn="release|${vi}">
@@ -7045,7 +7171,7 @@ function setTithe(r) {
     b.classList.toggle('on', +b.dataset.fn.split('|')[1] === p.tithe));
   const sub = root.querySelector('.sub');
   if (sub) sub.textContent =
-    `${p.vassals.length} vassal${p.vassals.length > 1 ? 's' : ''} · upkeep ${money(E.upkeep(p))}/turn`;
+    `${p.vassals.length} vassal${p.vassals.length > 1 ? 's' : ''} · upkeep ${money(E.upkeep(G, p))}/turn`;
 }
 
 function showRevolt() {

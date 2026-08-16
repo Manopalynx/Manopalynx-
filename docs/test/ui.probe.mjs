@@ -1833,6 +1833,59 @@ for (const device of DEVICES) {
     pass('building through Manage charges the set cost and draws from the pool');
   } else fail(`building misbehaved: ${JSON.stringify(built)}`);
 
+  // THE COMPETING-CLAIM SHEET names three players and used to name none of them
+  // in its figures. "Their holdings ₡540" meant the VASSAL's, with "Your cash"
+  // under it as though the two were a comparison, so it read as saying nothing
+  // about either side of the bid. Every row names whose it is now.
+  //
+  // And the rival's PURSE is deliberately absent: a sealed bid where you can
+  // see their cash is "bid one more than they have". Their vassal count is on
+  // the chips already; their cash is the thing you are guessing at.
+  const claim = await page.evaluate(async () => {
+    const G = window.__G(), SETS = window.__SETS();
+    const [me, rival] = G.players;
+    if (!rival) return 'needs two seats';
+    // A third seat to be the vassal, or the sheet has nobody to fight over.
+    const vassal = { ...JSON.parse(JSON.stringify(me)), i: G.players.length,
+                     name: 'Ondh', kind: 'ai', persona: 'vale',
+                     cash: 40, holdings: [], vassals: [], lord: me.i, debt: 0 };
+    G.players.push(vassal);
+    vassal.holdings = [{ sq: SETS.eden.sq[0], garrisons: 0, citadel: 0, mortgaged: 0 }];
+    me.vassals = [vassal.i]; me.cash = 805; me.tithe = 25;
+    rival.cash = 120; rival.vassals = [];
+    G.contest = { vassal: vassal.i, incumbent: me.i, claimant: rival.i,
+                  queue: [me.i], at: 0, bids: {}, resolved: false };
+    G.cur = me.i;
+    // Through tick() at the contest phase, which is the route a real game
+    // takes -- showClaim is not on window and should not be.
+    G.phase = 'contest';
+    window.__tick();
+    const sh = document.querySelector('.sheet');
+    const text = sh ? sh.innerText.replace(/\s+/g, ' ') : '(no sheet)';
+    G.contest = null; G.players.pop(); me.vassals = []; G.phase = 'end';
+    window.__tick();
+    return { text, rivalCash: rival.cash, myCash: me.cash };
+  });
+  if (typeof claim === 'string') fail(`the claim sheet check: ${claim}`);
+  else {
+    const has = re => re.test(claim.text);
+    if (has(/Ondh holds/) && has(/Worth to you at 25%/))
+      pass('the claim sheet names whose holdings are whose, and what they are worth to you');
+    else fail(`the claim sheet does not attribute its figures: "${claim.text.slice(0, 200)}"`);
+    if (has(/You hold 1 vassal/) && has(/holds 0 vassals/))
+      pass('and states both vassal counts');
+    else fail(`the claim sheet omits a vassal count: "${claim.text.slice(0, 260)}"`);
+    if (has(/Your cash — all you may claim/)) pass('and that your cash is the ceiling on a claim');
+    else fail('the claim sheet does not say your cash bounds the bid');
+    // The rival's cash must NOT be quoted. 120 is theirs; 805 is the player's
+    // own and legitimately on screen, so this looks for the one figure only.
+    if (!new RegExp(`₡${claim.rivalCash}\\b`).test(claim.text))
+      pass('and does not give away what the rival can spend');
+    else fail(`the claim sheet quotes the rival's purse (₡${claim.rivalCash})`);
+    if (has(/to the bank/)) pass('and says the claim is paid to the bank, won or lost');
+    else fail('the claim sheet does not say where a sealed claim goes');
+  }
+
   // WHAT THE ACTION BUTTON PROMISES MUST BE WHAT HAPPENS.
   //
   // Two cases where it was not, both found by Sam playing and both the same

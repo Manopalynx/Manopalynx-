@@ -117,35 +117,44 @@ for (const device of DEVICES) {
   // against. They coincide on a fresh screen, which is exactly why a check that
   // only looked at the fresh screen would prove nothing — so this moves the
   // selection away and asserts the mark STAYS where the default is.
+  //
+  // DERIVED, not counted. This asserted "three settings name their default" and
+  // broke the moment two more pickers were added — a check restating a number
+  // the screen owns, which is the same fault it exists to catch. It now finds
+  // the marked pickers itself and moves each one off its own default.
   const marks = await page.evaluate(() => {
+    // Which attribute identifies each picker's buttons. Read off the marked
+    // buttons themselves so a new picker arrives covered.
+    const attrOf = b => ['t', 'c', 'p', 'ub', 'uv', 'h', 'snd'].find(k => b.dataset[k] !== undefined);
     const read = () => [...document.querySelectorAll('.opt')]
       .filter(b => b.querySelector('.dflt'))
-      .map(b => ({ key: b.dataset.t || b.dataset.c || b.dataset.p || b.dataset.h,
-                   on: b.classList.contains('on'),
-                   // Does the caption fit inside its own button, at this width?
-                   clipped: b.querySelector('.dflt').getBoundingClientRect().width
-                            > b.getBoundingClientRect().width - 2 }));
+      .map(b => { const a = attrOf(b); return {
+        attr: a, key: b.dataset[a],
+        on: b.classList.contains('on'),
+        // Does the caption fit inside its own button, at this width?
+        clipped: b.querySelector('.dflt').getBoundingClientRect().width
+                 > b.getBoundingClientRect().width - 2 }; });
     const before = read();
-    // Move every picker off its default.
-    document.querySelector('[data-t="48"]').click();
-    document.querySelector('[data-c="4000"]').click();
-    document.querySelector('[data-p="1"]').click();
+    // Move every marked picker to some OTHER option in the same picker.
+    for (const m of before) {
+      const other = [...document.querySelectorAll(`[data-${m.attr}]`)]
+        .find(b => b.dataset[m.attr] !== m.key);
+      if (other) other.click();
+    }
     const after = read();
-    // Put them back, so the checks below start where they expect to.
-    document.querySelector('[data-t="72"]').click();
-    document.querySelector('[data-c="2000"]').click();
-    document.querySelector('[data-p="0"]').click();
+    // Put them all back, so the checks below start where they expect to.
+    for (const m of before) document.querySelector(`[data-${m.attr}="${m.key}"]`).click();
     return { before, after,
              seatMarked: !!document.querySelector('[data-h] .dflt'),
              soundMarked: !!document.querySelector('[data-snd] .dflt') };
   });
-  if (marks.before.length === 3)
-    pass(`three settings name their default (${marks.before.map(m => m.key).join(', ')})`);
-  else fail(`${marks.before.length} defaults marked: ${JSON.stringify(marks.before.map(m => m.key))}`);
+  if (marks.before.length >= 3)
+    pass(`${marks.before.length} settings name their default (${marks.before.map(m => m.key).join(', ')})`);
+  else fail(`only ${marks.before.length} defaults marked: ${JSON.stringify(marks.before.map(m => m.key))}`);
   if (marks.before.every(m => m.on)) pass('and a fresh screen opens on every one of them');
   else fail(`the screen does not open on its own defaults: ${JSON.stringify(marks.before)}`);
   // The real check. With the selection moved away, the mark must not follow it.
-  if (marks.after.length === 3 && marks.after.every(m => !m.on))
+  if (marks.after.length === marks.before.length && marks.after.every(m => !m.on))
     pass('the mark stays with the default when the selection moves away');
   else fail(`the default mark followed the selection: ${JSON.stringify(marks.after)}`);
   if (marks.after.map(m => m.key).join() === marks.before.map(m => m.key).join())
@@ -217,6 +226,49 @@ for (const device of DEVICES) {
   if (said.replace(/,/g, '').includes(String(purse.other))) pass('and the menu names it beside the build');
   else fail(`the build line does not name the purse: "${said.replace(/\n/g, ' ')}"`);
   await page.evaluate(() => window.closeSheet());
+
+  await page.goto(URL, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#begin');
+
+  // ---- the two upkeep dials ----
+  // The rate reaches the game through createGame and is resolved into G.rates
+  // once, so the way to check it is to start a game and read what it charges.
+  const dials = await page.evaluate(() => {
+    const b = [...document.querySelectorAll('[data-ub]')].map(x => +x.dataset.ub);
+    const v = [...document.querySelectorAll('[data-uv]')].map(x => +x.dataset.uv);
+    const onB = document.querySelector('[data-ub].on'), onV = document.querySelector('[data-uv].on');
+    const note = document.querySelector('[data-ub]').closest('.fld').innerText;
+    document.querySelector('[data-ub="2"]').click();
+    document.querySelector('[data-uv="0"]').click();
+    return { b, v, dfltB: onB ? +onB.dataset.ub : null, dfltV: onV ? +onV.dataset.uv : null, note };
+  });
+  if (dials.b.join() === '0,0.5,1,1.5,2' && dials.v.join() === '0,0.5,1,1.5,2')
+    pass('both upkeep dials run 0× to 2×');
+  else fail(`upkeep dials are ${dials.b.join()} and ${dials.v.join()}`);
+  if (dials.dfltB === 1 && dials.dfltV === 1) pass('and both open on 1×');
+  else fail(`the dials open at ${dials.dfltB}× and ${dials.dfltV}×`);
+  // The counter-intuitive half, measured: cheaper buildings make the takeover
+  // MORE likely, and 0× is the setting that turns hardest against the player.
+  if (/more/i.test(dials.note) || /0×/.test(dials.note)) pass('and the buildings note says which way it moves');
+  else fail('the buildings dial does not say what lowering it does');
+
+  await page.click('[data-h="1"]');
+  await page.click('[data-a="spector"]');
+  await page.click('#begin');
+  await page.waitForSelector('#game:not(.hidden)');
+  const charged = await page.evaluate(() => {
+    const G = window.__G(), E = window.__E(), SETS = window.__SETS();
+    const p = G.players[0], q = G.players[1];
+    p.holdings = [{ sq: SETS.eden.sq[0], garrisons: 3, citadel: 0, mortgaged: 0 }];
+    q.lord = p.i; p.vassals = [q.i];
+    return { rates: G.rates, bill: E.upkeep(G, p), chose: [G.upkeepBuildings, G.upkeepVassals] };
+  });
+  // Buildings doubled and vassals free: the bill must be all buildings.
+  if (charged.chose[0] === 2 && charged.chose[1] === 0) pass('the chosen dials reach the game (2× / 0×)');
+  else fail(`the game was created with ${JSON.stringify(charged.chose)}`);
+  if (charged.rates.vassal.every(x => x === 0) && charged.bill === 3 * charged.rates.garrison)
+    pass(`and it charges what they say (₡${charged.bill} of buildings, nothing for the vassal)`);
+  else fail(`rates ${JSON.stringify(charged.rates)} billed ₡${charged.bill}`);
 
   await page.goto(URL, { waitUntil: 'networkidle' });
   await page.waitForSelector('#begin');
