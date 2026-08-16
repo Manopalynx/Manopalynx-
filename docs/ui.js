@@ -827,6 +827,12 @@ function walk(path, done) {
   let k = -1;                       // the piece is already held at its origin
   const step = () => {
     k++;
+    // The walk is scheduled a frame at a time, and `anim` is module state that
+    // anything else re-rendering the board may clear in between — abandoning a
+    // game, a sheet that re-renders, a second walk starting. It threw
+    // "Cannot set properties of null" on one viewport in five. A cancelled
+    // animation should stop, not finish writing to something that is gone.
+    if (!anim) { renderBoard(); done(); return; }
     if (k >= path.length) { anim = null; renderBoard(); done(); return; }
     anim.pos = path[k];
     renderBoard();
