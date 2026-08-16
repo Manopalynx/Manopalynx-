@@ -928,7 +928,36 @@ were wrong nearly as often as the game was.
    pledged — and redeem was the half Sam had asked for. **Print what a check covered, not
    only that it passed**: the first says `2-seat table, one opponent` in its own output,
    which is the only reason the gap stayed visible.
-11. **I destroyed this file with a careless `str.replace`.** I took a slice from "State of
+11. **Three checks in a row covered less than they claimed, always for the same
+   reason: the fixture could not reach the case.** The counterparty-purse check ran
+   on a two-seat table, so "follows the selected tab" never ran. The pledge/redeem
+   check had nothing pledged, so it only ever saw `Pledge` — the half Sam asked for
+   was the other one. And the digest check set the turn up by hand, so `busy` was
+   false and the dead-action-bar bug it was written for could not occur; removing
+   the fix left it green. **Mutation-testing found all three and nothing else would
+   have.** The habit worth keeping: after writing a check, break the thing it
+   guards and watch it fail — and if it does not, the fixture is the suspect
+   before the assertion is.
+12. **I spent four rounds adjusting CSS that was never being applied.** The
+   numbers I was reading came from `.act`, because the current player's chip is
+   `class="pchip act"` and `.act` is also the action-button class with its own
+   padding and `min-height`. Then, hunting a clipped digit, I counted "ink" across
+   a whole cell and got 120 rows of it — the gold ownership ring, not the two
+   digits inside. Both times I was measuring confidently and measuring the wrong
+   object. The answer came from the one measurement that asked the question
+   directly: render the cell twice, once with its clipping on and once off, and
+   diff. Nothing was clipped at all; the figure was merely 3px from the border
+   against 8px on the top row.
+13. **I merged v65 with the probe reporting a failure and only looked at it
+   afterwards.** I read "1 failure(s)" as a number rather than as a thing to open.
+   It was real — a race in `walk()` where `anim` is cleared between one animation
+   frame being scheduled and it firing. Read the failure before shipping, not after.
+14. **`var(--tx)` is Spector's persona colour to the digit.** I styled the new rent
+   figure with it, so every rent on the board was painted as though he owned it.
+   Sam spotted it as "it only fits well with Spector", which was exactly right and
+   for a more literal reason than either of us assumed. It inherits the cell's
+   owner colour now.
+15. **I destroyed this file with a careless `str.replace`.** I took a slice from "State of
    the work" to "### Message to future instances" — and `str.index` found Instance 1's copy
    of that heading, not mine, so the slice was empty and `replace("", ...)` inserted the new
    text between every character of a 984-line file. It came back as 2.4 million lines. Git
@@ -977,6 +1006,21 @@ were wrong nearly as often as the game was.
   now measure on the region each is about, taking the peak across four samples rather than
   one arbitrary phase: 2327–2666 pixels across five viewports and two runs.
   **When a threshold looks wrong, check what the sample can see before touching the number.**
+- **A check is only as good as the state its fixture can reach.** Three separate
+  checks this session asserted something true and covered half of what they
+  claimed, because the fixture never entered the interesting case — two seats
+  where three were needed, nothing pledged, `busy` never set. Each printed a
+  cheerful `ok`. **Mutation-test everything, and read the fixture before the
+  assertion when a mutation fails to turn it red.** Where a check cannot reach a
+  case, say so in its own output — `2-seat table, one opponent` is why that gap
+  stayed visible instead of being silently believed.
+- **Ask what a measurement is actually looking at.** Twice in one turn I measured
+  the wrong object with total confidence: computed styles that came from `.act`
+  rather than `.pchip`, because a chip carries both classes; and an "ink" count
+  over a whole cell that was reading the ownership ring, not the digits inside
+  it. The measurement that settled it rendered the same thing twice, with the
+  suspected cause on and off, and diffed. **Prefer a differential measurement to
+  an absolute one** — it cannot be fooled by whatever else is in frame.
 - **A figure that varies square by square cannot live on a heading, and vice versa.** The
   garrison and citadel prices are properties of the SET, so repeating them per row ran the
   line past the buttons and clipped it mid-figure — `+G ₡2…` against a real ₡200, which is
@@ -986,7 +1030,7 @@ were wrong nearly as often as the game was.
 
 ### State of the work
 
-v62 on `main`, one branch, working tree clean. **331 unit tests across 17 files**, browser
+v70 on `main`, one branch, working tree clean. **333 unit tests across 17 files**, browser
 probe green on all five viewports, four measuring instruments that did not exist before.
 
 Shipped this session, each merged to `main` as it landed so Sam could play it:
@@ -1003,6 +1047,14 @@ Shipped this session, each merged to `main` as it landed so Sam could play it:
 | v60 | pledge and redeem name their price |
 | v61 | absorbing an overlord takes the oaths sworn to them |
 | v62 | vassal upkeep halved, and `liquidate()` stops stripping a vassal on the way in |
+| v63 | an accepted contract raises a screen and the opponent speaks on it |
+| v64 | both purses on an offer made to you; the chip row stops jumping |
+| v65 | a square shows its price until owned, then what it charges |
+| v66 | a rent takes the colour of the seat charging it |
+| v67 | the figure lifted off the cell edge |
+| v68 | a turn-start digest of what changed while somebody else acted |
+| v69 | acknowledging the digest hands back a live turn |
+| v70 | debt markers capped at ₡200 |
 
 New instruments, all `docs/test/`: `vassals.mjs` (the vassal economy), `varan.mjs` (what an
 opponent demands per square, by binary search on the real acceptance test), `money.mjs` (the
@@ -1014,6 +1066,14 @@ the vassal economy feels are now the ones he chose rather than the ones it was b
 
 Open, in the order I would take them:
 
+- **A wiped-out player has no route back, and the debt cap did not give them one.**
+  This is the live question. Capping the marker at ₡200 stopped it reaching ₡4,084
+  and stopped it *looking* hopeless, but measured across caps from ₡200 to
+  uncapped the median spell is 15 turns and the longest 145 — **identical**. The
+  conquest rate does not move either. The stuckness is about having no income at
+  all once everything is sold, not about the size of the marker, so anything that
+  actually helps has to put a player back in the way of earning. Sam is open to
+  ideas here and is playing v70 to see how it feels first.
 - **Chains of two.** A player who is already a vassal can take a vassal of their own, and
   the deep one contributes nothing to the top overlord. Left standing and pinned by a test.
   Flattening it fully is a design decision nobody has needed yet.
@@ -1022,6 +1082,9 @@ Open, in the order I would take them:
 - **The probe has no multi-opponent trade table.** The case Sam actually plays is uncovered
   for contracts exactly the way `sweep.mjs` was uncovered for endings.
 - **One unexplained probe failure**, `no cash field`, seen once and never again.
+- **The probe now covers Sam's table for contracts** — a fresh four-seat game
+  checks all three counterparty tabs and acceptance against each persona. That
+  gap is closed; `sweep.mjs` gained his table too.
 - Everything Instances 3 and 4 left open still stands, untouched.
 
 ### Message to future instances
@@ -1043,6 +1106,18 @@ So: **a number is only true about the thing you varied, on the table you varied 
 When a change is going out beside another change, measure them together before saying what
 they will do — the interaction is not the sum, and here it had the opposite sign.
 
+**And measure the right object.** Twice in one turn I read computed styles off `.act`
+when I meant `.pchip`, and counted an ownership ring as if it were a digit. Both were real
+numbers about the wrong thing, which is the same failure as the table, one level down. When
+an answer matters, render it twice with the suspected cause on and off and diff the two —
+a differential measurement cannot be fooled by whatever else is in frame.
+
+**Mutation-test everything, and suspect the fixture first.** Three checks this session
+asserted something true while covering half of what they claimed, every time because the
+fixture could not reach the interesting state. None of them would have been caught by
+reading the code. Break the thing a check guards; if it stays green, the fixture is the
+problem before the assertion is.
+
 The economy finding survives in a narrower form. Money pressure both creates arrangements
 and destroys the people holding them, and which dominates depends on the rest of the board.
 The instinct that made it work was Sam's, not mine: he asked for the upkeep halved on the
@@ -1051,4 +1126,4 @@ he was right where my figures said he would not be.
 
 Which is the thing to carry: when he reports something as broken, the report is data even
 when your measurements disagree. Bring him the numbers, say plainly which way they point,
-and let him spend the decision. He has now spent two, and both improved the game.
+and let him spend the decision. He has now spent several, and every one improved the game.
