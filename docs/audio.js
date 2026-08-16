@@ -29,6 +29,9 @@
 //   stage(n)     the deep array's four reports, at 25/50/75/95% of the game.
 //                Tied to the existing SWARM_STAGES beats rather than a second
 //                clock, so the sound escalates exactly when the text does.
+//   tribute(c)   somebody takes the anchorage pot. THE ONLY GOOD NEWS IN THE
+//                GAME, and the only cue here that is not the Neurex — see
+//                TRIBUTE below for why it shares none of their material.
 
 import { Score } from './score.js';
 
@@ -102,6 +105,73 @@ export const PRESENCE = [
 export function planFor(mark) {
   if (!Number.isInteger(mark) || mark < 1 || mark > STAGE_PLAN.length) return null;
   return STAGE_PLAN[mark - 1];
+}
+
+/* -------------------------------------------------------------- the tribute */
+// Somebody lands at Neutral Anchorage and takes what has gathered there.
+//
+// IT SHARES NO MATERIAL WITH ANYTHING ELSE HERE, and that is the whole design.
+// Every other sound in this file is the Neurex: clacks are mandibles, the
+// bodies are detuned sawtooths, and the shapes all fall. Retuning ABSORB_PLAN
+// for a windfall would not produce good news, it would produce LESS DREAD —
+// still insects, just fewer of them. So this is triangles rather than sawtooth,
+// a rising figure rather than a falling one, and not one clack.
+//
+// SHORT, because it is frequent. Absorption happens once or twice in a game and
+// cannot be undone, so it runs four seconds. The pot pays out 4.7 to 7.4 times
+// a game (measured, debt.mjs and the commit that shipped v75), and a cue that
+// size arriving seven times would wear through. This is about a third of it.
+//
+// SCALED TO THE TAKE, so the sound carries the news rather than merely marking
+// it. A ₡200 pot and a ₡1,500 pot are different events and a player should be
+// able to hear which one they just had without reading the ledger. More notes
+// and a higher top for a bigger take.
+//
+// The phone speaker, which is what moved the swarm cues from 34-58Hz up to
+// 98-186Hz, is a help here rather than a constraint: this cue lives entirely
+// above 500Hz, so all of it reaches a player instead of a fifth of it.
+//
+// MEASURED before shipping, the same way the swarm cues were: rendered offline,
+// then again through a 500Hz highpass standing in for the speaker's roll-off.
+// Essentially none of the tribute is lost. Absorption's sub-bass BODY, rendered
+// the same way, keeps about 7% — which is not a fault, it is why that cue was
+// rebuilt on a sawtooth whose harmonics survive when its fundamental does not.
+//
+// CALIBRATE THE FILTER BEFORE BELIEVING THE RATIO. The first run of this said
+// "127% survives", which is not a fraction of anything. A biquad highpass is
+// not unity in its passband: a pure 1kHz tone through the same filter comes out
+// at 1.27x, so every ratio has to be divided by that before it means what it
+// looks like it means. The number was real and the label on it was wrong.
+export const TRIBUTE = {
+  // A pentatonic rise on A: nothing in it can clash with a mood the score
+  // happens to be in, which matters because this plays over whatever is already
+  // going on rather than replacing it.
+  steps: [440, 587.33, 659.25, 880, 1174.66],
+  base: 3,          // notes at the smallest take
+  max: 5,           // and at the largest
+  big: 1200,        // the take at which it is playing everything it has
+  gap: 0.115,       // between note onsets
+  decay: 0.42,
+  gain: 0.085,
+  wash: 0.03        // a short shimmer under it, not the swarm's grinding noise
+};
+
+// How many notes a take is worth, and how loud. Pure, so the decision is
+// assertable in node where there is no Web Audio to run.
+// `amount` is the credits taken; anything at or above TRIBUTE.big plays the lot.
+export function tributePlan(amount) {
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  const t = Math.max(0, Math.min(1, amount / TRIBUTE.big));
+  const notes = Math.round(TRIBUTE.base + t * (TRIBUTE.max - TRIBUTE.base));
+  return {
+    notes,
+    // A bigger take is a little louder, but only a little: the NOTE COUNT is
+    // what should carry the size. Loudness alone would just be a louder version
+    // of the same news, and it is the one axis a phone speaker renders worst.
+    gain: TRIBUTE.gain * (0.85 + 0.3 * t),
+    wash: TRIBUTE.wash * (0.6 + 0.8 * t),
+    hz: TRIBUTE.steps.slice(0, notes)
+  };
 }
 
 /* ------------------------------------------------------------ the approach */
@@ -355,6 +425,56 @@ function play(plan) {
 
 export const stage = mark => play(planFor(mark));
 export const absorbed = () => play(ABSORB_PLAN);
+
+// Its own player, not play(). play() is built for the swarm — a detuned
+// sawtooth pair under a closing lowpass with clacks scattered through it — and
+// there is no set of numbers for it that produces a rising chime.
+export function tribute(amount) {
+  const plan = tributePlan(amount);
+  if (!plan || !live()) return false;
+  try {
+    const t = Score.ctx;
+    const dest = dryDest();
+    const at = t.currentTime + 0.02;
+
+    plan.hz.forEach((hz, i) => {
+      const when = at + i * TRIBUTE.gap;
+      // Two triangles an octave apart: the upper one gives a small speaker
+      // something to reproduce, the lower one gives it a body on anything else.
+      for (const [mult, level] of [[1, 1], [2, 0.35]]) {
+        const o = t.createOscillator();
+        o.type = 'triangle';
+        o.frequency.value = hz * mult;
+        const g = t.createGain();
+        g.gain.setValueAtTime(0.0001, when);
+        g.gain.exponentialRampToValueAtTime(plan.gain * level, when + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001, when + TRIBUTE.decay);
+        o.connect(g); g.connect(dest); g.connect(wetDest());
+        o.start(when); o.stop(when + TRIBUTE.decay + 0.05);
+      }
+    });
+
+    // A brief bright shimmer, highpassed well clear of the swarm's wash so the
+    // two could never be mistaken for each other.
+    if (plan.wash > 0) {
+      ensureNoise(t);
+      const span = plan.hz.length * TRIBUTE.gap + TRIBUTE.decay;
+      const src = t.createBufferSource();
+      src.buffer = noiseBuf; src.loop = true;
+      const hp = t.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = 3200;
+      const wg = t.createGain();
+      wg.gain.setValueAtTime(0.0001, at);
+      wg.gain.exponentialRampToValueAtTime(plan.wash, at + span * 0.3);
+      wg.gain.exponentialRampToValueAtTime(0.0001, at + span);
+      src.connect(hp); hp.connect(wg); wg.connect(dest); wg.connect(wetDest());
+      src.start(at); src.stop(at + span + 0.05);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /* ------------------------------------------------------------- the presence */
 // Built once and then left running for the rest of the game, its level moved by

@@ -255,11 +255,21 @@ for (const device of DEVICES) {
     // later. `busy` is true exactly while an opponent has a callback
     // outstanding, so waiting for it to be false twice running is waiting for
     // the chain to finish rather than guessing at a delay.
-    for (let k = 0, quiet = 0; k < 60 && quiet < 2; k++) {
+    // The ceiling has to cover the WORST case, not the typical one. One opponent
+    // turn is roughly 750ms to roll, up to 1.26s of walk at 105ms a step, then
+    // 320 + 520 + 620 — about three and a half seconds — and the fuzzer can stop
+    // with all three of them queued behind each other. A 3.6s ceiling was under
+    // half of that and tripped on one viewport in five, which is exactly the
+    // flaky-check failure mode this file keeps recording: it reads as a defect
+    // and is a number. 12s, and it only ever costs that when the table is
+    // genuinely still moving.
+    let waited = 0;
+    for (let k = 0, quiet = 0; k < 200 && quiet < 2; k++) {
       quiet = window.__busy() ? 0 : quiet + 1;
       await new Promise(r => setTimeout(r, 60));
+      waited += 60;
     }
-    if (window.__busy()) return 'the table never went quiet — an opponent turn is still running';
+    if (window.__busy()) return `the table never went quiet after ${waited}ms — phase ${window.__G().phase}`;
     while (G.players[G.cur].kind !== 'human') G.cur = (G.cur + 1) % G.players.length;
     const me = G.players[G.cur];
     const them = G.players.find(q => q !== me);
@@ -447,6 +457,26 @@ for (const device of DEVICES) {
     const onCross = count(() => window.__render());
     const onRepeat = count(() => window.__render());   // same state, must be silent
 
+    // The tribute, through the watcher. G.pot only grows through toPot, so the
+    // watcher reads a FALL as a claim -- which means a check that just sets the
+    // pot to zero would pass with the cue wired to almost anything. It sets a
+    // pot, takes a reading, drops it, and separately asserts a RISE is silent,
+    // because money going in is not an event and must not sound like one.
+    G.anchoragePot = true;
+    G.pot = 0; window.__render();
+    const potRise = count(() => { G.pot = 700; window.__render(); });
+    const potTake = count(() => { G.pot = 0; window.__render(); });
+    const potRepeat = count(() => window.__render());
+    // Bigger take, more of the figure -- the same scaling tributePlan asserts,
+    // observed as nodes actually scheduled rather than as a returned object.
+    G.pot = 0; window.__render();
+    G.pot = 120; window.__render();
+    const potSmall = count(() => { G.pot = 0; window.__render(); });
+    G.pot = 0; window.__render();
+    G.pot = 2000; window.__render();
+    const potBig = count(() => { G.pot = 0; window.__render(); });
+    G.anchoragePot = false; G.pot = 0; window.__render();
+
     // Absorption: a player acquiring an overlord.
     const victim = G.players.find(p => p.lord === null || p.lord === undefined);
     const other = G.players.find(p => p !== victim);
@@ -501,6 +531,7 @@ for (const device of DEVICES) {
     const moodNear = window.__moodFor(G, 8);
 
     return { unlocked, direct, louder, silenced, silencedAbsorb, onCross, onRepeat,
+             potRise, potTake, potRepeat, potSmall, potBig,
              onAbsorb, absorbRepeat, onGoto, gotoRepeat, bedBefore, bedSame, bedMoved,
              farMusic, midMusic, endMusic, backMusic,
              drifted: +(midR < R0 && endR < midR), backInTune: Math.abs(backR - R0) < 0.001,
@@ -516,6 +547,15 @@ for (const device of DEVICES) {
   else fail(`silenced but still scheduled ${cues.silenced}/${cues.silencedAbsorb} nodes`);
   if (cues.onCross > 0) pass('crossing a swarm stage fires the cue');
   else fail('the swarm stage advanced and nothing sounded');
+  if (cues.potTake > 0) pass(`taking the anchorage pot sounds (${cues.potTake} nodes)`);
+  else fail('the pot was claimed and nothing sounded');
+  if (cues.potRise === 0) pass('and money going INTO the pot is silent');
+  else fail(`feeding the pot scheduled ${cues.potRise} nodes — a fall is the event, not a change`);
+  if (cues.potRepeat === 0) pass('the tribute is edge-triggered too');
+  else fail(`the tribute repeated on an unchanged render (${cues.potRepeat} nodes)`);
+  if (cues.potBig > cues.potSmall)
+    pass(`a bigger take plays more of it (${cues.potBig} nodes against ${cues.potSmall})`);
+  else fail(`₡2000 scheduled ${cues.potBig} nodes against ₡120's ${cues.potSmall}`);
   if (cues.onRepeat === 0) pass('the cue is edge-triggered, not repeated every render');
   else fail(`re-rendering the same state fired again (${cues.onRepeat} nodes) — it would drone through every move`);
   if (cues.onAbsorb > 0) pass('absorption fires its own cue');

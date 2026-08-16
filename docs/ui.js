@@ -379,16 +379,18 @@ function render() {
 //
 //   G.swarmMark   how many of the four deep-array reports have been made
 //   p.lord        null until that player is absorbed
+//   G.pot         only ever GROWS through toPot, so a fall is somebody taking it
 //
 // Only transitions fire. render() runs on every animation frame of a walking
 // piece, so anything keyed on a level rather than an edge would retrigger for
 // the length of a move.
-let heard = { mark: -1, lords: '', onGoto: '' };
+let heard = { mark: -1, lords: '', onGoto: '', pot: -1 };
 
 function soundWatch() {
   if (!G) return;
   const lords = G.players.map(p => (p.lord === null || p.lord === undefined ? '-' : p.lord)).join(',');
   const mark = G.swarmMark ?? 0;
+  const pot = G.pot || 0;
   // Landing on Absorbed. This was the missing cue: the square is the go-to
   // corner, so resolveLanding sends the piece straight on to Detention and it is
   // never sitting there when anyone looks. But tick() renders between the walk
@@ -403,19 +405,24 @@ function soundWatch() {
       lords !== heard.lords &&
       lords.replace(/-/g, '').length > heard.lords.replace(/-/g, '').length;
     const arrived = onGoto && onGoto !== heard.onGoto;
+    // The pot only ever grows through toPot, so a fall can only be a claim, and
+    // the size of the fall is exactly what was taken. No engine change and no
+    // event to plumb through: the same reading-off-state the other two cues use.
+    const took = heard.pot > pot ? heard.pot - pot : 0;
     if (newlyAbsorbed || arrived) Sound.absorbed();
+    else if (took > 0) Sound.tribute(took);
     else if (mark > heard.mark) Sound.stage(mark);
   }
   // Both are levels rather than events, so they are set every render and do
   // their own nothing when neither has moved.
   Sound.setPresence(mark);
   Sound.setApproach(E.swarmDistance(G));
-  heard = { mark, lords, onGoto };
+  heard = { mark, lords, onGoto, pot };
 }
 
 // Starting a new game re-arms all three, so a second game reports from the top.
 function resetSoundWatch() {
-  heard = { mark: -1, lords: '', onGoto: '' };
+  heard = { mark: -1, lords: '', onGoto: '', pot: -1 };
   Sound.clearPresence();
 }
 

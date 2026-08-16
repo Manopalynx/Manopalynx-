@@ -15,7 +15,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 
-import { STAGE_PLAN, ABSORB_PLAN, PRESENCE, APPROACH, MUSIC_FLOOR, planFor, approachFor,
+import { STAGE_PLAN, ABSORB_PLAN, PRESENCE, APPROACH, MUSIC_FLOOR, TRIBUTE, planFor, approachFor,
+         tributePlan, tribute,
          supported, isOn, setOn, stage, absorbed, setPresence, setApproach, clearPresence, _reset }
   from '../audio.js';
 import { Score, moodFor } from '../score.js';
@@ -50,6 +51,70 @@ test('every stage is heavier than the one before it', () => {
     assert.ok(b.wash >= a.wash, `stage ${i + 1} has less noise than stage ${i}`);
     assert.ok(b.hz < a.hz, `stage ${i + 1} does not sit lower than stage ${i}`);
   }
+});
+
+/* ------------------------------------------------------------- the tribute */
+// The one good thing that happens in this game, and the only cue that is not
+// the Neurex. What can be asserted here is that it stays that way, and that the
+// take decides the shape.
+
+test('a take of nothing makes no sound', () => {
+  for (const bad of [0, -1, null, undefined, NaN, '400', {}]) {
+    assert.equal(tributePlan(bad), null, `tributePlan(${String(bad)}) should be null`);
+  }
+  assert.equal(tribute(0), false, 'and the player refuses it too');
+});
+
+test('a bigger take plays more of the figure', () => {
+  const small = tributePlan(150), mid = tributePlan(500), big = tributePlan(2000);
+  assert.equal(small.notes, TRIBUTE.base, 'the smallest take plays the base figure');
+  assert.equal(big.notes, TRIBUTE.max, 'and anything past TRIBUTE.big plays the lot');
+  assert.ok(mid.notes >= small.notes && big.notes >= mid.notes, 'never fewer for more');
+  assert.ok(big.gain > small.gain, 'and a little louder');
+  assert.ok(TRIBUTE.base < TRIBUTE.max,
+    'the two must differ, or the scaling could not be observed at all');
+});
+
+test('the figure only ever rises', () => {
+  // A falling figure is what every Neurex cue does. This one is the opposite
+  // news and has to be the opposite shape.
+  for (let i = 1; i < TRIBUTE.steps.length; i++) {
+    assert.ok(TRIBUTE.steps[i] > TRIBUTE.steps[i - 1],
+      `step ${i} does not rise above the one before it`);
+  }
+  assert.deepEqual(tributePlan(2000).hz, TRIBUTE.steps.slice(0, TRIBUTE.max));
+});
+
+test('it sits entirely in the band a phone speaker reproduces', () => {
+  // The swarm cues had to move from 34-58Hz to 98-186Hz because an iPhone
+  // speaker rolls off below about 500Hz and four fifths of the old cue could
+  // not physically arrive. This one has no excuse to be down there at all.
+  assert.ok(Math.min(...TRIBUTE.steps) >= 400,
+    'the lowest note of the tribute is below what a phone speaker renders');
+  assert.ok(Math.max(...TRIBUTE.steps) > 1000, 'and it reaches somewhere bright');
+});
+
+test('it shares no material with the swarm', () => {
+  // The point of the cue. If it ever grows clacks or drops into their register
+  // it stops being good news and becomes a smaller version of bad news.
+  assert.equal(TRIBUTE.clacks, undefined, 'clacks are mandibles and belong to the Neurex');
+  const lowestSwarm = Math.min(ABSORB_PLAN.hz, ...STAGE_PLAN.map(p => p.hz));
+  const highestSwarm = Math.max(ABSORB_PLAN.hz, ...STAGE_PLAN.map(p => p.hz));
+  assert.ok(Math.min(...TRIBUTE.steps) > highestSwarm,
+    `the tribute overlaps the swarm's register (theirs tops out at ${highestSwarm}Hz)`);
+  assert.ok(lowestSwarm < 100, 'and the swarm is still down where it was');
+});
+
+test('it is far shorter than absorption, because it happens far more often', () => {
+  // Absorption runs once or twice a game and cannot be undone. The pot pays out
+  // 4.7 to 7.4 times a game, and a four-second cue at that rate wears through.
+  const span = TRIBUTE.steps.length * TRIBUTE.gap + TRIBUTE.decay;
+  assert.ok(span < ABSORB_PLAN.dur / 2,
+    `the tribute runs ${span.toFixed(2)}s against absorption's ${ABSORB_PLAN.dur}s`);
+});
+
+test('it is silent rather than broken with no audio', () => {
+  assert.equal(tribute(400), false, 'no context, no sound, no throw');
 });
 
 test('absorption outweighs every stage report', () => {
