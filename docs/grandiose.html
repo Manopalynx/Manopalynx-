@@ -521,7 +521,7 @@ __m.data = (function () {
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-const BUILD = 'grandiose-v84';
+const BUILD = 'grandiose-v85';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -6551,17 +6551,25 @@ function showMenu() {
       ['New game', 'newGame', 'dgr', 'Confirm — abandons this game']
     ])}
     <p style="font-size:13px;color:var(--dim);line-height:1.5;margin-top:14px">
-    The game saves itself after every move. Closing the app does not lose it —
-    only starting a new one does.</p>
-    <p style="font-size:12px;color:var(--dim);line-height:1.6;margin-top:10px;
-       font-variant-numeric:tabular-nums" id="buildLine">
-    Build <b>${esc(BUILD)}</b> · seed <b>${G.seed >>> 0}</b>
-    · ${G.circuits} circuits · dealt <b>${money(G.startingCash ?? RULES.startingCash)}</b>${G.anchoragePot ? ' · anchorage pot' : ''}${
+    Saved after every move. Closing the app does not lose it; only starting a
+    new one does.</p>
+    <!-- A COLOPHON, not a bug-report form. Every figure here earns its place --
+         the version answers "did the fix land", the seed replays the same dice
+         and the same opponents, and the rest says which of the games on offer
+         this one is. What it does NOT need is three lines explaining that to
+         somebody who reports by screenshot, which is how this has been played
+         all along. Reported as reading like a playtest artefact, and it did.
+         The id and the shape of "Build <version> · seed <n>" are load-bearing:
+         two probe checks read this element. -->
+    <p style="font-size:12px;color:var(--dim);line-height:1.7;margin-top:16px;
+       font-variant-numeric:tabular-nums;border-top:1px solid var(--rule);
+       padding-top:12px" id="buildLine">
+    <span style="letter-spacing:.14em;text-transform:uppercase;font-size:10px">This game</span><br>
+    ${G.circuits} circuits · ${money(G.startingCash ?? RULES.startingCash)} a seat${
+      G.anchoragePot ? ' · anchorage pot' : ''}${
       (G.upkeepBuildings ?? 1) !== 1 ? ` · buildings ${G.upkeepBuildings}×` : ''}${
       (G.upkeepVassals ?? 1) !== 1 ? ` · vassals ${G.upkeepVassals}×` : ''}<br>
-    Quote these in a bug report — the build says whether you are on the current
-    version, the seed replays the same dice and the same opponents, and the last
-    two say which game was being played, since both are now chosen at setup.</p>`);
+    Build <b>${esc(BUILD)}</b> · seed <b>${G.seed >>> 0}</b></p>`);
 }
 // Through Sound.setOn rather than Score.toggle, so the choice is written down
 // and the setup screen comes back up agreeing with it next launch.
