@@ -521,7 +521,7 @@ __m.data = (function () {
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-const BUILD = 'grandiose-v83';
+const BUILD = 'grandiose-v84';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -6341,7 +6341,7 @@ function walk(path, done) {
 const ACTIONS = {
   act_roll, act_resolve, act_amend, act_end, act_rollAgain,
   showSquare, showManage, showTrade, showTithe, showRevolt, showFinal, showLedger, showDecks,
-  closeSheet, newGame, copyResult, act_payFee, act_pardon, showMenu, toggleScore, showPlayer,
+  closeSheet, newGame, copyResult, act_payFee, act_pardon, showMenu, showGuide, toggleScore, showPlayer,
   showSettle, settlePledge, settleSellG, settleBreak, settleAuto, settleDone,
   buyNow, declineToAuction, takeCard, sealBid, sealClaim, endAuction, endContest,
   answerContract, build, raiseCitadel, sellDev, toggleMortgage, repay,
@@ -6458,6 +6458,84 @@ function takeCard() { runCard(); }
 /* ---------------------------------------------------------- menu */
 // There was no way out of a game in progress at all — the only route back to
 // the setup screen was finishing and pressing New game.
+// The guide. EVERY FIGURE IN IT IS DERIVED, not typed -- which is the only
+// reason it is safe to write at all. A guide is the single most likely thing in
+// a game to go stale, and this session alone found three pieces of copy that
+// had: a tithe sheet quoting the whole upkeep bill as the cost of one vassal, a
+// settle sheet describing a debt spiral that two builds had already capped and
+// repaid, and a citadel price written out in six places and wrong in all six.
+// Nothing here restates a rule; copy.test.mjs fails the file if it starts to.
+//
+// It says what is OPTIONAL as well as what is true, because three settings now
+// change the answers and a guide that ignored them would be wrong on any table
+// that used them.
+function showGuide() {
+  const p = E.current(G);
+  const r = G.rates || RULES;
+  const g = r.garrison ?? RULES.garrisonUpkeep, cit = r.citadel ?? RULES.citadelUpkeep;
+  const vas = (r.vassal ?? RULES.vassalUpkeep);
+  const h = (title, body) => `<div class="sub" style="margin:18px 0 6px">${title}</div>
+    <p style="font-size:14px;color:var(--dim);line-height:1.55;margin:0">${body}</p>`;
+  sheet(`<h3>How this is played</h3>
+    <div class="sub">circuit ${G.circuit} of ${G.circuits}</div>
+    <p style="font-size:14px;color:var(--dim);line-height:1.55">Roll, settle where you land,
+    then build or deal before you end the turn. Whoever holds the most when the swarm
+    arrives has held the most — unless somebody takes everyone else first.</p>
+
+    <div class="sub" style="margin:18px 0 6px">The buttons</div>
+    <div class="stat"><span>Roll</span><span>starts your turn</span></div>
+    <div class="stat"><span>Amend</span><span>${money(E.amendCost(p))} · nudge one square</span></div>
+    <div class="stat"><span>Manage</span><span>build, pledge, redeem</span></div>
+    <div class="stat"><span>Propose</span><span>draw a contract</span></div>
+    <div class="stat"><span>End turn</span><span>pays your upkeep</span></div>
+    ${h('Amend', `Moves you ONE square forward, before the square you are on is settled —
+      so you may look at where you would land and nudge again, or stop. ${RULES.amendsPerGame}
+      a game, at ${RULES.amendCosts.map(money).join(', then ')}. It is worth it in front of a
+      citadel and almost nowhere else. Opponents use it on the same rule, each with its own
+      idea of when the saving justifies the fee.`)}
+    ${h('Contracts', `Up to ${RULES.tradeMax} squares each way plus credits, either direction.
+      Nothing built or pledged may move, and neither side may hold a debt marker. Refuse an
+      offer and you may <b>counter</b> it — their answer to that is the last word. When they
+      refuse you, they will often name their own price.`)}
+    ${h('Building', `You must hold every square of a colour to build on it. A garrison costs
+      the set's price and keeps for ${money(g)} a turn; a citadel replaces three garrisons,
+      costs one more garrison's price, and keeps for ${money(cit)}. Selling anything back
+      returns half of what it cost. Garrisons and citadels are finite —
+      ${G.garrisonPool} and ${G.citadelPool} are left.`)}
+    ${h('Pledging', `Raises half a square's list price against it. A pledged square earns
+      nothing and cannot be built on, but still counts toward its colour for whoever holds
+      it. Redeeming costs ${Math.round(RULES.mortgageRedeemNumerator
+        / RULES.mortgageRedeemDenominator * 100)}% of list — half back plus the interest.`)}
+    ${h('When you cannot pay', `You are never removed from the table. Short against the bank
+      becomes a debt marker at ${Math.round(RULES.debtInterest * 100)}% a turn${
+      RULES.debtCap ? `, capped at ${money(RULES.debtCap)}` : ''}${
+      RULES.lapRepaysDebt ? `, and a lap of the board pays ${money(RULES.passGo)} of it off`
+        : ''}. While one stands you cannot buy, build, trade or bid. Short against a
+      <b>player</b> is different: you are sworn to them instead.`)}
+    ${h('Vassalage', `An overlord takes a share of everything you hold toward their total —
+      you set the rate, ${RULES.titheRates.map(x => x + '%').join(' / ')} — and pays for the
+      arrangement every turn: ${vas.map(money).join(' / ')} by how many they hold, not per
+      head. Every turn under a tithe arms the vassal, and at enough strength they declare
+      independence. A rival may seal a claim to take a vassal from you; the higher claim pays
+      it to the bank, and a tie holds for whoever has them.`)}
+    ${h('Detention', `Roll doubles to walk out, or after ${RULES.facilityAttempts} attempts
+      pay ${money(RULES.facilityFee)}. A favour, if you hold one, spends instead. Three
+      doubles in a row on one turn sends you there.`)}
+    ${h('The swarm', `The clock. The deep array reports as it closes, and when it arrives the
+      game is scored on totals — cash, squares and the share your vassals bring. Take every
+      other player first and it ends before then.`)}
+
+    <div class="sub" style="margin:18px 0 6px">This table</div>
+    <div class="stat"><span>Dealt to each seat</span><span>${money(G.startingCash ?? RULES.startingCash)}</span></div>
+    <div class="stat"><span>Neutral Anchorage</span><span>${G.anchoragePot
+      ? 'holds the unclaimed tribute' : 'pays nothing'}</span></div>
+    <div class="stat"><span>Upkeep</span><span>buildings ${G.upkeepBuildings ?? 1}× · vassals ${G.upkeepVassals ?? 1}×</span></div>
+    <p style="font-size:13px;color:var(--dim);line-height:1.5;margin-top:8px">
+    These three are chosen at setup and change the figures above. Everything else in the
+    game is balanced against the defaults.</p>
+    ${btns([['Back', 'showMenu', 'pri wide']])}`);
+}
+
 function showMenu() {
   const p = E.current(G);
   sheet(`<h3>The ledger</h3><div class="sub">circuit ${G.circuit} of ${G.circuits}</div>
@@ -6466,6 +6544,7 @@ function showMenu() {
     <div class="stat"><span>Score</span><span>${Score.on ? 'on' : 'off'}</span></div>
     ${btns([
       [Score.on ? 'Turn the score off' : 'Turn the score on', 'toggleScore', 'wide'],
+      ['How this is played', 'showGuide', 'wide'],
       ['What the board pays', 'showLedger', 'wide'],
       ['The decks', 'showDecks', 'wide'],
       ['Back to the board', 'closeSheet', 'pri'],

@@ -28,10 +28,16 @@ const src = readFileSync(fileURLToPath(new URL('../ui.js', import.meta.url)), 'u
 
 // Comments are where the measurements and the history live, and they are full
 // of figures on purpose. Only what the player can actually read is in scope.
+// WHITESPACE NORMALISED, because a template literal wraps wherever the line got
+// long and a pattern looking for "3 a game" will not match "3\n      a game".
+// One pattern here silently could not fire for exactly that reason, which is a
+// check that passes while covering nothing -- the failure mode this file is
+// full of warnings about.
 const prose = src
   .split('\n')
   .filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l))
-  .join('\n');
+  .join(' ')
+  .replace(/\s+/g, ' ');
 
 // Each entry: a rule, and a pattern that would only match if a screen had
 // written that rule's value out by hand instead of reading it.
@@ -40,7 +46,18 @@ const LITERALS = [
   ['RULES.debtCap', /capped at ₡200\b/, 'the debt cap'],
   ['RULES.passGo', /collecting ₡200\b/, 'the lap payment'],
   ['RULES.startingCash', /dealt ₡2,?000\b/, 'the starting purse'],
-  ['RULES.facilityFee', /pays ₡150 and is released/, 'the facility fee']
+  ['RULES.facilityFee', /pays ₡150 and is released/, 'the facility fee'],
+  // Added with the guide in v84, which quotes more of the rulebook than any
+  // other screen and is therefore the most likely thing in the game to go
+  // stale. Every one of these is a figure it states.
+  ['RULES.amendCosts', /₡500, then ₡700, then ₡900/, 'the amend fees'],
+  ['RULES.amendsPerGame', /\b3 a game\b/, 'how many amends a game'],
+  ['RULES.titheRates', /10% \/ 25% \/ 40% \/ 55%/, 'the tithe rates'],
+  ['RULES.tradeMax', /Up to 3 squares each way/, 'the contract limit'],
+  ['RULES.facilityAttempts', /after 3 attempts/, 'the detention attempts'],
+  ['RULES.mortgageRedeem…', /Redeeming costs 55%/, 'the redemption rate'],
+  ['RULES.vassalUpkeep', /₡40 \/ ₡100 \/ ₡190 \/ ₡250/, 'the vassal upkeep ladder'],
+  ['G.rates.garrison', /keeps for ₡5 a turn/, 'the garrison upkeep']
 ];
 
 for (const [rule, pattern, what] of LITERALS) {

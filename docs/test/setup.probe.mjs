@@ -354,6 +354,54 @@ for (const device of DEVICES) {
   if (closed) pass('and Close closes it');
   else fail('the only button on a modal sheet does nothing — the player is trapped here');
 
+  // ---- the guide ----
+  // Reachable from the menu, and its figures must track the GAME rather than the
+  // rules -- a table playing an upkeep dial gets different numbers, and a guide
+  // that quoted the defaults there would be wrong on the one table that needed
+  // it most. Started at 0× buildings so the two are distinguishable.
+  await page.goto(URL, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#begin');
+  await page.click('[data-ub="0"]');
+  await page.click('[data-a="varan"]');
+  await page.click('#begin');
+  await page.waitForSelector('#game:not(.hidden)');
+  const guide = await page.evaluate(() => {
+    window.showMenu();
+    const link = [...document.querySelectorAll('#sheetRoot .mbtn')]
+      .find(b => /how this is played/i.test(b.textContent));
+    if (!link) return 'the menu offers no guide';
+    link.click();
+    const text = (document.querySelector('.sheet') || {}).innerText || '';
+    const back = [...document.querySelectorAll('#sheetRoot .mbtn')]
+      .find(b => /^back$/i.test(b.textContent.trim()));
+    const G = window.__G();
+    return { text: text.replace(/\s+/g, ' '), hasBack: !!back,
+             garrison: G.rates.garrison, circuits: G.circuits };
+  });
+  if (typeof guide === 'string') fail(guide);
+  else {
+    for (const want of ['Amend', 'Contracts', 'Building', 'Pledging', 'Vassalage',
+                        'Detention', 'The swarm', 'counter']) {
+      // CASE-INSENSITIVE: the section headings carry text-transform:uppercase
+      // and innerText returns them transformed, so "Contracts" is "CONTRACTS"
+      // on screen. A case-sensitive check reported six missing sections that
+      // were all present.
+      if (guide.text.toLowerCase().includes(want.toLowerCase())) pass(`the guide covers ${want}`);
+      else fail(`the guide does not mention ${want}`);
+    }
+    // The figure that proves it reads the game and not the rulebook.
+    if (guide.text.includes(`keeps for ₡${guide.garrison} a turn`))
+      pass(`and quotes this table's own rates (₡${guide.garrison} a garrison, not the default)`);
+    else fail(`the guide does not state the game's garrison rate of ₡${guide.garrison}`);
+    if (/upkeep buildings 0×/i.test(guide.text)) pass('and names the settings this table chose');
+    else fail('the guide does not say which optional settings are in play');
+    if (guide.hasBack) pass('and gets you back to the menu');
+    else fail('the guide has no way back');
+  }
+  await page.evaluate(() => window.closeSheet());
+  await page.goto(URL, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#begin');
+
   // ---- the sound, when a game ends ----
   await page.click('[data-a="spector"]');
   await page.click('#begin');
