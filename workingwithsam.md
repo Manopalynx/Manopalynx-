@@ -820,6 +820,13 @@ normal.
 
 Everything above held. New:
 
+**He tests every build and reports in screenshots.** That is the instrument this project
+actually runs on. He caught a money pump, a button that said "Nothing due" beside a cell
+showing ₡250, a sentence quoting the wrong half of an upkeep bill, and a menu footer that
+read like a playtest artefact — none of which any suite here would ever have found. When a
+screenshot arrives, read the figures in it against the code before forming a theory: twice
+his one-line note contained the whole diagnosis and my first reading of it was wrong.
+
 **He asks for a checklist at the end of every message.** *"A good way to keep track is to
 write a checklist at the end of each message of what we want to look at and change and do
 it in an order you think works best."* Do it. Group it — decisions he owes, things done,
@@ -963,6 +970,31 @@ were wrong nearly as often as the game was.
    text between every character of a 984-line file. It came back as 2.4 million lines. Git
    had it. **Anchor on something unique, assert the anchor matched exactly once, and check
    the line count afterwards** — every edit in this file after that one does.
+16. **I predicted the sign wrong on three separate balance levers, in a row.** Halving the
+   building upkeep would cost the ending: it took conquest 50% to 77%. The anchorage pot
+   would rescue the player about to be absorbed and cost the ending: conquest went UP and
+   the human's own win rate went DOWN. Starting cash would shorten the opening: the board is
+   fully owned by circuit 29–31 at every figure from ₡1000 to ₡4000, because the opening is
+   limited by LANDING on squares rather than affording them. Each time the intuition was
+   "loosen the economy, fewer bankruptcies, fewer absorptions" and each time the truth was
+   that **a credit not destroyed becomes rent, and rent concentrates.** If you are about to
+   tell him what a lever will do, measure it instead.
+17. **Five of my own checks were wrong, and mutation-testing found all five.** A probe check
+   that passed vacuously because the fixture had two seats and the case needs three. A
+   `copy.test.mjs` pattern that could NEVER fire, because it matched against source with
+   newlines intact and a template literal wraps wherever the line got long — a check that
+   passes while covering nothing, sitting in the file whose whole purpose is warning about
+   that. A default-mark check that restated "three settings" and broke when a fourth
+   arrived. A guide check that read `innerText` case-sensitively against headings carrying
+   `text-transform: uppercase`, and reported six missing sections that were all present. And
+   an audibility measurement that reported "**127% survives**", which is not a fraction of
+   anything: a biquad highpass is not unity in its passband, so every ratio had to be
+   divided by a 1.27x reference first.
+18. **I read "1 failure(s)" as a number rather than as a thing to open** — twice this
+   session, once shipping v65 on it. The second time it was my own quiescence guard being
+   impatient: an opponent turn is ~3.5s and the fuzzer can leave three queued, against a
+   3.6s ceiling, so it tripped on one viewport in five. **A flaky check teaches you to read
+   red as noise**, which is how the first one shipped.
 
 ### Things that keep being true — additions
 
@@ -1028,102 +1060,136 @@ were wrong nearly as often as the game was.
   square-level, so they belong on their own buttons. Ask which kind a number is before
   choosing where to put it.
 
+- **A number written in two places will disagree, and the second copy is usually in the
+  check.** The citadel sale price was `gc * 5 / 2` in SIX places — four in `engine.js`, two
+  in `ui.js` — and wrong in all six, which is how selling a citadel and raising it again
+  paid ₡225 a cycle. The probe check that should have caught it carried the comment
+  *"asserted against the engine's own arithmetic rather than against literals"* and then did
+  the arithmetic itself: the **seventh** copy, and it failed on the fix rather than on the
+  defect. The same shape sank a `copy.test.mjs` pattern and a default-mark check in the same
+  session. **Derive, and then check that the screen derived too.**
+- **The right guard for a defect class is a sweep, not a test of the instance.** Sam asked
+  for "a sweep over that system" and was right: `pump.test.mjs` drives EVERY reversible
+  action round its own loop and asserts the board came back while the purse did not, so a
+  new reversible action arrives already covered. A test naming the citadel would have caught
+  the citadel.
+- **Interface copy goes stale in MEANING while its digits stay right.** "The shortfall
+  becomes a debt marker at 10% a turn" was numerically correct and described an unbounded
+  spiral that two builds had already capped and made repayable. And "holding them costs ₡80
+  every turn, release one and that stops" quoted the whole upkeep bill as the cost of one
+  vassal — the figure right, the sentence false, which is worse, because a stale number is
+  wrong once and a false sentence misleads a decision.
+- **Ask what the harness does NOT do before quoting any figure from it.** Amending fires in
+  every real game and had never fired in a measured one. `sellDevelopment` has one caller
+  and no measured game has ever sold a development. The harness human raises no citadels,
+  sets no tithe, releases nobody, repays nothing deliberately. Each of those makes a whole
+  column of numbers describe a game nobody plays.
+- **A rule that only one side can reach is a defect whichever side it favours.** Instance 3
+  found five things an opponent could not do. This session found one an opponent could do
+  and a player could not (amend twice per landing, and counter an offer) and one a PLAYER
+  could do that no opponent ever had (sell a development — which is why the money pump
+  survived every sweep). Enumerate both directions.
+
 ### State of the work
 
-v70 on `main`, one branch, working tree clean. **333 unit tests across 17 files**, browser
-probe green on all five viewports, four measuring instruments that did not exist before.
+v85 on `main`, one branch, working tree clean. **412 unit tests across 20 files**, two
+browser probes green on all five viewports, eight measuring instruments that did not exist
+before.
 
 Shipped this session, each merged to `main` as it landed so Sam could play it:
 
 | build | what |
 |---|---|
-| v53 | opponents can release a vassal; one short name per player |
-| v54 | cash-aware pricing — a credit is worth more to a player who has none |
-| v55 | Holdings sheet grouped by colour set |
-| v56 | contract sheet shows the other side's purse and marker |
-| v57 | sealed bid names the colour set and who already holds it |
-| v58 | doubles: settle the square, then roll again, in one press |
-| v59 | the ledger no longer collapses; Holdings states build and sell prices |
-| v60 | pledge and redeem name their price |
-| v61 | absorbing an overlord takes the oaths sworn to them |
-| v62 | vassal upkeep halved, and `liquidate()` stops stripping a vassal on the way in |
-| v63 | an accepted contract raises a screen and the opponent speaks on it |
-| v64 | both purses on an offer made to you; the chip row stops jumping |
-| v65 | a square shows its price until owned, then what it charges |
-| v66 | a rent takes the colour of the seat charging it |
-| v67 | the figure lifted off the cell edge |
-| v68 | a turn-start digest of what changed while somebody else acted |
-| v69 | acknowledging the digest hands back a live turn |
-| v70 | debt markers capped at ₡200 |
+| v53–v57 | opponents release vassals; one short name each; cash-aware pricing; Holdings grouped; purses and set standing on the sheets |
+| v58–v62 | doubles; the ledger stops collapsing; pledge and redeem name their price; absorbing an overlord takes the oaths; vassal upkeep halved |
+| v63–v67 | an accepted contract speaks; both purses on an offer; a square shows price then rent, in its owner's colour, off the cell edge |
+| v68–v70 | a turn-start digest, acknowledging it hands back a live turn, debt markers capped |
+| v71 | an overlord pays their own vassal the NET; independence reaches the digest |
+| v72 | garrison upkeep ₡5, citadel ₡20 |
+| v73 | **a lap of the board pays off a debt marker** |
+| v74 | the purse is chosen at setup, five figures |
+| v75 | the anchorage pot, a house rule, default off |
+| v76–v77 | the setup screen names which option is the default; the purse row breaks 3+2 |
+| v78 | the anchorage pays out with a rising figure of its own — the only cue that is not the Neurex |
+| v79 | **the citadel money pump**, and a sweep of every reversible action |
+| v80 | what the action button promises is what the engine charges |
+| v81 | two upkeep dials at setup; a competing claim that says who is who |
+| v82 | a player may amend as many times as they hold amends |
+| v83 | a player may counter an offer, as an opponent already could |
+| v84 | a guide in the menu, every figure in it derived |
+| v85 | the foot of the menu reads as a colophon rather than a bug-report form |
 
-New instruments, all `docs/test/`: `vassals.mjs` (the vassal economy), `varan.mjs` (what an
-opponent demands per square, by binary search on the real acceptance test), `money.mjs` (the
-money supply across a game). New suites: `names.test.mjs`, `pricing.test.mjs`,
-`vassals.test.mjs`. `sweep.mjs` gained Sam's own table and lost its misleading labels.
+New instruments, all `docs/test/`: `vassals.mjs`, `varan.mjs`, `money.mjs`, `upkeep.mjs`
+(whether a garrison pays for the bill it brings), `debt.mjs` (how long a marker lasts and
+what it blocks). New suites: `names`, `pricing`, `vassals`, `pump`, `copy`. `sweep.mjs`
+gained Sam's own table and lost its misleading labels.
 
-**Everything on his original Grandiose list is shipped.** The two numbers that decide how
-the vassal economy feels are now the ones he chose rather than the ones it was born with.
+**The setup screen now carries five things that change the game**: circuits, the purse, the
+anchorage rule, and two upkeep dials. Each opens on the calibrated default, each is MARKED
+as the default, and each note says what departing from it does — because on three of them
+the effect is the opposite of what the number suggests.
 
 Open, in the order I would take them:
 
-- **A wiped-out player has no route back, and the debt cap did not give them one.**
-  This is the live question. Capping the marker at ₡200 stopped it reaching ₡4,084
-  and stopped it *looking* hopeless, but measured across caps from ₡200 to
-  uncapped the median spell is 15 turns and the longest 145 — **identical**. The
-  conquest rate does not move either. The stuckness is about having no income at
-  all once everything is sold, not about the size of the marker, so anything that
-  actually helps has to put a player back in the way of earning. Sam is open to
-  ideas here and is playing v70 to see how it feels first.
-- **Chains of two.** A player who is already a vassal can take a vassal of their own, and
-  the deep one contributes nothing to the top overlord. Left standing and pinned by a test.
-  Flattening it fully is a design decision nobody has needed yet.
-- **48 circuits is the one length v62 cost.** Conquest 28% → 22% there while every longer
-  length rose. If short games start to feel flat, that is the number to look at first.
-- **The probe has no multi-opponent trade table.** The case Sam actually plays is uncovered
-  for contracts exactly the way `sweep.mjs` was uncovered for endings.
-- **One unexplained probe failure**, `no cash field`, seen once and never again.
-- **The probe now covers Sam's table for contracts** — a fresh four-seat game
-  checks all three counterparty tabs and acceptance against each persona. That
-  gap is closed; `sweep.mjs` gained his table too.
+- **48 circuits is structural, not a tuning problem.** The buying phase costs ~30 circuits
+  whatever length was chosen, so a short game has 18 circuits of endgame where a 96 has 66.
+  Written up in `docs/README.md` with the measurement. Starting cash does not shorten the
+  opening — that was my guess and it is recorded as wrong.
+- **Chains of two.** Left on Sam's call, measured (3–10% of games, never deeper than two in
+  1,200), pinned by a test, and written up with why both ways of "fixing" it are worse.
+- **The harness human cannot do everything a player can** — no citadels, no tithe, no
+  release, no deliberate repay, pledge or redeem, no counter-offer. Left on Sam's call and
+  written into `docs/README.md`. Every "the human wins X%" figure is therefore a floor.
+  Citadels and repaying a marker are the two to add first if it ever needs to mean something.
 - Everything Instances 3 and 4 left open still stands, untouched.
+
+**Closed this session**: the debt spiral (a lap now repays it — spells that end 63% → 89%,
+median 16t → 8t), the unexplained `no cash field` probe failure (reproduced and diagnosed —
+it was the fixture), and the multi-opponent trade table.
 
 ### Message to future instances
 
-The measurements this session were worth more than the code. Four instruments now exist
-that did not, and each one killed something I was confident about — including, three times,
-something I had already told Sam.
+The measurements this session were worth more than the code. Eight instruments now exist,
+five of them new, and each one killed something I was confident about — including, four
+times, something I had already told Sam.
 
-**The trap I fell into twice is the shape of what you measure on.** First the table:
-`sweep.mjs` had seated two humans since it was written and Sam plays one against three, so
-a real number from a real instrument described a game he does not play, and I reported the
-direction of an effect backwards because of it. That one is fixed — his table is in there
-now. Then the *combination*: standing on the corrected figure I warned him that halving the
-vassal upkeep would cost the ending, and shipped it beside a second change that made
-conquest rise at every length but the shortest. Both measurements were honest. Neither was
-the answer, because I had measured levers and the game is played with all of them at once.
+**The trap is always the shape of what you measure on.** `sweep.mjs` seated two humans
+since it was written and Sam plays one against three, so a real number from a real
+instrument described a game he does not play and I reported an effect backwards. Then the
+*combination*: I warned him halving the vassal upkeep would cost the ending and shipped it
+beside a second change that made conquest rise. Then the *harness*: amending fires in every
+real game and had never once fired in a measured one, so every balance figure in this
+repository described a board where nobody dodges. Three versions of one mistake.
 
-So: **a number is only true about the thing you varied, on the table you varied it on.**
-When a change is going out beside another change, measure them together before saying what
-they will do — the interaction is not the sum, and here it had the opposite sign.
+So: **a number is only true about the thing you varied, on the table you varied it on, with
+everything else the harness actually does.** Before quoting a figure, ask what the
+instrument cannot reach.
 
-**And measure the right object.** Twice in one turn I read computed styles off `.act`
-when I meant `.pchip`, and counted an ownership ring as if it were a digit. Both were real
-numbers about the wrong thing, which is the same failure as the table, one level down. When
-an answer matters, render it twice with the suspected cause on and off and diff the two —
-a differential measurement cannot be fooled by whatever else is in frame.
+**Sam finds things no measurement was ever going to find.** He found a money pump by
+playing — sell a citadel, raise it again, +₡225 a cycle — and the reason no sweep could
+have caught it is that `sellDevelopment` has exactly one caller, the human's button. Three
+hundred-game sweeps were structurally blind to it. **When he reports something, the report
+is data about a region your instruments do not cover.**
 
-**Mutation-test everything, and suspect the fixture first.** Three checks this session
-asserted something true while covering half of what they claimed, every time because the
-fixture could not reach the interesting state. None of them would have been caught by
-reading the code. Break the thing a check guards; if it stays green, the fixture is the
-problem before the assertion is.
+**And the fix for that class is a sweep, not a patch.** `pump.test.mjs` drives every
+reversible action round its own loop and fails if the purse grew; the next one arrives
+already covered. Same for `copy.test.mjs`, which refuses the *mechanism* by which interface
+copy goes stale — a figure typed into a screen instead of read from the rule — rather than
+checking any particular sentence.
 
-The economy finding survives in a narrower form. Money pressure both creates arrangements
-and destroys the people holding them, and which dominates depends on the rest of the board.
-The instinct that made it work was Sam's, not mine: he asked for the upkeep halved on the
-plain ground that an arrangement nobody wants to keep is a tax rather than a mechanic, and
-he was right where my figures said he would not be.
+**Mutation-test everything, and suspect your own check first.** This session: a probe check
+that passed vacuously on a two-seat table, a `copy.test.mjs` pattern that could never fire
+because template literals wrap, a default-mark check that restated "three settings" and
+broke when a fourth arrived, a guide check that read uppercase headings case-sensitively,
+and an audibility measurement that reported "127% survives" because the filter has gain in
+its passband. **Five checks wrong, against how many bugs?** Break the thing a check guards;
+if it stays green, the fixture is the problem before the assertion is.
 
-Which is the thing to carry: when he reports something as broken, the report is data even
-when your measurements disagree. Bring him the numbers, say plainly which way they point,
-and let him spend the decision. He has now spent several, and every one improved the game.
+The economy finding held all session and kept being the same finding in new places: **a
+credit not destroyed stays in the room and becomes rent, and rent concentrates where
+destruction merely levels.** Cheaper buildings, a lower vassal bill, an anchorage that
+recycles taxes — every one of them makes the takeover *more* likely, not less, and every
+one of them is harder on the player. I predicted the sign wrong on two of the three.
+
+Which is the thing to carry: bring him the numbers, say plainly which way they point, and
+let him spend the decision. He has now spent a dozen, and every one improved the game.
