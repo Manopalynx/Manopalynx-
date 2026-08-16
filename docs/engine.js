@@ -158,12 +158,27 @@ export function netWorth(G, p) {
   return v;
 }
 
+// What the VASSALS cost, on their own. upkeep() returns the whole bill --
+// garrisons, citadels and vassals together -- and the tithe sheet was printing
+// that total under the words "holding them costs ₡80 every turn. Release one
+// and that stops." It does not stop: most of that figure was buildings, which
+// go on costing exactly what they cost. The number was right and the sentence
+// attached to it was false, which is worse than a stale number.
+export const vassalUpkeep = p => p.vassals.length
+  ? RULES.vassalUpkeep[Math.min(p.vassals.length - 1, RULES.vassalUpkeep.length - 1)]
+  : 0;
+
+// And what releasing ONE of them would actually save: the step down, not the
+// whole vassal line, because the bill is charged by count rather than per head.
+export const releaseSaving = p => vassalUpkeep(p)
+  - (p.vassals.length > 1
+      ? RULES.vassalUpkeep[Math.min(p.vassals.length - 2, RULES.vassalUpkeep.length - 1)]
+      : 0);
+
 export function upkeep(p) {
-  let u = garrisonsOf(p) * RULES.garrisonUpkeep + citadelsOf(p) * RULES.citadelUpkeep;
-  if (p.vassals.length) {
-    u += RULES.vassalUpkeep[Math.min(p.vassals.length - 1, RULES.vassalUpkeep.length - 1)];
-  }
-  return u;
+  return garrisonsOf(p) * RULES.garrisonUpkeep
+       + citadelsOf(p) * RULES.citadelUpkeep
+       + vassalUpkeep(p);
 }
 
 export function rentOf(G, i, roll = 7) {
@@ -355,12 +370,21 @@ export function liquidate(G, p, need) {
   }
 }
 
+// What a rent actually costs the payer, and where the parts of it go. Exported
+// because the SCREEN has to answer the same question before the payment happens
+// -- the action button was reading rentOf() straight, so an overlord landing on
+// their own vassal was told "Pay ₡200" and then charged ₡150. A figure computed
+// in two places stops matching, which is the same defect as the citadel price.
+export function rentSplit(G, from, to, amount) {
+  const lord = to.lord === null ? null : G.players[to.lord];
+  const cut = lord ? Math.floor(amount * lord.tithe / 100) : 0;
+  // An overlord cannot fully charge itself: its own tithe never leaves.
+  const selfLord = !!lord && lord.i === from.i;
+  return { lord, cut, selfLord, due: selfLord ? amount - cut : amount };
+}
+
 export function payRent(G, from, to, amount) {
-  let cut = 0, lord = null;
-  if (to.lord !== null) {
-    lord = G.players[to.lord];
-    cut = Math.floor(amount * lord.tithe / 100);
-  }
+  const { lord, cut } = rentSplit(G, from, to, amount);
   // An overlord landing on their own vassal pays the NET, and pays it once.
   //
   // It used to hand over the gross and take the tithe back afterwards, which is
@@ -372,8 +396,7 @@ export function payRent(G, from, to, amount) {
   //
   // Measured at 0.8 times a game, and one bill in thirty-two above ₡200 gross,
   // so it was rare rather than harmless.
-  const selfLord = !!lord && lord.i === from.i;
-  const due = selfLord ? amount - cut : amount;
+  const { selfLord, due } = rentSplit(G, from, to, amount);
   if (selfLord) {
     note(G, `${from.name} pays ${money(due)} to ${to.name} — ${money(cut)} of the rent is tithed straight back and never leaves. A vassal cannot fully charge its overlord.`);
   } else {
@@ -774,14 +797,27 @@ export function previewAt(G, p, sq, roll = G.dice[0] + G.dice[1]) {
   if (b.t === 'goto') return { ...at, kind: 'detention' };
   if (b.t === 'tax') return { ...at, kind: 'tax', amount: b.amt };
   if (b.t === 'con' || b.t === 'col') return { ...at, kind: 'card' };
+  // The anchorage, when the house rule is on and something is sitting there.
+  // It said "nothing due" while the cell itself showed ₡250 in gold -- the two
+  // halves of one screen disagreeing, and the action button is the half a
+  // player reads on their turn. Silent when the pot is empty, which is right.
+  if (b.t === 'free' && G.anchoragePot && (G.pot || 0) > 0) {
+    return { ...at, kind: 'tribute', amount: G.pot };
+  }
   if (b.t === 'free' || b.t === 'go' || b.t === 'jail') return { ...at, kind: 'nothing' };
 
   const owner = ownerOf(G, sq);
   if (!owner) return { ...at, kind: 'unowned', amount: b.pr };
   if (owner.i === p.i) return { ...at, kind: 'own' };
-  const amount = rentOf(G, sq, roll);
-  if (amount === 0) return { ...at, kind: 'pledged' };
-  return { ...at, kind: 'rent', amount, to: owner.i };
+  const gross = rentOf(G, sq, roll);
+  if (gross === 0) return { ...at, kind: 'pledged' };
+  // THE NET, not the gross. payRent charges an overlord landing on their own
+  // vassal the rent less its own tithe, and the button used to quote the full
+  // figure and then take less -- pleasant, and still the screen disagreeing
+  // with the rules. `tithed` is what never leaves, so the interface can say why.
+  const { due, selfLord, cut } = rentSplit(G, p, owner, gross);
+  return { ...at, kind: 'rent', amount: due, to: owner.i,
+           ...(selfLord ? { selfLord: true, tithed: cut, gross } : {}) };
 }
 
 export const landingPreview = G => previewAt(G, current(G), current(G).pos);

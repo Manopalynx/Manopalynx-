@@ -1833,6 +1833,84 @@ for (const device of DEVICES) {
     pass('building through Manage charges the set cost and draws from the pool');
   } else fail(`building misbehaved: ${JSON.stringify(built)}`);
 
+  // WHAT THE ACTION BUTTON PROMISES MUST BE WHAT HAPPENS.
+  //
+  // Two cases where it was not, both found by Sam playing and both the same
+  // shape as the citadel price: a figure the screen worked out for itself,
+  // beside a figure the engine works out, quietly disagreeing.
+  //
+  //   the anchorage   said "Nothing due" while the cell beside it showed ₡250
+  //                   in gold. One screen, two halves, disagreeing — and the
+  //                   button is the half a player reads on their turn.
+  //   a vassal's rent said "Pay ₡200" to an overlord and then charged ₡150,
+  //                   because previewAt read rentOf() straight and payRent
+  //                   nets an overlord's own tithe off.
+  const promises = await page.evaluate(async () => {
+    const G = window.__G(), E = window.__E(), SETS = window.__SETS(), BOARD = window.__BOARD();
+    const label = () => {
+      const b = [...document.querySelectorAll('.act')].find(x => /act_resolve/.test(x.dataset.fn || ''));
+      return b ? b.textContent.replace(/\s+/g, ' ').trim() : null;
+    };
+    const p = G.players[G.cur];
+    const other = G.players.find(q => q !== p);
+    p.cash = 20000; p.debt = 0; p.lord = null;
+
+    // --- the anchorage, empty then holding something ---
+    const anch = BOARD.findIndex(b => b.t === 'free');
+    G.anchoragePot = true; G.pot = 0;
+    p.pos = anch; G.phase = 'landed'; window.__render();
+    const emptyLabel = label();
+    G.pot = 250;
+    window.__render();
+    const potLabel = label();
+    const potPreview = E.landingPreview(G);
+
+    // --- a rent owed to your own vassal ---
+    const sq = SETS.eden.sq[0];
+    other.holdings = [{ sq, garrisons: 0, citadel: 0, mortgaged: 0 }];
+    p.holdings = [];
+    other.lord = p.i; p.vassals = [other.i]; p.tithe = 25;
+    G.anchoragePot = false; G.pot = 0;
+    p.pos = sq; G.phase = 'landed'; window.__render();
+    const gross = E.rentOf(G, sq, 7);
+    const shown = E.landingPreview(G);
+    const cashBefore = p.cash;
+    window.act_resolve();
+    const paid = cashBefore - p.cash;
+
+    // --- and somebody ELSE's vassal, which must still quote the gross ---
+    const third = G.players.find(q => q !== p && q !== other);
+    let outsider = null;
+    if (third) {
+      other.lord = third.i; third.vassals = [other.i]; p.vassals = [];
+      p.pos = sq; G.phase = 'landed'; p.cash = 20000; window.__render();
+      outsider = { quoted: E.landingPreview(G).amount, gross: E.rentOf(G, sq, 7) };
+    }
+    return { emptyLabel, potLabel, potKind: potPreview.kind, potAmount: potPreview.amount,
+             gross, quoted: shown.amount, selfLord: !!shown.selfLord, tithed: shown.tithed,
+             paid, outsider };
+  });
+  if (/nothing due/i.test(promises.emptyLabel || '')) pass('an empty anchorage still says nothing due');
+  else fail(`an empty anchorage says "${promises.emptyLabel}"`);
+  if (promises.potKind === 'tribute' && /250/.test((promises.potLabel || '').replace(/,/g, '')))
+    pass(`an anchorage holding ₡250 offers to take it ("${promises.potLabel}")`);
+  else fail(`the anchorage held ₡250 and the button said "${promises.potLabel}"`);
+  if (promises.quoted === promises.paid)
+    pass(`the rent quoted to an overlord is the rent charged (₡${promises.paid} of ₡${promises.gross})`);
+  else fail(`the button said ₡${promises.quoted} and ₡${promises.paid} was taken`);
+  if (promises.quoted < promises.gross && promises.selfLord && promises.tithed > 0)
+    pass(`and it says why (₡${promises.tithed} tithed back)`);
+  else fail(`the overlord discount is not shown: ${JSON.stringify(promises)}`);
+  // NEEDS THREE SEATS -- payer, owner, and the owner's overlord -- and the
+  // probe's game has two. It reported `ok` vacuously on the first run, which is
+  // the fixture-cannot-reach-the-case trap this repository keeps recording. It
+  // says what it did instead, and engine.test.mjs covers the case on a table
+  // that can hold it.
+  if (!promises.outsider) pass('(a rent to somebody else\'s vassal needs 3 seats — covered in engine.test.mjs)');
+  else if (promises.outsider.quoted === promises.outsider.gross)
+    pass('a rent owed to somebody ELSE\'s vassal is still quoted in full');
+  else fail(`somebody else's vassal quoted ₡${promises.outsider.quoted} of ₡${promises.outsider.gross}`);
+
   // A REVERSIBLE ACTION MUST NOT PAY, driven through the real buttons.
   //
   // pump.test.mjs sweeps every loop against the engine; this asserts the same

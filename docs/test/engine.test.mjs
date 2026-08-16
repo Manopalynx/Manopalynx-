@@ -642,6 +642,65 @@ test('a non-default purse survives a save and resume', () => {
   assert.equal(back.startingCash, 1000);
 });
 
+// What the ACTION BUTTON promises, which has to be what the engine charges.
+// previewAt read rentOf() straight, so an overlord landing on their own vassal
+// was told "Pay ₡200" and then charged ₡150 -- pleasant, and still the screen
+// disagreeing with the rules. The three-party case needs a table the browser
+// probe's two seats cannot reach, so it is pinned here.
+test('the preview quotes an overlord the net they will actually pay', () => {
+  const G = game(seats4);
+  const [me, v] = G.players;
+  v.lord = me.i; me.vassals.push(v.i); me.tithe = 25;
+  const sq = SETS.eden.sq[0];
+  v.holdings = [{ sq, garrisons: 0, citadel: 0, mortgaged: 0 }];
+  me.holdings = [];
+  const gross = rentOf(G, sq, 7);
+
+  const shown = previewAt(G, me, sq, 7);
+  const cash = me.cash;
+  payRent(G, me, v, gross);
+
+  assert.ok(shown.selfLord, 'the preview knows it is their own vassal');
+  assert.equal(shown.amount, cash - me.cash, 'and quotes exactly what was taken');
+  assert.ok(shown.amount < gross, 'which is less than the square charges');
+  assert.equal(shown.tithed, gross - shown.amount, 'the difference is named as the tithe');
+});
+
+test('a rent owed to somebody else’s vassal is quoted in full', () => {
+  // The other side of the same rule, and the case the probe cannot seat: the
+  // tithe still leaves the payer, it just carries on to a third player.
+  const G = game(seats4);
+  const [payer, v, lord] = G.players;
+  v.lord = lord.i; lord.vassals.push(v.i); lord.tithe = 25;
+  const sq = SETS.eden.sq[0];
+  v.holdings = [{ sq, garrisons: 0, citadel: 0, mortgaged: 0 }];
+  payer.holdings = [];
+  const gross = rentOf(G, sq, 7);
+
+  const shown = previewAt(G, payer, sq, 7);
+  const cash = payer.cash;
+  payRent(G, payer, v, gross);
+
+  assert.ok(!shown.selfLord, 'this is not their vassal');
+  assert.equal(shown.amount, gross, 'so the full rent is quoted');
+  assert.equal(cash - payer.cash, gross, 'and the full rent is taken');
+});
+
+test('the anchorage preview offers the pot only when there is one', () => {
+  const anch = BOARD.findIndex(b => b.t === 'free');
+  const off = createGame({ seats: seats4, seed: 1 });
+  off.pot = 500;
+  assert.equal(previewAt(off, off.players[0], anch).kind, 'nothing',
+    'with the house rule off the anchorage pays nothing whatever is stored');
+
+  const on = createGame({ seats: seats4, seed: 1, anchoragePot: true });
+  assert.equal(previewAt(on, on.players[0], anch).kind, 'nothing', 'an empty pot is silent');
+  on.pot = 250;
+  const v = previewAt(on, on.players[0], anch);
+  assert.equal(v.kind, 'tribute');
+  assert.equal(v.amount, 250, 'and names what is sitting there');
+});
+
 test('the lap payment goes against a debt marker before it reaches the purse', () => {
   const G = game();
   const [a] = G.players;

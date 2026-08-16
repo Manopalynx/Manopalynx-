@@ -671,7 +671,13 @@ function renderActions() {
 // already in the centre panel, so it does not need repeating here.
 function phraseLanding(v) {
   switch (v.kind) {
-    case 'rent':      return { label: `Pay ${money(v.amount)}`, sub: `to ${esc(chipName(G.players[v.to]))}` };
+    // The sub-line says WHY the figure is smaller than the square's rent, or an
+    // overlord reads a discount they cannot account for and mistrusts it.
+    case 'rent':      return v.selfLord
+      ? { label: `Pay ${money(v.amount)}`,
+          sub: `to ${esc(chipName(G.players[v.to]))} · ${money(v.tithed)} tithed back` }
+      : { label: `Pay ${money(v.amount)}`, sub: `to ${esc(chipName(G.players[v.to]))}` };
+    case 'tribute':   return { label: `Take ${money(v.amount)}`, sub: 'unclaimed tribute' };
     case 'tax':       return { label: `Pay ${money(v.amount)}`, sub: esc(v.name) };
     case 'unowned':   return { label: `Buy ${money(v.amount)}`, sub: 'or decline to auction' };
     case 'card':      return { label: 'Draw', sub: esc(v.name) };
@@ -1672,7 +1678,8 @@ function repay() { E.repayDebt(G, E.current(G)); afterManage(); }
 function showTithe() {
   const p = E.current(G);
   sheet(`<h3>Tithe rate</h3>
-    <div class="sub">${p.vassals.length} vassal${p.vassals.length > 1 ? 's' : ''} · upkeep ${money(E.upkeep(p))}/turn</div>
+    <div class="sub">${p.vassals.length} vassal${p.vassals.length > 1 ? 's' : ''}
+      · ${money(E.vassalUpkeep(p))}/turn of your ${money(E.upkeep(p))} upkeep</div>
     <p style="font-size:14.5px;color:var(--dim);line-height:1.5">This share of everything your vassals
     hold counts toward your total — and every turn under it arms them. Squeeze harder and they are
     worth more to you, for less long. You cannot see how close they are.</p>
@@ -1682,8 +1689,11 @@ function showTithe() {
       `<button class="opt${p.tithe === r ? ' on' : ''}" data-fn="setTithe|${r}">${r}%</button>`).join('')}</div>
     <div class="sub" style="margin:20px 0 6px">Let them go</div>
     <p style="font-size:13.5px;color:var(--dim);line-height:1.5;margin:0 0 8px">
-    Holding them costs ${money(E.upkeep(p))} every turn. Release one and that
-    stops — along with the tithe, and whatever they have buried against you.</p>
+    The vassal line is ${money(E.vassalUpkeep(p))} of your ${money(E.upkeep(p))} upkeep;
+    the rest is what you have built and goes on costing it. Letting one go saves
+    ${money(E.releaseSaving(p))} a turn${p.vassals.length > 1
+      ? ' — the bill is charged by how many you hold, not per head' : ''},
+    along with the tithe and whatever they have buried against you.</p>
     ${p.vassals.map(vi => `<button class="pick" data-fn="release|${vi}">
       Release ${esc(G.players[vi].name)}
       <span class="sub2">sworn since falling · holds ${money(E.holdingsValue(G.players[vi]))}</span>
@@ -2236,7 +2246,9 @@ function showSettle() {
       <span style="color:${short ? 'var(--warn)' : 'var(--tx)'}">${money(short)}</span></div>
     ${short > canRaise ? `<div class="warnbox">Everything you hold would raise ${money(canRaise)}.
       That is not enough, and ${st.to === null
-        ? 'the shortfall becomes a debt marker at 10% a turn.'
+        ? `the shortfall becomes a debt marker at ${Math.round(RULES.debtInterest * 100)}% a turn`
+          + `${RULES.debtCap ? `, capped at ${money(RULES.debtCap)}` : ''}`
+          + `${RULES.lapRepaysDebt ? `, and a lap of the board pays ${money(RULES.passGo)} of it off` : ''}.`
         : `you will enter vassalage under ${esc(owedTo)}.`}</div>` : ''}
     ${rows || '<p style="color:var(--dim);font-size:14px">Nothing left to raise against.</p>'}
     ${btns([
