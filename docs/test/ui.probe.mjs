@@ -2118,6 +2118,20 @@ for (const device of DEVICES) {
     out.mineColour = colourAt(lone);
     const pip = document.querySelectorAll('.pchip .pip')[me.i];
     out.minePip = pip ? getComputedStyle(pip).backgroundColor : null;
+    // Room under the figure, per edge. The colour band sits on the inward side,
+    // so three edges of the board spend their padding at the TOP and the figure
+    // ends up against the border; it was 3px there against 8px on the top row,
+    // which reads as cut at 8px type even though nothing is actually clipped.
+    const clearance = {};
+    for (const cell of document.querySelectorAll('.cell')) {
+      const el = cell.querySelector('.cpr');
+      if (!el) continue;
+      const edge = [...cell.classList].find(c => c.startsWith('e-')) || 'none';
+      const pad = parseFloat(getComputedStyle(el).paddingBottom) || 0;
+      const gap = cell.getBoundingClientRect().bottom - (el.getBoundingClientRect().bottom - pad);
+      clearance[edge] = Math.min(clearance[edge] ?? Infinity, +gap.toFixed(1));
+    }
+    out.clearance = clearance;
     // Every figure on the board, for clipping.
     out.anyClipped = [...document.querySelectorAll('.cell .cpr')]
       .filter(e => e.scrollWidth > e.clientWidth + 0.5).map(e => e.textContent.trim());
@@ -2153,6 +2167,13 @@ for (const device of DEVICES) {
   }
   if (!figures.anyClipped.length) pass('no figure is clipped by its cell');
   else fail(`clipped figures: ${figures.anyClipped.slice(0, 6).join(', ')}`);
+  const tight = Object.entries(figures.clearance).filter(([, v]) => v < 5);
+  if (!tight.length) {
+    pass(`every figure clears its cell edge (${Object.entries(figures.clearance)
+      .map(([k, v]) => `${k.replace('e-', '')} ${v}px`).join(', ')})`);
+  } else {
+    fail(`figures crowd the edge: ${tight.map(([k, v]) => `${k} ${v}px`).join(', ')}`);
+  }
 
   if (errors.length) {
     fail(`${errors.length} runtime error(s)`);

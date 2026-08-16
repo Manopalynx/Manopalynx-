@@ -179,8 +179,13 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
 .cell /* The figure on a square. Dim while it is a price nobody has paid; once owned
    it is what landing there costs, and it brightens so the two cannot be read as
    the same kind of number. See cellFigure in ui.js. */
+/* padding-bottom lifts the figure off the cell's edge. The colour band sits on
+   the inward side, so e-bottom/e-left/e-right spend their 7px of padding at the
+   TOP and leave the figure 3px from the border, against 8px on e-top. Nothing
+   was ever clipped -- rendered with the cell's overflow forced visible the ink
+   is identical -- but 3px reads as cut at 8px type on a phone. */
 .cpr{font-family:var(--m);font-size:8px;color:var(--dim);margin-top:auto;
-  white-space:nowrap;overflow:hidden;text-overflow:clip}
+  white-space:nowrap;overflow:hidden;text-overflow:clip;padding-bottom:3px}
 /* Inherited, NOT a colour of its own: the cell already carries the owner's
    colour through ownStyle, which is why the four-letter code reads as theirs.
    This was var(--tx), and var(--tx) is #5ECFC8 — Spector's persona colour
