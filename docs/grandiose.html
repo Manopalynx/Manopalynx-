@@ -521,7 +521,7 @@ __m.data = (function () {
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-const BUILD = 'grandiose-v82';
+const BUILD = 'grandiose-v83';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -6345,7 +6345,7 @@ const ACTIONS = {
   showSettle, settlePledge, settleSellG, settleBreak, settleAuto, settleDone,
   buyNow, declineToAuction, takeCard, sealBid, sealClaim, endAuction, endContest,
   answerContract, build, raiseCitadel, sellDev, toggleMortgage, repay,
-  setTithe, release, declare, tradeSet, sendTrade, takeCounter, offerFor, playOn
+  setTithe, release, declare, tradeSet, sendTrade, takeCounter, counterOffer, offerFor, playOn
 };
 for (const k of Object.keys(ACTIONS)) window[k] = ACTIONS[k];
 
@@ -7660,12 +7660,49 @@ function showContract() {
     <div class="stat" data-purse="you"><span>You hold</span><span>${money(to.cash)}</span></div>
     <div class="stat" data-purse="them"><span>${esc(chipName(from))} holds</span>
       <span>${money(from.cash)}${from.debt ? ` · <b style="color:var(--warn)">debt ${money(from.debt)}</b>` : ''}</span></div>
-    ${btns([['Accept', 'answerContract|1', 'pri'], ['Refuse', 'answerContract|0', 'dgr']])}`);
+    ${btns([['Accept', 'answerContract|1', 'pri'],
+            ['Counter', 'counterOffer', ''],
+            ['Refuse', 'answerContract|0', 'dgr']])}`);
 }
 function answerContract(accept) {
   closeSheet();
   E.respondToContract(G, accept === '1');
   tick();
+}
+
+// COUNTERING AN OFFER, which an opponent could do and a player could not.
+// When a human proposes and an opponent refuses, aiCounter names a price back
+// and the player takes it or walks. The other direction had no reply at all: an
+// offer you did not like could only be accepted or refused.
+//
+// This is a refusal followed by a proposal of your own, not a new mechanic. The
+// refusal is recorded exactly as any other, so an opponent still learns from
+// being told no, and the counter goes through proposeContract and the same
+// acceptance test everything else does.
+//
+// MIRRORED, because TR is written from the proposer's side and this contract was
+// written from theirs. What they offered to give you is what you now ask to GET;
+// what they wanted is what you now offer to GIVE. The cash flips with it:
+// direction 1 means `from` pays `to`, so an offer where they were paying becomes
+// a proposal where they still are -- which is -1 once you are the one proposing.
+//
+// It terminates on its own rather than needing a cap. They offer, you counter,
+// and their answer is the last word: accept, or refuse and name a price you can
+// take or walk away from. One reply each, which is what they get from you.
+function counterOffer() {
+  const c = G.contract;
+  if (!c) return;
+  const me = G.players[c.to], them = G.players[c.from];
+  closeSheet();
+  E.respondToContract(G, false);
+  TR = {
+    from: me.i, to: them.i,
+    get: E.sqList(c.give),          // what they were offering, now what you ask for
+    give: E.sqList(c.get),          // what they wanted, now what you offer
+    cash: c.cash || 0,
+    direction: c.direction === 1 ? -1 : 1
+  };
+  drawTrade();
 }
 
 /* ---------------------------------------------------------- settlement */

@@ -1833,6 +1833,51 @@ for (const device of DEVICES) {
     pass('building through Manage charges the set cost and draws from the pool');
   } else fail(`building misbehaved: ${JSON.stringify(built)}`);
 
+  // COUNTERING AN INCOMING OFFER, which an opponent could do and a player could
+  // not. The check is the MIRROR: what they offered to give you must come back
+  // as what you are asking to get, and the cash must flip with it, or the
+  // counter proposes the same deal from the wrong side of the table.
+  const counter = await page.evaluate(async () => {
+    const G = window.__G(), E = window.__E(), SETS = window.__SETS();
+    const me = G.players.find(p => p.kind === 'human');
+    const them = G.players.find(p => p !== me);
+    if (!them) return 'needs two seats';
+    me.debt = 0; them.debt = 0; me.cash = 5000; them.cash = 5000;
+    G.cur = me.i;
+    const mine = SETS.eden.sq[0], theirs = SETS.ven.sq[0];
+    me.holdings = [{ sq: mine, garrisons: 0, citadel: 0, mortgaged: 0 }];
+    them.holdings = [{ sq: theirs, garrisons: 0, citadel: 0, mortgaged: 0 }];
+    for (const q of G.players) if (q !== me && q !== them)
+      q.holdings = q.holdings.filter(h => h.sq !== mine && h.sq !== theirs);
+    // They offer: they give `theirs`, they want `mine`, and THEY pay 300.
+    G.contract = { from: them.i, to: me.i, give: [theirs], get: [mine],
+                   cash: 300, direction: 1, resumePhase: 'end' };
+    G.phase = 'contract';
+    window.__tick();
+    const offerSheet = document.querySelector('.sheet');
+    const btn = [...(offerSheet ? offerSheet.querySelectorAll('.mbtn') : [])]
+      .find(b => /counter/i.test(b.textContent));
+    if (!btn) return 'the incoming offer sheet offers no way to counter';
+    btn.click();
+    await new Promise(r => setTimeout(r, 60));
+    const tr = window.__TR && window.__TR();
+    const heading = (document.querySelector('.sheet h3') || {}).textContent || '';
+    return { tr, heading, mine, theirs, contractCleared: !G.contract, phase: G.phase };
+  });
+  if (typeof counter === 'string') fail(counter);
+  else {
+    if (/contract/i.test(counter.heading)) pass('refusing an offer can open a counter of your own');
+    else fail(`countering opened "${counter.heading}"`);
+    if (counter.tr && counter.tr.get.includes(counter.theirs) && counter.tr.give.includes(counter.mine))
+      pass('and the squares are mirrored — what they offered is what you now ask for');
+    else fail(`the counter did not mirror the squares: ${JSON.stringify(counter.tr)}`);
+    if (counter.tr && counter.tr.direction === -1 && counter.tr.cash === 300)
+      pass('and the cash still runs the same way (they were paying, they still are)');
+    else fail(`the cash flipped wrongly: direction ${counter.tr && counter.tr.direction}`);
+    if (counter.contractCleared) pass('and their offer is refused rather than left open');
+    else fail('the incoming contract was still standing after countering');
+  }
+
   // THE AMEND BUTTON must leave you standing on the square you nudged onto,
   // not resolve it out from under you. It resolved immediately, which meant a
   // human got ONE amend per landing where aiAmend loops for up to three -- and
