@@ -1833,6 +1833,41 @@ for (const device of DEVICES) {
     pass('building through Manage charges the set cost and draws from the pool');
   } else fail(`building misbehaved: ${JSON.stringify(built)}`);
 
+  // THE AMEND BUTTON must leave you standing on the square you nudged onto,
+  // not resolve it out from under you. It resolved immediately, which meant a
+  // human got ONE amend per landing where aiAmend loops for up to three -- and
+  // meant you never saw the square you had just paid to reach, which is the one
+  // thing a nudge is for.
+  const amend = await page.evaluate(async () => {
+    const G = window.__G(), E = window.__E();
+    const p = G.players[G.cur];
+    p.cash = 20000; p.debt = 0; p.amends = 3; p.pos = 5; p.inFacility = false;
+    G.phase = 'landed'; window.__render();
+    const btn = () => [...document.querySelectorAll('.act')]
+      .find(b => /act_amend/.test(b.dataset.fn || ''));
+    const first = btn();
+    if (!first || first.disabled) return 'no amend button on a fresh landing';
+    const fee = E.amendCost(p);
+    first.click();
+    await new Promise(r => setTimeout(r, 700));   // the walk is 105ms a step
+    const after = { pos: p.pos, cash: p.cash, amends: p.amends, phase: G.phase };
+    const second = btn();
+    const offeredAgain = !!second && !second.disabled;
+    if (offeredAgain) { second.click(); await new Promise(r => setTimeout(r, 700)); }
+    return { fee, after, offeredAgain, pos2: p.pos, amends2: p.amends };
+  });
+  if (typeof amend === 'string') fail(amend);
+  else {
+    if (amend.after.pos === 6 && amend.after.amends === 2) pass('amending moves one square and spends one');
+    else fail(`amending left the player at ${amend.after.pos} with ${amend.after.amends} amends`);
+    if (amend.after.phase === 'landed')
+      pass('and leaves you standing on it rather than resolving it for you');
+    else fail(`the landing resolved itself to phase "${amend.after.phase}"`);
+    if (amend.offeredAgain && amend.pos2 === 7 && amend.amends2 === 1)
+      pass('so a second amend is offered and works, as it is for an opponent');
+    else fail(`a second amend was ${amend.offeredAgain ? 'offered but did nothing' : 'not offered'}`);
+  }
+
   // THE COMPETING-CLAIM SHEET names three players and used to name none of them
   // in its figures. "Their holdings ₡540" meant the VASSAL's, with "Your cash"
   // under it as though the two were a comparison, so it read as saying nothing

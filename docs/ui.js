@@ -1036,6 +1036,16 @@ function aiResolve() {
   walk(r.path, () => { busy = false; E.resolveLanding(G); tick(); });
 }
 
+// Amending does NOT resolve the landing. It used to, which meant a human got
+// exactly ONE amend per landing while aiAmend loops and may take up to three --
+// a capability an opponent had and the player did not, of the kind Instance 3
+// swept this file for. Measured, the AI never actually takes a second step
+// (0 of 1,600 landings), so the asymmetry cost nothing; it was still there.
+//
+// Leaving the phase at 'landed' also means the player SEES the square they
+// amended onto before committing to it. Resolving immediately meant the one
+// thing a nudge is for -- looking at where you would land -- was the one thing
+// you could not do.
 function act_amend() {
   const p = E.current(G);
   const from = p.pos;
@@ -1043,7 +1053,7 @@ function act_amend() {
   if (!r) return;
   hold(p, from);
   busy = true; render();
-  walk(r.path, () => { busy = false; E.resolveLanding(G); tick(); });
+  walk(r.path, () => { busy = false; tick(); });
 }
 
 function act_payFee() {

@@ -25,7 +25,7 @@ import {
   serialize, deserialize, payFacilityFee, releaseVassal, aiValue, aiBid, aiWantsToBuy,
   pledge, pledgeValue, redeemCost, raisableValue, parkForSettlement, autoSettle, settleNow,
   threatPenalty, setBuildingTargets, denialTargets, aiCounter, aiAcceptsContract,
-  landingPreview, previewAt, cardEffect, usePardon, swarmDistance, extendGame,
+  landingPreview, previewAt, cardEffect, usePardon, swarmDistance, extendGame, aiAmend,
   sqList, contractValue, playOnCircuits, announceSwarm
 } from '../engine.js';
 
@@ -620,6 +620,89 @@ test('the pot only collects what actually left the payer', () => {
   resolveLanding(G);
   assert.equal(G.pot, 60, 'only the ₡60 they had');
   assert.ok(a.debt > 0, 'and the rest is a marker');
+});
+
+/* ===================================================== amending, both sides */
+// Sam asked whether an opponent amends the same way a player does. The RULE is
+// shared -- both go through amendManifest -- and the POLICY differs, which is
+// right. What was not right was that a human's button resolved the landing
+// after one nudge while aiAmend loops, so an opponent could take up to three
+// steps and a player exactly one. Instance 3's defect class, running the other
+// way for once: a capability the AI had and the player did not.
+test('amending is one square, one fee, from either side', () => {
+  const G = game(seats4);
+  const [me, ai] = G.players;
+  for (const p of [me, ai]) { p.cash = 20000; p.pos = 5; }
+  G.phase = 'landed';
+
+  const fee = amendCost(me);
+  const r = amendManifest(G);
+  assert.ok(r, 'the human may amend');
+  assert.equal(me.pos, 6, 'exactly one square');
+  assert.equal(me.cash, 20000 - fee, 'for exactly the fee');
+  assert.equal(me.amends, RULES.amendsPerGame - 1);
+  assert.equal(G.phase, 'landed',
+    'and the landing is NOT resolved, so a player may look at it or amend again');
+});
+
+test('a player may amend as many times as they hold amends', () => {
+  const G = game(seats4);
+  const [me] = G.players;
+  me.cash = 20000; me.pos = 5;
+  G.phase = 'landed';
+  let n = 0;
+  while (amendManifest(G)) n++;
+  assert.equal(n, RULES.amendsPerGame, 'all of them, one square each');
+  assert.equal(me.amends, 0);
+  assert.equal(me.pos, 5 + RULES.amendsPerGame);
+  assert.equal(amendManifest(G), null, 'and then no more');
+});
+
+test('the fee rises with each amend taken', () => {
+  const G = game(seats4);
+  const [me] = G.players;
+  me.cash = 20000; me.pos = 5;
+  G.phase = 'landed';
+  const paid = [];
+  for (let k = 0; k < RULES.amendsPerGame; k++) {
+    const before = me.cash;
+    amendManifest(G);
+    paid.push(before - me.cash);
+  }
+  assert.deepEqual(paid, RULES.amendCosts.slice(0, RULES.amendsPerGame));
+  for (let k = 1; k < paid.length; k++) {
+    assert.ok(paid[k] > paid[k - 1], 'each nudge costs more than the last');
+  }
+});
+
+test('an opponent amends through the same function a player does', () => {
+  // Not "it produces a similar result" -- the same board change and the same
+  // charge, so the two can never drift apart.
+  const G = game(seats4);
+  const ai = G.players.find(p => p.kind === 'ai');
+  G.cur = ai.i; G.phase = 'landed'; ai.cash = 20000; ai.pos = 5;
+  const fee = amendCost(ai);
+  const before = { pos: ai.pos, amends: ai.amends };
+
+  const r = aiAmend(G, ai);
+  if (r) {
+    assert.equal(ai.pos, before.pos + r.path.length, 'it moved by the steps it reports');
+    assert.equal(ai.amends, before.amends - r.path.length, 'and spent one amend a step');
+    assert.ok(ai.cash <= 20000 - fee, 'and paid at least the first fee');
+  } else {
+    assert.equal(ai.pos, before.pos, 'or it did not move at all');
+    assert.equal(ai.cash, 20000, 'and was not charged');
+  }
+});
+
+test('an opponent will not amend on a human turn, or out of the landed phase', () => {
+  const G = game(seats4);
+  const ai = G.players.find(p => p.kind === 'ai');
+  ai.cash = 20000; ai.pos = 5;
+  G.cur = ai.i; G.phase = 'end';
+  assert.equal(aiAmend(G, ai), null, 'not outside the landed phase');
+  G.phase = 'landed';
+  assert.equal(aiAmend(G, G.players[0]), null, 'and never for a human seat');
 });
 
 /* ============================================== the upkeep multipliers */

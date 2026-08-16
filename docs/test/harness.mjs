@@ -6,7 +6,8 @@ import { SETS, BOARD, RULES } from '../data.js';
 import {
   createGame, current, ownerOf, roll, resolveLanding, applyCard, endTurn,
   buy, openAuction, submitBid, closeAuction, submitClaim, closeContest,
-  aiWantsToBuy, aiDevelop, garrisonsOf, citadelsOf,
+  aiWantsToBuy, aiDevelop, aiAmend, amendManifest, amendCost, landingCost,
+  garrisonsOf, citadelsOf,
   seekContract, proposeContract, respondToContract, autoSettle, settleNow
 } from '../engine.js';
 
@@ -27,6 +28,14 @@ export function playGame({ seats, seed = 1, circuits = 24, onTurn = null, maxSte
         roll(G);
         break;
       case 'landed':
+        // AMENDING WAS MISSING FROM EVERY MEASUREMENT THIS FILE HAS EVER MADE.
+        // The mechanic fires in a real game -- aiAmend is called from ui.js --
+        // and no harness game had ever nudged a single square, so every balance
+        // figure in this repository described a board where nobody dodges. The
+        // same shape as sweep.mjs seating two humans: a real number about a
+        // game nobody plays.
+        if (p.kind === 'ai') aiAmend(G, p);
+        else humanAmend(G, p);
         resolveLanding(G);
         break;
       case 'card':
@@ -96,6 +105,23 @@ function humanDevelop(G, p) {
     p.cash -= SETS[BOARD[h.sq].s].gc;
     h.garrisons++;
     G.garrisonPool--;
+  }
+}
+
+// The human's amend policy: nudge when the square ahead is cheaper than this one
+// by more than the fee. Deliberately the plainest version of the test aiAmend
+// makes -- no persona margin, no reserve kept back -- so the two are comparable
+// and the SHARED path gets exercised from both sides. It loops, because a human
+// may now amend as many times as they hold amends, which is what v82 fixed.
+function humanAmend(G, p) {
+  let guard = 0;
+  while (p.amends > 0 && guard++ < 4) {
+    const fee = amendCost(p);
+    if (p.cash < fee) break;
+    const here = landingCost(G, p, p.pos);
+    const next = landingCost(G, p, (p.pos + 1) % BOARD.length);
+    if (here - next <= fee) break;
+    if (!amendManifest(G)) break;
   }
 }
 
