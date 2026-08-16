@@ -181,7 +181,12 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
    the same kind of number. See cellFigure in ui.js. */
 .cpr{font-family:var(--m);font-size:8px;color:var(--dim);margin-top:auto;
   white-space:nowrap;overflow:hidden;text-overflow:clip}
-.cpr.rent{color:var(--tx);font-weight:600}
+/* Inherited, NOT a colour of its own: the cell already carries the owner's
+   colour through ownStyle, which is why the four-letter code reads as theirs.
+   This was var(--tx), and var(--tx) is #5ECFC8 — Spector's persona colour
+   exactly — so every rent on the board was painted in one player's teal and
+   only his squares looked right. */
+.cpr.rent{color:inherit;font-weight:600}
 /* The eighteen non-property squares carry a drawn mark.
    ABSOLUTELY placed, and that is the whole design. A mark stacked above the
    code was measured and does not fit: a left- or right-edge cell is 30.4px tall
@@ -489,7 +494,7 @@ __m.data = (function () {
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-const BUILD = 'grandiose-v65';
+const BUILD = 'grandiose-v66';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.

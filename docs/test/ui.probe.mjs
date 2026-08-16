@@ -2106,6 +2106,18 @@ for (const device of DEVICES) {
     me.holdings.push({ sq: utils[1], garrisons: 0, citadel: 0, mortgaged: 0 });
     window.__render();
     out.bothUtils = read(utils[0]);
+    // The colour a rent renders in, against the colour of the seat charging it.
+    const colourAt = i => {
+      const el = document.querySelector(`.cell[data-i="${i}"] .cpr`);
+      return el ? getComputedStyle(el).color : null;
+    };
+    them.holdings.push({ sq: eden[0], garrisons: 0, citadel: 0, mortgaged: 0 });
+    me.holdings = me.holdings.filter(h => h.sq !== eden[0]);
+    window.__render();
+    out.theirsColour = colourAt(eden[0]);
+    out.mineColour = colourAt(lone);
+    const pip = document.querySelectorAll('.pchip .pip')[me.i];
+    out.minePip = pip ? getComputedStyle(pip).backgroundColor : null;
     // Every figure on the board, for clipping.
     out.anyClipped = [...document.querySelectorAll('.cell .cpr')]
       .filter(e => e.scrollWidth > e.clientWidth + 0.5).map(e => e.textContent.trim());
@@ -2124,7 +2136,14 @@ for (const device of DEVICES) {
     eq(figures.bothUtils, '×10', 'both utilities'),
     eq(figures.pledged, '—', 'a pledged square'),
     figures.unowned && figures.unowned.rent ? 'an unowned square is styled as rent' : null,
-    figures.cit && !figures.cit.rent ? 'a citadel rent is not styled as rent' : null
+    figures.cit && !figures.cit.rent ? 'a citadel rent is not styled as rent' : null,
+    // A rent takes the colour of whoever charges it. It used to take var(--tx),
+    // which is Spector's persona colour to the digit, so every rent on the board
+    // was painted as if he owned it.
+    figures.mineColour === figures.theirsColour
+      ? `both owners' rents render the same colour (${figures.mineColour})` : null,
+    figures.mineColour !== figures.minePip
+      ? `a rent is ${figures.mineColour}, its owner's pip is ${figures.minePip}` : null
   ].filter(Boolean);
   if (!figureFaults.length) {
     pass(`a square shows price then rent (bare ${figures.lone.text}, set ${figures.bare.text}, 2G ${figures.two.text}, ` +
