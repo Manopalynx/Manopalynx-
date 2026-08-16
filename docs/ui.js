@@ -68,7 +68,8 @@ const setup = {
   names: ['Samuel', 'Vex', 'Rourke', 'Ondh'],
   ais: [],
   circuits: 72,
-  cash: RULES.startingCash
+  cash: RULES.startingCash,
+  pot: RULES.anchoragePot
 };
 
 // The purse each seat is dealt. Every figure the game is balanced around comes
@@ -136,6 +137,18 @@ function drawSetup() {
            ${money(RULES.startingCash)}. More money is <b>harder</b>, not easier — the opponents
            build with it and charge you for it.`}</p>
     </div>
+    <div class="fld"><label>Neutral Anchorage</label>
+      <div class="opts">${[['0', 'Pays nothing'], ['1', 'Unclaimed tribute']].map(([v, n]) =>
+        `<button class="opt${(setup.pot ? '1' : '0') === v ? ' on' : ''}" data-p="${v}">${n}</button>`).join('')}</div>
+      <p class="note" style="margin-top:10px">${setup.pot
+        ? `A house rule. Taxes, card penalties and the Overseer's fee gather at the anchorage
+           instead of leaving the game, and whoever lands there takes the lot — about
+           ${money(380)} typically, arriving five to seven times a game. It pays a debt marker
+           first. Every other figure is calibrated with this <b>off</b>, and it makes the
+           takeover more likely rather than less: it is not a lifeline, it is fuel.`
+        : `The standard rule: the anchorage charges nothing and pays nothing. Everything in the
+           game is balanced against this.`}</p>
+    </div>
     <div class="fld"><label>Sound</label>
       <div class="opts">${[['1', 'On'], ['0', 'Off']].map(([v, n]) =>
         `<button class="opt${(Sound.isOn() ? '1' : '0') === v ? ' on' : ''}" data-snd="${v}">${n}</button>`).join('')}</div>
@@ -147,7 +160,8 @@ function drawSetup() {
     </div>
     <button class="big" id="begin">Open the ledger${seatsUsed < 2 ? ' — add an opponent' : ''}</button>
     <p class="note">Sealed-bid auctions are mandatory and the phone gets passed.
-    Garrisons are finite. Neutral Anchorage pays nothing. Doubles roll again — three in a row and an Overseer files you.<br><br>
+    Garrisons are finite. ${setup.pot ? 'Neutral Anchorage holds the unclaimed tribute.' : 'Neutral Anchorage pays nothing.'}
+    Doubles roll again — three in a row and an Overseer files you.<br><br>
     The game saves itself after every move, so a call or a locked screen costs nothing.</p>`;
 
   let nw = '';
@@ -186,6 +200,9 @@ function drawSetup() {
   $('setup').querySelectorAll('[data-c]').forEach(b => b.onclick = () => {
     setup.cash = +b.dataset.c; drawSetup();
   });
+  $('setup').querySelectorAll('[data-p]').forEach(b => b.onclick = () => {
+    setup.pot = b.dataset.p === '1'; drawSetup();
+  });
   $('begin').onclick = begin;
   if ($('resume')) $('resume').onclick = () => { G = saved; startShell(); };
 }
@@ -204,7 +221,7 @@ function begin() {
   setup.ais.forEach(k => seats.push({ name: PERSONAS[k].n, kind: 'ai', persona: k }));
   resetSoundWatch();
   G = E.createGame({ seats, seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0,
-    circuits: setup.circuits, startingCash: setup.cash });
+    circuits: setup.circuits, startingCash: setup.cash, anchoragePot: setup.pot });
   G.log.unshift({ kind: 'leader', circuit: 1, text: 'Nine systems are burning their drives to readiness. Begin.' });
   clearSave();
   startShell();
@@ -536,7 +553,9 @@ function renderBoard() {
       ${colour ? `<div class="cbar" style="background:${colour}"></div>` : ''}
       ${ico ? `<svg class="cico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ico}</svg>` : ''}
       <div class="code">${esc(b.a)}</div>
-      ${b.pr ? `<div class="cpr${owner ? ' rent' : ''}">${cellFigure(i, b, owner, held)}</div>` : ''}
+      ${b.pr ? `<div class="cpr${owner ? ' rent' : ''}">${cellFigure(i, b, owner, held)}</div>`
+        : b.t === 'free' && G.anchoragePot && G.pot > 0
+        ? `<div class="cpr pot">${money(G.pot)}</div>` : ''}
       ${dev ? `<div class="grr">${dev}</div>` : ''}
       <div class="toks">${toks}</div></div>`;
   });
@@ -1012,7 +1031,7 @@ function showMenu() {
     <p style="font-size:12px;color:var(--dim);line-height:1.6;margin-top:10px;
        font-variant-numeric:tabular-nums" id="buildLine">
     Build <b>${esc(BUILD)}</b> · seed <b>${G.seed >>> 0}</b>
-    · ${G.circuits} circuits · dealt <b>${money(G.startingCash ?? RULES.startingCash)}</b><br>
+    · ${G.circuits} circuits · dealt <b>${money(G.startingCash ?? RULES.startingCash)}</b>${G.anchoragePot ? ' · anchorage pot' : ''}<br>
     Quote these in a bug report — the build says whether you are on the current
     version, the seed replays the same dice and the same opponents, and the last
     two say which game was being played, since both are now chosen at setup.</p>`);
@@ -1036,6 +1055,14 @@ function showSquare(i) {
     <div class="stat"><span>Landing frequency</span><span>${TRAFFIC[i].toFixed(2)}%</span></div>`;
   if (b.pr) s += `<div class="stat"><span>Price</span><span>${money(b.pr)}</span></div>`;
   if (b.amt) s += `<div class="stat"><span>Charge</span><span>${money(b.amt)}</span></div>`;
+  if (b.t === 'free') {
+    s += G.anchoragePot
+      ? `<div class="stat"><span>Unclaimed tribute</span><span>${money(G.pot || 0)}</span></div>
+         <p style="font-size:14px;color:var(--dim);line-height:1.5">Taxes, penalties and the
+         Overseer's fee gather here instead of leaving the game. Whoever lands takes the lot —
+         and it pays a debt marker before it pays a purse.</p>`
+      : `<div class="stat"><span>Charge</span><span>Nothing</span></div>`;
+  }
   if (b.s) {
     s += `<div class="stat"><span>Set payback (3 garrisons)</span><span>${E.paybackTurns(b.s, TRAFFIC)} turns</span></div>
       <div class="stat"><span>Garrison cost</span><span>${money(SETS[b.s].gc)}</span></div>
@@ -2007,7 +2034,8 @@ function takeCounter() {
 const DIGEST_LABEL = {
   trade: 'Contract', vassalage: 'Vassalage', contest: 'Claim', release: 'Released',
   independence: 'Independence',
-  set: 'Colour set', citadel: 'Citadel', swarm: 'The deep array'
+  set: 'Colour set', citadel: 'Citadel', swarm: 'The deep array',
+  anchorage: 'Anchorage'
 };
 
 function showDigest(p) {

@@ -159,6 +159,62 @@ for (const device of DEVICES) {
   await page.goto(URL, { waitUntil: 'networkidle' });
   await page.waitForSelector('#begin');
 
+  // ---- the anchorage pot, the other setup option ----
+  const potOpts = await page.evaluate(() => {
+    const btns = [...document.querySelectorAll('[data-p]')];
+    const on = document.querySelector('[data-p].on');
+    const fld = btns[0] && btns[0].closest('.fld');
+    // The FOOT note specifically. Reading document.body caught the option
+     // button's own label "Pays nothing" and would have passed with the note
+     // never changing at all.
+     const foot = [...document.querySelectorAll('p.note')].pop();
+     return { n: btns.length, dflt: on ? on.dataset.p : null,
+              note: fld ? fld.innerText : '', foot: foot ? foot.innerText : '' };
+  });
+  if (potOpts.n === 2) pass('the anchorage is offered on and off');
+  else fail(`${potOpts.n} anchorage options`);
+  if (potOpts.dflt === '0') pass('and opens OFF, which every figure is calibrated against');
+  else fail(`the anchorage opens at "${potOpts.dflt}"`);
+  // The standing note at the foot of the screen states the rule as a fact.
+  // It said "Neutral Anchorage pays nothing" unconditionally, which would be a
+  // flat lie on a table playing the house rule.
+  if (/pays nothing/i.test(potOpts.foot)) pass('and the standing note agrees with it');
+  else fail('the foot of the setup screen does not say the anchorage pays nothing');
+
+  await page.click('[data-p="1"]');
+  const potOn = await page.evaluate(() => ({
+    foot: ([...document.querySelectorAll('p.note')].pop() || {}).innerText || '',
+    note: document.querySelector('[data-p]').closest('.fld').innerText
+  }));
+  if (!/pays nothing/i.test(potOn.foot) && /unclaimed tribute/i.test(potOn.foot))
+    pass('turning it on rewrites the standing note rather than leaving it wrong');
+  else fail('the standing note still says the anchorage pays nothing with the rule on');
+  // The counter-intuitive half again: it raises the takeover rate rather than
+  // softening the game, and a player choosing it should be told so.
+  if (/not a lifeline|more likely/i.test(potOn.note)) pass('and warns it is fuel, not a lifeline');
+  else fail('the anchorage note does not say what the rule actually does');
+
+  await page.click('[data-h="1"]');
+  await page.click('[data-a="spector"]');
+  await page.click('#begin');
+  await page.waitForSelector('#game:not(.hidden)');
+  const potGame = await page.evaluate(() => {
+    const G = window.__G();
+    const anch = window.__BOARD().findIndex(b => b.t === 'free');
+    G.pot = 640; window.__tick();
+    const cell = document.querySelector(`.cell[data-i="${anch}"] .cpr`);
+    return { on: G.anchoragePot, shown: cell ? cell.textContent.trim() : null };
+  });
+  if (potGame.on === true) pass('the chosen rule reaches the game');
+  else fail(`the game was created with anchoragePot ${potGame.on}`);
+  // A jackpot you cannot see is not a jackpot. It has to be on the BOARD.
+  if (potGame.shown && potGame.shown.replace(/[^0-9]/g, '') === '640')
+    pass(`and the pot is legible on the square itself (${potGame.shown})`);
+  else fail(`the anchorage cell shows ${JSON.stringify(potGame.shown)} holding ₡640`);
+
+  await page.goto(URL, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#begin');
+
   // ---- the sheet that meets a player before their first game ----
   // One seat and no opponents is refused, correctly. Its Close button was
   // written data-fn="closeSheet()" against forty-odd written without the

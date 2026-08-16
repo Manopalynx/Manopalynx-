@@ -19,7 +19,7 @@
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-export const BUILD = 'grandiose-v74';
+export const BUILD = 'grandiose-v75';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -445,6 +445,28 @@ export const RULES = {
   // would otherwise have banked. It converts an open-ended sentence into a
   // known one.
   lapRepaysDebt: true,
+  // The anchorage pot — a house rule, OFF by default, chosen at setup.
+  //
+  // Taxes, card penalties and the Overseer's fee accumulate at Neutral
+  // Anchorage instead of leaving the game, and whoever lands there takes the
+  // lot. It is the only mechanism that puts destroyed money back, against an
+  // economy measured to hold about 15% of its starting cash from circuit 36 on.
+  //
+  // Priced off TRAFFIC before it was built: the pot grows about ₡9.3 a
+  // player-turn and somebody lands at the anchorage every 8.4 rounds at four
+  // seats, so an average payout of roughly ₡316 against a table holding about
+  // ₡1,200 between them. A quarter of all the money in the room, arriving at
+  // one seat, on luck alone.
+  //
+  // NOT fed by upkeep, which is ₡24.7k a game on its own and would make the pot
+  // absurd. "Tax and fee money" is the rule as it is played and it is also the
+  // only version that leaves a figure a player can be pleased to win.
+  //
+  // Default is off because every figure in the game is calibrated without it,
+  // and because it is pure luck: it can rescue the player who was about to be
+  // absorbed. What that costs the conquest ending is in the commit that shipped
+  // it, measured both ways rather than guessed.
+  anchoragePot: false,
   // Redemption is 55% of list — half back plus a tenth in interest. Held as a
   // ratio rather than 0.55 because the float form rounds a credit wrong on
   // Cradle (400 * 0.55 === 220.00000000000003).

@@ -42,7 +42,8 @@ function shuffled(G, n) {
 // the purse it was dealt. It defaults to the rule, so every existing caller --
 // and every test that asserts against RULES.startingCash -- is unchanged.
 export function createGame({ seats, seed = 1, circuits = 72,
-                             startingCash = RULES.startingCash } = {}) {
+                             startingCash = RULES.startingCash,
+                             anchoragePot = RULES.anchoragePot } = {}) {
   const G = {
     seed,
     rngState: seed >>> 0,
@@ -71,6 +72,8 @@ export function createGame({ seats, seed = 1, circuits = 72,
     settlement: null,   // a bill parked while a human decides how to raise it
     swarmMark: 0,       // how many deep-array reports have been made
     swarmFrom: 1,       // and the circuit they are measured from — see extendGame
+    anchoragePot,       // the house rule, chosen at setup
+    pot: 0,             // unclaimed tribute at the anchorage — see toPot
     doublesRun: 0,      // consecutive doubles this turn
     rollAgain: false    // a doubles roll buys another before the turn settles
   };
@@ -234,7 +237,18 @@ const record = (G, tag, text, who = []) => {
 // which is what every measurement before this was taken against.
 const capDebt = d => (RULES.debtCap ? Math.min(d, RULES.debtCap) : d);
 
+// How much actually LEFT the payer on the last pay(). The boolean says whether
+// the bill was settled, which is not the same question: a player short of a
+// ₡200 tax hands over everything they have and the rest becomes a marker, and
+// the pot below is owed the part that moved. It cannot be reconstructed from
+// outside -- cash before minus cash after is wrong whenever liquidate() raised
+// money on the way through, and the marker is capped so its growth is not the
+// shortfall either. Written at every exit of pay() and read on the next line by
+// its one caller; never store it.
+let lastPaid = 0;
+
 export function pay(G, from, to, amount) {
+  lastPaid = 0;
   if (amount <= 0) return true;
   // The FULL amount, not the shortfall. liquidate() raises until cash reaches
   // the figure it is given, so passing the gap made it stop one gap short: a
@@ -260,9 +274,11 @@ export function pay(G, from, to, amount) {
   if (from.cash >= amount) {
     from.cash -= amount;
     if (to) to.cash += amount;
+    lastPaid = amount;
     return true;
   }
   const short = amount - from.cash;
+  lastPaid = from.cash;
   if (to) to.cash += from.cash;
   from.cash = 0;
   if (to) vassalise(G, from, to);
@@ -441,7 +457,7 @@ export function settleNow(G) {
     payRent(G, from, to, st.owed);
     if (G.phase !== 'contest' && !G.over) G.phase = 'end';
   } else if (st.then === 'tax') {
-    pay(G, from, null, st.owed);
+    toPot(G, from, st.owed);
     note(G, `${from.name} settles ${money(st.owed)}.`);
     if (G.phase !== 'contest' && !G.over) G.phase = 'end';
   } else if (st.then === 'upkeep') {
@@ -450,6 +466,49 @@ export function settleNow(G) {
     finishTurn(G);
   }
   return true;
+}
+
+/* ======================================================= the anchorage pot */
+// A house rule, off by default: taxes and fees accumulate at Neutral Anchorage
+// instead of leaving the game, and whoever lands there takes the lot.
+//
+// It is the only mechanism in the game that puts destroyed money BACK. Every
+// other credit paid to the bank is gone: measured, the table holds about 15% of
+// what it started with from circuit 36 on, and the second half of every game is
+// played on a sixth of the cash the price list was written for.
+//
+// WHAT FEEDS IT is taxes and fees only -- the two tax squares, the card
+// penalties, and the fee paid to an Overseer for release. NOT upkeep, which is
+// the largest bank payment in the game by a distance (₡24.7k a game against
+// ₡9.3 a turn of everything here) and would make the pot absurd. "Tax and fee
+// money" is the rule as Sam described it and it is also the only version that
+// leaves the pot at a size a player can be pleased to win.
+//
+// It pays a debt marker before it pays a purse, the same way the lap does, so
+// the two recovery routes behave alike rather than each having its own rule.
+function toPot(G, p, amount) {
+  const settled = pay(G, p, null, amount);
+  if (G.anchoragePot) G.pot = (G.pot || 0) + lastPaid;
+  return settled;
+}
+
+// Whoever lands at the anchorage takes it. Returns what they were paid, so the
+// caller can say nothing at all when the pot was empty -- announcing ₡0 as a
+// windfall is worse than silence.
+export function claimPot(G, p) {
+  const amount = G.pot || 0;
+  if (!G.anchoragePot || amount <= 0) return 0;
+  G.pot = 0;
+  const { toDebt, toCash } = lapSplit(p, amount);
+  p.debt -= toDebt;
+  p.cash += toCash;
+  note(G, toDebt
+    ? `${p.name} takes ${money(amount)} of unclaimed tribute at the anchorage`
+      + (p.debt ? ` — ${money(toDebt)} against the debt marker, ${money(p.debt)} still outstanding.`
+                : `. The debt marker is cleared${toCash ? `, and ${money(toCash)} reaches the purse` : ''}.`)
+    : `${p.name} takes ${money(amount)} of unclaimed tribute at the anchorage.`);
+  record(G, 'anchorage', `${p.name} takes ${money(amount)} at Neutral Anchorage.`, [p.i]);
+  return amount;
 }
 
 /* ============================================================ vassalage */
@@ -802,7 +861,7 @@ export function roll(G, d1, d2) {
           usePardon(G, p);
         } else {
           p.inFacility = false; p.attempts = 0;
-          pay(G, p, null, RULES.facilityFee);
+          toPot(G, p, RULES.facilityFee);
           note(G, `${p.name} pays ${money(RULES.facilityFee)} and is released.`);
         }
       } else {
@@ -851,7 +910,7 @@ export function usePardon(G, p = current(G)) {
 export function payFacilityFee(G) {
   const p = current(G);
   if (G.phase !== 'roll' || !p.inFacility || p.cash < RULES.facilityFee) return false;
-  pay(G, p, null, RULES.facilityFee);
+  toPot(G, p, RULES.facilityFee);
   p.inFacility = false;
   p.attempts = 0;
   note(G, `${p.name} settles with the Overseer for ${money(RULES.facilityFee)} and walks out.`);
@@ -884,7 +943,7 @@ export function resolveLanding(G) {
     if (b.t === 'goto') { toFacility(G, p); G.phase = 'end'; return; }
     if (b.t === 'tax') {
       if (parkForSettlement(G, p, null, b.amt, 'tax')) return;
-      pay(G, p, null, b.amt);
+      toPot(G, p, b.amt);
       note(G, `${p.name} pays the ${b.n} — ${money(b.amt)}.`);
       G.phase = G.phase === 'contest' ? 'contest' : 'end';
       return;
@@ -895,7 +954,8 @@ export function resolveLanding(G) {
       G.phase = 'card';
       return;                                  // UI acknowledges, then applyCard
     }
-    if (b.t === 'free' || b.t === 'go' || b.t === 'jail') { G.phase = 'end'; return; }
+    if (b.t === 'free') { claimPot(G, p); G.phase = 'end'; return; }
+    if (b.t === 'go' || b.t === 'jail') { G.phase = 'end'; return; }
 
     const owner = ownerOf(G, p.pos);
     if (!owner) { G.phase = 'offer'; return; }
@@ -925,9 +985,9 @@ export function applyCard(G) {
   G.pendingCard = null;
   note(G, `${p.name} — ${c.x.replace(/\*/g, '')}`);
 
-  if (c.cash) { if (c.cash > 0) p.cash += c.cash; else pay(G, p, null, -c.cash); }
-  if (c.perGarrison) pay(G, p, null, garrisonsOf(p) * c.perGarrison);
-  if (c.perCitadel) pay(G, p, null, citadelsOf(p) * c.perCitadel);
+  if (c.cash) { if (c.cash > 0) p.cash += c.cash; else toPot(G, p, -c.cash); }
+  if (c.perGarrison) toPot(G, p, garrisonsOf(p) * c.perGarrison);
+  if (c.perCitadel) toPot(G, p, citadelsOf(p) * c.perCitadel);
   if (c.pardon) {
     p.pardons += c.pardon;
     note(G, `${p.name} holds ${p.pardons} Overseer favour${p.pardons === 1 ? '' : 's'}.`);

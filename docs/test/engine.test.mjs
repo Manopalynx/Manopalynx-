@@ -532,6 +532,96 @@ test('passing the ledger opening pays 200 exactly once per lap', () => {
 // the GAME rather than a read of RULES at deal time. These pin that it is
 // honoured, that it defaults, and that it survives a save -- a game resumed
 // with the wrong purse would not announce itself, it would just play wrong.
+/* ================================================= the anchorage pot */
+// The house rule, off by default. What matters is WHAT FEEDS IT: taxes, card
+// penalties and the Overseer's fee, and NOT upkeep, which is the largest bank
+// payment in the game and would swamp it. Each of these fails if a feed is
+// wired to the wrong place.
+const potGame = (extra = {}) =>
+  createGame({ seats: seats4, seed: 1, anchoragePot: true, ...extra });
+
+test('the pot is off unless the game was created with it', () => {
+  const G = createGame({ seats: seats4, seed: 1 });
+  assert.equal(G.anchoragePot, RULES.anchoragePot);
+  assert.equal(RULES.anchoragePot, false, 'and the default is off, which everything is balanced against');
+  const [a] = G.players;
+  a.pos = BOARD.findIndex(b => b.t === 'tax');
+  pay(G, a, null, 200);
+  assert.equal(G.pot || 0, 0, 'a tax paid with the rule off leaves the game');
+});
+
+test('a tax feeds the pot', () => {
+  const G = potGame();
+  const [a] = G.players;
+  const tax = BOARD.findIndex(b => b.t === 'tax');
+  a.pos = tax; G.phase = 'landed';
+  resolveLanding(G);
+  assert.equal(G.pot, BOARD[tax].amt, 'the whole charge is sitting at the anchorage');
+});
+
+test('upkeep does NOT feed the pot', () => {
+  // The distinction the rule turns on. Upkeep is ~₡24.7k a game against ₡9.3 a
+  // turn of everything that does feed it; routing it here would make the pot
+  // absurd, and it is not a tax or a fee.
+  const G = potGame();
+  const [a] = G.players;
+  own(G, a, 16, { garrisons: 3 });
+  a.cash = 5000;
+  const before = G.pot;
+  endTurn(G);
+  assert.equal(G.pot, before, 'an upkeep bill leaves the game as it always did');
+  assert.ok(upkeep(a) > 0, 'and there was a bill to leave, or this proves nothing');
+});
+
+test('landing at the anchorage takes the pot, and empties it', () => {
+  const G = potGame();
+  const [a] = G.players;
+  const anch = BOARD.findIndex(b => b.t === 'free');
+  G.pot = 640;
+  a.pos = anch; G.phase = 'landed';
+  const cash = a.cash;
+  resolveLanding(G);
+  assert.equal(a.cash, cash + 640);
+  assert.equal(G.pot, 0, 'and the next player finds it empty');
+});
+
+test('the pot pays a debt marker before it pays a purse', () => {
+  const G = potGame();
+  const [a] = G.players;
+  const anch = BOARD.findIndex(b => b.t === 'free');
+  G.pot = 500; a.debt = 200;
+  a.pos = anch; G.phase = 'landed';
+  const cash = a.cash;
+  resolveLanding(G);
+  assert.equal(a.debt, 0, 'the marker is cleared first');
+  assert.equal(a.cash, cash + 300, 'and the rest reaches the purse');
+});
+
+test('an empty anchorage is silent', () => {
+  // Announcing ₡0 as a windfall is worse than saying nothing.
+  const G = potGame();
+  const [a] = G.players;
+  const anch = BOARD.findIndex(b => b.t === 'free');
+  const before = G.log.length;
+  a.pos = anch; G.phase = 'landed';
+  resolveLanding(G);
+  assert.equal(G.log.length, before, 'nothing is written when there is nothing to take');
+});
+
+test('the pot only collects what actually left the payer', () => {
+  // A player short of a tax hands over what they have and the rest becomes a
+  // marker. The pot is owed the part that moved, not the whole charge -- money
+  // that was never paid cannot be sitting at the anchorage.
+  const G = potGame();
+  const [a] = G.players;
+  const tax = BOARD.findIndex(b => b.t === 'tax');
+  a.cash = 60; a.holdings = [];          // nothing to raise
+  a.pos = tax; G.phase = 'landed';
+  resolveLanding(G);
+  assert.equal(G.pot, 60, 'only the ₡60 they had');
+  assert.ok(a.debt > 0, 'and the rest is a marker');
+});
+
 test('a game is dealt the purse it was created with', () => {
   const G = createGame({ seats: seats4, seed: 1, startingCash: 3000 });
   for (const p of G.players) assert.equal(p.cash, 3000);

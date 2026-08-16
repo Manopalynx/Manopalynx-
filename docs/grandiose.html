@@ -192,6 +192,10 @@ input[type=text],input[type=number]{width:100%;background:var(--deep);color:var(
    exactly — so every rent on the board was painted in one player's teal and
    only his squares looked right. */
 .cpr.rent{color:inherit;font-weight:600}
+/* The anchorage pot, when the house rule is on. Gold rather than inherited —
+   this one genuinely belongs to nobody, which is the point of the square, and
+   it is the only figure on the board that is not somebody's price or rent. */
+.cpr.pot{color:var(--gold);font-weight:600}
 /* The eighteen non-property squares carry a drawn mark.
    ABSOLUTELY placed, and that is the whole design. A mark stacked above the
    code was measured and does not fit: a left- or right-edge cell is 30.4px tall
@@ -499,7 +503,7 @@ __m.data = (function () {
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-const BUILD = 'grandiose-v74';
+const BUILD = 'grandiose-v75';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -925,6 +929,28 @@ const RULES = {
   // would otherwise have banked. It converts an open-ended sentence into a
   // known one.
   lapRepaysDebt: true,
+  // The anchorage pot — a house rule, OFF by default, chosen at setup.
+  //
+  // Taxes, card penalties and the Overseer's fee accumulate at Neutral
+  // Anchorage instead of leaving the game, and whoever lands there takes the
+  // lot. It is the only mechanism that puts destroyed money back, against an
+  // economy measured to hold about 15% of its starting cash from circuit 36 on.
+  //
+  // Priced off TRAFFIC before it was built: the pot grows about ₡9.3 a
+  // player-turn and somebody lands at the anchorage every 8.4 rounds at four
+  // seats, so an average payout of roughly ₡316 against a table holding about
+  // ₡1,200 between them. A quarter of all the money in the room, arriving at
+  // one seat, on luck alone.
+  //
+  // NOT fed by upkeep, which is ₡24.7k a game on its own and would make the pot
+  // absurd. "Tax and fee money" is the rule as it is played and it is also the
+  // only version that leaves a figure a player can be pleased to win.
+  //
+  // Default is off because every figure in the game is calibrated without it,
+  // and because it is pure luck: it can rescue the player who was about to be
+  // absorbed. What that costs the conquest ending is in the commit that shipped
+  // it, measured both ways rather than guessed.
+  anchoragePot: false,
   // Redemption is 55% of list — half back plus a tenth in interest. Held as a
   // ratio rather than 0.55 because the float form rounds a credit wrong on
   // Cradle (400 * 0.55 === 220.00000000000003).
@@ -1213,7 +1239,8 @@ function shuffled(G, n) {
 // the purse it was dealt. It defaults to the rule, so every existing caller --
 // and every test that asserts against RULES.startingCash -- is unchanged.
 function createGame({ seats, seed = 1, circuits = 72,
-                             startingCash = RULES.startingCash } = {}) {
+                             startingCash = RULES.startingCash,
+                             anchoragePot = RULES.anchoragePot } = {}) {
   const G = {
     seed,
     rngState: seed >>> 0,
@@ -1242,6 +1269,8 @@ function createGame({ seats, seed = 1, circuits = 72,
     settlement: null,   // a bill parked while a human decides how to raise it
     swarmMark: 0,       // how many deep-array reports have been made
     swarmFrom: 1,       // and the circuit they are measured from — see extendGame
+    anchoragePot,       // the house rule, chosen at setup
+    pot: 0,             // unclaimed tribute at the anchorage — see toPot
     doublesRun: 0,      // consecutive doubles this turn
     rollAgain: false    // a doubles roll buys another before the turn settles
   };
@@ -1405,7 +1434,18 @@ const record = (G, tag, text, who = []) => {
 // which is what every measurement before this was taken against.
 const capDebt = d => (RULES.debtCap ? Math.min(d, RULES.debtCap) : d);
 
+// How much actually LEFT the payer on the last pay(). The boolean says whether
+// the bill was settled, which is not the same question: a player short of a
+// ₡200 tax hands over everything they have and the rest becomes a marker, and
+// the pot below is owed the part that moved. It cannot be reconstructed from
+// outside -- cash before minus cash after is wrong whenever liquidate() raised
+// money on the way through, and the marker is capped so its growth is not the
+// shortfall either. Written at every exit of pay() and read on the next line by
+// its one caller; never store it.
+let lastPaid = 0;
+
 function pay(G, from, to, amount) {
+  lastPaid = 0;
   if (amount <= 0) return true;
   // The FULL amount, not the shortfall. liquidate() raises until cash reaches
   // the figure it is given, so passing the gap made it stop one gap short: a
@@ -1431,9 +1471,11 @@ function pay(G, from, to, amount) {
   if (from.cash >= amount) {
     from.cash -= amount;
     if (to) to.cash += amount;
+    lastPaid = amount;
     return true;
   }
   const short = amount - from.cash;
+  lastPaid = from.cash;
   if (to) to.cash += from.cash;
   from.cash = 0;
   if (to) vassalise(G, from, to);
@@ -1612,7 +1654,7 @@ function settleNow(G) {
     payRent(G, from, to, st.owed);
     if (G.phase !== 'contest' && !G.over) G.phase = 'end';
   } else if (st.then === 'tax') {
-    pay(G, from, null, st.owed);
+    toPot(G, from, st.owed);
     note(G, `${from.name} settles ${money(st.owed)}.`);
     if (G.phase !== 'contest' && !G.over) G.phase = 'end';
   } else if (st.then === 'upkeep') {
@@ -1621,6 +1663,49 @@ function settleNow(G) {
     finishTurn(G);
   }
   return true;
+}
+
+/* ======================================================= the anchorage pot */
+// A house rule, off by default: taxes and fees accumulate at Neutral Anchorage
+// instead of leaving the game, and whoever lands there takes the lot.
+//
+// It is the only mechanism in the game that puts destroyed money BACK. Every
+// other credit paid to the bank is gone: measured, the table holds about 15% of
+// what it started with from circuit 36 on, and the second half of every game is
+// played on a sixth of the cash the price list was written for.
+//
+// WHAT FEEDS IT is taxes and fees only -- the two tax squares, the card
+// penalties, and the fee paid to an Overseer for release. NOT upkeep, which is
+// the largest bank payment in the game by a distance (₡24.7k a game against
+// ₡9.3 a turn of everything here) and would make the pot absurd. "Tax and fee
+// money" is the rule as Sam described it and it is also the only version that
+// leaves the pot at a size a player can be pleased to win.
+//
+// It pays a debt marker before it pays a purse, the same way the lap does, so
+// the two recovery routes behave alike rather than each having its own rule.
+function toPot(G, p, amount) {
+  const settled = pay(G, p, null, amount);
+  if (G.anchoragePot) G.pot = (G.pot || 0) + lastPaid;
+  return settled;
+}
+
+// Whoever lands at the anchorage takes it. Returns what they were paid, so the
+// caller can say nothing at all when the pot was empty -- announcing ₡0 as a
+// windfall is worse than silence.
+function claimPot(G, p) {
+  const amount = G.pot || 0;
+  if (!G.anchoragePot || amount <= 0) return 0;
+  G.pot = 0;
+  const { toDebt, toCash } = lapSplit(p, amount);
+  p.debt -= toDebt;
+  p.cash += toCash;
+  note(G, toDebt
+    ? `${p.name} takes ${money(amount)} of unclaimed tribute at the anchorage`
+      + (p.debt ? ` — ${money(toDebt)} against the debt marker, ${money(p.debt)} still outstanding.`
+                : `. The debt marker is cleared${toCash ? `, and ${money(toCash)} reaches the purse` : ''}.`)
+    : `${p.name} takes ${money(amount)} of unclaimed tribute at the anchorage.`);
+  record(G, 'anchorage', `${p.name} takes ${money(amount)} at Neutral Anchorage.`, [p.i]);
+  return amount;
 }
 
 /* ============================================================ vassalage */
@@ -1973,7 +2058,7 @@ function roll(G, d1, d2) {
           usePardon(G, p);
         } else {
           p.inFacility = false; p.attempts = 0;
-          pay(G, p, null, RULES.facilityFee);
+          toPot(G, p, RULES.facilityFee);
           note(G, `${p.name} pays ${money(RULES.facilityFee)} and is released.`);
         }
       } else {
@@ -2022,7 +2107,7 @@ function usePardon(G, p = current(G)) {
 function payFacilityFee(G) {
   const p = current(G);
   if (G.phase !== 'roll' || !p.inFacility || p.cash < RULES.facilityFee) return false;
-  pay(G, p, null, RULES.facilityFee);
+  toPot(G, p, RULES.facilityFee);
   p.inFacility = false;
   p.attempts = 0;
   note(G, `${p.name} settles with the Overseer for ${money(RULES.facilityFee)} and walks out.`);
@@ -2055,7 +2140,7 @@ function resolveLanding(G) {
     if (b.t === 'goto') { toFacility(G, p); G.phase = 'end'; return; }
     if (b.t === 'tax') {
       if (parkForSettlement(G, p, null, b.amt, 'tax')) return;
-      pay(G, p, null, b.amt);
+      toPot(G, p, b.amt);
       note(G, `${p.name} pays the ${b.n} — ${money(b.amt)}.`);
       G.phase = G.phase === 'contest' ? 'contest' : 'end';
       return;
@@ -2066,7 +2151,8 @@ function resolveLanding(G) {
       G.phase = 'card';
       return;                                  // UI acknowledges, then applyCard
     }
-    if (b.t === 'free' || b.t === 'go' || b.t === 'jail') { G.phase = 'end'; return; }
+    if (b.t === 'free') { claimPot(G, p); G.phase = 'end'; return; }
+    if (b.t === 'go' || b.t === 'jail') { G.phase = 'end'; return; }
 
     const owner = ownerOf(G, p.pos);
     if (!owner) { G.phase = 'offer'; return; }
@@ -2096,9 +2182,9 @@ function applyCard(G) {
   G.pendingCard = null;
   note(G, `${p.name} — ${c.x.replace(/\*/g, '')}`);
 
-  if (c.cash) { if (c.cash > 0) p.cash += c.cash; else pay(G, p, null, -c.cash); }
-  if (c.perGarrison) pay(G, p, null, garrisonsOf(p) * c.perGarrison);
-  if (c.perCitadel) pay(G, p, null, citadelsOf(p) * c.perCitadel);
+  if (c.cash) { if (c.cash > 0) p.cash += c.cash; else toPot(G, p, -c.cash); }
+  if (c.perGarrison) toPot(G, p, garrisonsOf(p) * c.perGarrison);
+  if (c.perCitadel) toPot(G, p, citadelsOf(p) * c.perCitadel);
   if (c.pardon) {
     p.pardons += c.pardon;
     note(G, `${p.name} holds ${p.pardons} Overseer favour${p.pardons === 1 ? '' : 's'}.`);
@@ -3490,7 +3576,7 @@ function standings(G) {
     .sort((a, b) => b.worth - a.worth);
 }
 
-return { random, createGame, current, square, ownerOf, holding, ownsSet, countType, garrisonsOf, citadelsOf, holdingsValue, netWorth, upkeep, rentOf, paybackTurns, revoltThreshold, pay, liquidate, payRent, money, displayName, raisableValue, parkForSettlement, autoSettle, settleNow, claimValue, submitClaim, closeContest, releaseVassal, setTithe, declareIndependence, lapSplit, previewAt, landingPreview, cardEffect, roll, usePardon, payFacilityFee, amendCost, amendManifest, resolveLanding, applyCard, endTurn, swarmDistance, announceSwarm, playOnCircuits, extendGame, buy, openAuction, submitBid, closeAuction, canBuild, build, canRaiseCitadel, raiseCitadel, sellDevelopment, pledgeValue, redeemCost, pledge, mortgage, redeem, repayDebt, tradable, settleContract, setCompletingTargets, setBuildingTargets, denialTargets, seekContract, recordRefusal, refusalFor, refusalBlocks, contractIsLegal, proposeContract, respondToContract, netValue, aiValue, aiBid, aiWantsToBuy, threatPenalty, sqList, liquidityWeight, contractValue, aiAcceptsContract, aiCounter, aiRedeem, aiRepay, seekSale, openBoardFraction, aiPayFacilityFee, landingCost, aiAmend, aiTithe, aiRelease, aiDevelop, SAVE_VERSION, serialize, deserialize, standings };
+return { random, createGame, current, square, ownerOf, holding, ownsSet, countType, garrisonsOf, citadelsOf, holdingsValue, netWorth, upkeep, rentOf, paybackTurns, revoltThreshold, pay, liquidate, payRent, money, displayName, raisableValue, parkForSettlement, autoSettle, settleNow, claimPot, claimValue, submitClaim, closeContest, releaseVassal, setTithe, declareIndependence, lapSplit, previewAt, landingPreview, cardEffect, roll, usePardon, payFacilityFee, amendCost, amendManifest, resolveLanding, applyCard, endTurn, swarmDistance, announceSwarm, playOnCircuits, extendGame, buy, openAuction, submitBid, closeAuction, canBuild, build, canRaiseCitadel, raiseCitadel, sellDevelopment, pledgeValue, redeemCost, pledge, mortgage, redeem, repayDebt, tradable, settleContract, setCompletingTargets, setBuildingTargets, denialTargets, seekContract, recordRefusal, refusalFor, refusalBlocks, contractIsLegal, proposeContract, respondToContract, netValue, aiValue, aiBid, aiWantsToBuy, threatPenalty, sqList, liquidityWeight, contractValue, aiAcceptsContract, aiCounter, aiRedeem, aiRepay, seekSale, openBoardFraction, aiPayFacilityFee, landingCost, aiAmend, aiTithe, aiRelease, aiDevelop, SAVE_VERSION, serialize, deserialize, standings };
 })();
 
 __m.score = (function () {
@@ -5096,7 +5182,8 @@ const setup = {
   names: ['Samuel', 'Vex', 'Rourke', 'Ondh'],
   ais: [],
   circuits: 72,
-  cash: RULES.startingCash
+  cash: RULES.startingCash,
+  pot: RULES.anchoragePot
 };
 
 // The purse each seat is dealt. Every figure the game is balanced around comes
@@ -5164,6 +5251,18 @@ function drawSetup() {
            ${money(RULES.startingCash)}. More money is <b>harder</b>, not easier — the opponents
            build with it and charge you for it.`}</p>
     </div>
+    <div class="fld"><label>Neutral Anchorage</label>
+      <div class="opts">${[['0', 'Pays nothing'], ['1', 'Unclaimed tribute']].map(([v, n]) =>
+        `<button class="opt${(setup.pot ? '1' : '0') === v ? ' on' : ''}" data-p="${v}">${n}</button>`).join('')}</div>
+      <p class="note" style="margin-top:10px">${setup.pot
+        ? `A house rule. Taxes, card penalties and the Overseer's fee gather at the anchorage
+           instead of leaving the game, and whoever lands there takes the lot — about
+           ${money(380)} typically, arriving five to seven times a game. It pays a debt marker
+           first. Every other figure is calibrated with this <b>off</b>, and it makes the
+           takeover more likely rather than less: it is not a lifeline, it is fuel.`
+        : `The standard rule: the anchorage charges nothing and pays nothing. Everything in the
+           game is balanced against this.`}</p>
+    </div>
     <div class="fld"><label>Sound</label>
       <div class="opts">${[['1', 'On'], ['0', 'Off']].map(([v, n]) =>
         `<button class="opt${(Sound.isOn() ? '1' : '0') === v ? ' on' : ''}" data-snd="${v}">${n}</button>`).join('')}</div>
@@ -5175,7 +5274,8 @@ function drawSetup() {
     </div>
     <button class="big" id="begin">Open the ledger${seatsUsed < 2 ? ' — add an opponent' : ''}</button>
     <p class="note">Sealed-bid auctions are mandatory and the phone gets passed.
-    Garrisons are finite. Neutral Anchorage pays nothing. Doubles roll again — three in a row and an Overseer files you.<br><br>
+    Garrisons are finite. ${setup.pot ? 'Neutral Anchorage holds the unclaimed tribute.' : 'Neutral Anchorage pays nothing.'}
+    Doubles roll again — three in a row and an Overseer files you.<br><br>
     The game saves itself after every move, so a call or a locked screen costs nothing.</p>`;
 
   let nw = '';
@@ -5214,6 +5314,9 @@ function drawSetup() {
   $('setup').querySelectorAll('[data-c]').forEach(b => b.onclick = () => {
     setup.cash = +b.dataset.c; drawSetup();
   });
+  $('setup').querySelectorAll('[data-p]').forEach(b => b.onclick = () => {
+    setup.pot = b.dataset.p === '1'; drawSetup();
+  });
   $('begin').onclick = begin;
   if ($('resume')) $('resume').onclick = () => { G = saved; startShell(); };
 }
@@ -5232,7 +5335,7 @@ function begin() {
   setup.ais.forEach(k => seats.push({ name: PERSONAS[k].n, kind: 'ai', persona: k }));
   resetSoundWatch();
   G = E.createGame({ seats, seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0,
-    circuits: setup.circuits, startingCash: setup.cash });
+    circuits: setup.circuits, startingCash: setup.cash, anchoragePot: setup.pot });
   G.log.unshift({ kind: 'leader', circuit: 1, text: 'Nine systems are burning their drives to readiness. Begin.' });
   clearSave();
   startShell();
@@ -5564,7 +5667,9 @@ function renderBoard() {
       ${colour ? `<div class="cbar" style="background:${colour}"></div>` : ''}
       ${ico ? `<svg class="cico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ico}</svg>` : ''}
       <div class="code">${esc(b.a)}</div>
-      ${b.pr ? `<div class="cpr${owner ? ' rent' : ''}">${cellFigure(i, b, owner, held)}</div>` : ''}
+      ${b.pr ? `<div class="cpr${owner ? ' rent' : ''}">${cellFigure(i, b, owner, held)}</div>`
+        : b.t === 'free' && G.anchoragePot && G.pot > 0
+        ? `<div class="cpr pot">${money(G.pot)}</div>` : ''}
       ${dev ? `<div class="grr">${dev}</div>` : ''}
       <div class="toks">${toks}</div></div>`;
   });
@@ -6040,7 +6145,7 @@ function showMenu() {
     <p style="font-size:12px;color:var(--dim);line-height:1.6;margin-top:10px;
        font-variant-numeric:tabular-nums" id="buildLine">
     Build <b>${esc(BUILD)}</b> · seed <b>${G.seed >>> 0}</b>
-    · ${G.circuits} circuits · dealt <b>${money(G.startingCash ?? RULES.startingCash)}</b><br>
+    · ${G.circuits} circuits · dealt <b>${money(G.startingCash ?? RULES.startingCash)}</b>${G.anchoragePot ? ' · anchorage pot' : ''}<br>
     Quote these in a bug report — the build says whether you are on the current
     version, the seed replays the same dice and the same opponents, and the last
     two say which game was being played, since both are now chosen at setup.</p>`);
@@ -6064,6 +6169,14 @@ function showSquare(i) {
     <div class="stat"><span>Landing frequency</span><span>${TRAFFIC[i].toFixed(2)}%</span></div>`;
   if (b.pr) s += `<div class="stat"><span>Price</span><span>${money(b.pr)}</span></div>`;
   if (b.amt) s += `<div class="stat"><span>Charge</span><span>${money(b.amt)}</span></div>`;
+  if (b.t === 'free') {
+    s += G.anchoragePot
+      ? `<div class="stat"><span>Unclaimed tribute</span><span>${money(G.pot || 0)}</span></div>
+         <p style="font-size:14px;color:var(--dim);line-height:1.5">Taxes, penalties and the
+         Overseer's fee gather here instead of leaving the game. Whoever lands takes the lot —
+         and it pays a debt marker before it pays a purse.</p>`
+      : `<div class="stat"><span>Charge</span><span>Nothing</span></div>`;
+  }
   if (b.s) {
     s += `<div class="stat"><span>Set payback (3 garrisons)</span><span>${E.paybackTurns(b.s, TRAFFIC)} turns</span></div>
       <div class="stat"><span>Garrison cost</span><span>${money(SETS[b.s].gc)}</span></div>
@@ -7035,7 +7148,8 @@ function takeCounter() {
 const DIGEST_LABEL = {
   trade: 'Contract', vassalage: 'Vassalage', contest: 'Claim', release: 'Released',
   independence: 'Independence',
-  set: 'Colour set', citadel: 'Citadel', swarm: 'The deep array'
+  set: 'Colour set', citadel: 'Citadel', swarm: 'The deep array',
+  anchorage: 'Anchorage'
 };
 
 function showDigest(p) {

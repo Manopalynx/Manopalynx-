@@ -12,8 +12,13 @@ import {
 
 // Plays one game to its end. Returns the finished state.
 // `onTurn` is called after every completed turn so a caller can sample.
-export function playGame({ seats, seed = 1, circuits = 24, onTurn = null, maxSteps = 200000 } = {}) {
-  const G = createGame({ seats, seed, circuits });
+// startingCash and anchoragePot are passed through rather than defaulted here,
+// so an instrument can measure a setup option without a second harness.
+export function playGame({ seats, seed = 1, circuits = 24, onTurn = null, maxSteps = 200000,
+                           startingCash, anchoragePot } = {}) {
+  const G = createGame({ seats, seed, circuits,
+    ...(startingCash === undefined ? {} : { startingCash }),
+    ...(anchoragePot === undefined ? {} : { anchoragePot }) });
   let steps = 0;
   while (!G.over && steps++ < maxSteps) {
     const p = current(G);
