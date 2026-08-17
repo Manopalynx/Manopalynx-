@@ -5250,14 +5250,18 @@ function frame(now){
      so measuring now-last reported 16.6ms and 60fps on a phone no matter what was in
      the box. It would have said the same thing about an empty one. */
   const t0 = performance.now();
-  /* More than one tick a frame. A grid of 3px cells is nearly twice the world of a
-     4px one, and the physics runs per cell, so everything took correspondingly longer
-     to cross it: the opening scene went from about 30 seconds to reach the wood stack
-     to 36.8. Two ticks a frame gives the bigger box back its old pace and then some,
-     and there is room for it — 2.3ms of work for a busy scene against a 16.6ms frame,
-     on a phone that measured faster than this machine.
+  /* One tick a frame — see STEPS, which is where that decision and its reversal are
+     both recorded. This comment used to argue the other way, for two ticks a frame,
+     and went on arguing it after STEPS went back to 1: a comment describing a build
+     that no longer exists, sitting directly above the line it was describing.
 
-     Everything in the model is per tick, so this changes how fast the world runs and
+     Its figure had gone stale as well, and that is the half worth keeping. It quoted
+     "2.3ms of work for a busy scene against a 16.6ms frame". The gauge on the phone
+     this is played on reads 7.0ms on the Volcano — three times that, on the box the
+     number exists to reassure you about. Anything new that wants a slice of the frame
+     gets measured against 7.0, not against 2.3.
+
+     Everything in the model is per tick, so speed changes how fast the world runs and
      nothing about how it behaves. The suites step it themselves and are unaffected. */
   /* Carried between frames rather than rounded, so a quarter is one tick every fourth
      frame instead of nothing at all. Clamped, because a tab that has been in the

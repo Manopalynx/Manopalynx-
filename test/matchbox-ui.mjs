@@ -694,6 +694,18 @@ await check('clearing the life reaches the part of the box that is off the scree
   return null;
 });
 
+/* Two things in here were copies of facts rather than the facts, and both read fine.
+
+   It counted `__count(16) + __count(19)`. Those are FIRE and EMBER today, and every
+   other check in this file names what it counts — STRAW, WORM, STONE. The `M` table is
+   a list, so a material inserted anywhere before them leaves this check counting two
+   different materials, still green, still called "a fire survives being resized". It is
+   the same hazard `SAVE_KEY` exists to close on the save path.
+
+   And it spelled the tick out by hand as four passes. `simTick` has five: `moveLife`
+   went missing here, so this check has been stepping a box with nothing alive in it.
+   Nothing in the opening scene moves under `moveLife`, which is why it never showed —
+   the sim harness carries a comment warning about exactly this, one file away. */
 await check('a fire survives being resized', async p => {
   await p.evaluate(() => {
     const f = H-3;
@@ -702,14 +714,14 @@ await check('a fire survives being resized', async p => {
       tool='match'; brush=3; matchLit=99;        // a lit match, since paintAt checks
       paintAt((W*0.45)|0, f-5);
       tool=t0; brush=b0; matchLit=m0;
-      moveFalling(); moveRising(); diffuse(); react();
+      simTick();
     }
   });
-  const before = await p.evaluate(() => __count(16) + __count(19));
+  const before = await p.evaluate(() => __count(FIRE) + __count(EMBER));
   if (before < 3) return `nothing was alight to begin with (${before})`;
   await p.setViewportSize({ width: 390, height: 760 });
   await p.waitForTimeout(700);
-  const after = await p.evaluate(() => __count(16) + __count(19));
+  const after = await p.evaluate(() => __count(FIRE) + __count(EMBER));
   if (after === 0) return `the fire went out across a resize: ${before} hot cells became ${after}`;
   return null;
 });
