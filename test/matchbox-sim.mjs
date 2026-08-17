@@ -3966,13 +3966,31 @@ await check(browser, 'every preset pays off when you do what its label says', ()
      the log hatches. Measured at 78 stems, 35 flowers, 20 grass and 319 cells of rich soil
      from eleven seeds, with the first moth at about thirty seconds. */
   __room('Normal'); loadScene(scene('Garden'));
-  { const seeds = N(SEED), grubs = N(GRUB);
+  { const seeds = N(SEED), grubs = N(GRUB), water0 = N(WATER);
     if (!seeds || !grubs) bad.push(`Garden arrived with ${seeds} seeds and ${grubs} grubs`);
     let firstMoth = -1;
     for (let k=1;k<=12000;k++){ __step(1); if (firstMoth<0 && N(MOTH)) firstMoth = k; }
-    if (N(FLOWER) < 8) bad.push(`Garden grew ${N(FLOWER)} flowers from ${seeds} seeds in three minutes`);
-    if (N(RICH) < 60) bad.push(`Garden made ${N(RICH)} cells of rich soil — the flowers are not feeding the bed`);
-    if (N(GRASS) < 5) bad.push(`Garden put out ${N(GRASS)} grass, so the rich soil is not doing anything`);
+    /* The cascade is measured at every stage it has, not only at the end.
+
+       This arm failed one full suite run at 1 flower, 29 rich soil and 2 grass — every
+       figure about twenty times low — and then cleared six runs of the same scene in a
+       fresh page (flowers 18-30, rich 178-275, grass 11-26) and three runs of this whole
+       check. Second time this session: `the brush reaches into a tank` did the same
+       thing, failing once inside a full run at a count fifteen times low and clearing
+       forty runs afterwards.
+
+       A count at the end of a cascade cannot say WHICH stage stalled, and that is the
+       one thing worth knowing when it happens twice and reproduces neither time. Seeds
+       sprout into stems, stems flower, flowers feed the bed, the bed puts up grass — so
+       the failure now names the stage. Stems near zero means nothing germinated and the
+       question is the damp scan; stems high with no flowers means the second stage; and
+       water is reported because `damp` is what the first stage turns on. */
+    const stage = () => `[seeds left ${N(SEED)}, stems ${N(STEM)}, flowers ${N(FLOWER)}, `
+                      + `rich ${N(RICH)}, grass ${N(GRASS)}, water ${N(WATER)} of ${water0}, `
+                      + `first moth ${firstMoth < 0 ? 'never' : (firstMoth/60|0) + 's'}]`;
+    if (N(FLOWER) < 8) bad.push(`Garden grew ${N(FLOWER)} flowers from ${seeds} seeds in three minutes ${stage()}`);
+    if (N(RICH) < 60) bad.push(`Garden made ${N(RICH)} cells of rich soil — the flowers are not feeding the bed ${stage()}`);
+    if (N(GRASS) < 5) bad.push(`Garden put out ${N(GRASS)} grass, so the rich soil is not doing anything ${stage()}`);
     if (firstMoth < 0) bad.push('Garden never hatched a moth out of its log');
     // ...and it has to still be a garden, not a flood.
     if (N(WATER) < 100) bad.push(`Garden has ${N(WATER)} cells of water left — the pond is what keeps the bed damp`);
