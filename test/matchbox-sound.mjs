@@ -83,7 +83,7 @@ const HARNESS = `
     const plan = scorePump(secs || 4);
     snd.plk.frequency.value = SOUND.plkLow + Math.max(0, plan.u) * (SOUND.plkHigh - SOUND.plkLow);
     const fire = blaze();
-    snd.bed.gain.value = fire * SOUND.bedGain;
+    snd.bed.gain.value = fire * SOUND.rushGain;
     snd.music.gain.value = 1 - fire * SOUND.duck;
     const cracks = firePump(secs || 4, fire);
     const out = await c.startRendering();
@@ -94,6 +94,46 @@ const HARNESS = `
   /* The two halves rendered apart, which is the only way to ask whether one drowns the
      other. Same seed of a scene, once with the fire muted and once with the score muted,
      and the comparison is between their RMS. */
+  /* The fire alone, and what SHAPE it is — the only way to ask the difference between
+     rain and fire, because both are noise and the difference is entirely distribution.
+
+     THE TWO HALVES ARE RENDERED SEPARATELY, and that is not tidiness. A first version
+     measured both on the whole fire and the surge figure came out HIGHER with the rush's
+     breathing switched off than with it on — 41% against 35% — because what it was
+     actually measuring was the gap between one power-law snap and the next. It would have
+     passed with the swell deleted. Each number now measures the thing it is named after:
+
+       crest  peak over RMS, on the SNAPS alone. A power-law train stands well clear of
+              its own average; snaps of equal size average up and the crest collapses.
+       surge  the spread of per-100ms RMS over its mean, on the RUSH alone. Rain is
+              steady; a fire breathes, and with no snaps in the buffer the only thing that
+              can move the envelope is the swell. */
+  window.__fireShape = async (lit, secs, part) => {
+    const rate = 44100, len = Math.floor(rate * secs);
+    const c = new OfflineAudioContext(1, len, rate);
+    soundBuild(c);
+    soundOn = true; snd.master.gain.value = SOUND.master;
+    AMBIENT = 20; alightCount = lit;
+    snd.music.gain.value = 0;                      // the fire on its own
+    const fire = blaze();
+    const wantRush = part !== 'snaps';
+    snd.bed.gain.value   = wantRush ? fire * SOUND.rushGain : 0;
+    snd.swell.gain.value = wantRush ? fire * SOUND.rushGain * SOUND.swellD : 0;
+    if (part !== 'rush') firePump(secs, fire);
+    const buf = await c.startRendering();
+    const d = buf.getChannelData(0);
+    let peak = 0, sq = 0;
+    for (let i=0;i<d.length;i++){ const a = Math.abs(d[i]); if (a>peak) peak=a; sq += d[i]*d[i]; }
+    const rms = Math.sqrt(sq/d.length);
+    const win = Math.floor(rate * .1), envs = [];
+    for (let i=0; i+win<=d.length; i+=win){
+      let s2=0; for (let k=i;k<i+win;k++) s2 += d[k]*d[k];
+      envs.push(Math.sqrt(s2/win));
+    }
+    const mean = envs.reduce((a,b)=>a+b,0)/envs.length;
+    const sd = Math.sqrt(envs.reduce((a,b)=>a+(b-mean)*(b-mean),0)/envs.length);
+    return { crest: rms > 0 ? peak/rms : 0, surge: mean > 0 ? sd/mean : 0, rms };
+  };
   window.__split = async (room, secs, lit) => {
     const one = async (mute) => {
       const rate = 44100, len = Math.floor(rate * (secs || 4));
@@ -103,7 +143,7 @@ const HARNESS = `
       AMBIENT = room; alightCount = lit || 0;
       const plan = scorePump(secs || 4);
       const fire = blaze();
-      snd.bed.gain.value = mute === 'fire' ? 0 : fire * SOUND.bedGain;
+      snd.bed.gain.value = mute === 'fire' ? 0 : fire * SOUND.rushGain;
       snd.music.gain.value = mute === 'music' ? 0 : 1 - fire * SOUND.duck;
       if (mute !== 'fire') firePump(secs || 4, fire);
       return __rms(await c.startRendering());
@@ -319,6 +359,44 @@ await check(browser, 'the fire never drowns the tune', async p => {
   }
   console.log(`        (music vs fire — forge ${r.forge.music.toFixed(3)}/${r.forge.fire.toFixed(3)}, `
     + `opening ${r.open.music.toFixed(3)}/${r.open.fire.toFixed(3)})`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+await check(browser, 'the fire is a fire and not rain', async p => {
+  /* Reported from the phone: "it currently sounds more like rain than fire". Rain is
+     UNIFORM — many similar transients, evenly spaced, in one narrow band — and the first
+     version was exactly that: a bandpassed bed and snaps of near-equal size. Both of the
+     things that fix it are distributions rather than settings, so both are measured as
+     distributions rather than asserted as parameters. */
+  const r = await p.evaluate(async () => ({
+    snapsF: await __fireShape(135, 8, 'snaps'),
+    snapsO: await __fireShape(155, 8, 'snaps'),
+    rushF:  await __fireShape(135, 12, 'rush'),
+    rushO:  await __fireShape(155, 12, 'rush')
+  }));
+  const bad = [];
+  /* Snaps: a power-law train stands well clear of its own average. Bars set from the
+     mutation rather than from taste, which is the only way to know one separates:
+
+       crkShape 3 (as shipped)   crest 32-42
+       crkShape 0 (every snap full size)   crest 14-15
+
+     A bar of 9 passed both, which made it decoration. 22 sits in the gap. */
+  for (const [k, v] of [['forge', r.snapsF], ['opening', r.snapsO]])
+    if (!(v.crest > 22))
+      bad.push(`the ${k}'s snaps have a crest of ${v.crest.toFixed(1)} — they are all the same size, which is a rattle`);
+  /* Rush: with no snaps in the buffer the only thing that can move the envelope is the
+     swell. Same treatment — the bar comes from what the broken version measures:
+
+       swellD .55 (as shipped)   surge 45-47%
+       swellD 0   (no breathing) surge 6.3-6.7%   — the residue of the noise loop itself
+
+     6% passed both. 20% sits in the gap. */
+  for (const [k, v] of [['forge', r.rushF], ['opening', r.rushO]])
+    if (!(v.surge > .20))
+      bad.push(`the ${k}'s rush surges by ${(v.surge*100).toFixed(1)}% of its own level — that is steady hiss, not a fire drawing air`);
+  console.log(`        (snap crest — forge ${r.snapsF.crest.toFixed(1)}, opening ${r.snapsO.crest.toFixed(1)}; `
+    + `rush surge — forge ${(r.rushF.surge*100).toFixed(1)}%, opening ${(r.rushO.surge*100).toFixed(1)}%)`);
   return bad.length ? bad.join('; ') : null;
 });
 

@@ -2455,6 +2455,44 @@ fire's low rumble is exactly the band an iPhone cannot produce; its crackle is s
 broadband and lives at 1–4kHz, where a small speaker is strongest. Measured through the
 500Hz highpass: **98–105%**, against the first sound design's drone at 43%.
 
+#### It sounded like rain, and rain is a distribution rather than a timbre
+
+Reported from the phone: *"it currently sounds more like rain than fire… it probably needs
+more of a mix of low, rushing air and sharp snaps and crackles"*. Both halves of that were
+right and both were about **distribution**, not about which frequencies were used.
+
+Rain is uniform — many similar transients, evenly spaced, in one narrow band. The first
+version was exactly that: a bandpass bed at 700–2600Hz, which is static, and snaps of
+near-equal size through near-equal filters. Nothing varied, so it read as weather.
+
+A fire is two things and neither is uniform:
+
+| | before | now |
+|---|---|---|
+| the bed | bandpass 700–2600Hz — one colour of hiss | **lowpass** 320→1400Hz, so the noise stays broad and is only tilted |
+| its level | steady | two sines at **0.13 and 0.31Hz** summed into its gain — incommensurate, so the surge never repeats on a period the ear can catch |
+| a snap | 40ms, bandpass Q3–7 at 1.1–3.8kHz | **6ms**, highpass at 1.5–6.2kHz — a click, not a blip |
+| snap size | uniform 0.35–1.0 | **`pow(random, 3)`** — most nearly nothing, a few the whole point |
+
+One LFO is a tremolo and you hear the rate; two is weather.
+
+**Measured as shapes, because that is what the difference is:**
+
+| | crest (peak/RMS) | surge (envelope spread) |
+|---|---|---|
+| snaps, as shipped | **30–33** | |
+| snaps, all the same size | 15–17 | |
+| rush, as shipped | | **46%** |
+| rush, no breathing | | 5–7% |
+
+**And the two are measured on separate renders, which is not tidiness.** A first version
+measured both on the whole fire, and the surge came out *higher* with the breathing
+switched off — 41% against 35% — because what it was really measuring was the gap between
+one power-law snap and the next. It would have passed with the swell deleted.
+
+**The bars come from the mutations rather than from taste.** Crest at 9 and surge at 6%
+both passed the broken versions, which made them decoration; 22 and 20% sit in the gaps.
+
 #### Rate is linear and loudness is not
 
 The first version ran both off `blaze`, the same log curve everything else here uses, and
@@ -2820,7 +2858,7 @@ the glass.
 npm i                          # pinned Playwright; `npm i playwright` installs the wrong one
 node test/matchbox-sim.mjs     # 96 checks — the simulation
 node test/matchbox-ui.mjs      # 51 checks — the hand
-node test/matchbox-sound.mjs   #  9 checks — the score and the fire, rendered and filtered
+node test/matchbox-sound.mjs   # 10 checks — the score and the fire, rendered and filtered
 node test/published.mjs        #  3 checks — the copies with the URL still match
 
 node test/compact.mjs         # a copy with the commentary stripped, for pasting into a chat

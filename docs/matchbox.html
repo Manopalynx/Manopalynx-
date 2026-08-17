@@ -5608,12 +5608,36 @@ const SOUND = {
      Measured across the presets: a candle is 6 cells alight, the Volcano 27, the Forge
      135, the opening scene about 155 — so, log again, or a candle is silent. */
   fireRef:   160,               // cells alight that count as "the box is fully alight"
-  crkSlow:   1.5,               // crackles a second at one cell alight...
+
+  /* THE FIRST VERSION SOUNDED LIKE RAIN, and that was the right word for what was wrong.
+     Rain is uniform: many similar transients, evenly spaced, in one narrow band. The bed
+     was a bandpass at 700-2600Hz, which is static, and every snap was much the same size
+     through much the same filter. Nothing about it varied, so it read as weather.
+
+     A fire is two things at once and neither is uniform:
+
+       the rush   broadband noise, tilted LOW, surging slowly — the draw of air into the
+                  flame. Not a band: a band is hiss. A slow irregular swell is what makes
+                  it read as something breathing rather than something spraying.
+       the snaps  mostly inaudible, occasionally a loud crack. The distribution is the
+                  whole effect — every snap the same size is a rattle, and a power law is
+                  what a fire actually is.
+
+     The rush is the part a phone speaker will fight, so it is tilted low rather than put
+     low: the lowpass opens from 320Hz to 1400 as the fire grows, which keeps enough above
+     the 500Hz corner to survive while still reading as the bottom of the sound. */
+  rushGain:  .085,
+  rushLow:   320,  rushHigh: 1400,   // the rush's lowpass, small fire to large
+  rushQ:     .9,
+  swellA:    .13,  swellB:  .31,     // two slow swells at incommensurate rates, so the
+  swellD:    .55,                    // surge never repeats on a period you can hear
+
+  crkSlow:   1.5,               // snaps a second at one cell alight...
   crkFast:   26,                // ...and at a box fully alight
-  crkLow:    1100, crkHigh: 3800,
-  crkGain:   .22,
-  bedGain:   .07,               // a thin noise bed under the crackle
-  bedLow:    700,  bedHigh: 2600,
+  crkLow:    1500, crkHigh: 6200,    // sharper and wider than before — 1.1-3.8k was the
+  crkGain:   .40,                    // band raindrops live in
+  crkShape:  3,                 // the power law: `pow(random, 3)`, so most snaps are
+                                // nearly nothing and a few are the whole point
 
   /* How far the score gets out of the fire's way. NOT to nothing: `docs/README.md`
      records a bed brought up over ducked music and the report was "it repeats the same
@@ -5681,28 +5705,42 @@ function soundBuild(ctx){
   const pad = actx.createGain(); pad.gain.value = 1;
   pad.connect(music);
 
-  // ---- fire: a thin noise bed, plus crackles scheduled against the same clock the
-  //      score uses. Both sit above the 500Hz corner on purpose.
-  const bedBuf = actx.createBuffer(1, Math.floor(actx.sampleRate * 2), actx.sampleRate);
+  /* ---- the rush: broadband noise through a LOWPASS, not a bandpass. The difference is
+     the whole difference between fire and rain — a band is one colour of hiss, a lowpass
+     leaves the noise broad and simply tilts it. */
+  const bedBuf = actx.createBuffer(1, Math.floor(actx.sampleRate * 3), actx.sampleRate);
   const bd = bedBuf.getChannelData(0);
   for (let i=0; i<bd.length; i++) bd[i] = Math.random()*2 - 1;
   const bedSrc = actx.createBufferSource();
   bedSrc.buffer = bedBuf; bedSrc.loop = true;
   const bedFilt = actx.createBiquadFilter();
-  bedFilt.type = 'bandpass'; bedFilt.frequency.value = SOUND.bedLow; bedFilt.Q.value = .7;
+  bedFilt.type = 'lowpass'; bedFilt.frequency.value = SOUND.rushLow; bedFilt.Q.value = SOUND.rushQ;
   const bed = actx.createGain(); bed.gain.value = 0;
   bedSrc.connect(bedFilt); bedFilt.connect(bed); bed.connect(master);
   bedSrc.start();
 
-  // One short burst, made once and reused for every crackle.
-  const snap = actx.createBuffer(1, Math.floor(actx.sampleRate * .04), actx.sampleRate);
+  /* ...and the surge. Two sines at incommensurate rates summed into the rush's gain, so
+     it swells and falls without ever repeating on a period the ear can catch. One LFO is
+     a tremolo and you hear the rate; two is weather. They are added to the gain rather
+     than multiplying it, which is what `swellD` is a depth of. */
+  const swell = actx.createGain(); swell.gain.value = 0;
+  swell.connect(bed.gain);
+  for (const hz of [SOUND.swellA, SOUND.swellB]){
+    const o = actx.createOscillator(); o.type = 'sine'; o.frequency.value = hz;
+    o.connect(swell); o.start();
+  }
+
+  /* One snap, made once. Six milliseconds against the forty it was — a fire's crack is a
+     click, and forty milliseconds of filtered noise is a raindrop. No fade-in at all:
+     the attack IS the sound. */
+  const snap = actx.createBuffer(1, Math.floor(actx.sampleRate * .006), actx.sampleRate);
   const sd = snap.getChannelData(0);
   for (let i=0; i<sd.length; i++){
     const k = i / sd.length;
-    sd[i] = (Math.random()*2 - 1) * Math.pow(1 - k, 3);   // a pop, not a puff
+    sd[i] = (Math.random()*2 - 1) * Math.pow(1 - k, 2.2);
   }
 
-  snd = { master, music, plk, pad, dly, bed, bedFilt, snap };
+  snd = { master, music, plk, pad, dly, bed, bedFilt, swell, snap };
   nextBeat = 0; beatN = 0; nextCrack = 0;
   return true;
 }
@@ -5711,12 +5749,19 @@ function soundBuild(ctx){
    or moment twice — a fire that ticks regularly is a clock. */
 function crackle(at, level){
   const src = actx.createBufferSource(); src.buffer = snd.snap;
+  /* A HIGHPASS, not a bandpass. A bandpass picks one colour and every snap comes out the
+     same size of blip — which is a raindrop. A highpass at a randomly chosen corner keeps
+     everything above it, so a snap is bright and broad and each one is a different shape. */
   const f = actx.createBiquadFilter();
-  f.type = 'bandpass';
+  f.type = 'highpass';
   f.frequency.value = SOUND.crkLow + Math.random() * (SOUND.crkHigh - SOUND.crkLow);
-  f.Q.value = 3 + Math.random() * 4;
+  f.Q.value = .7 + Math.random() * 1.6;
+  /* The power law is the effect. Most snaps are nearly nothing and a few are the whole
+     point — `pow(random, 3)` puts about seven in ten under a tenth of full, and one in a
+     hundred over half. Uniform amplitudes read as a rattle, which is what the first
+     version did, and which is the other half of why it sounded like rain. */
   const g = actx.createGain();
-  g.gain.value = SOUND.crkGain * (.35 + .65 * Math.random()) * (.4 + .6 * level);
+  g.gain.value = SOUND.crkGain * Math.pow(Math.random(), SOUND.crkShape) * (.35 + .65 * level);
   src.connect(f); f.connect(g); g.connect(snd.master);
   src.start(at);
 }
@@ -5835,8 +5880,9 @@ function soundUpdate(){
 
   // The bed answers faster than the score does — a fire catching is an event, and .6s of
   // glide on it would arrive after the thing that caused it had gone out.
-  snd.bed.gain.setTargetAtTime(fire * SOUND.bedGain, t, .25);
-  snd.bedFilt.frequency.setTargetAtTime(SOUND.bedLow + fire * (SOUND.bedHigh - SOUND.bedLow), t, .25);
+  snd.bed.gain.setTargetAtTime(fire * SOUND.rushGain, t, .25);
+  snd.swell.gain.setTargetAtTime(fire * SOUND.rushGain * SOUND.swellD, t, .25);
+  snd.bedFilt.frequency.setTargetAtTime(SOUND.rushLow + fire * (SOUND.rushHigh - SOUND.rushLow), t, .25);
   // ...and the score steps back, but never below the fire. See `duck`.
   snd.music.gain.setTargetAtTime(1 - fire * SOUND.duck, t, .3);
   firePump(t + .5, fire);
