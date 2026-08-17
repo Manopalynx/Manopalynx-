@@ -83,7 +83,12 @@ const HARNESS = `
     const plan = scorePump(secs || 4);
     snd.plk.frequency.value = SOUND.plkLow + Math.max(0, plan.u) * (SOUND.plkHigh - SOUND.plkLow);
     const fire = blaze();
-    snd.bed.gain.value = fire * SOUND.rushGain;
+    const draw = drawStep();
+    const rush = SOUND.rushGain * Math.min(1.4, fire + draw * SOUND.drawLift);
+    snd.bed.gain.value = rush;
+    snd.swell.gain.value = rush * SOUND.swellD;
+    snd.flut.gain.value = rush * SOUND.flutD;
+    snd.throat.gain.value = fire * SOUND.throatD;
     snd.music.gain.value = 1 - fire * SOUND.duck;
     const cracks = firePump(secs || 4, fire);
     const out = await c.startRendering();
@@ -116,11 +121,22 @@ const HARNESS = `
     AMBIENT = 20; alightCount = lit;
     snd.music.gain.value = 0;                      // the fire on its own
     const fire = blaze();
-    const wantRush = part !== 'snaps';
-    snd.bed.gain.value   = wantRush ? fire * SOUND.rushGain : 0;
-    snd.swell.gain.value = wantRush ? fire * SOUND.rushGain * SOUND.swellD : 0;
+    /* Isolating one voice by silencing the others through their OWN constants, so what
+       runs is the real scheduler and the real graph rather than a reduced copy of them.
+       Restored at the end, because these are module state and the next check would
+       inherit them. */
+    const keepCrk = SOUND.crkGain, keepBig = SOUND.bigGain;
+    if (part === 'snaps') SOUND.bigGain = 0;
+    if (part === 'big')   SOUND.crkGain = 0;
+    const wantRush = part !== 'snaps' && part !== 'big';
+    const rush = fire * SOUND.rushGain;
+    snd.bed.gain.value    = wantRush ? rush : 0;
+    snd.swell.gain.value  = wantRush ? rush * SOUND.swellD : 0;
+    snd.flut.gain.value   = wantRush ? rush * SOUND.flutD : 0;
+    snd.throat.gain.value = wantRush ? fire * SOUND.throatD : 0;
     if (part !== 'rush') firePump(secs, fire);
     const buf = await c.startRendering();
+    SOUND.crkGain = keepCrk; SOUND.bigGain = keepBig;
     const d = buf.getChannelData(0);
     let peak = 0, sq = 0;
     for (let i=0;i<d.length;i++){ const a = Math.abs(d[i]); if (a>peak) peak=a; sq += d[i]*d[i]; }
@@ -132,7 +148,48 @@ const HARNESS = `
     }
     const mean = envs.reduce((a,b)=>a+b,0)/envs.length;
     const sd = Math.sqrt(envs.reduce((a,b)=>a+(b-mean)*(b-mean),0)/envs.length);
-    return { crest: rms > 0 ? peak/rms : 0, surge: mean > 0 ? sd/mean : 0, rms };
+    /* Two more, both aimed at the difference between a gust and a draw.
+
+       flutter  how much the envelope moves between one 20ms window and the next, over
+                its own mean. A sub-Hertz swell barely moves in 20ms; a 4-14Hz draw moves
+                a great deal. This is the number that separates weather from fire.
+       colour   the spread of the zero-crossing rate across windows. For noise the ZCR
+                tracks the spectral centroid, so this says whether the FILTER is moving
+                or only the gain — and moving the gain alone is a curtain of wind. */
+    const fw = Math.floor(rate * .02), fe = [], zc = [];
+    for (let i=0; i+fw<=d.length; i+=fw){
+      let s2=0, z=0;
+      for (let k=i;k<i+fw;k++){ s2 += d[k]*d[k]; if (k>i && (d[k]>=0) !== (d[k-1]>=0)) z++; }
+      fe.push(Math.sqrt(s2/fw)); zc.push(z);
+    }
+    let flux = 0;
+    for (let i=1;i<fe.length;i++) flux += Math.abs(fe[i]-fe[i-1]);
+    flux /= (fe.length-1);
+    const fem = fe.reduce((a,b)=>a+b,0)/fe.length;
+    /* Zero crossings counted only where there IS something, which matters for anything
+       sparse. Cracks occupy about 3% of a fourteen-second render, so averaging over every
+       window measured the silence between them and reported "0 crossings" — true, and
+       about the gaps rather than about the sound. */
+    const loud = fe.reduce((a,b)=>Math.max(a,b),0) * .12;
+    const zLive = zc.filter((_, i) => fe[i] > loud);
+    const zm = zLive.length ? zLive.reduce((a,b)=>a+b,0)/zLive.length
+                            : zc.reduce((a,b)=>a+b,0)/zc.length;
+    /* Smoothed before its spread is taken, and that is the difference between a metric
+       and a noise floor. Zero-crossing rate on noise wanders at random from one 20ms
+       window to the next, so the raw spread sat at 24% with the filter nailed still —
+       against 33% when it was sweeping. A bar between those two would have been a coin
+       toss. A 200ms moving average averages the randomness away and leaves the systematic
+       movement, because the throat sweeps at 0.7 and 2.3Hz — periods of 1.4s and 0.43s,
+       both far longer than the window. */
+    const SM = 10, sm = [];
+    for (let i=0; i+SM<=zc.length; i++){
+      let a=0; for (let k=i;k<i+SM;k++) a += zc[k];
+      sm.push(a/SM);
+    }
+    const smM = sm.length ? sm.reduce((a,b)=>a+b,0)/sm.length : 0;
+    const zsd = sm.length ? Math.sqrt(sm.reduce((a,b)=>a+(b-smM)*(b-smM),0)/sm.length) : 0;
+    return { crest: rms > 0 ? peak/rms : 0, surge: mean > 0 ? sd/mean : 0, rms,
+             flutter: fem > 0 ? flux/fem : 0, colour: smM > 0 ? zsd/smM : 0, zcr: zm };
   };
   window.__split = async (room, secs, lit) => {
     const one = async (mute) => {
@@ -143,7 +200,11 @@ const HARNESS = `
       AMBIENT = room; alightCount = lit || 0;
       const plan = scorePump(secs || 4);
       const fire = blaze();
-      snd.bed.gain.value = mute === 'fire' ? 0 : fire * SOUND.rushGain;
+      const rush = SOUND.rushGain * fire;
+      snd.bed.gain.value   = mute === 'fire' ? 0 : rush;
+      snd.swell.gain.value = mute === 'fire' ? 0 : rush * SOUND.swellD;
+      snd.flut.gain.value  = mute === 'fire' ? 0 : rush * SOUND.flutD;
+      snd.throat.gain.value = mute === 'fire' ? 0 : fire * SOUND.throatD;
       snd.music.gain.value = mute === 'music' ? 0 : 1 - fire * SOUND.duck;
       if (mute !== 'fire') firePump(secs || 4, fire);
       return __rms(await c.startRendering());
@@ -397,6 +458,75 @@ await check(browser, 'the fire is a fire and not rain', async p => {
       bad.push(`the ${k}'s rush surges by ${(v.surge*100).toFixed(1)}% of its own level — that is steady hiss, not a fire drawing air`);
   console.log(`        (snap crest — forge ${r.snapsF.crest.toFixed(1)}, opening ${r.snapsO.crest.toFixed(1)}; `
     + `rush surge — forge ${(r.rushF.surge*100).toFixed(1)}%, opening ${(r.rushO.surge*100).toFixed(1)}%)`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+await check(browser, 'the draw is caused by the fire and not by a clock', async p => {
+  /* The rush used to swell on two sines at 0.13 and 0.31Hz regardless of what the box was
+     doing, and it was reported as "a gust of wind that's blowing through the area rather
+     than coming from the fire". That is not a timbre fault: the ear is very good at
+     noticing whether two things are correlated, and those two were not.
+
+     So the level answers the CHANGE in `alightCount`. This drives `drawStep` directly —
+     it is a state machine over updates, not something a single render can show. */
+  const r = await p.evaluate(() => {
+    soundBuild(new OfflineAudioContext(1, 4410, 44100));
+    const steps = [];
+    alightCount = 0;  steps.push(drawStep());                 // nothing
+    alightCount = 60; steps.push(drawStep());                 // caught, all at once
+    const decay = [];
+    for (let i=0;i<10;i++) decay.push(drawStep());            // ...and now merely burning
+    return { cold: steps[0], caught: steps[1], after2: decay[1], after10: decay[9] };
+  });
+  const bad = [];
+  if (r.cold !== 0) bad.push(`an unlit box already has a draw of ${r.cold.toFixed(3)}`);
+  if (!(r.caught > .6)) bad.push(`sixty cells catching gave a draw of ${r.caught.toFixed(3)} — the fire is not lifting it`);
+  if (!(r.after2 < r.caught)) bad.push('the draw does not fall away once the fire is merely burning');
+  if (!(r.after10 < .12)) bad.push(`ten updates later the draw is still ${r.after10.toFixed(3)} — that is a gust, not a surge`);
+  console.log(`        (draw — cold ${r.cold.toFixed(2)}, caught ${r.caught.toFixed(2)}, `
+    + `two updates later ${r.after2.toFixed(2)}, ten later ${r.after10.toFixed(2)})`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+await check(browser, 'the rush flutters like a draw rather than swelling like weather', async p => {
+  const r = await p.evaluate(async () => ({
+    forge: await __fireShape(135, 12, 'rush'),
+    open:  await __fireShape(155, 12, 'rush')
+  }));
+  const bad = [];
+  for (const [k, v] of [['forge', r.forge], ['opening', r.open]]){
+    /* A sub-Hertz swell barely moves between one 20ms window and the next; a 4-14Hz draw
+       moves a great deal. This is the number that separates a gust from a fire. */
+    if (!(v.flutter > .30))
+      bad.push(`the ${k}'s rush changes by ${(v.flutter*100).toFixed(0)}% between 20ms windows — that is a slow swell, which is weather`);
+    /* And the throat has to move, not just the level. For noise the zero-crossing rate
+       tracks the spectral centroid, so this says whether the FILTER is travelling. */
+    /* Bar from the mutation, not from taste: throat sweeping 21.6-21.7%, throat nailed
+       still 6.4-6.8%. 14% sits in the gap. The unsmoothed version of this metric read 33%
+       against 24% and no bar between them would have been trustworthy. */
+    if (!(v.colour > .14))
+      bad.push(`the ${k}'s rush shifts colour by ${(v.colour*100).toFixed(1)}% — the filter is standing still and only the gain is moving`);
+  }
+  console.log(`        (flutter — forge ${(r.forge.flutter*100).toFixed(0)}%, opening ${(r.open.flutter*100).toFixed(0)}%; `
+    + `colour — forge ${(r.forge.colour*100).toFixed(1)}%, opening ${(r.open.colour*100).toFixed(1)}%)`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+await check(browser, 'a crack is a different event from a snap, not a louder one', async p => {
+  const r = await p.evaluate(async () => ({
+    snaps: await __fireShape(155, 14, 'snaps'),
+    big:   await __fireShape(155, 14, 'big')
+  }));
+  const bad = [];
+  // The body has to be there at all...
+  if (!(r.big.rms > 1e-4)) bad.push(`the cracks rendered at ${r.big.rms.toFixed(6)} RMS — there is no body under the transient`);
+  /* ...and it has to be LOW. That is the whole of what makes a crack a crack rather than
+     a big click: a damped tone under the transient. For noise-versus-tone the
+     zero-crossing rate is the discriminator, and a 95-210Hz triangle crosses zero far
+     less often than a 1.5-6kHz highpassed click. */
+  if (!(r.big.zcr < r.snaps.zcr * .5))
+    bad.push(`the cracks cross zero at ${r.big.zcr.toFixed(0)} against the snaps' ${r.snaps.zcr.toFixed(0)} — the body is not low, so a crack is only a louder click`);
+  console.log(`        (zero crossings — snaps ${r.snaps.zcr.toFixed(0)}, crack bodies ${r.big.zcr.toFixed(0)} per window)`);
   return bad.length ? bad.join('; ') : null;
 });
 

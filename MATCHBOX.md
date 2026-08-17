@@ -2493,6 +2493,66 @@ one power-law snap and the next. It would have passed with the swell deleted.
 **The bars come from the mutations rather than from taste.** Crest at 9 and surge at 6%
 both passed the broken versions, which made them decoration; 22 and 20% sit in the gaps.
 
+#### Then it sounded like weather, and the fault was not its timbre
+
+Reported next: *"the wind sound just sounds like a gust of wind that's blowing through the
+area rather than coming from the fire"*, with a description attached — *"Hot air rises
+fast. As fresh air rushes in to replace it, it creates a rushing, low-pitched vibration."*
+
+The rush's swell ran on two sines at 0.13 and 0.31Hz — periods of eight and three seconds
+— **regardless of what the fire was doing**. That is exactly what ambient wind is:
+something happening in the room on its own schedule. The ear is very good at noticing
+whether two things are correlated, and these two were not. Three fixes, in the order they
+matter:
+
+| | before | now |
+|---|---|---|
+| **cause** | nothing — an LFO on its own clock | the level answers the **change** in `alightCount`. A fire catching lifts the draw; a fire merely burning lets it fall |
+| **rate** | 0.13 and 0.31Hz — the timescale of a gust | 4.7, 7.3 and 11.9Hz summed, which is a draw. The slow pair stays at a fifth of its depth, as breath |
+| **a throat** | lowpass, fixed centre | **bandpass at Q 2.6**, centre 380→800Hz and sweeping ±150Hz on its own |
+
+*Vibration* was the word doing the work: something resonating, not smooth noise. The
+throat sits at 380–800Hz and no lower — 250Hz is gone by the time an iPhone speaker has
+finished with it, so it reads as low by being lower than everything else in the mix, which
+is the same answer `docs/` reached for the same problem.
+
+#### A crack is a different event, not a louder snap
+
+Every snap was the same 6ms click with only its volume varying, so a big one was just a
+bigger click. A real crack has a **body** — a short damped tone under the transient, which
+is the fibre actually splitting. Triangle and not sine, because a sine at 140Hz is one
+frequency and a phone speaker deletes it; a triangle's harmonics at 420 and 700Hz are what
+actually arrive. One every 4.5 seconds at a full fire, jittered ±65%.
+
+Measured, zero crossings per 20ms window: **snaps 114, crack bodies 6.** A 19× separation,
+which is the difference between noise and a tone.
+
+#### What the four new checks measure, and what each cost to make honest
+
+| check | healthy | with the feature switched off |
+|---|---|---|
+| the draw is caused by the fire | surge **1.00** on catching, 0.11 ten updates later | 0.00 throughout |
+| the rush flutters | **40%** change between 20ms windows | 17% |
+| the throat moves | **21.6%** colour shift | 6.4% |
+| a crack has a body | **6** crossings per window | nothing renders at all |
+
+Two of them were wrong before they were right, both in the same way — **a metric with a
+noise floor is not a metric**:
+
+- **Colour** first measured the raw spread of zero-crossing rate, which wanders at random
+  on noise: 33% sweeping against 24% frozen, with no trustworthy bar between them. A
+  200ms moving average removes the randomness and leaves the sweep — 21.6% against 6.4%.
+- **The crack's crossings** were averaged over every window, and cracks occupy about 3% of
+  a fourteen-second render, so it reported "0 crossings" — true, and about the silence
+  between them. It counts only windows with signal in them now.
+
+#### One real fault fell out of a check muting a voice
+
+`exponentialRampToValueAtTime` throws on a target of zero — it cannot reach it, which is
+why every envelope here ends at 0.0001. So turning `bigGain` down to silence the cracks
+did not make quiet cracks, it **stopped the page dead**. Nobody would have found that by
+hand; it took a check that mutes one voice in order to measure another.
+
 #### Rate is linear and loudness is not
 
 The first version ran both off `blaze`, the same log curve everything else here uses, and
@@ -2858,7 +2918,7 @@ the glass.
 npm i                          # pinned Playwright; `npm i playwright` installs the wrong one
 node test/matchbox-sim.mjs     # 96 checks — the simulation
 node test/matchbox-ui.mjs      # 51 checks — the hand
-node test/matchbox-sound.mjs   # 10 checks — the score and the fire, rendered and filtered
+node test/matchbox-sound.mjs   # 13 checks — the score and the fire, rendered and filtered
 node test/published.mjs        #  3 checks — the copies with the URL still match
 
 node test/compact.mjs         # a copy with the commentary stripped, for pasting into a chat

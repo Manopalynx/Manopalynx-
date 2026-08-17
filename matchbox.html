@@ -5626,18 +5626,58 @@ const SOUND = {
      The rush is the part a phone speaker will fight, so it is tilted low rather than put
      low: the lowpass opens from 320Hz to 1400 as the fire grows, which keeps enough above
      the 500Hz corner to survive while still reading as the bottom of the sound. */
-  rushGain:  .085,
-  rushLow:   320,  rushHigh: 1400,   // the rush's lowpass, small fire to large
-  rushQ:     .9,
-  swellA:    .13,  swellB:  .31,     // two slow swells at incommensurate rates, so the
-  swellD:    .55,                    // surge never repeats on a period you can hear
+  /* THE RUSH SOUNDED LIKE WEATHER, and the reason was not its timbre. Its swell ran on
+     two sines at 0.13 and 0.31Hz — periods of eight and three seconds — regardless of
+     what the fire was doing. That is exactly what ambient wind IS: something happening in
+     the room on its own schedule. The ear is very good at noticing whether two things are
+     correlated, and these two were not.
+
+     Three things separate a gust blowing past from air being pulled in:
+
+       CAUSE      the level answers the CHANGE in `alightCount`, not only its size. A fire
+                  catching produces a surge of draw; a fire dying lets it fall away. This
+                  is the one that matters most and it is the one nothing had.
+       RATE       a gust is sub-Hertz. A fire's draw flutters at 4-14Hz — dense and
+                  irregular, closer to a rumble than to a swell.
+       A THROAT   a fixed lowpass with a moving gain is noise getting louder, which is a
+                  curtain passing. Air pulled THROUGH something resonates, and its centre
+                  wobbles. Hence Q at 2.6 and a filter that is modulated too.
+
+     "Low-pitched vibration" was the description, and *vibration* is the word doing the
+     work: something resonating, not smooth noise. The throat sits at 380-800Hz and not
+     lower, because 250Hz is gone by the time an iPhone speaker has finished with it. It
+     reads as low by being lower than everything else in the mix, which is the same answer
+     `docs/` reached for the same problem. */
+  rushGain:  .058,
+  rushLow:   380,  rushHigh: 800,    // the throat's centre, small fire to large
+  rushQ:     2.6,
+  swellA:    .13,  swellB:  .31,  swellD: .20,   // the slow breath, much reduced
+  flutA:     4.7,  flutB:   7.3,  flutC:  11.9,  // ...and the draw, which is the new part
+  flutD:     .42,
+  throatA:   .70,  throatB: 2.3,   throatD: 150, // the throat's centre moves, in Hz
+  drawRef:   14,        // cells gained between two updates that counts as a full surge
+  drawFall:  .80,       // how fast a surge falls away, per update — five a second
+  drawLift:  .95,       // how much a surge adds on top of the fire's own size
 
   crkSlow:   1.5,               // snaps a second at one cell alight...
   crkFast:   26,                // ...and at a box fully alight
   crkLow:    1500, crkHigh: 6200,    // sharper and wider than before — 1.1-3.8k was the
-  crkGain:   .40,                    // band raindrops live in
+  crkGain:   .33,                    // band raindrops live in
   crkShape:  3,                 // the power law: `pow(random, 3)`, so most snaps are
                                 // nearly nothing and a few are the whole point
+
+  /* A CRACK IS A DIFFERENT EVENT, NOT A LOUDER SNAP. Every snap was the same 6ms click
+     with only its volume varying, so the big ones were just... bigger clicks. What makes a
+     real crack is that it has a BODY under the transient — the wood actually splitting —
+     which is a short damped tone, not noise.
+
+     Triangle and not sine, because a sine at 140Hz is one frequency and an iPhone speaker
+     deletes it. A triangle has harmonics at 420, 700, 980Hz, and those are what you
+     actually hear; the fundamental is felt only on something with a woofer. */
+  bigEvery:  4.5,               // seconds between cracks at a box fully alight
+  bigGain:   .42,
+  bigLow:    95,   bigHigh: 210,     // the body's pitch
+  bigDecay:  .14,
 
   /* How far the score gets out of the fire's way. NOT to nothing: `docs/README.md`
      records a bed brought up over ducked music and the report was "it repeats the same
@@ -5656,7 +5696,8 @@ const warmth = () => {
     : -Math.min(1, Math.log1p(20 - r) / Math.log1p(20 - SOUND.cold));
 };
 
-let actx = null, snd = null, soundOn = false, nextBeat = 0, beatN = 0, nextCrack = 0;
+let actx = null, snd = null, soundOn = false, nextBeat = 0, beatN = 0, nextCrack = 0,
+    nextBig = 0, lastAlight = 0, drawSurge = 0;
 
 /* Three answers, not two: on, off, and never asked. The setting is on by default, so
    "no stored value" has to be distinguishable from "stored off" or turning it off would
@@ -5713,21 +5754,41 @@ function soundBuild(ctx){
   for (let i=0; i<bd.length; i++) bd[i] = Math.random()*2 - 1;
   const bedSrc = actx.createBufferSource();
   bedSrc.buffer = bedBuf; bedSrc.loop = true;
+  /* A BANDPASS WITH REAL Q, not a gentle lowpass. This is the throat: the resonance is
+     what turns "noise that has been tilted" into "air being pulled through something". */
   const bedFilt = actx.createBiquadFilter();
-  bedFilt.type = 'lowpass'; bedFilt.frequency.value = SOUND.rushLow; bedFilt.Q.value = SOUND.rushQ;
+  bedFilt.type = 'bandpass'; bedFilt.frequency.value = SOUND.rushLow; bedFilt.Q.value = SOUND.rushQ;
   const bed = actx.createGain(); bed.gain.value = 0;
   bedSrc.connect(bedFilt); bedFilt.connect(bed); bed.connect(master);
   bedSrc.start();
 
-  /* ...and the surge. Two sines at incommensurate rates summed into the rush's gain, so
-     it swells and falls without ever repeating on a period the ear can catch. One LFO is
-     a tremolo and you hear the rate; two is weather. They are added to the gain rather
-     than multiplying it, which is what `swellD` is a depth of. */
+  /* Two modulations of the level and not one, because they are two different things.
+
+     `swell` is the slow breath — sub-Hertz, which is what a gust is, and it is kept only
+     as a background undulation at a fifth of its old depth.
+     `flut` is the draw: 4.7, 7.3 and 11.9Hz summed. Three incommensurate rates so it
+     never lands on a period the ear can name — one fast LFO is a helicopter. */
   const swell = actx.createGain(); swell.gain.value = 0;
   swell.connect(bed.gain);
   for (const hz of [SOUND.swellA, SOUND.swellB]){
     const o = actx.createOscillator(); o.type = 'sine'; o.frequency.value = hz;
     o.connect(swell); o.start();
+  }
+  const flut = actx.createGain(); flut.gain.value = 0;
+  flut.connect(bed.gain);
+  for (const hz of [SOUND.flutA, SOUND.flutB, SOUND.flutC]){
+    const o = actx.createOscillator(); o.type = 'sine'; o.frequency.value = hz;
+    o.connect(flut); o.start();
+  }
+
+  /* ...and the throat's own centre moves. Gain modulation alone is noise getting louder
+     and quieter, which is a curtain of wind passing you. Moving the resonance is what
+     makes it read as air travelling through a column that is itself changing. */
+  const throat = actx.createGain(); throat.gain.value = 0;
+  throat.connect(bedFilt.frequency);
+  for (const hz of [SOUND.throatA, SOUND.throatB]){
+    const o = actx.createOscillator(); o.type = 'sine'; o.frequency.value = hz;
+    o.connect(throat); o.start();
   }
 
   /* One snap, made once. Six milliseconds against the forty it was — a fire's crack is a
@@ -5740,8 +5801,8 @@ function soundBuild(ctx){
     sd[i] = (Math.random()*2 - 1) * Math.pow(1 - k, 2.2);
   }
 
-  snd = { master, music, plk, pad, dly, bed, bedFilt, swell, snap };
-  nextBeat = 0; beatN = 0; nextCrack = 0;
+  snd = { master, music, plk, pad, dly, bed, bedFilt, swell, flut, throat, snap };
+  nextBeat = 0; beatN = 0; nextCrack = 0; nextBig = 0; lastAlight = 0; drawSurge = 0;
   return true;
 }
 
@@ -5839,12 +5900,58 @@ function scorePump(horizon){
 const blaze = () => alightCount <= 0 ? 0
   : Math.min(1, Math.log1p(alightCount) / Math.log1p(SOUND.fireRef));
 
+/* A crack: the transient, and under it a body.
+
+   The body is the part that makes it a crack rather than a loud click — a short damped
+   tone, which is what a splitting fibre actually is. Triangle rather than sine so a phone
+   speaker has harmonics to work with; the 95-210Hz fundamental is felt only on something
+   with a woofer, and the 3rd and 5th at 300-1000Hz are what reach a phone. */
+function bigCrack(at, level){
+  crackle(at, 1);                                     // the transient, at full size
+  const o = actx.createOscillator();
+  o.type = 'triangle';
+  o.frequency.value = SOUND.bigLow + Math.random() * (SOUND.bigHigh - SOUND.bigLow);
+  const g = actx.createGain();
+  const peak = SOUND.bigGain * (.55 + .45 * Math.random()) * (.4 + .6 * level);
+  /* `exponentialRampToValueAtTime` throws on a target of zero — it cannot reach it, which
+     is why every envelope here ends at 0.0001 rather than 0. So a peak of nothing is not
+     a quiet crack, it is an exception: turn `bigGain` down to silence the cracks and the
+     page stops dead. Found by a check that mutes one voice to measure the other, which is
+     a use nobody would have tried by hand. */
+  if (!(peak > 1e-5)){ o.disconnect(); return; }
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(peak, at + .004);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + SOUND.bigDecay);
+  o.connect(g); g.connect(snd.master);
+  o.start(at); o.stop(at + SOUND.bigDecay + .02);
+}
+
 /* Crackles, filled up to a horizon the same way the score's notes are, so both run off one
    clock and the suite can drive them the same way. Returns what it scheduled, because a
    check that asks only whether the box made a sound is answered by the bed. */
+/* The surge, which is the whole of "coming from the fire rather than blowing past it".
+
+   It answers the CHANGE in what is alight rather than the amount, so a fire catching
+   lifts the draw and a fire merely continuing does not. Held and decayed rather than
+   read raw, because five updates a second of a difference is a stutter, not a surge. */
+function drawStep(){
+  const grew = Math.max(0, alightCount - lastAlight);
+  lastAlight = alightCount;
+  drawSurge = Math.max(drawSurge * SOUND.drawFall, Math.min(1, grew / SOUND.drawRef));
+  return drawSurge;
+}
+
 function firePump(horizon, level){
   let n = 0;
-  if (level <= 0){ nextCrack = 0; return n; }
+  if (level <= 0){ nextCrack = 0; nextBig = 0; return n; }
+  // The rare one, on its own much slower clock. Jittered hard — a crack every four and a
+  // half seconds exactly is a metronome, and the point of it is to surprise you.
+  const bigEvery = SOUND.bigEvery / Math.max(.15, level);
+  if (nextBig < actx.currentTime) nextBig = actx.currentTime + bigEvery * Math.random();
+  while (nextBig < horizon){
+    bigCrack(nextBig, level);
+    nextBig += bigEvery * (.35 + Math.random() * 1.3);
+  }
   /* RATE IS LINEAR IN THE CELL COUNT AND LOUDNESS IS NOT, and running both off the same
      log curve was wrong in a way you could hear. How often a fire crackles is a count of
      events — twice the burning cells, roughly twice the pops. How loud it is is a
@@ -5880,8 +5987,14 @@ function soundUpdate(){
 
   // The bed answers faster than the score does — a fire catching is an event, and .6s of
   // glide on it would arrive after the thing that caused it had gone out.
-  snd.bed.gain.setTargetAtTime(fire * SOUND.rushGain, t, .25);
-  snd.swell.gain.setTargetAtTime(fire * SOUND.rushGain * SOUND.swellD, t, .25);
+  /* The rush answers both the size of the fire and its growth, and the second term is
+     what stops it sounding like weather. */
+  const draw = drawStep();
+  const rush = SOUND.rushGain * Math.min(1.4, fire + draw * SOUND.drawLift);
+  snd.bed.gain.setTargetAtTime(rush, t, .18);
+  snd.swell.gain.setTargetAtTime(rush * SOUND.swellD, t, .25);
+  snd.flut.gain.setTargetAtTime(rush * SOUND.flutD, t, .18);
+  snd.throat.gain.setTargetAtTime(fire * SOUND.throatD, t, .25);
   snd.bedFilt.frequency.setTargetAtTime(SOUND.rushLow + fire * (SOUND.rushHigh - SOUND.rushLow), t, .25);
   // ...and the score steps back, but never below the fire. See `duck`.
   snd.music.gain.setTargetAtTime(1 - fire * SOUND.duck, t, .3);
