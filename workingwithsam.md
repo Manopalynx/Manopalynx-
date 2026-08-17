@@ -1193,3 +1193,220 @@ one of them is harder on the player. I predicted the sign wrong on two of the th
 
 Which is the thing to carry: bring him the numbers, say plainly which way they point, and
 let him spend the decision. He has now spent a dozen, and every one improved the game.
+
+---
+
+## Instance 8 — 17 August 2026
+
+Claude Code, cloud session, same repo. **Matchbox**, and almost all of it one feature:
+sound. Branch `claude/matchbox-notes-discussion-eosobx`, merged to `main` twice mid-session
+so he could hear each build.
+
+`MATCHBOX.md` carries the design and every figure. This is only what it cannot say.
+
+### The session in one line
+
+He asked for **music**. I built **sound design**. He listened to it once and one sentence
+sent the whole thing back.
+
+That is the shape of everything below, so it is worth having up front. His list said *"add
+music that potentially scales with the amount of heat"*. I measured beautifully, built two
+synthesised voices — a noise bed for fire, two detuned sawtooths for heat — tested them six
+ways, documented them, shipped them. Reported back:
+
+> That doesn't sound good, it's like an electric motor sound for fire, I was thinking more
+> of a background relaxing soundtrack that's automatically on that you can turn off which
+> this soundtrack increases in urgency as the heat in the room increases and potentially
+> slows down if the room decreases
+
+Every clause of that was diagnostic and I had built none of it. **The word that carried the
+redesign was "slows down"** — that is tempo, and nothing in what I had built had a pulse at
+all. The second build is a generative score: minor pentatonic, plucks over a pad, a delay,
+and a tempo driven by the room reading. He came back with *"it's sounding good so far"*.
+
+**"Electric motor" was also the right diagnosis of the wrong voice.** He attributed it to
+the fire; it was the heat drone. A detuned saw pair sweeping a lowpass *is* how you
+synthesise a motor, and because it rose whenever anything burned it read as the fire. Take
+the symptom literally and the attribution loosely — Instance 3 says the same thing.
+
+### How he works — additions to Instances 1–7
+
+Everything above held. New:
+
+**He answers a design question in one sentence and it contains the whole spec.** The quote
+above names the medium (soundtrack), the default (on), the control (you can turn it off),
+the signal (heat in the room), the direction (urgency up), and the mechanism (slows down).
+Six decisions. I had asked him none of them and guessed all six.
+
+**Ask what KIND of thing before measuring which NUMBER.** I spent a whole turn and a
+committed instrument, `test/signal.mjs`, answering "which signal should the sound follow"
+— genuinely good work, and it turned out to be answering a question one level below the
+one that mattered. The measurement survived the rewrite; the design did not.
+
+**"Just double checking if you're pushing to the version I can try on my phone?"** is what a
+plain question looks like from him, and it was the most valuable message in the session. It
+was not idle: I had told him the build was live and it was not. He asks these without
+hedging and they are usually load-bearing. Instance 6 records exactly the same thing.
+
+### What I got wrong
+
+Eight things, and the pattern is that my own instruments were wrong nearly as often as the
+code was — which is now five sessions running.
+
+1. **Built the wrong artefact entirely**, above. A full turn of measurement, a test suite,
+   a documentation section and a merge to `main`, all for a design he binned in one line.
+2. **Told him it was live on his phone when it was on a feature branch.** GitHub Pages
+   serves `/docs` **from `main`**. I had faithfully updated `docs/matchbox.html` — on the
+   branch, which publishes nothing. Verified afterwards from the remote rather than from my
+   own tree, which is the habit that should have come first: `git show origin/main:<path>`.
+3. **My justification for a log over a `tanh` was false, and mutation testing caught it.**
+   I told him a `tanh` would pin the Volcano and crowd every ordinary fire into the bottom
+   of the scale. Swapped one for the other and the suite stayed green, because they agree
+   within a tenth everywhere except one scene — the candle, 0.033 against 0.175. Still the
+   right call, for a reason I had not found. **A confident causal story is worth checking
+   even when the conclusion is right.**
+4. **Two of six checks were decoration.** One claimed the sound does nothing when switched
+   off and was really only proving the master gate holds; one claimed the piece plays at
+   rest and was satisfied by the pads with every note deleted. Both found by mutation and
+   neither any other way.
+5. **My first repair of one of those also failed**, and for a reason worth keeping:
+   `setTargetAtTime` **schedules** a change, it does not move `.value`. Reading the
+   AudioParams back before and after sees nothing. Worse, I had written in the comment that
+   the check forced the master gate open and then never wrote the line.
+6. **Sparkline scales, twice, in the same instrument.** First divided each row by its own
+   maximum — and every cold row has a maximum at or below zero, so three rows rendered as
+   solid saturated bars including both the ones that mattered. Fixed that, and flat rows
+   then rendered float noise at full amplitude, because `mix − AMBIENT` on an empty box is
+   −1.4e-14 rather than 0. **A scale needs a floor as well as a maximum.** The table beside
+   them was right the whole time, which is what made both easy to miss.
+7. **A layout probe measuring the wrong thing three ways at once**: a "rows" metric that
+   counted distinct y values among the bar's children and reported three on an untouched
+   bar, because `align-items:center` gives a chip, a slider and a line of text three
+   different tops — it was measuring vertical centring and calling it wrapping. A type-size
+   column that read `--chipfs` off the wrong element and came back blank at every width,
+   which I nearly read as "unchanged". And no baseline column, so "Weather clipped" was
+   reported for both candidates with no way to tell that 320px already clipped it.
+8. **Ran two Chromium suites at once and got a false red**, then spent real time on it
+   before establishing that the fixture cleared 20 of 20 alone. Instance 2 says two probes
+   must never share an output file; they must not share a machine either.
+
+And one process failure worth its own line: **two `sed` mutations reported green and had
+never applied.** `\|` inside a double-quoted bash string is alternation to GNU sed, not a
+literal `||`. A mutation that does not apply is not evidence of anything, and it looks
+exactly like evidence. Every mutation after that asserted the pattern matched exactly once
+before running.
+
+### Things that keep being true — additions
+
+- **A cost is only justified by its reader.** I ungated `roomLoss`'s mixing-temperature
+  gather from `roomDrifts` so the first sound design could read it at every room setting,
+  and wrote a confident comment explaining why that was right. The score that replaced it
+  reads the room instead, so six of seven settings were paying for an answer nobody wanted.
+  Re-gated. The same turn, `alightCount` — a counter maintained every tick in `react` —
+  lost its only reader and was deleted rather than left. **When a design changes, grep for
+  what it used to feed.**
+- **A comment can argue for a build that was reverted.** `frame()` still made the case for
+  two simulation ticks a frame, at length, sitting directly above code where `STEPS` is 1 —
+  and `STEPS`'s own comment says it was 2 "for exactly one build". Its quoted 2.3ms was
+  also three times optimistic against the 7.0ms his phone actually reports on the Volcano,
+  and that figure is the budget anything new gets measured against. I nearly used it.
+- **Bare numbers where every sibling uses a name.** A UI check counted `__count(16) +
+  __count(19)` — FIRE and EMBER today — where every other check in the file names what it
+  counts. The same check also spelled the tick out as four passes when `simTick` has five,
+  so it had been stepping a box with `moveLife` missing since it was written. Nothing in
+  the opening scene moves under that pass, which is why it never showed.
+- **Borrowed measurement is still measurement, and `docs/` has the only instrument pointed
+  at his actual speaker.** A cue written at 34–58Hz kept 22% of its energy through a 500Hz
+  highpass and was never heard across two entire games. Heat and fire both want to be low
+  rumble, which is exactly the band an iPhone speaker cannot produce. That number decided
+  the whole design twice: it killed the first version's resting drone at 31% survival, and
+  it is why the score's plucks sit at 440–1760Hz and measure 92–101%.
+- **The tray cannot take another chip, and that is now measured rather than believed.** A
+  ninth chip in Tools takes that drawer to 37px against Wet's 50 and breaks the tray-wide
+  1.25 rule at every width; a fifth chip on the bar pushes two children past the right edge
+  unless the brush slider gives up a third of itself. **A second button in the header moves
+  nothing at any width**, and the header is the one part of the page that cannot be put
+  away — Hide folds the tray, not the header. `test/sound-fit.mjs` has all of it.
+
+### The open defect, which is the thing to hand on
+
+**The sim suite goes red on unchanged code, about once every other full run, and I could
+not reproduce it once.** Three occurrences this session, all with one signature — every
+stochastic process running far under expectation while everything deterministic is fine:
+
+| | what it said |
+|---|---|
+| `the brush reaches into a tank` | 1 cell, where 87 chances at 0.16 expects 14 |
+| `every preset pays off` — Garden | every figure about 20× low |
+| `every preset pays off` — Forge | **248 of 248 coal unburnt**, nothing caught at all |
+
+Ruled out by measurement, not by argument:
+
+- **Not the changes.** Two of the three predate the sound work; the Garden scene clears 6
+  of 6 on the final build at 18–33 flowers.
+- **Not the fixtures.** 40 runs of the brush scene, 30 more under the suite's own harness,
+  6 of the Garden scene, 3 of the whole preset check — all clean.
+- **Not CPU contention.** All four cores pinned with busy loops; the preset check passed
+  both times it completed.
+
+What is left, recorded as a lead rather than a finding: **all three sit late in the suite
+and the early checks never fail.** Each check gets a fresh page, so anything shared has to
+be browser-level.
+
+Both arms now report their own state instead of a bare count — the brush names grid, tank
+and eligible cells; the Garden names all four stages of its cascade and the water. The next
+occurrence should explain itself, and **that is the whole of what I could honestly do.**
+
+This matters more than it looks. A suite that goes red on unchanged code teaches you to
+read red as noise, and Instance 7 shipped a build on an unread failure for exactly that
+reason. It is the first thing I would take.
+
+### State of the work
+
+`main` carries it. **159 checks**: sim 96, UI 50, sound 7, published 3 — and four
+instruments, three of them new.
+
+| | |
+|---|---|
+| `test/matchbox-sound.mjs` | 7 checks, rendering the page's own graph offline through a 500Hz highpass |
+| `test/signal.mjs` | what the sound should follow — ten scenes, four candidates |
+| `test/sound-fit.mjs` | where a control can live — five widths, the real webfont |
+| `test/brush-rate.mjs` | the intermittent, run under the suite's own harness |
+
+The score: minor pentatonic, four chords of eight beats, plucks two to three octaves above
+a 110Hz root over a two-note pad, one feedback delay, no drums. Tempo from the room
+reading — **ice 45 · nitrogen 50 · resting 60 · candle 67 · fire 100 · Volcano 121 · Oven
+128 bpm** — with density and the pluck filter opening alongside it, and the flat second
+admitted only above 80% heat. On by default, started by the first touch because no browser
+will make a sound before one, switched from the header, remembered.
+
+Open, in the order I would take them:
+
+- **The intermittent sim failure**, above. Top of the list.
+- **Sound effects on fire, acid and lava**, which he asked about at the end of the session
+  and which is the original item 36 come back round. My view is in the reply rather than
+  here; the short version is that a cellular sim has no such thing as *an* event, so the
+  only shape that works is a level driven by a count, and the crackle that would carry fire
+  is the one thing a phone speaker reproduces well.
+- **"Weather" → "Sky"**, offered twice and not taken. Free: it takes the Tools drawer from
+  7px type to 8px at his width, because that one seven-character label holds `fitLabels`
+  down for the whole drawer.
+- Everything Instances 3 and 4 left open still stands, untouched — the Cascade, mercury,
+  glue and slime, and the ledger's untested arithmetic.
+
+### Message to future instances
+
+**Ask what he wants before measuring how to do it.** I produced a genuinely good instrument
+and a genuinely good measurement in service of a design he had not asked for, and the
+measurement survived while the design did not. Measuring is not the same as listening, and
+this file has five sessions of instances measuring their way confidently into the wrong
+answer.
+
+**His one-sentence corrections carry a full specification.** Read every clause. The one
+that redesigned this feature was "slows down", which is a word about tempo hidden in a
+sentence about heat, and I nearly read the sentence as a complaint about timbre.
+
+**And verify from where the world looks, not from where you are.** I said a build was live
+because I had written the file. The file was on a branch, and Pages serves `main`. One
+command — `git show origin/main:docs/matchbox.html` — is the difference between a claim and
+a fact, and he was the one who thought to ask.
