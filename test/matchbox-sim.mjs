@@ -1897,21 +1897,52 @@ await check(browser, 'the brush reaches into a tank, and still not through a wal
      "a fish could not be placed inside a tank of water" on a build where the brush was
      perfect. An implicit bar of *at least one* on a sparse brush is the same fault as an
      absolute bar on a small count, which this file has now met five times. */
+  /* It says what the scene was, not only what came out of it.
+
+     This failed one full suite run with "three taps put 1 cells of a worm" and passed the
+     run before and the run after. One is not the tail of this distribution — three taps of
+     a brush-3 disc is about 87 chances at the worm's `sparse` of 0.16, so the expected
+     count is 14 — which means the dice were not what went wrong and the count could not
+     say what was. Measured since, and none of it reproduced the failure:
+
+       the fixture, forty times in a fresh page          worm 7 to 21, none under the bar
+       the fixture, thirty times under this same harness worm 5 to 21, none under the bar
+       grid, tank and eligible cells across those runs   143×220, 1230, 87 — every time
+
+     Two guesses died on arithmetic rather than on a run: the worm is 0.16 against the
+     fish's 0.14, so it should place MORE, not fewer; and `build()` floors the grid at
+     40×40, so even the smallest grid leaves all 87 cells of the three discs eligible.
+
+     So the cause is still unknown, and the useful thing a check can do about that is
+     carry the evidence rather than the symptom. `tank` and `elig` cost one pass over 87
+     cells and turn the next occurrence into a diagnosis: 87 eligible says it really was
+     the dice and something is wrong with `sparse`; anything less says the scene was never
+     the scene this check believes it built. `test/brush-rate.mjs` is the instrument. */
   const into = (t) => {
     __wipe(); const f = __floor();
     __slab(cx-20, f-30, cx+20, f-1, WATER);
+    let tank = 0;
+    for (let i=0;i<type.length;i++) if (type[i]===WATER) tank++;
+    let elig = 0;
+    for (const ox of [-8, 0, 8])
+      for (let dy=-3; dy<=3; dy++) for (let dx=-3; dx<=3; dx++){
+        if (dx*dx+dy*dy > 9) continue;
+        const x = cx+ox+dx, y = f-15+dy;
+        if (inb(x,y) && yields(type[idx(x,y)])) elig++;
+      }
     const before = __count(t);
     const t0 = tool, b0 = brush;
     tool = t; brush = 3;
     paintAt(cx-8, f-15); paintAt(cx, f-15); paintAt(cx+8, f-15);
     tool = t0; brush = b0;
-    return __count(t) - before;
+    return { got: __count(t) - before, tank, elig };
   };
   for (const [n, t] of [['a fish', FISH], ['sand', SAND], ['a worm', WORM]]){
     // Counted once. Calling it again inside the message re-runs the whole scene and prints a
     // number that is not the one that failed.
-    const got = into(t);
-    if (got < 3) bad.push(`three taps put ${got} cells of ${n} inside a tank of water`);
+    const r = into(t);
+    if (r.got < 3) bad.push(`three taps put ${r.got} cells of ${n} inside a tank of water `
+      + `— grid ${W}×${H}, tank ${r.tank} cells, ${r.elig} of 87 brushed cells eligible`);
   }
 
   // The other half. Solids and powders still refuse, or the brush quietly becomes an
