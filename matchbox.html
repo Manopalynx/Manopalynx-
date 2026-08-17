@@ -1741,13 +1741,19 @@ const N_RATE      = .0035;// ~5s to answer a change. At .0015 the destinations w
 /* The box's mixing temperature, written once a tick by `roomLoss` and read by the room
    and by the sound. One writer, so there is nothing for a second copy to drift from. */
 let boxMix = 20;
-/* There was an `alightCount` here — cells actually burning, counted by `react` in the
-   branch that already decides it. The first version of the sound was built on it, and
-   when that was replaced by a score driven from the room reading, nothing read it any
-   more. It is gone rather than left in place: a counter maintained every tick that
-   nothing consumes is precisely the shape of thing this file keeps finding years later
-   and having to work out. `test/signal.mjs` still measures it, so it costs one command
-   to get back if a fire voice is ever wanted. */
+/* Cells actually burning, counted by `react` in the branch that already decides it, so it
+   costs an increment rather than a sweep.
+
+   It has been here twice. The first sound design was built on it; when a score driven by
+   the room replaced that, nothing read it and it was deleted rather than left lying about.
+   The fire voice wants it back — and it wants THIS number rather than the room, because
+   the room lags by about five seconds and a fire that has just caught should be heard
+   immediately.
+
+   Alight, not hot. `MATCHBOX.md` records counting the two as the same making a lid of ice
+   read as feeding the fire under it. Measured across the presets: a candle is 6, the
+   Volcano 27, the Forge 135 and the opening scene about 155. */
+let alightCount = 0;
 let roomDrifts = false;   // whether the setting in hand is Neutral. Derived from the
                           // opening `roomAt` where ROOMS is declared, and set by
                           // setRoom after that — never written by hand, because a copy
@@ -3110,6 +3116,7 @@ let tick = 0;
 
 function react(){
   tick++;
+  let lit = 0;                    // see `alightCount` — counted where it is decided
   for (let y=H-1; y>=0; y--){
     for (let x=0; x<W; x++){
       const i = idx(x,y), t = type[i];
@@ -3309,6 +3316,12 @@ function react(){
         // takes the energy out of the fire.
         if (touchingWater(x,y)) continue;
 
+        /* Counted here and nowhere else, because here is where the box has finished
+           deciding. Everything above this line is a cell that MIGHT burn — over its
+           ignition point, still charring, or held under water — and none of that is a
+           fire. Past the water check it is alight. */
+        lit++;
+
         // A wick does not burn so much as draw, and a wick that is drawing does not
         // burn away — it is soaked in what it is drawing. Spend the liquid instead of
         // itself, and come back up to full while it can still reach some. A dry one
@@ -3344,6 +3357,7 @@ function react(){
       }
     }
   }
+  alightCount = lit;
 }
 
 /* ============================================================ render
@@ -5575,7 +5589,37 @@ const SOUND = {
   plkGain: .17,
   plkLow:  900,  plkHigh: 4200, // the pluck's lowpass, calm to urgent
   denCalm: .45,  denHot:  .95,  // chance of a note on any given beat
-  delay:   .38,  feedback: .34
+  delay:   .38,  feedback: .34,
+
+  /* ---- the fire, from `alightCount` rather than from the room.
+
+     Two signals and not one, because they answer different questions and at different
+     speeds. The room is what the box has settled at and it lags about five seconds; the
+     alight count is what is happening NOW. A fire that has just caught should be audible
+     before the music has noticed it.
+
+     CRACKLE AND NOT ROAR, which is the one part of this a phone speaker makes easy. A
+     fire's low rumble is exactly the band an iPhone cannot produce — 34-58Hz measured at
+     22% survival through a 500Hz highpass in `docs/`. Its crackle is short, broadband and
+     lives at 1-4kHz, which is where a small speaker is strongest. So the voice is mostly
+     transients with a thin bed under them, and it is the one material sound in this box
+     that is nearly free to make convincing.
+
+     Measured across the presets: a candle is 6 cells alight, the Volcano 27, the Forge
+     135, the opening scene about 155 — so, log again, or a candle is silent. */
+  fireRef:   160,               // cells alight that count as "the box is fully alight"
+  crkSlow:   1.5,               // crackles a second at one cell alight...
+  crkFast:   26,                // ...and at a box fully alight
+  crkLow:    1100, crkHigh: 3800,
+  crkGain:   .22,
+  bedGain:   .07,               // a thin noise bed under the crackle
+  bedLow:    700,  bedHigh: 2600,
+
+  /* How far the score gets out of the fire's way. NOT to nothing: `docs/README.md`
+     records a bed brought up over ducked music and the report was "it repeats the same
+     sound over and over", because the variety was in the part that had been turned down.
+     The check asserts the music is never quieter than the fire. */
+  duck:      .38                // the most the score is pulled down, at a full fire
 };
 
 /* Sign-preserving log compression, clamped. The two ends have different reference
@@ -5588,7 +5632,7 @@ const warmth = () => {
     : -Math.min(1, Math.log1p(20 - r) / Math.log1p(20 - SOUND.cold));
 };
 
-let actx = null, snd = null, soundOn = false, nextBeat = 0, beatN = 0;
+let actx = null, snd = null, soundOn = false, nextBeat = 0, beatN = 0, nextCrack = 0;
 
 /* Three answers, not two: on, off, and never asked. The setting is on by default, so
    "no stored value" has to be distinguishable from "stored off" or turning it off would
@@ -5622,17 +5666,59 @@ function soundBuild(ctx){
   const wet = actx.createGain(); wet.gain.value = .45;
   dly.connect(fb); fb.connect(dly); dly.connect(wet); wet.connect(master);
 
+  /* Everything the score makes goes through `music` and nothing else does, so the fire can
+     duck the tune without ducking itself. Routing the fire through the same node would
+     have it turning itself down as it got louder, which is a compressor and not a mix. */
+  const music = actx.createGain(); music.gain.value = 1;
+  music.connect(master);
+  wet.disconnect(); wet.connect(music);
+
   // The plucks go through their own lowpass, which is the thing urgency opens.
   const plk = actx.createBiquadFilter();
   plk.type = 'lowpass'; plk.frequency.value = SOUND.plkLow; plk.Q.value = .8;
-  plk.connect(master); plk.connect(dly);
+  plk.connect(music); plk.connect(dly);
 
   const pad = actx.createGain(); pad.gain.value = 1;
-  pad.connect(master);
+  pad.connect(music);
 
-  snd = { master, plk, pad, dly };
-  nextBeat = 0; beatN = 0;
+  // ---- fire: a thin noise bed, plus crackles scheduled against the same clock the
+  //      score uses. Both sit above the 500Hz corner on purpose.
+  const bedBuf = actx.createBuffer(1, Math.floor(actx.sampleRate * 2), actx.sampleRate);
+  const bd = bedBuf.getChannelData(0);
+  for (let i=0; i<bd.length; i++) bd[i] = Math.random()*2 - 1;
+  const bedSrc = actx.createBufferSource();
+  bedSrc.buffer = bedBuf; bedSrc.loop = true;
+  const bedFilt = actx.createBiquadFilter();
+  bedFilt.type = 'bandpass'; bedFilt.frequency.value = SOUND.bedLow; bedFilt.Q.value = .7;
+  const bed = actx.createGain(); bed.gain.value = 0;
+  bedSrc.connect(bedFilt); bedFilt.connect(bed); bed.connect(master);
+  bedSrc.start();
+
+  // One short burst, made once and reused for every crackle.
+  const snap = actx.createBuffer(1, Math.floor(actx.sampleRate * .04), actx.sampleRate);
+  const sd = snap.getChannelData(0);
+  for (let i=0; i<sd.length; i++){
+    const k = i / sd.length;
+    sd[i] = (Math.random()*2 - 1) * Math.pow(1 - k, 3);   // a pop, not a puff
+  }
+
+  snd = { master, music, plk, pad, dly, bed, bedFilt, snap };
+  nextBeat = 0; beatN = 0; nextCrack = 0;
   return true;
+}
+
+/* A crackle. Short, bandpassed somewhere in 1.1-3.8kHz, and never at quite the same pitch
+   or moment twice — a fire that ticks regularly is a clock. */
+function crackle(at, level){
+  const src = actx.createBufferSource(); src.buffer = snd.snap;
+  const f = actx.createBiquadFilter();
+  f.type = 'bandpass';
+  f.frequency.value = SOUND.crkLow + Math.random() * (SOUND.crkHigh - SOUND.crkLow);
+  f.Q.value = 3 + Math.random() * 4;
+  const g = actx.createGain();
+  g.gain.value = SOUND.crkGain * (.35 + .65 * Math.random()) * (.4 + .6 * level);
+  src.connect(f); f.connect(g); g.connect(snd.master);
+  src.start(at);
 }
 
 // One note. Triangle rather than sine, so a phone speaker has some harmonics to work
@@ -5702,14 +5788,58 @@ function scorePump(horizon){
   return { bpm, density, u, notes };
 }
 
-/* Driven from `frame`, five times a second, off the one number the gauge already prints.
-   No pass of the grid belongs to the sound. */
+/* How much of the box is alight, 0 to 1. Log, for the same reason everything else here
+   is: a candle is 6 cells against a full box's 160, and on a straight line a candle is
+   silent — which is wrong, because a candle is the one fire you lean in to listen to. */
+const blaze = () => alightCount <= 0 ? 0
+  : Math.min(1, Math.log1p(alightCount) / Math.log1p(SOUND.fireRef));
+
+/* Crackles, filled up to a horizon the same way the score's notes are, so both run off one
+   clock and the suite can drive them the same way. Returns what it scheduled, because a
+   check that asks only whether the box made a sound is answered by the bed. */
+function firePump(horizon, level){
+  let n = 0;
+  if (level <= 0){ nextCrack = 0; return n; }
+  /* RATE IS LINEAR IN THE CELL COUNT AND LOUDNESS IS NOT, and running both off the same
+     log curve was wrong in a way you could hear. How often a fire crackles is a count of
+     events — twice the burning cells, roughly twice the pops. How loud it is is a
+     perception, which is why `blaze` is logarithmic and a candle is audible at all.
+
+     On one log curve a candle came out at eleven crackles a second, which is a campfire.
+     Linear: a candle is 6 cells of 160 and crackles about twice a second, the Volcano's
+     27 gives six, and the Forge's 135 gives twenty-two. */
+  const dense = Math.min(1, alightCount / SOUND.fireRef);
+  const every = 1 / (SOUND.crkSlow + dense * (SOUND.crkFast - SOUND.crkSlow));
+  if (nextCrack < actx.currentTime) nextCrack = actx.currentTime + .02;
+  while (nextCrack < horizon){
+    crackle(nextCrack, level);
+    // Jittered, so a fire does not tick. A regular interval reads as a mechanism, which
+    // is the note the first sound design was sent back on.
+    nextCrack += every * (.45 + Math.random() * 1.1);
+    n++;
+  }
+  return n;
+}
+
+/* Driven from `frame`, five times a second, off two numbers that were already computed —
+   the room reading the gauge prints, and the count `react` keeps in the branch that
+   decides it. No pass of the grid belongs to the sound. */
 function soundUpdate(){
   if (!snd || !soundOn) return;
-  const t = actx.currentTime;
+  const t = actx.currentTime, g = SOUND.glide;
   const hot = Math.max(0, warmth());
-  snd.plk.frequency.setTargetAtTime(SOUND.plkLow + hot * (SOUND.plkHigh - SOUND.plkLow), t, SOUND.glide);
+  const fire = blaze();
+
+  snd.plk.frequency.setTargetAtTime(SOUND.plkLow + hot * (SOUND.plkHigh - SOUND.plkLow), t, g);
   scorePump(t + .5);
+
+  // The bed answers faster than the score does — a fire catching is an event, and .6s of
+  // glide on it would arrive after the thing that caused it had gone out.
+  snd.bed.gain.setTargetAtTime(fire * SOUND.bedGain, t, .25);
+  snd.bedFilt.frequency.setTargetAtTime(SOUND.bedLow + fire * (SOUND.bedHigh - SOUND.bedLow), t, .25);
+  // ...and the score steps back, but never below the fire. See `duck`.
+  snd.music.gain.setTargetAtTime(1 - fire * SOUND.duck, t, .3);
+  firePump(t + .5, fire);
 }
 
 /* Starting is not the same as switching, and running them through one function was a

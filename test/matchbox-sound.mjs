@@ -73,18 +73,42 @@ const HARNESS = `
 
      The room is set directly rather than simulated, because the room reading IS the
      signal — that is the whole point of the score being driven by one number. */
-  window.__render = async (room, secs) => {
+  window.__render = async (room, secs, lit) => {
     const rate = 44100, len = Math.floor(rate * (secs || 4));
     const c = new OfflineAudioContext(1, len, rate);
     if (!soundBuild(c)) throw new Error('the page would not build its graph');
     soundOn = true;
     snd.master.gain.value = SOUND.master;
-    AMBIENT = room;
+    AMBIENT = room; alightCount = lit || 0;
     const plan = scorePump(secs || 4);
     snd.plk.frequency.value = SOUND.plkLow + Math.max(0, plan.u) * (SOUND.plkHigh - SOUND.plkLow);
+    const fire = blaze();
+    snd.bed.gain.value = fire * SOUND.bedGain;
+    snd.music.gain.value = 1 - fire * SOUND.duck;
+    const cracks = firePump(secs || 4, fire);
     const out = await c.startRendering();
     return { rms: __rms(out), buf: out, bpm: plan.bpm, density: plan.density,
-             u: plan.u, beats: beatN, notes: plan.notes, cut: snd.plk.frequency.value };
+             u: plan.u, beats: beatN, notes: plan.notes, cut: snd.plk.frequency.value,
+             fire, cracks, bed: snd.bed.gain.value, music: snd.music.gain.value };
+  };
+  /* The two halves rendered apart, which is the only way to ask whether one drowns the
+     other. Same seed of a scene, once with the fire muted and once with the score muted,
+     and the comparison is between their RMS. */
+  window.__split = async (room, secs, lit) => {
+    const one = async (mute) => {
+      const rate = 44100, len = Math.floor(rate * (secs || 4));
+      const c = new OfflineAudioContext(1, len, rate);
+      soundBuild(c);
+      soundOn = true; snd.master.gain.value = SOUND.master;
+      AMBIENT = room; alightCount = lit || 0;
+      const plan = scorePump(secs || 4);
+      const fire = blaze();
+      snd.bed.gain.value = mute === 'fire' ? 0 : fire * SOUND.bedGain;
+      snd.music.gain.value = mute === 'music' ? 0 : 1 - fire * SOUND.duck;
+      if (mute !== 'fire') firePump(secs || 4, fire);
+      return __rms(await c.startRendering());
+    };
+    return { music: await one('fire'), fire: await one('music') };
   };
 `;
 
@@ -239,25 +263,86 @@ await check(browser, 'the piece plays when nothing at all is happening', async p
   return bad.length ? bad.join('; ') : null;
 });
 
+console.log('\n— the fire —');
+
+await check(browser, 'the fire follows what is alight, and not the room', async p => {
+  const r = await p.evaluate(async () => ({
+    none:    await __render(20,   1, 0),
+    candle:  await __render(20.6, 1, 6),
+    volcano: await __render(64.8, 1, 27),
+    forge:   await __render(30.7, 1, 135),
+    open:    await __render(31.4, 1, 155),
+    // A furnace with nothing burning in it. The room is at its ceiling and the fire voice
+    // must not stir — this is the separation the two signals exist for.
+    oven:    await __render(230,  1, 0)
+  }));
+  const bad = [];
+  if (r.none.fire !== 0)  bad.push(`an unlit box has the fire at ${r.none.fire.toFixed(3)}`);
+  if (r.oven.fire !== 0)  bad.push(`an empty furnace has the fire at ${r.oven.fire.toFixed(3)} — it is hearing the room`);
+  if (!(r.candle.fire > 0 && r.candle.fire < r.forge.fire))
+    bad.push(`a candle reads ${r.candle.fire.toFixed(3)} against a forge's ${r.forge.fire.toFixed(3)}`);
+  if (!(r.forge.fire < r.open.fire)) bad.push(`the forge is not below the opening scene`);
+  // The Volcano is 27 cells alight against the Forge's 135 — it is a heat event, not a
+  // bonfire — so the fire voice must rank it BELOW the forge even though the room says
+  // the opposite. That disagreement is the whole reason there are two signals.
+  if (!(r.volcano.fire < r.forge.fire))
+    bad.push(`the Volcano's fire reads ${r.volcano.fire.toFixed(3)} against the Forge's ${r.forge.fire.toFixed(3)} — the fire is following the room`);
+  if (!(r.volcano.bpm > r.forge.bpm))
+    bad.push(`...and the tempo should still put the Volcano above the Forge: ${r.volcano.bpm.toFixed(0)} vs ${r.forge.bpm.toFixed(0)}bpm`);
+  // A candle should be a few crackles, not silence and not a bonfire.
+  if (!(r.candle.cracks > 0)) bad.push('a candle scheduled no crackles at all');
+  if (!(r.open.cracks > r.candle.cracks * 2))
+    bad.push(`a full fire scheduled ${r.open.cracks} crackles against a candle's ${r.candle.cracks}`);
+  console.log(`        (candle ${r.candle.cracks} crackles/s, forge ${r.forge.cracks}, opening ${r.open.cracks}; `
+    + `blaze candle ${r.candle.fire.toFixed(2)} forge ${r.forge.fire.toFixed(2)} volcano ${r.volcano.fire.toFixed(2)})`);
+  return bad.length ? bad.join('; ') : null;
+});
+
+await check(browser, 'the fire never drowns the tune', async p => {
+  const r = await p.evaluate(async () => ({
+    quiet: await __split(20,   6, 0),
+    forge: await __split(30.7, 6, 135),
+    open:  await __split(31.4, 6, 155)
+  }));
+  const bad = [];
+  /* `docs/README.md` records a bed brought up over ducked music, and the report was
+     "it repeats the same sound over and over" — because the variety was all in the part
+     that had been turned down. The score may step back for the fire and may not go
+     under it. */
+  for (const [k, v] of Object.entries(r)){
+    if (k === 'quiet'){
+      if (v.fire > 1e-4) bad.push(`with nothing alight the fire still rendered at ${v.fire.toFixed(5)}`);
+      continue;
+    }
+    if (!(v.music > v.fire))
+      bad.push(`at ${k} the fire is ${v.fire.toFixed(4)} against the music's ${v.music.toFixed(4)} — the bed outweighs the piece`);
+  }
+  console.log(`        (music vs fire — forge ${r.forge.music.toFixed(3)}/${r.forge.fire.toFixed(3)}, `
+    + `opening ${r.open.music.toFixed(3)}/${r.open.fire.toFixed(3)})`);
+  return bad.length ? bad.join('; ') : null;
+});
+
 console.log('\n— it survives the speaker it will be played through —');
 
 await check(browser, 'what comes out is still there after a phone speaker has had it', async p => {
   const r = await p.evaluate(async () => {
     const ref = await __reference(500);
-    const one = async (room) => {
-      const o = await __render(room, 6);
+    const one = async (room, lit) => {
+      const o = await __render(room, 6, lit);
       return { survives: (await __through(o.buf, 500) / o.rms) / ref };
     };
-    return { ref, rest: await one(20), fire: await one(31.4), volcano: await one(64.8), ice: await one(-2.8) };
+    return { ref, rest: await one(20), fire: await one(31.4), volcano: await one(64.8), ice: await one(-2.8),
+             blaze: await one(31.4, 155) };
   });
   const bad = [];
   /* The bar is what `docs/` measured its FIXED cue at, 51%, against the 22% of the
      version that could not be heard at all across two entire games. */
-  for (const k of ['rest','fire','volcano','ice'])
+  for (const k of ['rest','fire','volcano','ice','blaze'])
     if (r[k].survives < .35)
       bad.push(`${k} keeps only ${(r[k].survives*100)|0}% of its energy through a 500Hz highpass`);
   console.log(`        (reference ${r.ref.toFixed(3)}; survives — resting ${(r.rest.survives*100)|0}%, `
-    + `fire ${(r.fire.survives*100)|0}%, volcano ${(r.volcano.survives*100)|0}%, ice ${(r.ice.survives*100)|0}%)`);
+    + `fire ${(r.fire.survives*100)|0}%, volcano ${(r.volcano.survives*100)|0}%, ice ${(r.ice.survives*100)|0}%, `
+    + `alight ${(r.blaze.survives*100)|0}%)`);
   /* A figure at or slightly over 100% is not the broken metric `docs/` once reported as
      "127% survives". That one had no reference division at all. This one does, and a
      ratio a little over unity simply means the score sits further above the 500Hz corner

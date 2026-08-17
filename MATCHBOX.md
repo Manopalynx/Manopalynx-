@@ -2434,6 +2434,60 @@ still measures it if a fire voice is ever wanted. And `roomLoss`'s mixing-temper
 gather went back behind its `roomDrifts` gate, which had been opened for a build so the
 first version could read it at every room setting. A cost is only justified by its reader.
 
+### The fire, which is the second signal
+
+The score follows the room. The fire follows **`alightCount`** — cells actually burning,
+counted by `react` in the branch that already decides it — and the two disagree in a way
+that is the whole reason there are two of them:
+
+| | cells alight | room |
+|---|---|---|
+| Volcano | **27** | **64.8°C** |
+| Forge | **135** | 30.7°C |
+
+The Volcano is a heat event, not a bonfire. So the music runs faster for it (121bpm
+against 100) while the fire voice is quieter (0.66 against 0.97). One number could not say
+both. The room also lags about five seconds, and a fire that has just caught should be
+heard before the music has noticed it.
+
+**Crackle and not roar**, which is the one part of this a phone speaker makes easy. A
+fire's low rumble is exactly the band an iPhone cannot produce; its crackle is short,
+broadband and lives at 1–4kHz, where a small speaker is strongest. Measured through the
+500Hz highpass: **98–105%**, against the first sound design's drone at 43%.
+
+#### Rate is linear and loudness is not
+
+The first version ran both off `blaze`, the same log curve everything else here uses, and
+a candle came out at **eleven crackles a second** — which is a campfire.
+
+They are different quantities. **How often** a fire crackles is a count of events: twice
+the burning cells, roughly twice the pops, so rate is linear in the cell count. **How
+loud** it is is a perception, so level stays logarithmic — which is what keeps a candle
+audible at all rather than rounding it to silence.
+
+| | cells | crackles/sec | level |
+|---|---|---|---|
+| candle | 6 | **3** | 0.38 |
+| Volcano | 27 | 6 | 0.66 |
+| Forge | 135 | 23 | 0.97 |
+| opening scene | 155 | 24 | 1.00 |
+
+Intervals are jittered ±55%, because a regular one reads as a mechanism — which is the
+note the first sound design was sent back on.
+
+#### The score steps back and does not get out of the way
+
+Everything the score makes goes through a `music` bus and nothing else does, so the fire
+ducks the tune without ducking itself — routing the fire through the same node would have
+it turning itself down as it got louder, which is a compressor and not a mix.
+
+`duck` is **.38** at a full fire. Not more: `docs/README.md` records a bed brought up over
+ducked music, and the report was *"it repeats the same sound over and over"*, because the
+variety was all in the part that had been turned down. **The suite renders the two halves
+separately and fails if the fire is ever louder than the music** — measured at the Forge,
+music 0.011 against fire 0.006. Set `duck` to 1.0 and that check goes red.
+
+
 ### What is not verified
 
 **What any of it sounds like.** The suite asserts that it plays, that it plays only when
@@ -2766,7 +2820,7 @@ the glass.
 npm i                          # pinned Playwright; `npm i playwright` installs the wrong one
 node test/matchbox-sim.mjs     # 96 checks — the simulation
 node test/matchbox-ui.mjs      # 51 checks — the hand
-node test/matchbox-sound.mjs   #  7 checks — the score, rendered offline and filtered
+node test/matchbox-sound.mjs   #  9 checks — the score and the fire, rendered and filtered
 node test/published.mjs        #  3 checks — the copies with the URL still match
 
 node test/compact.mjs         # a copy with the commentary stripped, for pasting into a chat
