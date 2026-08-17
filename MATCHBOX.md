@@ -2516,6 +2516,28 @@ throat sits at 380–800Hz and no lower — 250Hz is gone by the time an iPhone 
 finished with it, so it reads as low by being lower than everything else in the mix, which
 is the same answer `docs/` reached for the same problem.
 
+#### Softness is tone, and movement is not
+
+Reported after that: *"the wind is still a bit off, my suggestion would be to make softer
+and quieter"* — which is two dials, not one.
+
+The first attempt moved three: gain down, Q down, and `flutD` down as well, on the
+assumption that gentler meant calmer. Measured, that last one is the mistake — the flutter
+fell from 40% to 27% and under its own bar, which is the draw being softened *out of
+existence* rather than softened:
+
+| | gain | Q | `flutD` | rush RMS | flutter | colour |
+|---|---|---|---|---|---|---|
+| as it was | .058 | 2.6 | .42 | 0.0020 | 40% | 21.6% |
+| softening the movement too | .026 | 1.1 | .27 | 0.0013 | **27% — under the bar** | 17.7% |
+| **shipped** | **.026** | **1.1** | **.42** | 0.0014 | **37%** | 19.9% |
+
+With the movement left alone, every setting from Q 2.6 down to 1.1 holds flutter at 37–40%
+and colour near 20%. **`rushQ` is the softness** — at 2.6 the band is narrow enough to
+whistle, which is the hard edge, and 1.1 is a hush. **`rushGain` is the loudness**, down by
+more than half. The flutter is what makes it a fire at all and is not a candidate for
+either.
+
 #### A crack is a different event, not a louder snap
 
 Every snap was the same 6ms click with only its volume varying, so a big one was just a

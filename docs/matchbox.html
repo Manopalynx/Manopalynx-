@@ -5648,9 +5648,22 @@ const SOUND = {
      lower, because 250Hz is gone by the time an iPhone speaker has finished with it. It
      reads as low by being lower than everything else in the mix, which is the same answer
      `docs/` reached for the same problem. */
-  rushGain:  .058,
+  /* Softened, and quietened, and those are two different dials — reported as "the wind is
+     still a bit off, my suggestion would be to make softer and quieter".
+
+     `rushQ` is the softness. At 2.6 the band is narrow enough to whistle, which is the
+     hard edge; 1.1 is a hush. `rushGain` is the loudness, and it comes down by more than
+     half.
+
+     WHAT IS NOT TOUCHED IS THE MOVEMENT. The first attempt at this softened `flutD` too,
+     on the assumption that gentler meant calmer, and measured: flutter fell from 40% to
+     27% and went under the bar — which is the draw being softened out of existence rather
+     than softened. Held at .42, every setting from Q 2.6 down to 1.1 keeps flutter at
+     37-40% and the colour shift at ~20%. Softness is a matter of tone; the flutter is
+     what makes it a fire at all. */
+  rushGain:  .026,
   rushLow:   380,  rushHigh: 800,    // the throat's centre, small fire to large
-  rushQ:     2.6,
+  rushQ:     1.1,
   swellA:    .13,  swellB:  .31,  swellD: .20,   // the slow breath, much reduced
   flutA:     4.7,  flutB:   7.3,  flutC:  11.9,  // ...and the draw, which is the new part
   flutD:     .42,
