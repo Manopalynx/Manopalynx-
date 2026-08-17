@@ -4058,9 +4058,26 @@ await check(browser, 'every preset pays off when you do what its label says', ()
     const fu = edge(FUSE,'left');
     if (!fu || !coal0) bad.push('Forge is missing its cord or its coal'); else {
       __hold(fu[0], fu[1], 2, 150);
-      let peak = -1e9;
-      for (let k=0;k<9000;k++){ __step(1); if (__maxT() > peak) peak = __maxT(); }
-      if (N(COAL) > coal0 * 0.3) bad.push(`Forge left ${N(COAL)} of ${coal0} coal unburnt — the bed never caught`);
+      /* Watched on the way through rather than counted at the end, because "248 of 248
+         coal unburnt" is a symptom and says nothing about WHERE the chain broke.
+
+         This arm has now failed four full suite runs on unchanged code and reproduced in
+         none of 79 attempts — the same signature as the Garden and the brush, every
+         stochastic process running far under expectation. The chain is: the match lights
+         the cord, the cord carries fire to the straw, the straw lights the coal. A peak
+         that never leaves room temperature says the match never took; a peak that climbs
+         and a bed that never catches is a different fault entirely. */
+      let peak = -1e9, everLit = 0, peakAt = -1;
+      for (let k=0;k<9000;k++){
+        __step(1);
+        const m = __maxT();
+        if (m > peak){ peak = m; peakAt = k; }
+        const lit = __count(FIRE);
+        if (lit > everLit) everLit = lit;
+      }
+      const how = `[peak ${Math.round(peak)}°C at ${(peakAt/60)|0}s, most flame at once ${everLit}, `
+                + `cord at ${fu[0]},${fu[1]}, coal ${N(COAL)} of ${coal0}]`;
+      if (N(COAL) > coal0 * 0.3) bad.push(`Forge left ${N(COAL)} of ${coal0} coal unburnt — the bed never caught ${how}`);
       if (peak < 1100) bad.push(`Forge peaked at ${Math.round(peak)}°C, which is not a forge`);
       if (peak > 1400) bad.push(`Forge peaked at ${Math.round(peak)}°C — something with its own \`peak\` is alight in there`);
       if (N(STEEL) < steel0) bad.push(`Forge lost ${steel0-N(STEEL)} cells of steel — a coal fire must not be able to`);

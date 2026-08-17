@@ -5675,7 +5675,7 @@ const SOUND = {
   crkSlow:   1.5,               // snaps a second at one cell alight...
   crkFast:   26,                // ...and at a box fully alight
   crkLow:    1500, crkHigh: 6200,    // sharper and wider than before — 1.1-3.8k was the
-  crkGain:   .33,                    // band raindrops live in
+  crkGain:   .26,                    // band raindrops live in
   crkShape:  3,                 // the power law: `pow(random, 3)`, so most snaps are
                                 // nearly nothing and a few are the whole point
 
@@ -5688,7 +5688,7 @@ const SOUND = {
      deletes it. A triangle has harmonics at 420, 700, 980Hz, and those are what you
      actually hear; the fundamental is felt only on something with a woofer. */
   bigEvery:  4.5,               // seconds between cracks at a box fully alight
-  bigGain:   .42,
+  bigGain:   .34,
   bigLow:    95,   bigHigh: 210,     // the body's pitch
   bigDecay:  .14,
 
@@ -5696,7 +5696,19 @@ const SOUND = {
      records a bed brought up over ducked music and the report was "it repeats the same
      sound over and over", because the variety was in the part that had been turned down.
      The check asserts the music is never quieter than the fire. */
-  duck:      .38                // the most the score is pulled down, at a full fire
+  duck:      .38                /* the most the score is pulled down, at a full fire.
+
+     The fire's own level is set against this rather than chosen. Measured over eight
+     renders at each setting, music ÷ fire at its worst:
+
+       crkGain .33  bigGain .42    1.23   — parity, and the check duly flipped
+       crkGain .26  bigGain .34    1.50
+       crkGain .21  bigGain .28    1.55
+       crkGain .17  bigGain .22    2.06
+
+     Two noisy numbers compared for which is larger is a coin toss when they are equal, so
+     the fire is set where the margin is real and the check asks for a margin rather than
+     for a win. */
 };
 
 /* Sign-preserving log compression, clamped. The two ends have different reference

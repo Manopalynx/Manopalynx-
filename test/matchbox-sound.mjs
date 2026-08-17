@@ -415,8 +415,14 @@ await check(browser, 'the fire never drowns the tune', async p => {
       if (v.fire > 1e-4) bad.push(`with nothing alight the fire still rendered at ${v.fire.toFixed(5)}`);
       continue;
     }
-    if (!(v.music > v.fire))
-      bad.push(`at ${k} the fire is ${v.fire.toFixed(4)} against the music's ${v.music.toFixed(4)} — the bed outweighs the piece`);
+    /* A MARGIN, not a win. `music > fire` compares two stochastic numbers for which is
+       larger, and when they are close that is a coin toss — it duly passed at 0.0088
+       against 0.0075 and failed the next run at 0.0077 against 0.0076, on identical code.
+       The claim is that the score is the main thing, so it is stated as one: measured
+       worst-of-eight is 1.50 at the levels shipped. */
+    if (!(v.music > v.fire * 1.25))
+      bad.push(`at ${k} the fire is ${v.fire.toFixed(4)} against the music's ${v.music.toFixed(4)} `
+             + `— a ratio of ${(v.music/v.fire).toFixed(2)}, and the score has to stay clearly the main thing`);
   }
   console.log(`        (music vs fire — forge ${r.forge.music.toFixed(3)}/${r.forge.fire.toFixed(3)}, `
     + `opening ${r.open.music.toFixed(3)}/${r.open.fire.toFixed(3)})`);
