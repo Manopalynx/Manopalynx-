@@ -2445,29 +2445,78 @@ the result is pleasant or maddening. That judgement is Sam's, and every number t
 decides it is in the `SOUND` block at the top of the section so acting on it is a one-line
 change.
 
-### The switch is in the header because the tray had no room
+### The switch is on the bar, and the first answer was wrong
 
-Measured with the real Space Mono at 320, 375, 390, 393 and 430px — `test/sound-fit.mjs`:
+It went into the header, on a measurement that was true and useless. `test/sound-fit.mjs`
+asked whether a second header button moved the stage, tray or strip, and it does not —
+**`.label` is a nowrap flex row, so when it runs out of room it does not push its
+neighbours, it spills over the edge.** Reported from the phone as Hide going off screen,
+and measured afterwards at every width:
 
-| | at 393px, which is the phone |
+| | header overflow, with Sound in it |
 |---|---|
-| ninth chip in Tools | 37px against Wet's 50px — **ratio 1.35**, over the 1.25 the suite enforces. Fails at every width. |
-| ninth chip, "Weather" shortened | same ratio. The rename is a real win and does not buy this. |
-| fifth chip on the bar | **overflows 21px, two children past the right edge**. Fits only if the brush slider's intrinsic floor is released: 166 → 108px. |
-| **second button in the header** | **nothing moves, at any width** — stage top 60, stage height 606, identical before and after. |
+| 320px | 131px |
+| 375px | 76px |
+| 390px | 61px |
+| **393px** | **58px** |
+| 430px | 21px |
 
-It also has to be somewhere that cannot be put away. **Hide folds the tray, not the
-header**, and in a Home Screen PWA the iPhone's ringer switch does not reliably silence a
-web page. The way to stop a sound must not sit behind the thing you need it for.
+**The header cannot hold two buttons at all.** The title, the instruction and two buttons
+want 451px of a 365px row, and the only ways to close that are cutting the instruction or
+shrinking the title. Letting `.meta` shrink looks like a fix and is not — it moves the
+overflow inside the instruction, which goes from the 145px it needs to 72px and is clipped.
 
-The label stays "Sound" at both settings and the state is a background colour, because a
-button that relabels itself changes width — the rule the whole tray is built on, kept here
-even though the header would survive breaking it.
+So it is a chip on the bar beside Free, Line, Box and Time, and what pays for it is the
+**brush slider's intrinsic floor**. `input[type=range]` carries an intrinsic size and a
+flex item's `min-width` is `auto`, so `flex:1` could never take the slider below about
+129px however little room was left — which is why the bar *overflowed* rather than
+squeezing when this was first tried. Released to 80, which only binds at the narrow end:
 
-**One free thing fell out of measuring it.** "Weather" is seven characters against a
-longest-of-five everywhere else, and it is what holds `fitLabels` down for the whole Tools
-drawer. Shortening it takes the type from **7px to 8px** at 393, 6.5 → 7.5 at 375 and 8 →
-9.5 at 430. Nothing to do with sound, and not taken yet.
+| | slider | was | bar | header | stage |
+|---|---|---|---|---|---|
+| 375px | 96 | 148 | 6px over | — | unmoved |
+| 390px | 105 | 163 | **0** | **0** | unmoved |
+| **393px** | **108** | **166** | **0** | **0** | unmoved |
+| 430px | 145 | 203 | **0** | **0** | unmoved |
+
+**And there is a check now, which is the part that matters.** `no row runs off the edge of
+the box` asks `scrollWidth > clientWidth` of the header, the bar, the drawer row, the tabs
+and the strip, at four widths, with the webfont let through. It found a **pre-existing**
+10px overflow at 375px that predates the sound work entirely — `gap` 12 → 8 on the header
+and 9px → 7px of button padding clears it at every width with the header height unchanged
+at 60, so the stage does not move.
+
+The lesson is not "measure the header". It is that **the right question for a nowrap flex
+row is whether it overflows, not whether anything moved** — and that question was already
+written, correctly, for the bar in the same probe, and simply pointed at the wrong element.
+
+### Red is spoken for
+
+The switch first carried its own `.fold.on` rule painted in `var(--phos)`. That is
+`#A83226`, red phosphorus, the colour of the match head — and the comment beside the one
+chip that uses it says so: *the only chip allowed to wear red is the one in the Clear
+drawer that wipes the box, and it has to be the odd one out.* The sound switch was wearing
+the destroy-everything colour, and was reported as such from the phone.
+
+It is a plain `.chip` now, so it inherits the answer the tray already had:
+`.chip[aria-pressed="true"]{background:var(--ink);color:var(--pale)}` — dark fill on pale,
+which is how every tab, every material and every shape in the box says it is on. The
+separate `.on` class is gone, so there is no second piece of state to fall out of step
+with the first.
+
+### Starting is not switching
+
+`soundOn` is true at boot, because on is the default, so the first touch anywhere has to
+**build** the graph — a context made outside a gesture is one iOS hands over and then will
+not let make a sound. That listener called `soundSet(true)`.
+
+Tap anything but the switch and it worked. Tap **the switch** and the `pointerdown` armed
+it and the `click` immediately toggled it straight back off, in one gesture — so the one
+control that exists to turn the sound on was the only control that could not. Reported
+from the phone as the music not starting.
+
+`soundStart` only ever starts, and is what a touch calls. `soundSet` is the deliberate act
+that persists, labels and speaks.
 
 ## The attic, which is the part of the box that is not on the screen
 
@@ -2716,7 +2765,7 @@ the glass.
 ```
 npm i                          # pinned Playwright; `npm i playwright` installs the wrong one
 node test/matchbox-sim.mjs     # 96 checks — the simulation
-node test/matchbox-ui.mjs      # 50 checks — the hand
+node test/matchbox-ui.mjs      # 51 checks — the hand
 node test/matchbox-sound.mjs   #  7 checks — the score, rendered offline and filtered
 node test/published.mjs        #  3 checks — the copies with the URL still match
 
