@@ -2316,119 +2316,134 @@ in a file with one scope and a lot of short names.
 
 ## Sound
 
-Two voices, off by default, switched from the header. A page that starts making a noise
-on its own has taken a decision that was not its to take.
+A generative score, on by default, switched from the header. Minor pentatonic, plucks over
+a slow pad, a feedback delay, no drums. **Its tempo is the room reading.**
 
-### The signal, which is not the one the idea named
+### The first version was the wrong thing, and one word said so
 
-Asked for as "music that scales with heat". The obvious number is the box's own
-temperature — and `roomLoss` already computes it every tick for Neutral, so it is nearly
-free. `test/signal.mjs` put ten scenes through four candidates and killed it on the first
-row:
+Asked for as *"a background relaxing soundtrack that increases in urgency as the heat in
+the room increases and potentially slows down if the room decreases"*. What got built was
+two synthesised voices — a bandpassed noise bed for fire, and two detuned sawtooths for
+heat. Reported back from the phone as:
 
-| | mixing temperature | what is happening |
-|---|---|---|
-| empty box on **Oven** | **230.0°C** | nothing at all |
-| lit **Forge** | 55.6°C | the hardest fire in the box |
+> it's like an electric motor sound for fire
 
-A score following that plays its finale over an empty oven, and the room dial becomes a
-volume knob. What works is **the temperature above the room**, which reads exactly `0.0`
-on all three empty boxes at every setting, and separately **the count of cells actually
-alight**, which the room cannot touch at all.
+Which was the right diagnosis of the wrong voice. **A detuned saw pair sweeping a lowpass
+is how you synthesise a motor**, and because it rose whenever something burned it read as
+the fire rather than as the heat. Both voices are deleted.
 
-| | above the room | alight |
-|---|---|---|
-| empty · Normal / Oven / Freezing | **0.0** | 0 |
-| Garden, left alone | −0.3 | 0 |
-| Chandler, lit | 2.0 | 6 |
-| Forge, lit | 35.6 | 135 |
-| opening scene, lit | 40.4 | ~155 |
-| **Volcano** | **522.4** | 27 |
-| nitrogen splash | −31.1 | 0 |
-| packed ice | −33.3 | 0 |
+The word that carried the redesign was **slows down**. That is tempo, and nothing in the
+first version had a pulse at all — it was sound design where a soundtrack was asked for.
+The brief had been read as "make the box audible" instead of "write music".
 
-**They are two voices because they have two shapes.** Fire catches, peaks and dies; heat
-lags it and hangs about long after:
+### The signal is the room reading, which is the number the gauge already prints
 
-```
-Forge, alight  |::  .:-=+*#%@@@@%%%%%#*+=-:..      |
-Forge, above   |:-=+++*##%%%@@@@@@@@@%%%##**+===---:::...|
-```
+`AMBIENT`. On Neutral — what the box opens on — it is bounded and well-behaved:
 
-**Neither costs a sweep.** `alightCount` is an increment in the one branch of `react`
-that has already decided a cell is burning — past the ignition point, past the charring,
-past the water check. `boxMix` is `roomLoss`'s existing gather, ungated from `roomDrifts`
-so every room setting pays the 0.126ms Neutral was already paying. Both are read five
-times a second beside the gauge, and every parameter is set with `setTargetAtTime`, so
-5Hz of steps arrives as a continuous line.
+| | room reading |
+|---|---|
+| nothing happening | 20.0 |
+| a candle | 20.6 |
+| opening scene, lit | **31.4** |
+| Forge, lit | 30.7 |
+| **Volcano** | **64.8** |
+| nitrogen splash | 12.1 |
+| packed ice | **−2.8** |
 
-### Compressed with a log, not the `tanh` the room uses — for a reason I first got wrong
+About **−3 to +65**, monotone, with no outlier fifteen times the size of the rest — which
+is what the previous signal had, and most of why it needed so much compression. It is also
+literally what was asked for: the heat in the *room*.
 
-The stated reason was that `above` spans a candle's 2.0 to the Volcano's 522, so a `tanh`
-would pin the Volcano at 0.99999 and crowd every ordinary fire into the bottom of the
-scale. **Mutation-tested by swapping one for the other, and the suite stayed green.** The
-claim was false:
+**Still logarithmic, for a plainer reason than the one given last time.** An ordinary fire
+moves the room 11 degrees and the Volcano moves it 45, so on a straight line every fire but
+an eruption would be barely quicker than silence. Measured through `log1p`:
 
-| | `tanh(x/60)` | `log1p/log1p` | |
+| ice | nitrogen | resting | candle | fire | Volcano | Oven |
+|---|---|---|---|---|---|---|
+| 45 | 50 | **60** | 67 | 100 | 121 | 128 bpm |
+
+**A fixed room setting is a deliberate act, so it is allowed to drive this.** Set the box
+to Oven and the music is urgent with nothing burning, because you have put the box in an
+oven. `hot` clamps the top, so Furnace at 480°C is not four times an eruption — the suite
+asserts Oven and Furnace land on the same number, and that check goes red the moment the
+clamp comes off.
+
+### The piece
+
+Minor pentatonic, which is the one scale where any note may follow any other and still
+sound intended — this has to run for an hour behind somebody drawing. Four chords, eight
+beats each; a pad of two long triangle notes a fifth apart under plucks two to three
+octaves above the root; one feedback delay and no reverb, because an impulse response is a
+second buffer to build and the delay does most of the same work through a phone speaker.
+
+Urgency does three things at once: the tempo rises, the note density goes from 45% of beats
+to 95%, and the pluck filter opens from 900Hz to 4200. **The flat second is admitted only
+above 80% heat**, so tension is something the box does rather than something the piece does
+on its own.
+
+**Pitched for a phone speaker**, which is borrowed knowledge rather than this project's own:
+`docs/README.md` records a cue written at 34–58Hz of which **22% survived** a 500Hz highpass
+approximating an iPhone speaker, with two entire games played without it being heard once.
+The plucks carry this piece at 440–1760Hz, where a small speaker is strongest. Measured
+through the same filter:
+
+| resting | fire | Volcano | ice |
 |---|---|---|---|
-| candle | 0.033 | **0.175** | **5.3×** |
-| Forge | 0.532 | 0.575 | 1.1× |
-| opening | 0.587 | 0.594 | 1.0× |
-| Volcano | 1.000 | 0.999 | 1.0× |
-| packed ice | 0.504 | 0.564 | 1.1× |
+| 100% | 92% | 101% | 93% |
 
-They agree within a tenth everywhere except one scene. **The whole difference is the
-candle** — and that is still the right reason to take the log, just not the reason first
-given: a candle is 2.0 above the room against the Volcano's 522, and it is the scene most
-likely to be the only thing in the box. Under a `tanh` it sits at 3% of a scale it has
-entirely to itself; under a log, 18%.
+against the drone's 43% in the version this replaced. A figure at or slightly over 100% is
+not the broken metric `docs/` once reported as *"127% survives"* — that one had no reference
+division at all. This one does, and a ratio a little over unity means the score sits further
+above the corner than the 2kHz tone the filter was characterised on. It is the answer
+"essentially all of it".
 
-The check now asserts the **quiet** end, where the decision actually lives, rather than
-the forge, where there was never anything to decide. The old assertion was decoration and
-only mutation testing said so — which is the fifth time in this file's history that a
-check has been green about something it could not see.
+### On by default, with the one caveat no page can get round
 
-### On Neutral the heat voice settles, and that is the design
+A browser will not make a sound before it has been touched, so "automatically on" means
+**armed at load and started by the first touch of the page**. The switch in the header turns
+it off for good and is remembered.
 
-Measured, a box packed edge to edge with ice on Neutral:
+`soundStored` answers **three** things — on, off, and never asked — because the default is
+on: a box that has never been asked has to behave like a yes while a stored no has to
+survive a reload, and a boolean cannot tell those last two apart.
 
-| | mix | room | above |
-|---|---|---|---|
-| 0s | −13.3 | 20.0 | **−33.3** |
-| 15s | −12.5 | −1.9 | **−10.6** |
-| 120s | −11.3 | −2.2 | −9.1 |
+### What the suite is really for
 
-The ice is all still there at two minutes. The signal has fallen to 27% of its opening
-value inside fifteen seconds, because Neutral's whole job is to make the room agree with
-the box — so this voice reports **disequilibrium**, not state. Something happening rather
-than something being the case. That was a fork and it was taken deliberately: a drone
-that never resolves is what `docs/` got reported for.
+`test/matchbox-sound.mjs`, 7 checks, driving **the page's own scheduler**: `scorePump`
+fills up to an audio-context time, so the page's five-a-second half-second lookahead and a
+single call covering a whole offline render are one code path.
 
-### Pitched for a phone speaker, which is borrowed knowledge
+Four mutations, all of which go red:
 
-The one thing here that is not this project's own measurement. `docs/README.md` records a
-cue written at 34–58Hz of which **22% survived** a 500Hz highpass approximating an iPhone
-speaker — four fifths of it could not physically reach the player, and two entire games
-were played without it being heard once.
+| break this | and this fails |
+|---|---|
+| tempo stops following the room | *eight seconds carried 8 beats cold, 8 resting and 8 hot* |
+| the hot end loses its clamp | *Oven 145bpm and Furnace 158bpm differ* |
+| the score plays only when hot | *a still box played 0 notes in six seconds* |
+| `soundUpdate` runs when switched off | *2 beats were scheduled — nobody asked it to* |
 
-Heat and fire both want to be low rumble, which is exactly the band that cannot get out
-of the speaker. So the drone is a sawtooth between **88 and 165Hz** and the speaker is
-given its harmonics. `test/matchbox-sound.mjs` renders the page's own graph offline,
-puts it through that filter, and fails anything under 82Hz or under 35% survival.
+**The third of those found a hole in a check rather than in the code.** Asking whether a
+still box makes *a sound* is satisfied by the pads alone, so deleting every pluck at rest
+left it green with the tune gone and the drone left. It counts **notes** now. `scorePump`
+returns how many it scheduled for exactly that reason.
 
-**Which caught the design being wrong on its first run.** At rest the drone's lowpass sat
-at 420Hz — everything above a 110Hz saw's third harmonic removed, entirely under the
-speaker's floor. It kept **31%**. So "Sound on" with nothing burning would have been
-silence on the only device this is played on, with no way to tell the switch had worked.
-Swept: 700Hz gives 43%, 900 gives 46%, 1200 gives 48%. **700**, because it clears the bar
-and keeps the widest sweep for the filter to do the job it exists for — 700 → 3000 is a
-4.3× opening where 1200 → 3000 is 2.5×.
+**Two things were taken out when the design changed, rather than left lying about.** The
+`alightCount` counter in `react` — cells actually burning, which the first version was
+built on — had no reader once the score followed the room, so it is gone; `test/signal.mjs`
+still measures it if a fire voice is ever wanted. And `roomLoss`'s mixing-temperature
+gather went back behind its `roomDrifts` gate, which had been opened for a build so the
+first version could read it at every room setting. A cost is only justified by its reader.
 
-Measured through the same filter, at the settings shipped:
+### What is not verified
 
-| drone at rest | candle | Forge | Volcano |
-|---|---|---|---|
-| 43% | 49% | 57% | 54% |
+**What any of it sounds like.** The suite asserts that it plays, that it plays only when
+switched on, that it is on by default and stays off when turned off, that the tempo
+follows the room in both directions and reaches the scheduler rather than merely being a
+number, that the top is clamped, that there is a tune and not just a bed when nothing is
+happening, and that what comes out survives a phone speaker. It cannot tell you whether
+the result is pleasant or maddening. That judgement is Sam's, and every number that
+decides it is in the `SOUND` block at the top of the section so acting on it is a one-line
+change.
 
 ### The switch is in the header because the tray had no room
 
@@ -2446,23 +2461,13 @@ header**, and in a Home Screen PWA the iPhone's ringer switch does not reliably 
 web page. The way to stop a sound must not sit behind the thing you need it for.
 
 The label stays "Sound" at both settings and the state is a background colour, because a
-button that relabels itself changes width — the rule the whole tray is built on, kept
-here even though the header would survive breaking it.
+button that relabels itself changes width — the rule the whole tray is built on, kept here
+even though the header would survive breaking it.
 
 **One free thing fell out of measuring it.** "Weather" is seven characters against a
-longest-of-five everywhere else, and it is what holds `fitLabels` down for the whole
-Tools drawer. Shortening it takes the type from **7px to 8px** at 393, 6.5 → 7.5 at 375
-and 8 → 9.5 at 430. Nothing to do with sound, and not taken yet.
-
-### What is not verified
-
-**What any of it sounds like.** The suite asserts that it plays, that it plays only when
-switched on, that each voice answers the number it is supposed to answer and not the
-room, that the scale is not crowded at either end, that the fundamental never drops below
-82Hz across a sweep well past the measured extremes, and that what comes out survives a
-phone speaker. It cannot tell you whether the result is pleasant or maddening. That
-judgement is Sam's, and every number that decides it is in the `SOUND` block at the top
-of the section so acting on it is a one-line change.
+longest-of-five everywhere else, and it is what holds `fitLabels` down for the whole Tools
+drawer. Shortening it takes the type from **7px to 8px** at 393, 6.5 → 7.5 at 375 and 8 →
+9.5 at 430. Nothing to do with sound, and not taken yet.
 
 ## The attic, which is the part of the box that is not on the screen
 
@@ -2712,7 +2717,7 @@ the glass.
 npm i                          # pinned Playwright; `npm i playwright` installs the wrong one
 node test/matchbox-sim.mjs     # 96 checks — the simulation
 node test/matchbox-ui.mjs      # 50 checks — the hand
-node test/matchbox-sound.mjs   #  6 checks — the sound, rendered offline and filtered
+node test/matchbox-sound.mjs   #  7 checks — the score, rendered offline and filtered
 node test/published.mjs        #  3 checks — the copies with the URL still match
 
 node test/compact.mjs         # a copy with the commentary stripped, for pasting into a chat

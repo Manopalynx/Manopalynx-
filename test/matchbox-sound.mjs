@@ -1,24 +1,20 @@
 // What the box sounds like, measured rather than described.
 //
 // This cannot tell you whether the result is pleasant. Nothing here can — that judgement
-// is Sam's, and the numbers it would need are all at the top of `SOUND` in the page so
-// acting on it is a one-line change. What it CAN tell you is the set of things that
-// would make the sound silently pointless, every one of which has actually happened to
-// this repository's other project:
+// is Sam's, and the numbers it would need are all in the `SOUND` block at the top of the
+// sound section so acting on it is a one-line change. What it CAN tell you is the set of
+// things that would make the score silently pointless.
 //
-//   * that it plays at all, and only when it has been switched on;
-//   * that the two voices answer the two numbers they are supposed to answer, rather
-//     than sitting at a constant that happens to sound plausible;
-//   * that the drone never drops below the floor a phone speaker can reproduce;
-//   * and that what comes out SURVIVES A PHONE SPEAKER, which is the one that sank the
-//     first version of the Neurex cues in `docs/`: written at 34–58Hz, 22% of the energy
-//     made it through a 500Hz highpass, and two entire games were played without either
-//     cue being heard once.
+// Rewritten when the two synthesised voices became a score. The old suite asserted that a
+// fire voice tracked the alight count and a drone tracked the temperature; both voices
+// were reported back as "like an electric motor sound for fire" and deleted, and every
+// check about them went with them. A suite that kept passing about a deleted design would
+// have been the most convincing kind of green.
 //
-// The graph under test is the page's own. `soundBuild` takes a context so this file can
-// hand it an OfflineAudioContext and render the real thing — a test that rebuilds the
-// graph in order to measure it is measuring its own copy, which is the mistake the sim
-// harness carries a comment about and the one this file would be likeliest to repeat.
+// The scheduler is driven directly. `scorePump(horizon)` fills up to an audio-context
+// time, so the page's five-a-second half-second lookahead and a single call covering a
+// whole offline render are the same code path — the tests drive the real scheduler rather
+// than a stand-in for it.
 //
 // Run:  node test/matchbox-sound.mjs
 
@@ -63,24 +59,22 @@ const HARNESS = `
     const plain = await a.startRendering();
     return (await __through(plain, hz)) / __rms(plain);
   };
-  /* One render of the page's own graph. The scene is not simulated — the two numbers the
-     sound is driven by are set directly, which is the whole point of the sound being
-     driven by two numbers. */
-  window.__render = async (lit, above, secs) => {
-    const rate = 44100, len = Math.floor(rate * (secs || 2));
+  /* One render of the page's own graph, driven by the page's own scheduler.
+
+     The room is set directly rather than simulated, because the room reading IS the
+     signal — that is the whole point of the score being driven by one number. */
+  window.__render = async (room, secs) => {
+    const rate = 44100, len = Math.floor(rate * (secs || 4));
     const c = new OfflineAudioContext(1, len, rate);
     if (!soundBuild(c)) throw new Error('the page would not build its graph');
     soundOn = true;
     snd.master.gain.value = SOUND.master;
-    AMBIENT = 20; boxMix = 20 + above; alightCount = lit;
-    soundUpdate();
+    AMBIENT = room;
+    const plan = scorePump(secs || 4);
+    snd.plk.frequency.value = SOUND.plkLow + Math.max(0, plan.u) * (SOUND.plkHigh - SOUND.plkLow);
     const out = await c.startRendering();
-    return { rms: __rms(out), buf: out,
-             hz: snd.saws[0].frequency.value,
-             fire: snd.fireGain.gain.value,
-             band: snd.fireFilt.frequency.value,
-             open: snd.heatFilt.frequency.value,
-             drone: snd.heatGain.gain.value };
+    return { rms: __rms(out), buf: out, bpm: plan.bpm, density: plan.density,
+             u: plan.u, beats: beatN, notes: plan.notes, cut: snd.plk.frequency.value };
   };
 `;
 
@@ -113,159 +107,147 @@ const browser = await chromium.launch();
 console.log('\n— it plays, and only when asked —');
 
 await check(browser, 'the page makes no context until it is switched on', async p => {
-  const before = await p.evaluate(() => actx === null && snd === null && soundOn === false);
-  if (!before) return 'the page had already built an audio context at boot, which iOS hands over and then will not let make a sound';
-  return null;
+  /* The SETTING is on at boot and the GRAPH is not built, and those are different
+     things. A context created outside a user gesture is one iOS hands over and then
+     refuses to let make a sound, which reads exactly like a broken graph — so "on by
+     default" has to mean "armed", with the first touch doing the building. */
+  const r = await p.evaluate(() => ({ ctx: actx === null, graph: snd === null, on: soundOn }));
+  const bad = [];
+  if (!r.ctx || !r.graph) bad.push('the page built an audio context at boot, which iOS hands over and then will not let make a sound');
+  if (!r.on) bad.push('the sound was not armed at boot, so the default is not on');
+  return bad.length ? bad.join('; ') : null;
 });
 
-/* Both guards, separately, because they are not the same guard and one of them hides
-   the other.
-
-   The master gate starts at zero and only `soundSet` opens it, so a render with the
-   sound off is silent whatever `soundUpdate` does. That makes the render check alone
-   pass with `soundUpdate`'s own `!soundOn` guard deleted — mutation-tested, and it duly
-   stayed green. Belt and braces measures exactly like decoration from the outside, so
-   the second half is asserted directly: with the gate forced open, an off box must not
-   move a single voice. */
-await check(browser, 'switched off, the graph is silent and stays where it was put', async p => {
+/* The guard, not the gate. The master starts at zero and only `soundSet` opens it, so a
+   render with the sound off is silent whatever else happens — which means asserting
+   silence alone passes with `soundUpdate`'s own `!soundOn` guard deleted. Mutation-tested
+   on the previous design, and it duly stayed green. So the gate is forced open and the
+   claim becomes: with the sound off, nothing is SCHEDULED. */
+await check(browser, 'switched off, nothing is scheduled and nothing is heard', async p => {
   const r = await p.evaluate(async () => {
     const one = async (openTheGate) => {
-      const rate = 44100, len = rate;
-      const c = new OfflineAudioContext(1, len, rate);
+      const c = new OfflineAudioContext(1, 44100 * 2, 44100);
       soundBuild(c);
       soundOn = false;
-      AMBIENT = 20; boxMix = 320; alightCount = 150;   // a large fire, and it must not matter
-      if (openTheGate){
-        /* The gate held open and both voices wound to nothing, so the only thing that
-           can make a sound is `soundUpdate` deciding to. With its guard in place it
-           declines and this renders silent; with the guard gone it drives a large fire
-           into an open gate and this does not.
-
-           Reading the AudioParams back instead does not work, and that is worth writing
-           down: `setTargetAtTime` SCHEDULES a change, it does not move `.value`. A first
-           version of this check compared the parameters before and after and passed with
-           the guard deleted, because there was nothing to see yet. */
-        snd.master.gain.value = SOUND.master;
-        snd.heatGain.gain.value = 0;
-        snd.fireGain.gain.value = 0;
-      }
+      AMBIENT = 320;                        // a furnace, and it must not matter
+      if (openTheGate) snd.master.gain.value = SOUND.master;
       soundUpdate();
-      return __rms(await c.startRendering());
+      return { rms: __rms(await c.startRendering()), beats: beatN };
     };
     return { shut: await one(false), open: await one(true) };
   });
   const bad = [];
-  // A bar rather than an equality, because a biquad has a transient of its own at t=0.
-  if (r.shut > 1e-4) bad.push(`a fire with the sound off rendered at ${r.shut.toFixed(5)} RMS — the master gate is not holding`);
-  if (r.open > 1e-3) bad.push(`with the gate forced open and both voices at zero, an off box still rendered at ${r.open.toFixed(5)} RMS `
-    + `— soundUpdate is driving the graph when the sound is switched off`);
+  if (r.shut.rms > 1e-4) bad.push(`a furnace with the sound off rendered at ${r.shut.rms.toFixed(5)} RMS — the master gate is not holding`);
+  if (r.open.beats !== 0) bad.push(`with the sound off, ${r.open.beats} beats were scheduled — soundUpdate is driving the score when nobody asked it to`);
+  if (r.open.rms > 1e-3) bad.push(`with the gate forced open, an off box rendered at ${r.open.rms.toFixed(5)} RMS`);
   return bad.length ? bad.join('; ') : null;
 });
 
-console.log('\n— the two voices answer the two numbers —');
-
-await check(browser, 'the fire voice follows what is alight, and not the room', async p => {
-  const r = await p.evaluate(async () => ({
-    none:   (await __render(0, 0)).fire,
-    candle: (await __render(6, 2)).fire,
-    forge:  (await __render(135, 36)).fire,
-    open:   (await __render(155, 40)).fire,
-    // An empty box in an oven. `alightCount` is 0 and the room is at 230, so the fire
-    // voice must not stir at all — this is the case that killed using the box's own
-    // temperature as the signal.
-    oven:   (await __render(0, 0, 2)).fire
-  }));
+await check(browser, 'on by default, and an off that survives a reload', async p => {
   const bad = [];
-  if (!(r.none === 0)) bad.push(`an unlit box has the fire voice at ${r.none.toFixed(3)}`);
-  if (!(r.candle > 0 && r.candle < r.forge)) bad.push(`a candle reads ${r.candle.toFixed(3)} against a forge's ${r.forge.toFixed(3)}`);
-  if (!(r.forge < r.open)) bad.push(`the forge reads ${r.forge.toFixed(3)} against the opening scene's ${r.open.toFixed(3)}`);
-  if (r.oven !== 0) bad.push(`an empty box reads ${r.oven.toFixed(3)} — the fire voice is hearing the room`);
+  // Default on. `soundStored` has to answer three things, not two: on, off, and never
+  // asked — or a stored "off" is indistinguishable from a fresh box and comes back on.
+  const fresh = await p.evaluate(() => ({ stored: soundStored(), on: soundOn }));
+  if (fresh.stored !== null) bad.push(`a fresh box reports a stored setting of ${fresh.stored}`);
+  if (fresh.on !== true) bad.push('a fresh box did not come up with the sound on, which is the default that was asked for');
+
+  await p.evaluate(() => soundSet(false));
+  await p.reload({ waitUntil: 'domcontentloaded' });
+  await p.waitForFunction(() => typeof W !== 'undefined' && W > 40);
+  const after = await p.evaluate(() => ({ stored: soundStored(), on: soundOn }));
+  if (after.stored !== false) bad.push(`after being switched off, the stored setting is ${after.stored}`);
+  if (after.on !== false) bad.push('the sound came back on after being switched off and reloaded');
   return bad.length ? bad.join('; ') : null;
 });
 
-await check(browser, 'the heat voice reaches both ends and saturates at neither', async p => {
+console.log('\n— the pulse follows the room —');
+
+await check(browser, 'the tempo rises with the room and falls with it', async p => {
   const r = await p.evaluate(async () => ({
-    still:   (await __render(0, 0)).hz,
-    candle:  (await __render(6, 2)).hz,
-    forge:   (await __render(135, 36)).hz,
-    volcano: (await __render(27, 522)).hz,
-    nitro:   (await __render(0, -31)).hz,
-    ice:     (await __render(0, -33)).hz
+    ice:      (await __render(-2.8, 1)).bpm,
+    nitrogen: (await __render(12.1, 1)).bpm,
+    rest:     (await __render(20,   1)).bpm,
+    candle:   (await __render(20.6, 1)).bpm,
+    fire:     (await __render(31.4, 1)).bpm,
+    volcano:  (await __render(64.8, 1)).bpm,
+    oven:     (await __render(230,  1)).bpm,
+    furnace:  (await __render(480,  1)).bpm
   }));
   const bad = [];
-  if (Math.abs(r.still - 110) > .5) bad.push(`a still box sits at ${r.still.toFixed(1)}Hz rather than the 110 it rests at`);
-  if (!(r.candle < r.forge && r.forge < r.volcano))
-    bad.push(`candle ${r.candle.toFixed(1)}, forge ${r.forge.toFixed(1)}, volcano ${r.volcano.toFixed(1)} — not in order`);
-  /* The candle, and not the forge, because the candle is the only place the choice of
-     compression makes any difference at all.
+  const order = ['ice','nitrogen','rest','candle','fire','volcano'];
+  for (let i = 1; i < order.length; i++)
+    if (!(r[order[i]] > r[order[i-1]]))
+      bad.push(`${order[i]} at ${r[order[i]].toFixed(1)}bpm is not quicker than ${order[i-1]} at ${r[order[i-1]].toFixed(1)}`);
+  if (Math.abs(r.rest - 60) > .5) bad.push(`a still box runs at ${r.rest.toFixed(1)}bpm rather than the 60 it rests at`);
+  // A fixed room setting is a deliberate act and is allowed to drive this — but clamped,
+  // or a Furnace at 480°C would be four times an eruption.
+  if (Math.abs(r.oven - r.furnace) > .01) bad.push(`Oven ${r.oven.toFixed(1)}bpm and Furnace ${r.furnace.toFixed(1)}bpm differ — the top is not clamped`);
+  if (!(r.oven >= r.volcano)) bad.push(`an Oven runs slower than an eruption`);
+  /* The quiet end is where the choice of compression lives, exactly as it did for the
+     voices this replaced. On a straight line an ordinary fire moves the room 11 degrees
+     against the Volcano's 45 and is barely quicker than silence. */
+  const span = r.volcano - r.rest;
+  const at = (r.fire - r.rest) / span;
+  if (!(at > .45)) bad.push(`an ordinary fire sits ${(at*100)|0}% of the way from resting to an eruption — the quiet end is crowded`);
+  console.log(`        (ice ${r.ice.toFixed(0)} · nitrogen ${r.nitrogen.toFixed(0)} · rest ${r.rest.toFixed(0)} · candle ${r.candle.toFixed(0)}`
+    + ` · fire ${r.fire.toFixed(0)} · volcano ${r.volcano.toFixed(0)} · oven ${r.oven.toFixed(0)} bpm)`);
+  return bad.length ? bad.join('; ') : null;
+});
 
-     This check used to assert the FORGE's position, on the stated grounds that a `tanh`
-     would crowd every ordinary fire into the bottom of the scale. Mutation-tested by
-     swapping the log for `tanh(x/60)`, and it stayed green — because the claim was
-     wrong. The two agree within a tenth everywhere except one scene:
+await check(browser, 'the tempo is a pulse and not just a number', async p => {
+  // The bpm could be perfect and drive nothing. This counts what actually got scheduled
+  // into a fixed window, which is the only claim that matters.
+  const r = await p.evaluate(async () => ({
+    ice:     (await __render(-2.8, 8)).beats,
+    rest:    (await __render(20,   8)).beats,
+    volcano: (await __render(64.8, 8)).beats
+  }));
+  const bad = [];
+  if (!(r.volcano > r.rest && r.rest > r.ice))
+    bad.push(`eight seconds carried ${r.ice} beats cold, ${r.rest} resting and ${r.volcano} hot — the tempo is not reaching the scheduler`);
+  if (r.ice < 4) bad.push(`only ${r.ice} beats in eight seconds at the cold end — the piece has stopped rather than slowed`);
+  return bad.length ? bad.join('; ') : null;
+});
 
-           tanh(x/60)   log1p/log1p
-       candle    0.033         0.175    5.3x
-       Forge     0.532         0.575    1.1x
-       opening   0.587         0.594    1.0x
-       Volcano   1.000         0.999    1.0x
+await check(browser, 'the piece plays when nothing at all is happening', async p => {
+  /* The whole brief is a soundtrack you leave on. A score that only arrives with a fire
+     is a sound effect wearing a score's clothes.
 
-     A candle is the scene most likely to be the only thing in the box, and under a tanh
-     it is 3% of the way up a scale it has entirely to itself. So the bar goes on the
-     quiet end, which is where the decision actually lives. */
-  const span = r.volcano - r.still;
-  const at = (r.candle - r.still) / span;
-  if (!(at > .10))
-    bad.push(`a candle sits ${(at*100).toFixed(1)}% of the way from a still box to the volcano `
-           + `— the quiet end of the scale is crowded, which is what a tanh does here`);
-  const forge = (r.forge - r.still) / span;
-  if (!(forge > .35 && forge < .75))
-    bad.push(`the forge sits ${(forge*100)|0}% of the way from still to the volcano`);
-  if (!(r.nitro < r.still && r.ice < r.nitro))
-    bad.push(`cold does not take the drone down: still ${r.still.toFixed(1)}, nitrogen ${r.nitro.toFixed(1)}, ice ${r.ice.toFixed(1)}`);
+     It counts NOTES and not loudness, and that distinction was found by mutation. Asking
+     only whether a still box makes a sound is satisfied by the pads on their own, so
+     deleting every pluck at rest — `density = hot * denHot`, which is nought at 20°C —
+     left the check green with the tune gone and the drone left. */
+  const r = await p.evaluate(async () => await __render(20, 6));
+  const bad = [];
+  if (r.rms < 1e-3) bad.push(`a still box on Neutral rendered at ${r.rms.toFixed(5)} RMS — there is nothing there at all`);
+  if (r.notes < 3) bad.push(`a still box played ${r.notes} notes in six seconds — there is no tune until something burns, only a bed`);
   return bad.length ? bad.join('; ') : null;
 });
 
 console.log('\n— it survives the speaker it will be played through —');
 
-await check(browser, 'the drone never drops below what a phone can reproduce', async p => {
-  const worst = await p.evaluate(async () => {
-    let lo = 1e9, at = 0;
-    // Swept past the measured extremes in both directions, because `heatRef` is the
-    // largest excursion anyone has built rather than a bound the box enforces.
-    for (let above = -900; above <= 900; above += 30){
-      const hz = (await __render(0, above, .2)).hz;
-      if (hz < lo){ lo = hz; at = above; }
-    }
-    return { lo, at };
-  });
-  if (worst.lo < 82) return `the drone reaches ${worst.lo.toFixed(1)}Hz at ${worst.at}°C above the room — under 82Hz a phone speaker does not reproduce the fundamental`;
-  return null;
-});
-
 await check(browser, 'what comes out is still there after a phone speaker has had it', async p => {
   const r = await p.evaluate(async () => {
     const ref = await __reference(500);
-    const one = async (lit, above) => {
-      const o = await __render(lit, above, 2);
-      const cut = await __through(o.buf, 500);
-      return { raw: o.rms, survives: (cut / o.rms) / ref };
+    const one = async (room) => {
+      const o = await __render(room, 6);
+      return { survives: (await __through(o.buf, 500) / o.rms) / ref };
     };
-    return { ref,
-      drone:  await one(0, 0),
-      candle: await one(6, 2),
-      forge:  await one(135, 36),
-      volcano:await one(27, 522) };
+    return { ref, rest: await one(20), fire: await one(31.4), volcano: await one(64.8), ice: await one(-2.8) };
   });
   const bad = [];
-  // The bar is what `docs/` measured its *fixed* cue at, 51% at stage one, and the
-  // failure it replaced was 22%. Anything at or under a quarter is a sound written for
-  // headphones and inaudible on the thing it is played on.
-  for (const k of ['drone','candle','forge','volcano'])
+  /* The bar is what `docs/` measured its FIXED cue at, 51%, against the 22% of the
+     version that could not be heard at all across two entire games. */
+  for (const k of ['rest','fire','volcano','ice'])
     if (r[k].survives < .35)
       bad.push(`${k} keeps only ${(r[k].survives*100)|0}% of its energy through a 500Hz highpass`);
-  console.log(`        (reference ${r.ref.toFixed(3)}; survives — drone ${(r.drone.survives*100)|0}%, `
-    + `candle ${(r.candle.survives*100)|0}%, forge ${(r.forge.survives*100)|0}%, volcano ${(r.volcano.survives*100)|0}%)`);
+  console.log(`        (reference ${r.ref.toFixed(3)}; survives — resting ${(r.rest.survives*100)|0}%, `
+    + `fire ${(r.fire.survives*100)|0}%, volcano ${(r.volcano.survives*100)|0}%, ice ${(r.ice.survives*100)|0}%)`);
+  /* A figure at or slightly over 100% is not the broken metric `docs/` once reported as
+     "127% survives". That one had no reference division at all. This one does, and a
+     ratio a little over unity simply means the score sits further above the 500Hz corner
+     than the 2kHz tone the filter was characterised on — which is the answer "essentially
+     all of it", and is what putting the plucks at 440-1760Hz was for. */
   return bad.length ? bad.join('; ') : null;
 });
 

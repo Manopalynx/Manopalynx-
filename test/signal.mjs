@@ -83,25 +83,25 @@ const HARNESS = `
 
 const scenarios = [
   // The controls. Nothing is happening in any of these.
-  ['empty · Normal',    async p => p.evaluate(() => { __room('Normal');   __wipe(); }), 60],
+  ['empty · Normal',    async p => p.evaluate(() => { __room('Neutral');   __wipe(); }), 60],
   ['empty · Oven',      async p => p.evaluate(() => { __room('Oven');     __wipe(); }), 60],
   ['empty · Freezing',  async p => p.evaluate(() => { __room('Freezing'); __wipe(); }), 60],
 
   // A box with something in it and nothing happening to it — the second control, and
   // the harder one: the Garden is busy with life and cold throughout.
-  ['Garden · alone',    async p => p.evaluate(() => { __room('Normal'); loadScene(__scene('Garden')); }), 120],
+  ['Garden · alone',    async p => p.evaluate(() => { __room('Neutral'); loadScene(__scene('Garden')); }), 120],
 
   // Fires, smallest to largest.
-  ['Chandler · lit',    async p => p.evaluate(() => { __room('Normal'); loadScene(__scene('Chandler'));
+  ['Chandler · lit',    async p => p.evaluate(() => { __room('Neutral'); loadScene(__scene('Chandler'));
                           const w = __edge(FUSE,'top'); __hold(w[0], w[1], 2, 120); }), 120],
-  ['opening · lit',     async p => p.evaluate(() => { __room('Normal'); __wipe(); seed();
+  ['opening · lit',     async p => p.evaluate(() => { __room('Neutral'); __wipe(); seed();
                           const o = __edge(OIL,'left'); __hold(o[0], o[1], 2, 90); }), 120],
-  ['Forge · lit',       async p => p.evaluate(() => { __room('Normal'); loadScene(__scene('Forge'));
+  ['Forge · lit',       async p => p.evaluate(() => { __room('Neutral'); loadScene(__scene('Forge'));
                           const f = __edge(FUSE,'left'); __hold(f[0], f[1], 2, 150); }), 150],
-  ['Volcano · alone',   async p => p.evaluate(() => { __room('Normal'); loadScene(__scene('Volcano')); }), 150],
+  ['Volcano · alone',   async p => p.evaluate(() => { __room('Neutral'); loadScene(__scene('Volcano')); }), 150],
 
   // The cold end, which the same number has to reach if it is to drive anything.
-  ['nitrogen · splash', async p => p.evaluate(() => { __room('Normal'); __wipe(); const f = __floor();
+  ['nitrogen · splash', async p => p.evaluate(() => { __room('Neutral'); __wipe(); const f = __floor();
                           for (let y=f-18; y<f; y++) for (let x=(W*0.35)|0; x<(W*0.55)|0; x++) put(x,y,NITRO); }), 60],
   ['ice · packed',      async p => p.evaluate(() => { __room('Neutral'); __wipe(); const f = __floor();
                           for (let y=0; y<f; y++) for (let x=0; x<W; x++) put(x,y,ICE); }), 120],
@@ -140,6 +140,7 @@ for (const [name, build, secs] of scenarios) {
     alightPeak: peakOf('alight'), alightMean: meanOf('alight'),
     firePeak: peakOf('fire'),
     peakT: peakOf('peak'), ambEnd: series[series.length-1].amb,
+    ambPeak: peakOf('amb'), ambMin: series.reduce((a,x)=>Math.min(a,x.amb), 1e9),
     series });
   await page.close();
 }
@@ -150,13 +151,12 @@ const pad = (s, n) => String(s).padEnd(n);
 const rpad = (s, n) => String(s).padStart(n);
 
 console.log('\nEach scenario run for the seconds shown, sampled once a second.\n');
-console.log(pad('scenario', 20) + rpad('secs', 5) + rpad('mix peak', 10) + rpad('above peak', 12)
-          + rpad('above min', 11) + rpad('alight peak', 13) + rpad('fire peak', 11) + rpad('max °C', 9) + rpad('room end', 10));
-console.log('-'.repeat(101));
+console.log(pad('scenario', 20) + rpad('secs', 5) + rpad('alight peak', 13)
+          + rpad('ROOM hottest', 14) + rpad('ROOM coldest', 14) + rpad('room end', 10));
+console.log('-'.repeat(76));
 for (const r of rows)
-  console.log(pad(r.name, 20) + rpad(r.secs, 5) + rpad(f(r.mixPeak), 10) + rpad(f(r.abovePeak), 12)
-            + rpad(f(r.aboveMin), 11) + rpad(r.alightPeak, 13) + rpad(r.firePeak, 11)
-            + rpad(f(r.peakT, 0), 9) + rpad(f(r.ambEnd), 10));
+  console.log(pad(r.name, 20) + rpad(r.secs, 5) + rpad(r.alightPeak, 13)
+            + rpad(f(r.ambPeak), 14) + rpad(f(r.ambMin), 14) + rpad(f(r.ambEnd), 10));
 
 /* Scaled by the largest *magnitude* in the series, not by its maximum.
    The first version of this used `Math.max(1, peak)`, and every cold scenario has a
@@ -181,6 +181,11 @@ const spark = (series, key, signed, floor) => {
                                    .replace('*','o').replace('+','c').replace('=','~') : c;
   }).join('');
 };
+
+console.log('\nShape over time — the ROOM reading, which is the number on the gauge:\n');
+for (const r of rows)
+  console.log(pad(r.name, 20) + '|' + spark(r.series, 'amb', true, 2) + '|  '
+            + f(r.ambMin) + ' to ' + f(r.ambPeak));
 
 console.log('\nShape over time — `above` (mixing temperature less the room).');
 console.log('Scaled per row to its own largest swing. Cold samples use the second glyph set.\n');
