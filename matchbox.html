@@ -75,6 +75,12 @@
     font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:.12em;
     text-transform:uppercase;color:var(--ink);cursor:pointer}
   .fold:focus-visible{outline:2px solid var(--phos);outline-offset:1px}
+  /* On-state by background rather than by label. The label stays "Sound" at both
+     settings on purpose: a button that relabels itself changes width, and this file has
+     already had a row lifted by 86px between the tap that asks and the tap that
+     confirms. The header is not the tray and would survive it — but the rule is cheap
+     to keep and the reason it exists has not gone anywhere. */
+  .fold.on{background:var(--phos);border-color:var(--phos);color:#171009}
   .tray.folded{display:none}
 
   /* ---- the void ---- */
@@ -311,6 +317,19 @@
   <div class="label">
     <div class="word">Match<em>box</em></div>
     <div class="meta">Strike the strip<br>Then touch the dark</div>
+    <!-- The header, and not the tray, because the tray has no room and this is measured
+         rather than assumed: a ninth chip in Tools takes that drawer to 37px against
+         Wet's 50 and breaks the tray-wide 1.25 rule at every width, and a fifth chip on
+         the bar pushes two children off the right edge unless the brush slider gives up
+         a third of itself. A second button here moves nothing at all, at 320, 375, 390,
+         393 or 430px. `test/sound-fit.mjs` has the numbers.
+
+         It also has to be here rather than anywhere that can be put away: Hide folds the
+         TRAY, not the header, and in a Home Screen PWA the iPhone's ringer switch does
+         not reliably silence a web page. The way to stop a sound must not be behind the
+         thing you would need it for. -->
+    <button class="fold" id="snd" type="button" aria-pressed="false"
+            aria-label="Sound">Sound</button>
     <button class="fold" id="fold" type="button" aria-expanded="true"
             aria-label="Hide the tray and give the room to the box">Hide</button>
   </div>
@@ -1713,6 +1732,17 @@ const N_SPAN_HOT  = 45;   // reached, and doing real work: a large fire saturate
 const N_RATE      = .0035;// ~5s to answer a change. At .0015 the destinations were the
                           // same and the recovery from a removed ice slab took 82s
                           // rather than 46 — the rate is a cheap win, so it is spent.
+/* The box's mixing temperature, written once a tick by `roomLoss` and read by the room
+   and by the sound. One writer, so there is nothing for a second copy to drift from. */
+let boxMix = 20;
+/* How many cells were actually alight at the end of the last tick, counted by `react`
+   in the branch that already decides it — so it costs an increment rather than a sweep.
+
+   Alight, not hot. `MATCHBOX.md` records counting the two as the same making a lid of
+   ice read as *feeding* the fire under it, and this is the number the sound is built on.
+   Measured across the presets: a candle is 6, the Volcano 27, the Forge 135 and the
+   opening scene about 155. */
+let alightCount = 0;
 let roomDrifts = false;   // whether the setting in hand is Neutral. Derived from the
                           // opening `roomAt` where ROOMS is declared, and set by
                           // setRoom after that — never written by hand, because a copy
@@ -1739,8 +1769,22 @@ function roomLoss(){
     // scattered through the reaction code — one of which did not exist.
     if (temp[i] > MAX_T) temp[i] = MAX_T;
     if (temp[i] < MIN_T) temp[i] = MIN_T;
-    if (roomDrifts){ const p = CAPS[type[i]]; heat += temp[i] * p; cap += p; }
+    /* Gathered always, not only when the room is drifting. It used to be `if
+       (roomDrifts)`, because Neutral was the only thing that wanted it — and then the
+       sound wanted it too, at every setting.
+
+       Ungated rather than computed a second time somewhere else. The same number
+       derived twice from the same field is two numbers waiting to disagree, and this
+       file has paid for that often enough to spend 0.126ms a tick avoiding it — which
+       is what this gather was measured at when Neutral went in. */
+    const p = CAPS[type[i]]; heat += temp[i] * p; cap += p;
   }
+  /* What the box would read if you stirred it. The room steers by it, and so does the
+     sound — but they want it differently: the room wants the absolute temperature, and
+     the sound wants the distance from the room, because an empty box on Oven is at
+     230°C with nothing happening in it. Measured: mix 230.0 on an empty Oven against
+     55.6 for a lit Forge, which is why the sound cannot use this number raw. */
+  boxMix = heat / cap;
   // The walls. Whatever is pressed against the outside of the box is in contact with
   // the room, so the border ring sheds heat properly rather than banking it.
   for (let x=0; x<W; x++){
@@ -1756,7 +1800,7 @@ function roomLoss(){
   // Last, so the walls above shed into the room the box had this tick rather than the
   // one it is moving to. A tick of lag against a five-second response is nothing, and
   // reading and writing AMBIENT in the same pass is how a feedback loop gets subtle.
-  if (roomDrifts) AMBIENT += (roomTarget(heat / cap) - AMBIENT) * N_RATE;
+  if (roomDrifts) AMBIENT += (roomTarget(boxMix) - AMBIENT) * N_RATE;
 }
 
 
@@ -3063,6 +3107,7 @@ let tick = 0;
 
 function react(){
   tick++;
+  let lit = 0;                    // see `alightCount` — counted where it is decided
   for (let y=H-1; y>=0; y--){
     for (let x=0; x<W; x++){
       const i = idx(x,y), t = type[i];
@@ -3262,6 +3307,13 @@ function react(){
         // takes the energy out of the fire.
         if (touchingWater(x,y)) continue;
 
+        /* Counted here and nowhere else, because here is where the box has finished
+           deciding. Everything above this line is a cell that might burn — over its
+           ignition point, still charring, or held under water — and none of that is a
+           fire. Past the water check it is alight, and the count is what the sound is
+           built on. Free: an increment on a branch that already exists. */
+        lit++;
+
         // A wick does not burn so much as draw, and a wick that is drawing does not
         // burn away — it is soaked in what it is drawing. Spend the liquid instead of
         // itself, and come back up to full while it can still reach some. A dry one
@@ -3297,6 +3349,7 @@ function react(){
       }
     }
   }
+  alightCount = lit;
 }
 
 /* ============================================================ render
@@ -5276,7 +5329,11 @@ function frame(now){
   heatView ? drawHeat() : draw();
   frameMs += (performance.now() - t0 - frameMs) * .05;
   if (findFlash > 0 && --findFlash === 0) sayTool();
-  if ((++gaugeTick % 12) === 0) updateGauge();
+  /* Five times a second for both, which is as often as either needs to be. The sound is
+     driven beside the gauge rather than from inside it, so a change to what the corner
+     prints cannot silently change what the box sounds like. Every parameter is set with
+     `setTargetAtTime`, so 5Hz of steps arrives as a continuous line. */
+  if ((++gaugeTick % 12) === 0){ updateGauge(); soundUpdate(); }
   requestAnimationFrame(frame);
 }
 
@@ -5456,6 +5513,245 @@ function updateGauge(){
   keepRoClear();
 }
 
+/* ============================================================ sound
+
+   Two voices, because the box has two things to say and they are not the same thing.
+
+   THE NUMBERS THAT DECIDE THIS WERE MEASURED, and the first one killed the obvious
+   design. `test/signal.mjs` puts ten scenes through four candidate signals:
+
+     empty box on Oven      mixing temperature 230.0°C     nothing is happening
+     lit Forge              mixing temperature  55.6°C     the hardest fire in the box
+
+   So a score that follows the box's temperature plays its finale over an empty oven and
+   makes the room dial a volume knob. What works is the temperature *above the room* —
+   which reads 0.0 on all three empty boxes at every setting — and, separately, the count
+   of cells actually alight, which the room cannot touch at all.
+
+   They are two voices rather than one number because they have different shapes. Fire
+   catches, peaks and dies; heat lags it and hangs about long after:
+
+     Forge, alight  |::  .:-=+*#%@@@@%%%%%#*+=-:..      |
+     Forge, above   |:-=+++*##%%%@@@@@@@@@%%%##**+===---:::...|
+
+   COMPRESSED WITH A LOG, NOT THE TANH THE ROOM USES — and the reason first written here
+   was wrong, which is worth leaving in rather than quietly correcting. The claim was that
+   `tanh(x/60)` pins the Volcano at 0.99999 and crowds every ordinary fire into the bottom
+   of the scale. Mutation-tested by swapping one for the other, and the suite stayed green,
+   because the two agree within a tenth almost everywhere:
+
+                tanh(x/60)   log1p/log1p
+      candle         0.033         0.175    5.3x
+      Forge          0.532         0.575    1.1x
+      opening        0.587         0.594    1.0x
+      Volcano        1.000         0.999    1.0x
+      packed ice     0.504         0.564    1.1x
+
+   **The whole difference is the candle**, and that is still the right reason to take the
+   log: a candle is 2.0 above the room against the Volcano's 522, and it is the scene most
+   likely to be the only thing in the box. Under a tanh it sits at 3% of a scale it has
+   entirely to itself. Under a log it sits at 18%. The suite now asserts the quiet end,
+   where the decision actually lives, rather than the forge, where there was never
+   anything to decide.
+
+   PITCHED FOR A PHONE SPEAKER, which is the one thing here that is not this project's own
+   measurement. `docs/README.md` records a cue written at 34–58Hz of which **22% survived**
+   a 500Hz highpass approximating an iPhone speaker — two entire games played without it
+   being heard once. Heat and fire both want to be low rumble, which is exactly the band
+   that cannot reach the player. So the drone is a sawtooth between 88 and 165Hz and the
+   speaker gets its harmonics. `test/matchbox-sound.mjs` renders the graph offline and
+   fails anything that does not survive that filter.
+
+   SYNTHESISED, because the whole page is one file and a sample would end that.
+
+   OFF BY DEFAULT, and remembered. A page that starts making noise on its own has taken a
+   decision that was not its to take. */
+const SOUND = {
+  master:   .55,
+  glide:    .35,        // seconds to answer a change; the box is not a synthesiser
+
+  // ---- the fire, from `alightCount`
+  fireRef:  160,        // measured: the opening scene peaks about 155, the Forge 135
+  fireLow:  520,        // the bed's bandpass at nothing...
+  fireHigh: 2400,       // ...and at a box fully alight
+  fireQ:    .9,
+  fireGain: .30,
+  crackMax: 11,         // crackles a second at full fire
+  crackLow: 900,
+  crackHigh:2600,
+
+  // ---- the heat, from the mixing temperature less the room
+  heatRef:  525,        // the largest excursion measured — the Volcano's 522
+  heatHz:   110,        // NOT LOWER. Cold takes this down by a fifth and the floor
+  heatUp:   1.5,        // that has to clear is about 82Hz on a phone speaker.
+  heatDown: .8,         // 110 × .8 = 88Hz, 110 × 1.5 = 165Hz
+  /* The drone's lowpass, cold. NOT 420, which is where this started and where the
+     resting bed kept only 31% of its energy through a 500Hz highpass — a 110Hz saw with
+     everything above its third harmonic removed is entirely under the floor of a phone
+     speaker, so "Sound on" with nothing burning would have been silence on the only
+     device this is played on, and no way to tell the switch had worked. Caught by
+     `test/matchbox-sound.mjs` rather than by listening.
+
+     Swept: 700 gives 43%, 900 gives 46%, 1200 gives 48%. 700 clears the bar and keeps
+     the widest sweep for the filter to do the job it is there for — 700 → 3000 is a
+     4.3× opening where 1200 → 3000 is 2.5×. */
+  heatShut: 700,
+  heatOpen: 3000,       // ...and at full heat
+  heatGain: .34,
+  detune:   7,          // cents between the two saws, which is what makes it breathe
+  bed:      .05         // at rest, so "on" is audibly different from "off"
+};
+
+/* Sign-preserving log compression. Clamped, because `heatRef` is the largest excursion
+   *measured* rather than a bound anything enforces, and a scene nobody has built yet is
+   allowed to be hotter than the Volcano. */
+const squash = (x, ref) => {
+  const m = Math.min(1, Math.log1p(Math.abs(x)) / Math.log1p(ref));
+  return x < 0 ? -m : m;
+};
+
+let actx = null, snd = null, soundOn = false;
+
+function soundStored(){
+  if (!storageWorks()) return false;
+  try { return localStorage.getItem('matchbox.sound') === '1'; } catch { return false; }
+}
+
+/* Built inside a user gesture and never before one. iOS will hand out a context at any
+   time and then refuse to let it make a sound, which looks exactly like a broken graph:
+   everything connects, nothing is heard, and there is nothing in the console. */
+/* Takes a context rather than always making one, and that is for the tests rather than
+   for the page — which is worth saying out loud, because a seam that exists for a test
+   is usually a bad smell and this one is the opposite. The only way to find out what
+   this graph actually sounds like through a phone speaker is to render it offline and
+   filter it, and a test that rebuilds the graph to do that is measuring its own copy.
+   `test/matchbox-sound.mjs` hands in an OfflineAudioContext and gets the real thing. */
+function soundBuild(ctx){
+  const C = window.AudioContext || window.webkitAudioContext;
+  if (!ctx && !C) return false;
+  try { actx = ctx || new C(); } catch { return false; }
+
+  const master = actx.createGain();
+  master.gain.value = 0;
+  master.connect(actx.destination);
+
+  // ---- heat: two detuned sawtooths under a lowpass.
+  const heatFilt = actx.createBiquadFilter();
+  heatFilt.type = 'lowpass'; heatFilt.frequency.value = SOUND.heatShut; heatFilt.Q.value = .7;
+  const heatGain = actx.createGain(); heatGain.gain.value = SOUND.bed;
+  heatFilt.connect(heatGain); heatGain.connect(master);
+  const saws = [0, SOUND.detune].map(d => {
+    const o = actx.createOscillator();
+    o.type = 'sawtooth'; o.frequency.value = SOUND.heatHz; o.detune.value = d;
+    o.connect(heatFilt); o.start();
+    return o;
+  });
+
+  // ---- fire: looped noise through a bandpass. Two seconds of it, so the loop is not
+  //      a pitch of its own.
+  const bed = actx.createBuffer(1, Math.floor(actx.sampleRate * 2), actx.sampleRate);
+  const bd = bed.getChannelData(0);
+  for (let i=0; i<bd.length; i++) bd[i] = Math.random()*2 - 1;
+  const noise = actx.createBufferSource();
+  noise.buffer = bed; noise.loop = true;
+  const fireFilt = actx.createBiquadFilter();
+  fireFilt.type = 'bandpass'; fireFilt.frequency.value = SOUND.fireLow; fireFilt.Q.value = SOUND.fireQ;
+  const fireGain = actx.createGain(); fireGain.gain.value = 0;
+  noise.connect(fireFilt); fireFilt.connect(fireGain); fireGain.connect(master);
+  noise.start();
+
+  // A short buffer for the crackles, made once. A crackle is the only thing here that
+  // is an event rather than a level.
+  const snap = actx.createBuffer(1, Math.floor(actx.sampleRate * .05), actx.sampleRate);
+  const sd = snap.getChannelData(0);
+  for (let i=0; i<sd.length; i++) sd[i] = (Math.random()*2 - 1) * (1 - i/sd.length);
+
+  snd = { master, heatGain, heatFilt, saws, fireGain, fireFilt, snap };
+  return true;
+}
+
+function crackle(level){
+  const src = actx.createBufferSource(); src.buffer = snd.snap;
+  const f = actx.createBiquadFilter();
+  f.type = 'bandpass';
+  f.frequency.value = SOUND.crackLow + Math.random() * (SOUND.crackHigh - SOUND.crackLow);
+  f.Q.value = 4;
+  const g = actx.createGain(); g.gain.value = .10 + .16 * level * Math.random();
+  src.connect(f); f.connect(g); g.connect(snd.master);
+  src.start();
+}
+
+/* Driven from `frame`, five times a second, off two numbers that were already computed:
+   `alightCount` by `react` in the branch that decides it, and `boxMix` by `roomLoss` in
+   the sweep it already makes. No pass of the grid belongs to the sound. */
+function soundUpdate(){
+  if (!snd || !soundOn) return;
+  const t = actx.currentTime, g = SOUND.glide;
+  const to = (p, v) => p.setTargetAtTime(v, t, g);
+
+  const fire = Math.min(1, alightCount / SOUND.fireRef);
+  const heat = squash(boxMix - AMBIENT, SOUND.heatRef);
+  const hot  = Math.max(0, heat);
+
+  to(snd.fireGain.gain, fire * SOUND.fireGain);
+  to(snd.fireFilt.frequency, SOUND.fireLow + fire * (SOUND.fireHigh - SOUND.fireLow));
+
+  // Hot lifts the drone, cold drops it, and neither may take it under the floor a
+  // phone speaker can reproduce — hence the two multipliers rather than one.
+  const hz = SOUND.heatHz * (heat >= 0
+    ? 1 + heat * (SOUND.heatUp - 1)
+    : 1 - (-heat) * (1 - SOUND.heatDown));
+  for (const o of snd.saws) to(o.frequency, hz);
+  to(snd.heatFilt.frequency, SOUND.heatShut + hot * (SOUND.heatOpen - SOUND.heatShut));
+  to(snd.heatGain.gain, SOUND.bed + Math.abs(heat) * SOUND.heatGain);
+
+  // Crackles, at a rate set by how much is alight. Five updates a second, so this is
+  // the per-update share of `crackMax`.
+  if (fire > 0 && Math.random() < fire * SOUND.crackMax / 5) crackle(fire);
+}
+
+function soundSet(on){
+  let note = on ? 'Sound on' : 'Sound off';
+  soundOn = on;
+  if (on){
+    /* A browser with no Web Audio at all, or one that refuses a context. The state has
+       to come back down with it — the first draft returned early here, which left the
+       button lit and the box silent. A control that says it is on while it is off is
+       worse than one that does not work, because there is nothing left to try. */
+    if (!snd && !soundBuild()){ soundOn = false; note = 'This browser will not play sound'; }
+    else {
+      if (actx.state === 'suspended') actx.resume();
+      snd.master.gain.setTargetAtTime(SOUND.master, actx.currentTime, .2);
+    }
+  } else if (snd){
+    snd.master.gain.setTargetAtTime(0, actx.currentTime, .2);
+  }
+  // One place reflects the state, on every path through this function.
+  sndEl.classList.toggle('on', soundOn);
+  sndEl.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
+  if (storageWorks()) { try { localStorage.setItem('matchbox.sound', soundOn ? '1' : '0'); } catch {} }
+  say(note, true);
+}
+
+const sndEl = document.getElementById('snd');
+sndEl.addEventListener('click', () => soundSet(!soundOn));
+
+/* Every touch is a chance to start the sound, and a touch is the only thing allowed to.
+
+   Two jobs, and the first one is easy to leave out. A setting remembered from last time
+   arrives with `soundOn` true and no graph at all, because a context built at boot is one
+   iOS hands over and then will not let make a sound — so the first touch has to BUILD it,
+   not merely resume it. Without that half, "remembered" means the button comes back on
+   and nothing ever plays, which is the most convincing kind of broken.
+
+   The second is that a live context can be suspended out from under the page by a phone
+   call, a tab going to the background, or iOS simply deciding. */
+addEventListener('pointerdown', () => {
+  if (!soundOn) return;
+  if (!snd){ soundSet(true); return; }
+  if (actx.state === 'suspended') actx.resume();
+}, { capture: true });
+
 /* ============================================================ boot */
 
 /* A little scene, so the first thing on screen is not an empty box.
@@ -5501,6 +5797,15 @@ function boot(){
   build();
   seed();
   setTool(WOOD);
+  /* The setting is remembered; the sound is not resumed. A context built outside a
+     gesture is handed over on iOS and then refuses to make a sound, which reads exactly
+     like a broken graph. So the button comes back on and the first touch anywhere —
+     which is the `pointerdown` listener beside `soundSet` — is what actually starts it. */
+  if (soundStored()){
+    soundOn = true;
+    sndEl.classList.add('on');
+    sndEl.setAttribute('aria-pressed', 'true');
+  }
   requestAnimationFrame(frame);
 }
 boot();

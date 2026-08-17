@@ -2314,6 +2314,156 @@ and a second strike not giving a fresh match — and **neither of them is about 
 is the only reason it did not ship. Same shape as the `KEEP` collision a few changes earlier,
 in a file with one scope and a lot of short names.
 
+## Sound
+
+Two voices, off by default, switched from the header. A page that starts making a noise
+on its own has taken a decision that was not its to take.
+
+### The signal, which is not the one the idea named
+
+Asked for as "music that scales with heat". The obvious number is the box's own
+temperature — and `roomLoss` already computes it every tick for Neutral, so it is nearly
+free. `test/signal.mjs` put ten scenes through four candidates and killed it on the first
+row:
+
+| | mixing temperature | what is happening |
+|---|---|---|
+| empty box on **Oven** | **230.0°C** | nothing at all |
+| lit **Forge** | 55.6°C | the hardest fire in the box |
+
+A score following that plays its finale over an empty oven, and the room dial becomes a
+volume knob. What works is **the temperature above the room**, which reads exactly `0.0`
+on all three empty boxes at every setting, and separately **the count of cells actually
+alight**, which the room cannot touch at all.
+
+| | above the room | alight |
+|---|---|---|
+| empty · Normal / Oven / Freezing | **0.0** | 0 |
+| Garden, left alone | −0.3 | 0 |
+| Chandler, lit | 2.0 | 6 |
+| Forge, lit | 35.6 | 135 |
+| opening scene, lit | 40.4 | ~155 |
+| **Volcano** | **522.4** | 27 |
+| nitrogen splash | −31.1 | 0 |
+| packed ice | −33.3 | 0 |
+
+**They are two voices because they have two shapes.** Fire catches, peaks and dies; heat
+lags it and hangs about long after:
+
+```
+Forge, alight  |::  .:-=+*#%@@@@%%%%%#*+=-:..      |
+Forge, above   |:-=+++*##%%%@@@@@@@@@%%%##**+===---:::...|
+```
+
+**Neither costs a sweep.** `alightCount` is an increment in the one branch of `react`
+that has already decided a cell is burning — past the ignition point, past the charring,
+past the water check. `boxMix` is `roomLoss`'s existing gather, ungated from `roomDrifts`
+so every room setting pays the 0.126ms Neutral was already paying. Both are read five
+times a second beside the gauge, and every parameter is set with `setTargetAtTime`, so
+5Hz of steps arrives as a continuous line.
+
+### Compressed with a log, not the `tanh` the room uses — for a reason I first got wrong
+
+The stated reason was that `above` spans a candle's 2.0 to the Volcano's 522, so a `tanh`
+would pin the Volcano at 0.99999 and crowd every ordinary fire into the bottom of the
+scale. **Mutation-tested by swapping one for the other, and the suite stayed green.** The
+claim was false:
+
+| | `tanh(x/60)` | `log1p/log1p` | |
+|---|---|---|---|
+| candle | 0.033 | **0.175** | **5.3×** |
+| Forge | 0.532 | 0.575 | 1.1× |
+| opening | 0.587 | 0.594 | 1.0× |
+| Volcano | 1.000 | 0.999 | 1.0× |
+| packed ice | 0.504 | 0.564 | 1.1× |
+
+They agree within a tenth everywhere except one scene. **The whole difference is the
+candle** — and that is still the right reason to take the log, just not the reason first
+given: a candle is 2.0 above the room against the Volcano's 522, and it is the scene most
+likely to be the only thing in the box. Under a `tanh` it sits at 3% of a scale it has
+entirely to itself; under a log, 18%.
+
+The check now asserts the **quiet** end, where the decision actually lives, rather than
+the forge, where there was never anything to decide. The old assertion was decoration and
+only mutation testing said so — which is the fifth time in this file's history that a
+check has been green about something it could not see.
+
+### On Neutral the heat voice settles, and that is the design
+
+Measured, a box packed edge to edge with ice on Neutral:
+
+| | mix | room | above |
+|---|---|---|---|
+| 0s | −13.3 | 20.0 | **−33.3** |
+| 15s | −12.5 | −1.9 | **−10.6** |
+| 120s | −11.3 | −2.2 | −9.1 |
+
+The ice is all still there at two minutes. The signal has fallen to 27% of its opening
+value inside fifteen seconds, because Neutral's whole job is to make the room agree with
+the box — so this voice reports **disequilibrium**, not state. Something happening rather
+than something being the case. That was a fork and it was taken deliberately: a drone
+that never resolves is what `docs/` got reported for.
+
+### Pitched for a phone speaker, which is borrowed knowledge
+
+The one thing here that is not this project's own measurement. `docs/README.md` records a
+cue written at 34–58Hz of which **22% survived** a 500Hz highpass approximating an iPhone
+speaker — four fifths of it could not physically reach the player, and two entire games
+were played without it being heard once.
+
+Heat and fire both want to be low rumble, which is exactly the band that cannot get out
+of the speaker. So the drone is a sawtooth between **88 and 165Hz** and the speaker is
+given its harmonics. `test/matchbox-sound.mjs` renders the page's own graph offline,
+puts it through that filter, and fails anything under 82Hz or under 35% survival.
+
+**Which caught the design being wrong on its first run.** At rest the drone's lowpass sat
+at 420Hz — everything above a 110Hz saw's third harmonic removed, entirely under the
+speaker's floor. It kept **31%**. So "Sound on" with nothing burning would have been
+silence on the only device this is played on, with no way to tell the switch had worked.
+Swept: 700Hz gives 43%, 900 gives 46%, 1200 gives 48%. **700**, because it clears the bar
+and keeps the widest sweep for the filter to do the job it exists for — 700 → 3000 is a
+4.3× opening where 1200 → 3000 is 2.5×.
+
+Measured through the same filter, at the settings shipped:
+
+| drone at rest | candle | Forge | Volcano |
+|---|---|---|---|
+| 43% | 49% | 57% | 54% |
+
+### The switch is in the header because the tray had no room
+
+Measured with the real Space Mono at 320, 375, 390, 393 and 430px — `test/sound-fit.mjs`:
+
+| | at 393px, which is the phone |
+|---|---|
+| ninth chip in Tools | 37px against Wet's 50px — **ratio 1.35**, over the 1.25 the suite enforces. Fails at every width. |
+| ninth chip, "Weather" shortened | same ratio. The rename is a real win and does not buy this. |
+| fifth chip on the bar | **overflows 21px, two children past the right edge**. Fits only if the brush slider's intrinsic floor is released: 166 → 108px. |
+| **second button in the header** | **nothing moves, at any width** — stage top 60, stage height 606, identical before and after. |
+
+It also has to be somewhere that cannot be put away. **Hide folds the tray, not the
+header**, and in a Home Screen PWA the iPhone's ringer switch does not reliably silence a
+web page. The way to stop a sound must not sit behind the thing you need it for.
+
+The label stays "Sound" at both settings and the state is a background colour, because a
+button that relabels itself changes width — the rule the whole tray is built on, kept
+here even though the header would survive breaking it.
+
+**One free thing fell out of measuring it.** "Weather" is seven characters against a
+longest-of-five everywhere else, and it is what holds `fitLabels` down for the whole
+Tools drawer. Shortening it takes the type from **7px to 8px** at 393, 6.5 → 7.5 at 375
+and 8 → 9.5 at 430. Nothing to do with sound, and not taken yet.
+
+### What is not verified
+
+**What any of it sounds like.** The suite asserts that it plays, that it plays only when
+switched on, that each voice answers the number it is supposed to answer and not the
+room, that the scale is not crowded at either end, that the fundamental never drops below
+82Hz across a sweep well past the measured extremes, and that what comes out survives a
+phone speaker. It cannot tell you whether the result is pleasant or maddening. That
+judgement is Sam's, and every number that decides it is in the `SOUND` block at the top
+of the section so acting on it is a one-line change.
+
 ## The attic, which is the part of the box that is not on the screen
 
 Reported from the phone, with pictures: build a tower, turn the phone on its side, turn it
@@ -2562,10 +2712,25 @@ the glass.
 npm i                          # pinned Playwright; `npm i playwright` installs the wrong one
 node test/matchbox-sim.mjs     # 96 checks — the simulation
 node test/matchbox-ui.mjs      # 50 checks — the hand
+node test/matchbox-sound.mjs   #  6 checks — the sound, rendered offline and filtered
 node test/published.mjs        #  3 checks — the copies with the URL still match
 
 node test/compact.mjs         # a copy with the commentary stripped, for pasting into a chat
 ```
+
+Four instruments beside them, which answer a question rather than hold a line. They are
+kept because every one of them killed something that had been asserted confidently first:
+
+```
+node test/signal.mjs        what the sound should follow — ten scenes, four candidates
+node test/sound-fit.mjs     where a control can live — five widths, the real webfont
+node test/brush-rate.mjs    an intermittent check, run under the suite's own harness
+```
+
+`test/matchbox-sound.mjs` renders **the page's own graph**, not a copy of it: `soundBuild`
+takes a context so the suite can hand it an `OfflineAudioContext`. A test that rebuilds a
+graph in order to measure it is measuring its own copy, which is the mistake the sim
+harness carries a comment about and the one an audio suite is likeliest to repeat.
 
 `matchbox.html` is already self-contained — one Google Fonts `@import` is the only external
 thing in it, and it degrades to a fallback offline — so handing the whole file to something
