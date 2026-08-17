@@ -58,9 +58,16 @@
   }
 
   /* ---- label ---- */
+  /* gap 8 and not 12, which is a tenner's worth of room and was the difference between
+     Hide fitting and Hide hanging off the right edge at 375px. That overflow predates the
+     sound switch — the header has always been this tight and nothing was watching. There
+     is a check now: `no row runs off the edge of the box`, in the UI suite, which asks
+     `scrollWidth > clientWidth` of every row rather than asking whether the stage moved,
+     because a nowrap flex row does not move its neighbours when it runs out of room. It
+     spills, silently, and only a phone shows you. */
   .label{
     padding:9px 14px 8px;border-bottom:2px solid var(--card-dark);
-    display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex:none;
+    display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex:none;
   }
   .word{font-family:'Anton',Impact,sans-serif;font-size:26px;letter-spacing:.045em;
     color:var(--ink);line-height:1;text-transform:uppercase}
@@ -70,17 +77,11 @@
   /* Folding the tray away is the only thing that buys the stage a real amount of
      room. Tightening the chips only made them harder to hit: the tray came down by
      eight pixels and the targets went under a fingertip, which is a bad trade. */
-  .fold{flex:none;align-self:center;padding:6px 9px;min-height:30px;
+  .fold{flex:none;align-self:center;padding:6px 7px;min-height:30px;
     border:1.5px solid var(--card-dark);border-radius:3px;background:rgba(255,255,255,.13);
     font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:.12em;
     text-transform:uppercase;color:var(--ink);cursor:pointer}
   .fold:focus-visible{outline:2px solid var(--phos);outline-offset:1px}
-  /* On-state by background rather than by label. The label stays "Sound" at both
-     settings on purpose: a button that relabels itself changes width, and this file has
-     already had a row lifted by 86px between the tap that asks and the tap that
-     confirms. The header is not the tray and would survive it — but the rule is cheap
-     to keep and the reason it exists has not gone anywhere. */
-  .fold.on{background:var(--phos);border-color:var(--phos);color:#171009}
   .tray.folded{display:none}
 
   /* ---- the void ---- */
@@ -296,7 +297,12 @@
      check written for the cap did not see it, because that check looks inside #mats and
      this row is not in #mats. */
   .shapes .chip{flex:0 0 auto;max-width:none;padding:7px 9px 6px}
-  input[type=range]{flex:1;accent-color:var(--phos);height:18px}
+  /* A floor, not a width. `input[type=range]` carries an intrinsic size and a flex
+     item's `min-width` is `auto`, so `flex:1` could never take it below about 129px
+     however little room was left — which is why the bar OVERFLOWED instead of squeezing
+     when a fifth chip went on it. Released to 80, which only ever binds at the narrow
+     end: at 393px the slider still computes to 108. */
+  input[type=range]{flex:1;min-width:80px;accent-color:var(--phos);height:18px}
   input[type=range]:focus-visible{outline:2px solid var(--phos);outline-offset:3px}
 
   @media (max-height:700px){
@@ -317,19 +323,6 @@
   <div class="label">
     <div class="word">Match<em>box</em></div>
     <div class="meta">Strike the strip<br>Then touch the dark</div>
-    <!-- The header, and not the tray, because the tray has no room and this is measured
-         rather than assumed: a ninth chip in Tools takes that drawer to 37px against
-         Wet's 50 and breaks the tray-wide 1.25 rule at every width, and a fifth chip on
-         the bar pushes two children off the right edge unless the brush slider gives up
-         a third of itself. A second button here moves nothing at all, at 320, 375, 390,
-         393 or 430px. `test/sound-fit.mjs` has the numbers.
-
-         It also has to be here rather than anywhere that can be put away: Hide folds the
-         TRAY, not the header, and in a Home Screen PWA the iPhone's ringer switch does
-         not reliably silence a web page. The way to stop a sound must not be behind the
-         thing you would need it for. -->
-    <button class="fold" id="snd" type="button" aria-pressed="false"
-            aria-label="Sound">Sound</button>
     <button class="fold" id="fold" type="button" aria-expanded="true"
             aria-label="Hide the tray and give the room to the box">Hide</button>
   </div>
@@ -381,6 +374,19 @@
     <div class="bar">
       <div class="shapes" id="shapes"></div>
       <div class="shapes" id="timeHold"></div>
+      <!-- Sound sits here and not in the header, and that is the second answer to the
+           question rather than the first. `test/sound-fit.mjs` measured a second header
+           button as moving nothing at any width, which was true and useless: it asked
+           whether the STAGE moved, and `.label` does not push anything when it runs out
+           of room, it simply spills. Reported from the phone as Hide going off the right
+           edge — measured afterwards at 58px of overflow at 393px and 21px even at 430.
+
+           The header cannot hold two buttons at all: the title, the instruction and two
+           buttons want 451px of a 365px row, and the only ways to close that are cutting
+           the instruction or shrinking the title. On the bar, with the slider's intrinsic
+           floor released, nothing overflows and nothing moves — the slider gives up
+           166px to 108 at 393px, which is the whole cost. -->
+      <div class="shapes" id="sndHold"></div>
       <input type="range" id="brush" min="1" max="9" value="3" aria-label="Brush size">
       <span id="bval">3</span>
     </div>
@@ -5706,47 +5712,66 @@ function soundUpdate(){
   scorePump(t + .5);
 }
 
+/* Starting is not the same as switching, and running them through one function was a
+   bug you could hear.
+
+   `soundOn` is true at boot because on is the default, so the first touch anywhere has to
+   BUILD the graph — a context made outside a gesture is one iOS hands over and then will
+   not let make a sound. That listener used to call `soundSet(true)`. Tap anything but the
+   switch and it worked; tap the SWITCH and the pointerdown armed it and the click that
+   followed immediately toggled it straight back off, in one gesture, so the control that
+   exists to turn the sound on was the one control that could not.
+
+   So: `soundStart` only ever starts, and is what a touch calls. `soundSet` is the
+   deliberate act — it persists, it labels, it speaks. */
+function soundStart(){
+  if (!soundOn) return true;
+  if (!snd && !soundBuild()) return false;
+  if (actx.state === 'suspended') actx.resume();
+  snd.master.gain.setTargetAtTime(SOUND.master, actx.currentTime, .2);
+  return true;
+}
+
 function soundSet(on){
-  let note = on ? 'Sound on' : 'Sound off';
   soundOn = on;
+  let note = on ? 'Sound on' : 'Sound off';
   if (on){
     /* A browser with no Web Audio at all, or one that refuses a context. The state has
-       to come back down with it — the first draft returned early here, which left the
-       button lit and the box silent. A control that says it is on while it is off is
-       worse than one that does not work, because there is nothing left to try. */
-    if (!snd && !soundBuild()){ soundOn = false; note = 'This browser will not play sound'; }
-    else {
-      if (actx.state === 'suspended') actx.resume();
-      snd.master.gain.setTargetAtTime(SOUND.master, actx.currentTime, .2);
-    }
+       to come back down with it — an early return here left the button lit and the box
+       silent, and a control that says it is on while it is off is worse than one that
+       does not work, because there is nothing left to try. */
+    if (!soundStart()){ soundOn = false; note = 'This browser will not play sound'; }
   } else if (snd){
     snd.master.gain.setTargetAtTime(0, actx.currentTime, .2);
   }
-  // One place reflects the state, on every path through this function.
-  sndEl.classList.toggle('on', soundOn);
+  // One place reflects the state, on every path through this function. `aria-pressed` and
+  // nothing else: it is what `.chip` is already styled from, so the switch says "on" the
+  // same way every tab and every material in the box says it, and there is no second
+  // piece of state to fall out of step with the first.
   sndEl.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
   if (storageWorks()) { try { localStorage.setItem('matchbox.sound', soundOn ? '1' : '0'); } catch {} }
   say(note, true);
 }
 
-const sndEl = document.getElementById('snd');
+/* A plain chip on the bar, built the way the Time chip beside it is built, so it inherits
+   the tray's whole answer to "how does a control say it is on" — `.chip[aria-pressed]`,
+   dark fill on pale. It used to carry its own `.fold.on` rule painted in `--phos`, which
+   is the red phosphorus of the match head and is spoken for: the comment beside it says
+   the only chip allowed to wear red is the one in the Clear drawer that wipes the box.
+   The sound switch was wearing the destroy-everything colour, and was reported as such. */
+const sndEl = document.createElement('button');
+sndEl.className = 'chip'; sndEl.type = 'button'; sndEl.id = 'snd';
+sndEl.textContent = 'Sound';
+sndEl.dataset.act = 'sound';
+sndEl.setAttribute('aria-pressed', 'false');
 sndEl.addEventListener('click', () => soundSet(!soundOn));
+document.getElementById('sndHold').appendChild(sndEl);
 
-/* Every touch is a chance to start the sound, and a touch is the only thing allowed to.
-
-   Two jobs, and the first one is easy to leave out. A setting remembered from last time
-   arrives with `soundOn` true and no graph at all, because a context built at boot is one
-   iOS hands over and then will not let make a sound — so the first touch has to BUILD it,
-   not merely resume it. Without that half, "remembered" means the button comes back on
-   and nothing ever plays, which is the most convincing kind of broken.
-
-   The second is that a live context can be suspended out from under the page by a phone
-   call, a tab going to the background, or iOS simply deciding. */
-addEventListener('pointerdown', () => {
-  if (!soundOn) return;
-  if (!snd){ soundSet(true); return; }
-  if (actx.state === 'suspended') actx.resume();
-}, { capture: true });
+/* Every touch is a chance to start it, and a touch is the only thing allowed to — no page
+   may make a sound before one. A live context can also be suspended out from under the
+   page by a phone call or a tab going to the background, and `soundStart` puts both right
+   without ever changing what the switch says. */
+addEventListener('pointerdown', () => { soundStart(); }, { capture: true });
 
 /* ============================================================ boot */
 
@@ -5804,7 +5829,6 @@ function boot(){
      `pointerdown` listener beside `soundSet` — is what actually starts it. */
   if (soundStored() !== false){
     soundOn = true;
-    sndEl.classList.add('on');
     sndEl.setAttribute('aria-pressed', 'true');
   }
   requestAnimationFrame(frame);

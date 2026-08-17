@@ -726,6 +726,59 @@ await check('a fire survives being resized', async p => {
   return null;
 });
 
+/* Nothing runs off the right-hand edge of the row it is in — the header, the bar and the
+   drawer row alike.
+
+   There was no check for this, and the gap is the interesting part. `test/sound-fit.mjs`
+   measured a candidate control in the header and reported that nothing moved at any
+   width, which was true: `.label` does not push its neighbours when it runs out of room,
+   it simply spills over the edge. So a probe that asks "did the stage move" says yes,
+   everything is fine, while Hide sits half off the screen. Reported from the phone,
+   measured afterwards at 58px of overflow at 393px and 21px even at 430.
+
+   The right question for a nowrap flex row is not whether anything moved, it is whether
+   `scrollWidth` exceeds `clientWidth` — and it has to be asked of every row, not of the
+   one that happened to be under suspicion. The webfont is let through, because Space Mono
+   is wider than the fallback and a row that fits in the fallback has been reported
+   clipped on the phone three times now. */
+await check('no row runs off the edge of the box', async p => {
+  await p.unroute(u => /^https?:/.test(u.href));
+  await p.reload({ waitUntil: 'load' });
+  await p.waitForFunction(() => typeof W !== 'undefined' && W > 40);
+  const realFont = await p.evaluate(async () => {
+    try { await document.fonts.ready; } catch {}
+    return document.fonts.check("9.5px 'Space Mono'");
+  });
+  if (!realFont) return 'Space Mono did not load, so this would be measuring the fallback';
+
+  const bad = [];
+  // 375 is the narrowest the tray has ever been tuned for; 430 the widest tested.
+  for (const width of [375, 390, 393, 430]){
+    await p.setViewportSize({ width, height: 844 });
+    await p.evaluate(() => fitLabels());
+    await p.waitForTimeout(120);
+    const rows = await p.evaluate(() => {
+      const out = [];
+      for (const sel of ['.label', '.bar', '#mats', '.tabs', '.strip']){
+        const e = document.querySelector(sel);
+        if (!e) continue;
+        const box = e.getBoundingClientRect();
+        const past = [...e.children]
+          .filter(c => c.getBoundingClientRect().right > box.right + 0.5)
+          .map(c => (c.id || c.textContent.trim() || c.className).slice(0, 12));
+        out.push({ sel, over: Math.round(e.scrollWidth - e.clientWidth), past });
+      }
+      return out;
+    });
+    for (const r of rows)
+      if (r.over > 1)
+        bad.push(`at ${width}px ${r.sel} overflows by ${r.over}px`
+               + (r.past.length ? ` — ${r.past.join(', ')} past the edge` : ''));
+  }
+  await p.setViewportSize(VIEWPORT);
+  return bad.length ? bad.join('; ') : null;
+});
+
 await check('the whole tray is reachable without scrolling', async p => {
   const box = await p.locator('.box').boundingBox();
   // Every drawer, every chip in it, plus the tabs themselves — a drawer whose

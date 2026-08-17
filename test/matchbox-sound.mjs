@@ -59,6 +59,16 @@ const HARNESS = `
     const plain = await a.startRendering();
     return (await __through(plain, hz)) / __rms(plain);
   };
+  /* Notes only, without rendering — the scheduler is the thing under test and audio is
+     expensive to render. Lets a check ask about a minute of music instead of six seconds,
+     which is the difference between a bar on a dice roll and a bar on a distribution. */
+  window.__notes = (room, secs) => {
+    const c = new OfflineAudioContext(1, 44100, 44100);
+    soundBuild(c); soundOn = true; AMBIENT = room;
+    let n = 0, t = 0;
+    while (t < secs){ const plan = scorePump(t + 1); n += plan.notes; t += 1; }
+    return n;
+  };
   /* One render of the page's own graph, driven by the page's own scheduler.
 
      The room is set directly rather than simulated, because the room reading IS the
@@ -217,10 +227,15 @@ await check(browser, 'the piece plays when nothing at all is happening', async p
      only whether a still box makes a sound is satisfied by the pads on their own, so
      deleting every pluck at rest — `density = hot * denHot`, which is nought at 20°C —
      left the check green with the tune gone and the drone left. */
-  const r = await p.evaluate(async () => await __render(20, 6));
+  const r = await p.evaluate(async () => ({ heard: await __render(20, 6), min: __notes(20, 60) }));
   const bad = [];
-  if (r.rms < 1e-3) bad.push(`a still box on Neutral rendered at ${r.rms.toFixed(5)} RMS — there is nothing there at all`);
-  if (r.notes < 3) bad.push(`a still box played ${r.notes} notes in six seconds — there is no tune until something burns, only a bed`);
+  if (r.heard.rms < 1e-3) bad.push(`a still box on Neutral rendered at ${r.heard.rms.toFixed(5)} RMS — there is nothing there at all`);
+  /* A MINUTE, and a bar well under the expectation, because the first version of this
+     asked for three notes in six seconds — six beats at 45% density, so an expectation of
+     2.7 against a bar of 3. It measured fine on the run that set it and failed on the
+     next. `MATCHBOX.md` warns about exactly this and says three of them have shipped in
+     this file; this was the fourth. Sixty seconds at 60bpm expects about 27. */
+  if (r.min < 12) bad.push(`a still box played ${r.min} notes in a minute — there is no tune until something burns, only a bed`);
   return bad.length ? bad.join('; ') : null;
 });
 
