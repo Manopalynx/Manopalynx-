@@ -1321,6 +1321,18 @@ before running.
   rumble, which is exactly the band an iPhone speaker cannot produce. That number decided
   the whole design twice: it killed the first version's resting drone at 31% survival, and
   it is why the score's plucks sit at 440–1760Hz and measure 92–101%.
+- **There is a fourth thing that cannot be seen from inside the session, and it is not a
+  setting.** Instances 5, 6 and 7 named three: the Pages source, the default branch, and
+  the environment's source revision. This one is a *transient*. `git push` succeeding,
+  `origin/main` containing the right bytes, and the site actually serving them are three
+  separate facts — and the third failed on its own this session, with **Pages returning a
+  503** to the deploy job while the build succeeded in 26 seconds. He reported it as "it
+  doesn't look like it updated on my phone", with the failure email attached. Nothing in
+  the repository, the suites or `git` could have told me. `actions_list` and
+  `get_job_logs` on the `pages build and deployment` run said it in one line, and that is
+  now the first place to look when a merge does not appear. Re-running the failed job on a
+  *dynamic* Pages workflow does not reliably produce a second attempt; a fresh commit to
+  `main` does.
 - **The tray cannot take another chip, and that is now measured rather than believed.** A
   ninth chip in Tools takes that drawer to 37px against Wet's 50 and breaks the tray-wide
   1.25 rule at every width; a fifth chip on the bar pushes two children past the right edge
