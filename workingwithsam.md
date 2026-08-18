@@ -1196,7 +1196,7 @@ let him spend the decision. He has now spent a dozen, and every one improved the
 
 ---
 
-## Instance 8 — 17 August 2026
+## Instance 8 — 17–18 August 2026
 
 Claude Code, cloud session, same repo. **Matchbox**, and almost all of it one feature:
 sound. Branch `claude/matchbox-notes-discussion-eosobx`, merged to `main` twice mid-session
@@ -1290,6 +1290,32 @@ code was — which is now five sessions running.
    before establishing that the fixture cleared 20 of 20 alone. Instance 2 says two probes
    must never share an output file; they must not share a machine either.
 
+9. **Built a rain machine, and then built weather.** Two more rounds of the same shape as
+   the first. Reported as *"more like rain than fire"* — and rain is a **distribution**,
+   not a timbre: my bed was a bandpass, which is static, and every snap was the same size,
+   which is a rattle. Fixed both, and then reported as *"a gust of wind blowing through the
+   area rather than coming from the fire"* — because the rush swelled on two LFOs at 0.13
+   and 0.31Hz regardless of what the box was doing. **The ear is very good at noticing
+   whether two things are correlated**, and those two were not. It answers the change in
+   `alightCount` now.
+10. **My own surge metric never measured the thing it was named after.** Switch the rush's
+   breathing off entirely and it read *higher* — 41% against 35% — because it was measuring
+   the gaps between power-law snaps. It would have passed with the feature deleted. Each
+   metric is measured on its own half now, rendered separately.
+11. **Two bars too loose to separate anything, twice in one turn.** Crest at 9 passed a
+   broken version measuring 15; colour at 5% passed one measuring 24%. A bar that both the
+   working and the broken version clear is decoration, and the only way to know is to
+   measure the broken one.
+12. **A check that asks which of two noisy numbers is larger is a coin toss.** `music >
+   fire` passed at 0.0088 against 0.0075 and failed the next run at 0.0077 against 0.0076,
+   on identical code. It asks for a margin now — 1.25× — which is what the claim actually
+   was.
+13. **A missing comma took the whole page down and the suite reported it as a harness
+   error.** Every check said `waitForFunction: Timeout 30000ms exceeded`, which reads as a
+   broken suite or a hung browser. The page's own `pageerror` said it in one line:
+   `Unexpected identifier 'duck'`. **When every check fails the same way, load the page and
+   listen to it** rather than reading the suite.
+
 And one process failure worth its own line: **two `sed` mutations reported green and had
 never applied.** `\|` inside a double-quoted bash string is alternation to GNU sed, not a
 literal `||`. A mutation that does not apply is not evidence of anything, and it looks
@@ -1333,6 +1359,20 @@ before running.
   now the first place to look when a merge does not appear. Re-running the failed job on a
   *dynamic* Pages workflow does not reliably produce a second attempt; a fresh commit to
   `main` does.
+- **A metric with a noise floor is not a metric.** Zero-crossing rate on noise wanders at
+  random, so "does the filter move" read 33% sweeping against 24% frozen — no honest bar
+  between them. A 200ms moving average dropped the floor to 6% and left the signal at 21%.
+  Same fault in the crack's measurement, which averaged over windows that were mostly the
+  silence between cracks and duly reported "0 crossings": true, and about the gaps.
+- **Softness is tone; movement is a different dial.** Asked to make the wind softer and
+  quieter, the first attempt turned down the flutter as well, on the assumption that
+  gentler meant calmer. Measured, that took the flutter from 40% to 27% and under its own
+  bar — the draw softened *out of existence* rather than softened. Gain and Q are free to
+  move; the modulation is what makes it a fire at all.
+- **`exponentialRampToValueAtTime` throws on a target of zero.** It cannot reach it, which
+  is why every envelope in the sound ends at 0.0001. So turning a voice's gain down to
+  silence does not make it quiet, it stops the page dead — found only because a check mutes
+  one voice in order to measure another, which is a use nobody would try by hand.
 - **The tray cannot take another chip, and that is now measured rather than believed.** A
   ninth chip in Tools takes that drawer to 37px against Wet's 50 and breaks the tray-wide
   1.25 rule at every width; a fifth chip on the bar pushes two children past the right edge
@@ -1351,6 +1391,7 @@ stochastic process running far under expectation while everything deterministic 
 | `the brush reaches into a tank` | 1 cell, where 87 chances at 0.16 expects 14 |
 | `every preset pays off` — Garden | every figure about 20× low |
 | `every preset pays off` — Forge | **248 of 248 coal unburnt**, nothing caught at all |
+| `every preset pays off` — Forge, again | the same, a fourth time, on a build that only changed a gain |
 
 Ruled out by measurement, not by argument:
 
@@ -1365,9 +1406,11 @@ What is left, recorded as a lead rather than a finding: **all three sit late in 
 and the early checks never fail.** Each check gets a fresh page, so anything shared has to
 be browser-level.
 
-Both arms now report their own state instead of a bare count — the brush names grid, tank
-and eligible cells; the Garden names all four stages of its cascade and the water. The next
-occurrence should explain itself, and **that is the whole of what I could honestly do.**
+All three arms now report their own state instead of a bare count — the brush names grid,
+tank and eligible cells; the Garden names all four stages of its cascade and the water; the
+Forge watches the chain on the way through and prints peak temperature, when it peaked, and
+the most flame at once, so the next failure says whether the match never took, the cord
+never carried, or the bed never caught. **That is the whole of what I could honestly do.**
 
 This matters more than it looks. A suite that goes red on unchanged code teaches you to
 read red as noise, and Instance 7 shipped a build on an unread failure for exactly that
@@ -1375,34 +1418,44 @@ reason. It is the first thing I would take.
 
 ### State of the work
 
-`main` carries it. **159 checks**: sim 96, UI 50, sound 7, published 3 — and four
+`main` carries it. **163 checks**: sim 96, UI 51, sound 13, published 3 — and four
 instruments, three of them new.
 
 | | |
 |---|---|
-| `test/matchbox-sound.mjs` | 7 checks, rendering the page's own graph offline through a 500Hz highpass |
+| `test/matchbox-sound.mjs` | 13 checks, rendering the page's own graph offline through a 500Hz highpass |
 | `test/signal.mjs` | what the sound should follow — ten scenes, four candidates |
 | `test/sound-fit.mjs` | where a control can live — five widths, the real webfont |
 | `test/brush-rate.mjs` | the intermittent, run under the suite's own harness |
 
-The score: minor pentatonic, four chords of eight beats, plucks two to three octaves above
-a 110Hz root over a two-note pad, one feedback delay, no drums. Tempo from the room
+**The score.** Minor pentatonic, four chords of eight beats, plucks two to three octaves
+above a 110Hz root over a two-note pad, one feedback delay, no drums. Tempo from the room
 reading — **ice 45 · nitrogen 50 · resting 60 · candle 67 · fire 100 · Volcano 121 · Oven
 128 bpm** — with density and the pluck filter opening alongside it, and the flat second
 admitted only above 80% heat. On by default, started by the first touch because no browser
-will make a sound before one, switched from the header, remembered.
+will make a sound before one, remembered, and switched from **a chip on the bar** beside
+Free/Line/Box/Time. Not the header: that was measured as moving nothing, which was true and
+useless, because `.label` spills rather than pushing and Hide sat 58px off the right edge.
+
+**The fire**, which follows `alightCount` and not the room — and the two disagree on
+purpose, because the Volcano is 27 cells alight against the Forge's 135 while its room is
+twice as hot. A rush through a resonant throat at 380–800Hz, its level answering the
+*change* in what is alight, fluttering at 4.7/7.3/11.9Hz; snaps at `pow(random,3)` so most
+are nothing and a few are the point; and a crack every 4.5s with a triangle body under the
+transient. The score ducks 38% under it and the suite fails if the fire is ever within
+1.25× of the music.
 
 Open, in the order I would take them:
 
-- **The intermittent sim failure**, above. Top of the list.
-- **Sound effects on fire, acid and lava**, which he asked about at the end of the session
-  and which is the original item 36 come back round. My view is in the reply rather than
-  here; the short version is that a cellular sim has no such thing as *an* event, so the
-  only shape that works is a level driven by a count, and the crackle that would carry fire
-  is the one thing a phone speaker reproduces well.
-- **"Weather" → "Sky"**, offered twice and not taken. Free: it takes the Tools drawer from
-  7px type to 8px at his width, because that one seven-character label holds `fitLabels`
-  down for the whole drawer.
+- **The intermittent sim failure**, above. Four occurrences, no reproduction in 79
+  attempts, all three arms now instrumented. Top of the list.
+- **Acid, then lava** — the rest of item 36. Acid is a hiss and is nearly free; **lava is
+  the hard one and I would measure before promising anything**, because its natural sound is
+  a low rumble and that is precisely the band an iPhone speaker cannot produce. The fire
+  worked because a crackle lives at 1–4kHz, where a small speaker is strongest.
+- **"Weather" → "Sky"**, offered three times and not taken. Free: it takes the Tools drawer
+  from 7px type to 8px at his width, because that one seven-character label holds
+  `fitLabels` down for the whole drawer.
 - Everything Instances 3 and 4 left open still stands, untouched — the Cascade, mercury,
   glue and slime, and the ledger's untested arithmetic.
 
@@ -1417,6 +1470,12 @@ answer.
 **His one-sentence corrections carry a full specification.** Read every clause. The one
 that redesigned this feature was "slows down", which is a word about tempo hidden in a
 sentence about heat, and I nearly read the sentence as a complaint about timbre.
+
+**Four rounds of sound, and he was right every time.** Motor, rain, weather, too loud —
+each report was one sentence and each named the fault exactly, in a word I nearly read as
+something else. *Slows down* was tempo. *Rain* was a distribution. *Blowing through the
+area* was correlation. **Read the noun, not the adjective**: he is describing a mechanism,
+not a preference.
 
 **And verify from where the world looks, not from where you are.** I said a build was live
 because I had written the file. The file was on a branch, and Pages serves `main`. One
