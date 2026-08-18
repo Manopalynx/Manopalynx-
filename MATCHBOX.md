@@ -2530,7 +2530,10 @@ existence* rather than softened:
 |---|---|---|---|---|---|---|
 | as it was | .058 | 2.6 | .42 | 0.0020 | 40% | 21.6% |
 | softening the movement too | .026 | 1.1 | .27 | 0.0013 | **27% — under the bar** | 17.7% |
-| **shipped** | **.026** | **1.1** | **.42** | 0.0014 | **37%** | 19.9% |
+| **shipped** | **.021** | **1.1** | **.42** | 0.0011 | **38%** | 19.9% |
+
+Taken down a further fifth on report after that, which changed none of the shapes — the
+flutter and the colour shift are ratios and do not care about the level.
 
 With the movement left alone, every setting from Q 2.6 down to 1.1 holds flutter at 37–40%
 and colour near 20%. **`rushQ` is the softness** — at 2.6 the band is narrow enough to
