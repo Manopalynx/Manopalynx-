@@ -8,13 +8,7 @@
   rediscovery, or because Sam asked what happened when.
 
 **Notation.** `[3,7]` means instances 3 and 7 found it independently here, by measurement;
-more numbers is stronger. **`[chat]` means it comes from working with Sam outside Claude
-Code and has never been tested against this repo** — a hypothesis that predicts him well,
-not a finding.
-
-**Scope.** This file covers working on this repository. Sam's personal material stays out
-however relevant it looks — it does not improve a sales ledger, and this file lives in a git
-history he hands to other people.
+more numbers is stronger, and a line with no bracket has no session behind it yet.
 
 ---
 
@@ -85,7 +79,6 @@ in minimum viable language; you decompress it; he checks your decompression agai
 original and corrects the divergence. **So when a message looks underspecified, the missing
 content is compression, not absence — ask him to decompress rather than filling it in.**
 This is the mechanism under everything below, and it is what makes the rest actionable.
-`[chat]`
 
 **Read every clause literally; each one narrows the fault.** *Hum* meant a steady pitch.
 *Up and down* meant a slow sweep. *Doesn't start until* meant a trigger partway through a
@@ -105,7 +98,7 @@ measuring which NUMBER.** `[8]`
 
 **Short prompts are not a request for short answers.** No preamble, no filler — and his
 density is an invitation to full analytical depth, not a ceiling on yours. The style rules
-target padding and hedging. **Play and banter are welcome and carry full density.** `[chat]`
+target padding and hedging. **Play and banter are welcome and carry full density.**
 
 **His plain questions are load-bearing and are not tests.** *"can you confirm you connect to
 the main branch by default?"* — the answer was no and it took a session to repair. *"Just
@@ -113,14 +106,14 @@ double checking if you're pushing to the version I can try on my phone?"* — it
 Answer them properly; check before you confirm. `[1,6,8]`
 
 **Weight his hedges up.** A tentative observation from him is closer to a finding than a
-guess, and when he abstains it is real — there is nothing to draw out. `[chat]`
+guess, and when he abstains it is real — there is nothing to draw out.
 
 **He verifies rather than trusts, and cross-examines other models as a discipline.** Twice
 he uploaded a file saying "this is what you made, just renamed" — both byte-identical.
 **Diff anyway**; he is modelling the behaviour he wants back. He runs structured audits
 against other models and against Claude, and they land. **An unverified confident claim is
 not merely risky here — it is the thing he is instrumented to catch.** Give him a
-falsifiable prediction and he will check it faster than any probe. `[1,7,chat]`
+falsifiable prediction and he will check it faster than any probe. `[1,7]`
 
 **"Where is X?" means under-delivered, not broken.** Something technically present but
 unreachable reads to him, correctly, as not shipped. `[2]`
@@ -184,7 +177,9 @@ One branch, `main`, carries three projects sharing no code.
 
 **GitHub Pages serves `/docs` from `main`** — hence the folder name, and why the root
 `upliftledger.html` and `matchbox.html` are unpublished. `docs/matchbox.html` is the
-published copy; `test/published.mjs` asserts the two are byte-identical.
+published copy; `test/published.mjs` asserts the two are byte-identical. **The repository
+is public**, checked against the API rather than assumed — so anything written into a file
+here is published, test fixtures and worked examples included.
 
 **He is the author of the novel.** Mark what is quoted and what you wrote, in the data *and*
 visibly in the interface, so he can strike yours without opening a file. `[2]`
