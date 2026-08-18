@@ -67,7 +67,18 @@
      spills, silently, and only a phone shows you. */
   .label{
     padding:9px 14px 8px;border-bottom:2px solid var(--card-dark);
-    display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex:none;
+    /* Centred, and the row is the only thing that says so. It used to be
+       `align-items:baseline` with `align-self:center` on the button contradicting it, so
+       the three children sat on three different anchors — measured at 393px, their
+       centres were 13px apart at 22, 35 and 29.5. Reported from the phone as the header
+       not lining up, which it did not.
+
+       The instruction stays right-aligned: its two lines already share a right edge with
+       the button at 325px, and centring them makes both edges ragged instead of one.
+
+       Costs 11px of header, 60px to 49, because baseline alignment was pushing the box
+       taller than its tallest child. The stage gains them. */
+    display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none;
   }
   .word{font-family:'Anton',Impact,sans-serif;font-size:26px;letter-spacing:.045em;
     color:var(--ink);line-height:1;text-transform:uppercase}
@@ -77,7 +88,7 @@
   /* Folding the tray away is the only thing that buys the stage a real amount of
      room. Tightening the chips only made them harder to hit: the tray came down by
      eight pixels and the targets went under a fingertip, which is a bad trade. */
-  .fold{flex:none;align-self:center;padding:6px 7px;min-height:30px;
+  .fold{flex:none;padding:6px 7px;min-height:30px;
     border:1.5px solid var(--card-dark);border-radius:3px;background:rgba(255,255,255,.13);
     font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:.12em;
     text-transform:uppercase;color:var(--ink);cursor:pointer}

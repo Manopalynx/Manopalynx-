@@ -2667,6 +2667,30 @@ The lesson is not "measure the header". It is that **the right question for a no
 row is whether it overflows, not whether anything moved** — and that question was already
 written, correctly, for the bar in the same probe, and simply pointed at the wrong element.
 
+### The header did not line up, and the CSS said so
+
+Reported from the phone. Measured at 393px, the three children's vertical centres:
+
+| | centre, before | after |
+|---|---|---|
+| MATCHBOX | 22 | **24** |
+| the instruction | 35 | **24** |
+| Hide | 29.5 | **24** |
+
+**Three elements on three different anchors, 13px apart**, and the cause was a
+contradiction sitting in plain sight: the row set `align-items:baseline` and `.fold` set
+`align-self:center`, so the title and the instruction aligned on their first baselines
+while the button centred itself against both.
+
+The instruction stays **right-aligned**. Its two lines already share a right edge with the
+button at 325px; centring them gives 191→313 and 180→325, ragged on both sides instead of
+one. The ragged left edge is what right-alignment is.
+
+It costs 11px of header — 60px down to 49 — because baseline alignment was pushing the box
+taller than its tallest child, and **the stage gains them**: the grid goes 131×204 to
+131×208 at that width. A layout that settles once at boot is not the thing the
+"nothing moves" rule is about; that rule is about a row that reflows under a thumb.
+
 ### Red is spoken for
 
 The switch first carried its own `.fold.on` rule painted in `var(--phos)`. That is
