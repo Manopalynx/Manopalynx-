@@ -3160,6 +3160,77 @@ of work where this machine managed 4.4 on a comparable scene. That is what the f
 timer in the corner is for — the number that decides how big the grid can be has to
 come from the device holding it.
 
+## Open work
+
+Everything below is unfinished, in the order it is worth taking. Items move off this list
+by being done or by being cut with the reason written up above; nothing here lives in any
+other file.
+
+### The sim suite goes red on unchanged code
+
+**About once every other full run, and it has never once reproduced in isolation** — 79
+attempts across four occurrences. One signature every time: every stochastic process runs
+far under expectation while everything deterministic is fine.
+
+| check | what it reported |
+|---|---|
+| `the brush reaches into a tank` | 1 cell, where 87 chances at 0.16 expects 14 |
+| `every preset pays off` — Garden | every figure about 20× low |
+| `every preset pays off` — Forge | **248 of 248 coal unburnt**, nothing caught at all |
+| `every preset pays off` — Forge, again | the same, on a build that changed only a gain |
+
+Ruled out by measurement, not by argument: **not the changes** (two occurrences predate the
+sound work, and the Garden clears 6 of 6 on the current build at 18–33 flowers); **not the
+fixtures** (40 runs of the brush scene, 30 more under the suite's own harness, 6 of the
+Garden, 3 of the whole preset check, all clean); **not CPU contention** (all four cores
+pinned with busy loops, the preset check passed both times it completed).
+
+What is left, recorded as a lead rather than a finding: **all three sit late in the suite
+and the early checks never fail.** Each check gets a fresh page, so anything shared has to
+be browser-level.
+
+All three arms now report their own state rather than a bare count — the brush names grid,
+tank and eligible cells; the Garden names all four stages of its cascade and the water; the
+Forge watches the chain through and prints peak temperature, when it peaked, and the most
+flame at once. **So the next failure says which of the three it was**: the match never took,
+the cord never carried, or the bed never caught.
+
+This matters more than the symptom looks. A suite that goes red on unchanged code teaches
+you to read red as noise, and that is exactly how one Grandiose build shipped on an unread
+failure.
+
+### The Cascade, one more try
+
+Cut after four versions — the reasons are written up under *The three that were cut*, and
+the wax, the quench and the steel-is-a-wire findings all still hold. Worth one more attempt
+built around **a long fuse as its clock**, which is the only signal measured to carry
+reliably over distance in this box. Everything learned is in the source where the preset
+used to be.
+
+### Mercury
+
+Approved in principle, never built. **Measure before promising anything**: solids are static
+in this engine, so the steel-floating-on-mercury moment may simply not appear. Powders and
+liquids would layer on it, and that may be the whole of it.
+
+### Glue and slime
+
+The interesting half of each needs **cell-to-cell connectivity, which this file does not
+have**. Leave until there is a reason to build that for its own sake.
+
+### Sound for acid, then lava
+
+Acid is a hiss and is nearly free. **Lava is the hard one and wants measuring before it is
+promised**: its natural voice is a low rumble, and that is precisely the band a phone
+speaker cannot produce. The fire worked because a crackle lives at 1–4kHz, where a small
+speaker is strongest — the borrowed-measurement note under *Sound* has the figures.
+
+### "Weather" → "Sky"
+
+Offered three times and not taken. Free, and it is not cosmetic: that one seven-character
+label holds `fitLabels` down for the whole Tools drawer, so the rename takes it from 7px
+type to 8px at Sam's width.
+
 ## If you change something
 
 Run both suites first, then again after. This file has a history of faults that read
