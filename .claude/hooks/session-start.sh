@@ -53,7 +53,7 @@ WRONG BASE -- this session did NOT start from main.
 
 The CLAUDE.md now loaded is the one from $head, NOT the one on main. If this
 base predates 15 August 2026 it imports only README.md, which means
-workingwithsam.md -- the running handover, and the map of which project is
+workingwithsam.md -- the operating document, and the map of which project is
 which -- has NOT been loaded. Do not trust your loaded context.
 
 Fix before doing any work:

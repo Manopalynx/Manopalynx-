@@ -12,7 +12,9 @@ Everything is stored in the browser's `localStorage` on the machine you open it 
 > - `docs/`, *Grandiose* — a Monopoly-shaped game set in Sam's novel, and the only
 >   thing GitHub Pages publishes. **[docs/README.md](docs/README.md)** carries its detail.
 >
-> `workingwithsam.md` is the running handover between sessions and maps all three.
+> `workingwithsam.md` is the operating document — how Sam works, the standing
+> instructions, the defect catalogue — and it maps all three. `HISTORY.md` carries the
+> session sections it used to hold.
 
 ## Running it
 
