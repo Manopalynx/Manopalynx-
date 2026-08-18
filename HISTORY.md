@@ -16,6 +16,17 @@ merged. One branch, `main`, carries all three now.
 New sessions append a numbered, dated section at the end of this file. `workingwithsam.md`
 is not where a session section goes.
 
+**You do not have to read this file in order to append to it, and you should not.** It is
+~92kB and roughly 23k tokens, which is the cost the split existed to remove — reading it
+whole to add to the end spends all of it again. Everything you need is two commands:
+
+```
+grep -n '^## Instance' HISTORY.md | tail -1     # the number and date to follow
+sed -n '/^## Instance 8/,$p' HISTORY.md         # the last section, for the house format
+```
+
+Then append. Read further only to chase a specific citation.
+
 ## Instance 1 — 29 July 2026
 
 Claude Code, cloud session, repo `Manopalynx/Manopalynx-`. About a full working day on
