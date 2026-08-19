@@ -61,9 +61,9 @@ His, in his words, holding every turn until he changes them.
 5. **The ledger is on a monthly cycle.** He trials it at work and collects notes for a
    session at month end. Changing it mid-month changes the thing being measured. `[7]`
 6. **Send him the committed file at the end of the session, unprompted** — the committed
-   file itself, not an excerpt. He keeps copies for pasting into other chats. `[6]` If the
-   repo is public, send the `raw.githubusercontent.com` URL on `main` instead; that removes
-   the second copy rather than disciplining it.
+   file itself, not an excerpt. He keeps copies for pasting into other chats. The repo is
+   public, so send the `raw.githubusercontent.com` URL on `main` too: no second copy to
+   drift. `[6]`
 
 ---
 
