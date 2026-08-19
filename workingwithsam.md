@@ -3,9 +3,8 @@
 **Read all of it before you do anything.** It is short by rule (last section). Two files:
 
 - **this one** — imported by `CLAUDE.md`, loads itself every session, everything live.
-- **`HISTORY.md`** — eight session sections verbatim, **not** imported and not expected
-  reading. Open it to chase a citation, to check whether something you think is new is a
-  rediscovery, or because Sam asked what happened when.
+- **`HISTORY.md`** — the session sections verbatim, **not** imported and not expected
+  reading. Open it to chase a citation, or to check whether something is a rediscovery.
 
 **Notation.** `[3,7]` means instances 3 and 7 found it independently here, by measurement;
 more numbers is stronger, and a line with no bracket has no session behind it yet.
@@ -28,6 +27,19 @@ more numbers is stronger, and a line with no bracket has no session behind it ye
    instrument and a good measurement in service of a design he binned in a line. `[8]` For
    Grandiose lore, ask him to re-attach the novel — the `.docx` does not survive context
    summarisation. `[2,8]`
+
+---
+
+## End of session
+
+1. **Append your section to `HISTORY.md`** — dated and numbered, at the end, unconditionally
+   and whether or not the session felt worth recording. You do not need to read that file to
+   add to it; its header carries the two commands. Nothing else you did survives you.
+2. **Change this file only if something in it is now wrong, or a genuinely new class
+   appeared.** A line, not a narrative; if that breaks the ceiling, remove something in the
+   same edit. **Most sessions should change nothing here** — that is the file working, not
+   you being lazy.
+3. **Then standing instructions 4 and 6** — on `main`, and the committed file sent to him.
 
 ---
 
@@ -293,7 +305,7 @@ from where the world looks: `git show origin/main:<path>`. `[5,6,7,8]`
 
 **Open items, state, test counts and build numbers live in each project's document and in
 `git` — not here.** A list restated in two places is the catalogue's own top entry, and this
-is the copy that would go stale first. Read `README.md`, `docs/README.md` and `MATCHBOX.md`.
+is the copy that would go stale first.
 
 One item has no other home, spans the repository, and has survived eight sessions: **the
 ledger's arithmetic is untested.** Flagged in session one, still the highest-value work
@@ -307,17 +319,14 @@ never had, and the monthly cycle in the standing instructions is when to ask for
 
 **One copy**, imported by `CLAUDE.md` from `main`. Never paste changes into the chat for him
 to save by hand, never start a second file. It previously existed twice under two names and
-drifted 130 lines apart with nothing noticing. If he uploads a copy, diff it against this
-one and tell him which is current. `[5]`
+drifted 130 lines apart with nothing noticing. `[5]`
 
 **Ceiling: 340 lines.** The predecessor reached 1,483 lines and ~23k tokens, sections
 growing from 167 to 397, and the failure mode was an instance that skimmed and did not read
 as having skimmed. **If your edit takes this file over 340 lines, remove something in the
 same edit** — every addition competes against something already here. The number was
 corrected once against measurement; a second correction would make it a description rather
-than a constraint. **Do not append a session section here** — sessions go to `HISTORY.md`,
-dated and numbered. This file changes only when something in it is now wrong, or a genuinely
-new class appears, and then as a line rather than a narrative.
+than a constraint.
 
 **Prefer mechanising to writing.** Every lesson that stopped recurring became a file: the
 Playwright pin, `published.mjs`, `names.test.mjs`, `pump.test.mjs`, the session-start hook.

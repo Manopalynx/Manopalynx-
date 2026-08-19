@@ -1,7 +1,7 @@
 #!/bin/bash
 # SessionStart hook.
 #
-# Two jobs, in this order:
+# Three jobs, in this order:
 #
 #   1. Say out loud which commit the session actually started from, and complain
 #      if it is not built on main. On 15 August 2026 a session started from a
@@ -13,6 +13,12 @@
 #
 #   2. Install the test dependency, so `node test/*.mjs` works without a manual
 #      `npm i` first.
+#
+#   3. Print what the session owes at the end of it. The obligation is written
+#      in workingwithsam.md under "End of session", but that file used to carry
+#      the same thing as a prohibition in its footer and instances skimmed past
+#      it. A hook fires at the start and cannot nag at the end, so it states the
+#      debt up front, where step 1 is already read.
 #
 # stdout from a SessionStart hook is fed to the agent as context, so anything
 # echoed here is read at the top of the session.
@@ -83,5 +89,23 @@ if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ -f package.json ]; then
     tail -15 /tmp/npm-install.log
   fi
 fi
+
+# ------------------------------------------------------------ end-of-session debt
+
+cat <<'MSG'
+
+Before this session ends, three things it owes -- "End of session" in
+workingwithsam.md is the authority, this is only the reminder:
+
+  1. Append a dated, numbered section to HISTORY.md. Unconditionally, whether
+     or not the session felt worth recording. Do NOT read that file to do it;
+     its header carries the two commands that cost 19kB instead of 91kB.
+  2. Change workingwithsam.md only if something in it is now wrong or a new
+     class appeared -- and if that breaks its 340-line ceiling, remove
+     something in the same edit. Most sessions should change nothing there.
+  3. Merge to main, and send Sam the committed file unprompted. A push to a
+     working branch does not reach him: CLAUDE.md imports from main, so
+     nothing takes effect until it is there.
+MSG
 
 exit 0
