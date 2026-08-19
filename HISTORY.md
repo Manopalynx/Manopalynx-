@@ -1446,3 +1446,95 @@ not a preference.
 because I had written the file. The file was on a branch, and Pages serves `main`. One
 command — `git show origin/main:docs/matchbox.html` — is the difference between a claim and
 a fact, and he was the one who thought to ask.
+
+---
+
+## Instance 9 — 19 August 2026
+
+### The session in one line
+
+Sam attached two candidate versions of `workingwithsam.md` and asked which a fresh
+instance would rather have at session start. No code was touched all session; the
+whole of it was the operating document, and **every substantive finding came from him
+asking a plain question rather than from me auditing anything.**
+
+### The measurement that decided it
+
+The long file was not rejected for being long. It was rejected because **it had visibly
+failed on its own authors**, and that took four minutes to establish:
+
+| | |
+|---|---|
+| Instance 7's confession list | **two items numbered `2`** |
+| items 10 and 11 | the same finding, written twice |
+| items 13 and 18 | the same lesson, written twice |
+
+Section sizes 166, 94, 133, 129, 95, 114, **396, 284** — the last two 46% of the file.
+The file's own top defect entry, *a thing written twice will disagree and nothing
+notices*, had happened inside it. **That is a measurement of the skim failure, not an
+opinion about length**, and it is the argument to reach for if this ever gets relitigated.
+
+### Three things Sam found by asking
+
+1. **"Show me the `[chat]` lines so I can choose."** Extracting them exposed a stale
+   load-bearing figure — *"a 6,538-line game"*, which reproduces from no subset of the
+   tree today (the six modules plus `index.html` are ~8,000). It had drifted silently, in
+   a file with an entry about exactly that.
+2. **"I don't think these two are relevant."** He was right on both, and on the second
+   for a role reason I had not seen: a rule telling an instance to strip his personal
+   material overrides **his** judgement about **his own** information, which is the
+   division of labour running backwards. What survived was a fact rather than a rule —
+   the repository is public, now checked against the API instead of assumed, so one of
+   the four things this file calls invisible from inside a session is invisible no more.
+3. **"Are there instructions to update the file as we go?"** No — and the gap was mine.
+   See below.
+
+### What I got wrong
+
+1. **I reported that `MATCHBOX.md` already carried three open items, from grep *counts*
+   without reading the hits.** "intermittent" matched a line in the tests list; "248"
+   matched a preset results table. Neither was the open item, and the file had no
+   open-work section at all. Six items lived only in the handover file, one merge away
+   from being deleted by my own change. **A count is not a match** — this is the
+   instrument-is-wrong entry wearing a new coat, and it was cheap to avoid.
+2. **I broke the record's own trigger and did not notice for three turns.** The old
+   file's first sentence was *"A handoff between Claude instances. Each one appends a
+   dated section at the end."* I replaced it with a prohibition in the footer — *"Do not
+   append a session section here"* — and put the positive form in `HISTORY.md`'s header,
+   which is deliberately **not imported**. So the instruction to write the record lived
+   only in the file nobody opens. Nothing complained. It took Sam asking.
+3. **I said "336 → 340, saving two lines" and one of the two edits saved none** —
+   trimming a trailing sentence shortens a line without removing it. Caught by the line
+   count immediately, which is the only reason it is a footnote rather than a defect.
+
+### Things that keep being true — additions
+
+**A notation is a check, and checks get mutation-tested.** `[chat]` marked what came from
+outside this repo. Flipping it to a session number on each of the four lines carrying it
+changed no behaviour at all — every one was a reading instruction or a permission, not a
+claim a measurement would settle. It stayed green, so it was decoration, and it went. The
+numeric citations stayed because *how many independent sessions found a thing* does change
+how hard to lean on it.
+
+**The ceiling is load-bearing and it bites immediately.** Adding "End of session" took the
+file to 342 and it had to buy its way back to 340 — paid for with the project documents
+named twice, a diff instruction "How he communicates" already carried with its
+measurement, and the phrase "eight session sections", a count that would have been wrong
+by the end of this session. **Nothing was cut that was not a second copy of something.**
+
+**A prohibition is not an instruction.** *"Do not append a session section here"* tells a
+reader where not to write. It never tells them to write. When you move an obligation,
+check that what lands in the imported file is in the positive voice — and that it is not
+sitting in the footer, which is where the record shows things get skimmed.
+
+### State of the work
+
+`workingwithsam.md` is **340 lines**, exactly at its ceiling, with no headroom — the next
+addition must remove something. `HISTORY.md` carries instances 1–9, verbatim, and its
+header says how to append without paying the 23k tokens to read it. `MATCHBOX.md` has an
+open-work section for the first time, carrying all six matchbox items. The hook prints the
+end-of-session debt at the top of every session, because a hook cannot nag at the end.
+
+**Not touched, deliberately:** any code, either app, any test beyond `published.mjs` (3/3)
+and `interaction.mjs` (14/14) as a sanity check. The ledger's untested arithmetic is still
+the highest-value work in the repository, still not started, now in its ninth session.
