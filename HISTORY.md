@@ -1849,3 +1849,50 @@ Open, in the order it needs answering:
   last work day of the month; notes and a month of real entries are coming, which is the
   fixture it has never had.
 - Everything Instances 3 and 4 left open still stands.
+
+### The Column, built as far as the numbers
+
+Sam gave the round structure — five lives, three picks a round, blind simultaneous
+commitment revealed between picks, round ends on a wipe, loser drops a life and opens the
+next round with an extra pick — and said to go for what I thought the next step was. His
+reveal-between-picks rule is better than what I had proposed and replaced it: the loop
+runs three times a round instead of once.
+
+**The engine and both instruments exist; there is no interface, deliberately.** Pure, no
+DOM, no timers, no `Math.random`, with a replay log the renderer will be the only reader
+of. Every tick gathers intent from the state at the start of the tick and applies it all
+at once, so neither side gets a systematic opening strike from being iterated first.
+
+**The counter-graph holds.** 171 three-cycles at 60/40 or wider, every unit inside one,
+every unit the best answer to something.
+
+**The third claim fails and the reason is the finding.** Five tuning passes each flipped a
+unit from dead to dominant on a small change, so I stopped tuning and measured the room:
+**76% of pairings are decided 95/5 or harder.** An "overall win rate" is therefore a count
+of pairings won, in steps of 1/11 — the 35-65% band admits four values, and the threshold
+is finer than the model's resolution. Two dials are super-linear: `count` is quadratic
+(Line 25.8% → 87.8% on one extra body) and an aura scales with enemies *and* radius
+squared (Volt 27.8% → 86.6%). That is the catalogue's *"when a tolerance change flips
+everything at once, the metric has no room in it"*, found from the other end.
+
+**Sam's rubber band is not an oscillator — it is marginally too light.** Alternation runs
+50-67% across five tables where 50% is neutral, so the winner keeps winning slightly more
+often than not. His instinct was right and the correction is small.
+
+**Three of five personas are worse than picking blind.** The harness policy that always
+takes the first card offered beats Harlow 94%, Hale 100%, Vex 98%. The three that lose are
+the three that draft by a single stat; Varan, which reads the board, is the only
+competitive one. In a game decided by counters, drafting by stat is a handicap rather than
+a personality — which is the Ledger's "can the AI do everything the player can" sweep
+paying off on the first run of a new project.
+
+**And my own check measured the wrong object again.** The legibility claim counted CARDS
+when a card deploys up to ten bodies, and would have reported a comfortable field at a
+third of the real crowd. Corrected: **171 bodies on screen by the end at about 36pt each**
+on a 393pt portrait field. Performance is not the problem — Matchbox runs 26,390 cells at
+2.5ms a frame — telling them apart is, and observation is the step Sam's whole loop hangs
+on. That is the first thing to settle.
+
+Two fields changed on the roster because the first sweep said so: `cost` was deleted for
+having no reader (a pick is a pick, so balance comes entirely from counters), and `count`
+was added because a one-body Crawler Swarm contradicted its own fiction.

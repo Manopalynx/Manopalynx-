@@ -4,10 +4,10 @@ A tactical drafting autobattler set in *Grandiose: The Rise to Power* (S. T. Cha
 Two commanders draft armies from what the war makes available, surrender control, and
 watch the consequences. Portrait, phone, one hand.
 
-**Nothing here is built.** This is Move 1: the name, the frame, the shape of the roster,
-and the one condition that decides whether the game is worth building at all — written so
-that a measurement can fail it. Sam owns every decision in it; where a choice is still
-open it says so rather than guessing.
+**The engine and both instruments are built. There is no interface yet, deliberately.**
+Everything down to *What the first sweeps found* is the design as proposed; that last
+section is what measuring it actually returned, and the two disagree in places. Sam owns
+every decision here; where a choice is still open it says so rather than guessing.
 
 ## Why "The Column"
 
