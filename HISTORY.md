@@ -1538,3 +1538,95 @@ end-of-session debt at the top of every session, because a hook cannot nag at th
 **Not touched, deliberately:** any code, either app, any test beyond `published.mjs` (3/3)
 and `interaction.mjs` (14/14) as a sanity check. The ledger's untested arithmetic is still
 the highest-value work in the repository, still not started, now in its ninth session.
+
+## Instance 10 — 27 August 2026
+
+### The session in one line
+
+Sam asked what happens at session start, and the whole session stayed on the operating
+document and the hook — no project code, no app, no test beyond a 14/14 sanity run.
+**Every substantive correction came from him telling me to read `HISTORY.md` before
+changing anything, which refuted the case I had spent four turns building.**
+
+### The argument I built, and the sentence that killed it
+
+Asked whether the 340-line ceiling should be relaxed, I reconstructed the file's history
+from `git` and found what looked like a decisive case for loosening it:
+
+| | |
+|---|---|
+| the 1,483-line rescue | a **split**, not a cut — 1,483 → 336 + 1,437, total content up |
+| so the file never held | 15,750 words of *rules*; ~3,300 of rules and ~15,300 of log |
+| the number 340 | written in the same commit as the split, with the file at 336 |
+| its stated pedigree | "corrected once against measurement", unverifiable |
+| whether it had ever bound | **never**, by every commit diff |
+
+The last row was wrong and it was the load-bearing one. Instance 9: *"The ceiling is
+load-bearing and it bites immediately. Adding 'End of session' took the file to 342 and
+it had to buy its way back to 340."* The trade happened **inside a commit**, so the diff
+shows only the net `331 → 340`. Four turns of argument rested on an instrument that
+cannot see the thing it was asked about.
+
+Instance 9 had also left the answer addressed to whoever tried this: the long file was
+rejected on a measurement — two confession items both numbered `2`, two further
+duplicated pairs, the last two sections 46% of the file — *"and it is the argument to
+reach for if this ever gets relitigated."* I was relitigating it.
+
+### What I got wrong
+
+1. **"The ceiling has never bound."** False, and reported to Sam as a finding before it
+   was checked against anything but `git`. A commit diff shows net change only; a forced
+   removal paid inside one commit is invisible to it. When the question is whether a rule
+   has ever bitten, the session record is the instrument and the commit log is not.
+2. **I called the ceiling's pedigree false when it is only unverifiable.** It was written
+   in the commit that introduced the number, so nothing can check it — but Instance 8
+   could have corrected it while drafting, exactly as Instance 9 later went 342 → 340
+   within a session. Unverifiable and false are not the same claim, and I led with the
+   stronger one.
+3. **I reported the Pages URL as `000`.** My own curl flags hid the reason; run with
+   `-sS` it says `CONNECT tunnel failed, response 403`, which is what the catalogue
+   already said. I nearly reported a discrepancy that did not exist, in the repository
+   whose top defect entry is that the instrument is wrong more often than the code.
+4. **Two of my three proposals died on reading rather than on argument** — word budgets,
+   because they would have replaced a measurably-working mechanism with an untested one;
+   and "promote the split to a rule", because `End of session` already routes narrative
+   to this file and the addition would have been a second copy of it.
+
+### Things that keep being true — additions
+
+**Nothing was added to `workingwithsam.md` for this session's lessons, deliberately.**
+The instrument failure above is an instance of an entry that already exists, not a new
+class; it belongs here until a second session finds the same shape independently and it
+earns a bracket. That is the notation working as an admission test rather than as
+decoration, and it is the discipline the ceiling was defending.
+
+**An invisibility claim ages faster than the thing it describes.** Three of the four
+things this file called unseeable now answer to one command each — the environment gained
+capability while the entry stood still. Nothing complained, because a claim that you
+cannot know something is never contradicted by evidence nobody goes looking for. Re-probe
+them; do not inherit them.
+
+### State of the work
+
+`workingwithsam.md` is **340 lines**, unchanged in count across three edits, all of them
+corrections rather than additions: the ceiling's pedigree replaced with its measured one
+and the `[9]` citation it never carried, three stale session counts rephrased so they
+cannot drift again, and the four-invisible-things entry converted into the three commands
+that now answer it — `git ls-remote --symref origin HEAD` for the default branch,
+`get_session` for the environment's pinned source revision, and the agent proxy's status
+endpoint for the network policy. Only the Pages source still resists. `HISTORY.md`'s
+header said "Eight sessions" while carrying nine, and now states no number at all.
+
+The hook gained two jobs. It prints the file's headroom against its ceiling at startup,
+because the rule previously depended on an instance remembering to run `wc` at the end of
+a session, which is exactly when rules get skimmed; three branches and the absent-file
+case were mutation-tested. And its WRONG BASE message now carries the `get_session` call
+and says to quote the value read, rather than asking the instance to assert the cause it
+cannot see — mutation-tested by forcing a stale base in a clone. A Pages reachability
+probe was refused twice by the permission classifier, was not routed around, and is not
+worth a settings change.
+
+**Not touched, deliberately:** any code, either app, any test beyond `interaction.mjs`
+(14/14) as a sanity check. The ledger's untested arithmetic is still the highest-value
+work in the repository, still not started, now in its tenth session. A month of Sam's
+real entries is the fixture it has never had, and the monthly cycle is when to ask for it.
