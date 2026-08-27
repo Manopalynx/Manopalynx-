@@ -1610,7 +1610,7 @@ them; do not inherit them.
 
 `workingwithsam.md` is **340 lines**, unchanged in count across three edits, all of them
 corrections rather than additions: the ceiling's pedigree replaced with its measured one
-and the `[9]` citation it never carried, three stale session counts rephrased so they
+and the `[9]` citation it never carried, two stale session counts rephrased so they
 cannot drift again, and the four-invisible-things entry converted into the three commands
 that now answer it — `git ls-remote --symref origin HEAD` for the default branch,
 `get_session` for the environment's pinned source revision, and the agent proxy's status
