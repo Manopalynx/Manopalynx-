@@ -88,6 +88,12 @@ npm i                          # installs the pinned Playwright — see package.
 node test/interaction.mjs
 ```
 
+`test/` also holds the suites that are about the repository rather than the ledger.
+`test/offline.mjs` is the one that spans projects: everything published under `docs/`
+shares one origin and one service worker, so it asserts that each app still opens with
+no signal and that shipping one of them does not delete another's saved files. Run it
+after touching `docs/sw.js`, and add a row to its `APPS` when a new app is published.
+
 Playwright is pinned to an exact version on purpose: each release only looks for the
 Chromium build it shipped with, so an unpinned install fails every browser suite at
 launch with *"Executable doesn't exist"*. `npm i playwright` is the wrong command now.

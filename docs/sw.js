@@ -1,4 +1,4 @@
-// Offline support.
+// Offline support for the whole published site.
 //
 // NETWORK-FIRST, falling back to the cache. Cache-first would load a shade
 // faster, but a phone that has added this to its Home Screen would then keep
@@ -7,22 +7,71 @@
 // signal" is worth more than fifty milliseconds.
 //
 // Swap the order if this ever stops changing weekly.
-// Must match BUILD in data.js exactly — test/build.test.mjs asserts it, because
+//
+// SCOPE, WHICH IS THE WHOLE SITE AND NOT ONE APP
+// ----------------------------------------------
+// A service worker is in charge of the folder its script sits in. GitHub Pages
+// serves /docs from main as the root of one site, so this file's neighbours are
+// every app published here -- not only Grandiose. Two faults came of assuming
+// otherwise, and both were silent:
+//
+//   · THE FALLBACK ANSWERED FOR EVERYONE. A navigation with nothing cached and no
+//     network used to return './index.html' whatever had been asked for, so
+//     opening Matchbox on a train showed Grandiose instead. A working game that
+//     is not the one that was tapped is worse than an error page, because
+//     nothing about it looks like a failure.
+//   · THE CLEANUP DELETED THE NEIGHBOURS. Cache Storage is per ORIGIN, not per
+//     scope, so caches.keys() returns every cache on the site. Removing
+//     "everything that is not mine" therefore threw away every other app's saved
+//     files on every single build -- which is why Matchbox worked offline right
+//     up until the next time Grandiose shipped.
+//
+// test/offline.mjs asserts both, against the mechanism rather than against
+// Matchbox, so the next app arrives already covered.
+//
+// Must match BUILD in data.js exactly -- test/build.test.mjs asserts it, because
 // the menu shows BUILD and it would be worse than useless if it named a build
 // the cache was not actually serving.
-const CACHE = 'grandiose-v85';
-const FILES = [
-  './',
-  './index.html',
-  './ui.js',
-  './engine.js',
-  './data.js',
-  './score.js',
-  './galaxy.js',
-  './audio.js',
-  './manifest.webmanifest',
-  './icon-180.png'
+const CACHE = 'grandiose-v86';
+
+// Previous builds of THIS app and nothing else on the origin. Derived from CACHE
+// so the two cannot drift, which is the fault the name was written to avoid.
+const PREFIX = CACHE.replace(/v\d+$/, '');
+
+// Each app published under docs/: the page it owns, and what it needs to open
+// with no signal. Adding an app here is what makes it work on a train -- until
+// it is listed, it survives offline only by having happened to be fetched since
+// the last build, which is not a promise anybody should rely on.
+const APPS = [
+  {
+    page: './index.html',
+    files: [
+      './',
+      './index.html',
+      './ui.js',
+      './engine.js',
+      './data.js',
+      './score.js',
+      './galaxy.js',
+      './audio.js',
+      './manifest.webmanifest',
+      './icon-180.png'
+    ]
+  },
+  {
+    // Matchbox is one self-contained file. The manifest and icon only matter once
+    // it is on a Home Screen -- iOS will not take an icon from a data: URI, so it
+    // has to be a real file travelling beside the page.
+    page: './matchbox.html',
+    files: [
+      './matchbox.html',
+      './matchbox.webmanifest',
+      './matchbox-icon-180.png'
+    ]
+  }
 ];
+
+const FILES = APPS.flatMap(a => a.files);
 
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -36,7 +85,8 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(
+        keys.filter(k => k.startsWith(PREFIX) && k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -53,7 +103,19 @@ self.addEventListener('fetch', e => {
         }
         return res;
       })
-      .catch(() => caches.match(e.request)
-        .then(hit => hit || caches.match('./index.html')))
+      .catch(() => caches.match(e.request).then(hit => {
+        if (hit) return hit;
+        // Nothing saved and no network. A subresource gets an honest failure:
+        // handing a page back to a <script> tag only produces a syntax error a
+        // long way from its cause.
+        if (e.request.mode !== 'navigate') return Response.error();
+        // A navigation falls back to the page of the app that OWNS the URL, so a
+        // cold open of one app can never be answered with another's. Anything
+        // unrecognised gets the site's front page.
+        const path = new URL(e.request.url).pathname;
+        const owner = APPS.find(a => new URL(a.page, self.location).pathname === path);
+        return caches.match(owner ? owner.page : APPS[0].page)
+          .then(page => page || Response.error());
+      }))
   );
 });

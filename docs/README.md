@@ -14,6 +14,41 @@ and root would publish `upliftledger.html` — a private tool that has no busine
 on the web — alongside the game. Serving from `/docs` puts exactly this folder
 online and nothing else in the repository.
 
+### One folder means one service worker for every app in it
+
+Pages serves `/docs` as the **root of one site**, so everything published here shares an
+origin and a directory:
+
+```
+https://manopalynx.github.io/Manopalynx-/                 index.html   Grandiose
+https://manopalynx.github.io/Manopalynx-/matchbox.html                 Matchbox
+```
+
+A service worker's scope is the folder its script sits in, so `sw.js` is in charge of
+**every** app here, not only Grandiose. Two faults came of assuming otherwise. Neither
+threw, warned or looked wrong on screen, and Sam found the symptom by trying to open
+Matchbox with no signal:
+
+- **The offline fallback answered for everyone.** A navigation with nothing cached and no
+  network returned `./index.html` whatever had been asked for, so opening Matchbox on a
+  train showed **Grandiose**. A working game that is not the one you tapped is worse than
+  an error page, because nothing about it looks like a failure.
+- **The cleanup deleted the neighbours.** Cache Storage is per *origin*, not per scope, so
+  `caches.keys()` hands one app every cache on the site. `activate` removed everything
+  that was not its own — so **every Grandiose build threw away Matchbox's saved files**,
+  which is why Matchbox worked offline right up until the next time the game shipped.
+
+Both are fixed in `sw.js`: the cleanup is scoped to a `PREFIX` derived from `CACHE`, and
+the fallback serves the page belonging to the app that **owns** the requested URL, failing
+outright rather than substituting another app's. `sw.js` also carries an `APPS` registry
+naming what each app needs offline — **an app is only reliably offline once it is listed
+there**; before that it survives only by happening to have been fetched since the last
+build, which is not a promise worth making.
+
+`test/offline.mjs` asserts all of it, against the mechanism rather than against Matchbox,
+so a third app arrives already covered. **Adding an app means a row in `APPS` in `sw.js`
+and a row in `APPS` in `test/offline.mjs`.**
+
 ## State
 
 Playable. Engine, interface, offline support and save/resume are all in.
@@ -21,7 +56,7 @@ Playable. Engine, interface, offline support and save/resume are all in.
 ```
 data.js      board, decks, opponents, economy constants — data only
 engine.js    the rules. No DOM, no timers, no Math.random
-test/        350 passing (plus two browser probes across five viewports)
+test/        412 passing (plus two browser probes across five viewports)
 ```
 
 ## Running the tests
@@ -31,6 +66,15 @@ node --test docs/test/*.test.mjs
 ```
 
 There is no build step and no dependency — `node:test` and ES modules only.
+
+The offline behaviour is the exception, because it needs a real browser and a real
+service worker. It lives with the other cross-app suites at the repository root:
+
+```
+npm i                          # the pinned Playwright — see package.json
+node test/offline.mjs          # every app still works with no signal, and shipping
+                               # one of them does not break the others
+```
 
 These are not tests. They are measuring instruments, run by hand when a number
 needs explaining:

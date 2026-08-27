@@ -23,6 +23,14 @@ to Home Screen. It opens in its own window with its own icon.
 > icon added before that was set up keeps the old behaviour forever, however many
 > times the page is updated. Delete it from the Home Screen and add it again.
 
+**With no signal it now opens.** It did not before, and the reason was not in this file:
+Matchbox registers no service worker of its own, and the one Grandiose registers covers
+the whole published folder. It deleted every cache that was not its own on each build —
+so Matchbox worked offline only until the next time the game shipped — and answered an
+uncached page with *Grandiose's* page rather than Matchbox's. Both are fixed in
+`docs/sw.js`, which now precaches Matchbox's three files by name and serves each app its
+own page. `test/offline.mjs` holds it there. See `docs/README.md` for the whole account.
+
 Three files travel together: the page, `matchbox-icon-180.png` and
 `matchbox.webmanifest`. Both companions are optional — the page runs on its own from
 anywhere, and without them it loses the Home Screen appearance and nothing else. They
