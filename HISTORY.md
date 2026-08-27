@@ -1630,3 +1630,131 @@ worth a settings change.
 (14/14) as a sanity check. The ledger's untested arithmetic is still the highest-value
 work in the repository, still not started, now in its tenth session. A month of Sam's
 real entries is the fixture it has never had, and the monthly cycle is when to ask for it.
+
+## Instance 11 — 27 August 2026
+
+### The session in one line
+
+Sam chose between starting a new project and fixing existing ones, picked a tactical
+drafting autobattler, and asked for a game plan — and the only code that got written was
+a service-worker fix for a fault found by *reading* Grandiose's `sw.js` while working out
+where a fourth app would live.
+
+### The direction, which is the thing to carry
+
+He offered two new projects and took the recommendation: **the autobattler, not the
+roguelite defence shooter.** The argument that decided it was not taste but order —
+strip both to their engines and the shooter's combat is a degenerate case of the
+autobattler's, one commander being a stationary tower. **Building the autobattler first
+makes the shooter cheaper; the reverse is not true.** The second argument was that in the
+autobattler the player surrenders control, so a battle is a pure function of two armies
+and a seed and can be swept headlessly — which is the only kind of game this repo has ever
+been able to measure.
+
+He approved **AI opponents with distinct personalities** as the answer to "find an
+opponent". Still undecided at the end of the session, and all of it his: whether it lives
+in the novel's universe (**he must re-attach the `.docx` before any lore is written** —
+three sessions have fabricated canon), the name, the drafting frame, whether the AI sees
+the player's board when it drafts, and the roster scale.
+
+Proposed and not yet answered: **Grandiose — The Muster**, with the draft framed as
+calling in oaths rather than commanding an army — which explains the three random cards
+(who answers), the surrendered control (they are not your soldiers) and the losing
+player's extra draft (desperation buys reach) in one idea, and shares Grandiose's spine.
+
+### The fault, and why nothing had ever complained
+
+Pages serves `/docs` as the root of **one site**, so `docs/sw.js` is in charge of every
+app published there. Two faults, neither of which throws:
+
+- **The offline fallback answered for everyone.** Any uncached navigation returned
+  `./index.html`, so opening Matchbox with no signal served *Grandiose*.
+- **The cleanup deleted the neighbours.** Cache Storage is per ORIGIN, not per scope, so
+  `caches.keys()` hands one app every cache on the site. `activate` removed everything
+  that was not its own — so **every Grandiose build threw away Matchbox's saved files**.
+
+Matchbox therefore worked offline only until the next time the game shipped. Sam confirmed
+the symptom from his phone in one message: *"matchbox doesn't work offline but grandiose
+does"*.
+
+Fixed by scoping the cleanup to a `PREFIX` derived from `CACHE`, adding an `APPS` registry
+naming what each app needs offline, and falling back to the page of the app that **owns**
+the URL — failing outright rather than substituting another's. `test/offline.mjs` asserts
+it against the mechanism, so a third app arrives covered.
+
+### What I got wrong — three instrument failures in one new file
+
+Sixth session running that my own measurements were wrong more often than the code was,
+and this time all three were in a file written *to check* a fault I had already reasoned
+out and reported.
+
+1. **`context.setOffline(true)` does not reach a service worker's own `fetch()`.** The
+   first version of `test/offline.mjs` reported **6 passed, 0 failed** against code with
+   both faults present. The worker went out to the real server and came back with the real
+   file; the page was never offline. The server's own request log is what settled it — it
+   recorded a hit for `/matchbox.html` taken *while the context was offline*. The network
+   is taken away at the server now, by destroying the socket, which nothing in the browser
+   is exempt from. **Check 0 is permanent and exists only to assert the harness can still
+   tell offline from online at all.**
+2. **Waiting on `controllerchange` reads the caches too early.** `sw.js` calls
+   `clients.claim()` after the deletion, so the event looked like proof the cleanup had
+   run. It is not: the check reported the neighbour cache alive on code that deletes it,
+   and a plain three-second wait showed it gone. The settle signal is now the behaviour
+   itself — the app's own previous cache disappearing.
+3. **`waitForFunction` with an async predicate returns on the first frame.** It is handed
+   a Promise, and a Promise is truthy, so it waits for nothing. Replaced with an explicit
+   poll from Node. This is the same shape as Instance 3's probe selector that returned a
+   truthy string so the fallback never ran.
+
+Each of the three would have shipped a confident wrong answer, and the first would have
+told Sam his phone was fixed when nothing had been.
+
+**And the check that passed for the wrong reason.** Once Matchbox was precached, "an app
+opened offline is not answered with another app's page" passed without ever reaching the
+fallback — so the fallback fix was unguarded. Check 2b evicts the page from the cache
+first, which is the state Matchbox was actually left in after every Grandiose build.
+Mutation-testing found it: each half of the fix now turns exactly one check red and
+nothing else.
+
+### Things that keep being true — additions
+
+- **Reading a file to find out where a new thing would live is a measurement.** The whole
+  fault came out of asking where a fourth app would go, not out of looking for a bug. The
+  question "what does this assume about the world" is worth asking of code nobody has
+  complained about.
+- **Sam's one-line phone reports remain the only instrument pointed at the real thing.**
+  *"matchbox doesn't work offline but grandiose does"* is a two-clause diagnosis: the
+  contrast is the finding, because it is what rules out the network and points at the one
+  app that owns a service worker.
+
+### State of the work
+
+`main` carries **grandiose-v86**, verified from `origin/main` rather than from the working
+tree. All suites green on the merged tree, run one at a time:
+
+| suite | result |
+|---|---|
+| Grandiose, `node --test docs/test/*.test.mjs` | 412 passed |
+| Offline, `test/offline.mjs` | 9 passed |
+| Grandiose UI probe | all checks passed |
+| Ledger interaction | 14 passed |
+| Published copies | 3 passed |
+
+`docs/README.md` gained a section on why one folder means one service worker, and its
+State block was corrected from 350 tests to 412. `MATCHBOX.md` and the root `README.md`
+carry the offline note and the new suite.
+
+**Nothing was added to `workingwithsam.md`, deliberately.** Three instrument failures are
+the catalogue's existing top entry wearing new clothes, not a new class; they belong here
+until a second session finds the same shape independently. The file stays at 340/340.
+
+Open:
+- **The Muster has not started.** Every decision listed above is Sam's and none is made.
+- **The published site still cannot be checked from here** — 403 from the proxy. Sam was
+  asked to confirm `grandiose-v86` in the menu and Matchbox opening in airplane mode.
+  The new worker only installs when **Grandiose** is opened with a signal, because
+  Matchbox registers none of its own.
+- The ledger's arithmetic is still untested, now in its eleventh session. Sam's last work
+  day of the month is **the 31st**; he has notes and a month of real entries to bring,
+  which is the fixture it has never had.
+- Everything Instances 3 and 4 left open still stands.
