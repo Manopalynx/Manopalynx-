@@ -19,7 +19,7 @@
 // Sam plays from the Home Screen where a stale service worker looks identical to
 // a current one, so "the fix didn't land" was previously unanswerable by either
 // of us. `CACHE` in sw.js must match this exactly; build.test.mjs asserts it.
-export const BUILD = 'grandiose-v86';
+export const BUILD = 'grandiose-v87';
 
 /* ---------------------------------------------------------------- colour sets */
 // gc = cost of one garrison on any square in the set.
@@ -80,7 +80,10 @@ export const BOARD = [
   { t: 'p', s: 'eni', n: 'Enigma Agricultural Belt', pr: 100, r: [6, 30, 90, 270, 550], a: 'BELT',
     q: 'The wind came off the agricultural belt smelling of turned earth and the flowering season, the way it had smelled every spring of his life.', qv: 1 },
   { t: 'p', s: 'eni', n: 'Arvanis', pr: 120, r: [8, 40, 100, 300, 600], a: 'ARVN',
-    q: 'The nation of Arvanis has refused integration three times. Its mineral output is required.', qv: 1 },
+    // The speech is split by its dialogue tag in the book. The tag is carried
+    // rather than elided, because eliding it made this line the only one on the
+    // board that was joined across a cut -- see Re-dok below.
+    q: '“The nation of Arvanis has refused integration three times,” the Dominion officer said. “Its mineral output is required.”', qv: 1 },
   { t: 'jail', n: 'Overseer Detention', a: 'OVSR',
     q: 'An Overseer is an official, and officials have a price.' },
   { t: 'p', s: 'dom', n: 'Ortox Transit', pr: 140, r: [10, 50, 150, 450, 750], a: 'ORTX',
@@ -126,7 +129,12 @@ export const BOARD = [
   { t: 'p', s: 'bas', n: 'The Rezar Marches', pr: 300, r: [26, 130, 390, 900, 1275], a: 'REZR',
     q: 'By spring the buffer will run unbroken from the Rezar marches to the core routes.', qv: 1 },
   { t: 'p', s: 'bas', n: 'Re-dok Station', pr: 300, r: [26, 130, 390, 900, 1275], a: 'RDOK',
-    q: 'Six levels of platforms under a single vaulted roof, and the walls were mosaic — ten centuries of Basileian history in ten million pieces of colored stone.', qv: 1 },
+    // The whole sentence, uncut. The board's longest line by some way, and kept
+    // that way deliberately: the earlier version dropped "actual mosaic,
+    // hand-set, kilometers of it" and "flowing along beside the escalators" out
+    // of the middle, which is an elision rather than a trim and is the one thing
+    // this file promises not to do.
+    q: 'The station rose through six levels of platforms under a single vaulted roof, and the walls were mosaic — actual mosaic, hand-set, kilometers of it, ten centuries of Basileian history flowing along beside the escalators in ten million pieces of colored stone.', qv: 1 },
   { t: 'col', n: 'The Column', a: 'CLMN',
     q: 'The figure was correct. That was never the part in question.' },
   // CANON. The plaza is real and is where Vale is assassinated, but the book

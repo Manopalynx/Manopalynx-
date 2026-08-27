@@ -2342,7 +2342,14 @@ test('favours survive a save', () => {
 test('every square carries a line, and every line is attributed', () => {
   BOARD.forEach((b, i) => {
     assert.ok(b.q && b.q.trim().length > 20, `square ${i} (${b.n}) has no line`);
-    assert.ok(b.q.trim().endsWith('.') || b.q.trim().endsWith('?'),
+    // A closing speech mark may follow the full stop. Arvanis carries its
+    // dialogue punctuation because the line is a quotation split by its own
+    // tag in the book, and dropping the marks was the elision that made it
+    // the one board line joined across a cut. The guard is against a line
+    // TRUNCATED mid-sentence, so it looks past a terminal quote mark rather
+    // than treating one as a failure.
+    const ends = b.q.trim().replace(/[”"’']+$/, '');
+    assert.ok(ends.endsWith('.') || ends.endsWith('?'),
       `square ${i} (${b.n}) does not finish its sentence: "${b.q}"`);
     assert.ok(b.qv === undefined || b.qv === 1,
       `square ${i} (${b.n}) has a strange qv: ${b.qv}`);
