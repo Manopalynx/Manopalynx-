@@ -293,11 +293,11 @@ that assumed it wasn't; after a structural move, for the old names. And **defens
 one half of a pair hides a bug in the other**: one binder stripped a trailing `()` and its
 twin did not, so a button worked in half the interface and was dead in the rest. `[2,5]`
 
-**Four things cannot be seen from inside a session**: the Pages source, the default branch,
-the Claude Code environment's source revision, and this sandbox's network policy — plus a
-transient, Pages returning 503 while the build succeeds. `git push` succeeding,
-`origin/main` holding the bytes, and the site serving them are three separate facts. Verify
-from where the world looks: `git show origin/main:<path>`. `[5,6,7,8]`
+**Three things once called invisible now answer to a command**: the default branch to
+`git ls-remote --symref origin HEAD`, the environment's source revision to `get_session`,
+the network policy to `curl -sS "$HTTPS_PROXY/__agentproxy/status"`. Only the Pages source
+resists, and it can 503 while its build succeeds. A push, `origin/main` holding the bytes,
+and the site serving them stay three facts: `git show origin/main:<path>`. `[5,6,7,8,10]`
 
 ---
 

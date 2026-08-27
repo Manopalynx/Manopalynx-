@@ -79,8 +79,12 @@ Fix before doing any work:
 then read CLAUDE.md and workingwithsam.md from disk, because the harness will
 not re-import them mid-session.
 
-Tell Sam this happened. The cause is a source revision pinned to a stale
-branch on the environment, and it will keep happening until that is changed.
+Tell Sam this happened, with the evidence rather than the inference. The
+environment's pinned source revision is readable from inside the session:
+call get_session (claude-code-remote MCP) with no session_id and read
+session_context.sources[].git_repository.revision. If that is not
+refs/heads/main, it is the cause, and it will keep happening until it is
+changed. Quote the value you read; do not assert the cause without it.
 =============================================================================
 MSG
     fi
