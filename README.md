@@ -11,6 +11,9 @@ Everything is stored in the browser's `localStorage` on the machine you open it 
 >   **[MATCHBOX.md](MATCHBOX.md)** carries its design, measured figures and tests.
 > - `docs/`, *Grandiose* — a Monopoly-shaped game set in Sam's novel, and the only
 >   thing GitHub Pages publishes. **[docs/README.md](docs/README.md)** carries its detail.
+> - `docs/column/`, *Grandiose — The Column* — a drafting autobattler in the same
+>   novel. **Design only, nothing built yet**;
+>   **[docs/column/README.md](docs/column/README.md)** is the proposal.
 >
 > `workingwithsam.md` is the operating document — how Sam works, the standing
 > instructions, the defect catalogue — and it maps all three. `HISTORY.md` carries the
