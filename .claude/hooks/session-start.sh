@@ -1,7 +1,7 @@
 #!/bin/bash
 # SessionStart hook.
 #
-# Three jobs, in this order:
+# Four jobs, in this order:
 #
 #   1. Say out loud which commit the session actually started from, and complain
 #      if it is not built on main. On 15 August 2026 a session started from a
@@ -14,7 +14,17 @@
 #   2. Install the test dependency, so `node test/*.mjs` works without a manual
 #      `npm i` first.
 #
-#   3. Print what the session owes at the end of it. The obligation is written
+#   3. Measure workingwithsam.md against its own line ceiling and print the
+#      headroom. The rule lives inside the file it governs -- "if your edit
+#      takes this file over 340 lines, remove something in the same edit" --
+#      and it binds at the END of a session, when context is longest and rules
+#      are most likely to be skimmed. It also depends on the instance
+#      remembering to run wc at that moment. Printing the number at the start
+#      removes the remembering: it is in front of the instance hours before
+#      the edit it governs. The predecessor file reached 1,483 lines, so the
+#      failure this guards against is one that has already happened once.
+#
+#   4. Print what the session owes at the end of it. The obligation is written
 #      in workingwithsam.md under "End of session", but that file used to carry
 #      the same thing as a prohibition in its footer and instances skimmed past
 #      it. A hook fires at the start and cannot nag at the end, so it states the
@@ -87,6 +97,22 @@ if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ -f package.json ]; then
   else
     echo "npm install FAILED. Browser suites will not run until this is fixed:"
     tail -15 /tmp/npm-install.log
+  fi
+fi
+
+# ----------------------------------------------------------------- doc ceiling
+
+if [ -f workingwithsam.md ]; then
+  lines=$(wc -l < workingwithsam.md | tr -d ' ')
+  ceiling=340
+  spare=$(( ceiling - lines ))
+
+  if [ "$spare" -gt 0 ]; then
+    echo "workingwithsam.md: $lines of $ceiling lines, $spare spare."
+  elif [ "$spare" -eq 0 ]; then
+    echo "workingwithsam.md: $lines of $ceiling lines. No headroom -- an addition must remove something in the same edit."
+  else
+    echo "workingwithsam.md: $lines lines, OVER the $ceiling ceiling by $(( -spare )). Remove something before adding anything."
   fi
 fi
 
