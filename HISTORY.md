@@ -1,6 +1,6 @@
 # History — the session sections
 
-Eight sessions, verbatim as each instance wrote them, oldest first. Nothing here has been
+Every session, verbatim as each instance wrote them, oldest first. Nothing here has been
 edited, merged or pruned; where a section is now wrong, the correction lives in
 `workingwithsam.md` rather than here, because rewriting a confession removes the evidence
 that the mistake happened.

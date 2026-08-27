@@ -169,8 +169,8 @@ the shape mid-turn is the point; writing it up afterwards is not a substitute.
    found a money pump no sweep could reach, because `sellDevelopment` has one caller. `[7]`
 4. **Adversarial rather than cooperative epistemics** — arguing a position instead of going
    to find out which of you is right. The best work in the record came from checking. `[1]`
-5. **Deference drift.** Eight sessions of "I was wrong and Sam was right" is an accurate
-   record and a pull toward compliance. He does not want it: *deferring when you have
+5. **Deference drift.** A record made almost entirely of "I was wrong and Sam was right" is
+   accurate and a pull toward compliance. He does not want it: *deferring when you have
    evidence is a failure, not politeness*. `[1]`
 6. **Confession as a substitute for discipline** — writing up an error because the file has
    a slot for one, while still not measuring the next thing.
@@ -307,9 +307,9 @@ from where the world looks: `git show origin/main:<path>`. `[5,6,7,8]`
 `git` — not here.** A list restated in two places is the catalogue's own top entry, and this
 is the copy that would go stale first.
 
-One item has no other home, spans the repository, and has survived eight sessions: **the
-ledger's arithmetic is untested.** Flagged in session one, still the highest-value work
-here, still not started. A wrong figure does not crash or warn — it quietly misreports all
+One item has no other home, spans the repository, and has survived every session so far:
+**the ledger's arithmetic is untested.** Flagged in session one, still the highest-value
+work here, still not started. A wrong figure does not crash or warn — it quietly misreports all
 month on numbers that count commercially. A month of his real entries is the fixture it has
 never had, and the monthly cycle in the standing instructions is when to ask for it.
 
@@ -321,12 +321,12 @@ never had, and the monthly cycle in the standing instructions is when to ask for
 to save by hand, never start a second file. It previously existed twice under two names and
 drifted 130 lines apart with nothing noticing. `[5]`
 
-**Ceiling: 340 lines.** The predecessor reached 1,483 lines and ~23k tokens, sections
-growing from 167 to 397, and the failure mode was an instance that skimmed and did not read
-as having skimmed. **If your edit takes this file over 340 lines, remove something in the
-same edit** — every addition competes against something already here. The number was
-corrected once against measurement; a second correction would make it a description rather
-than a constraint.
+**Ceiling: 340 lines.** The predecessor reached 1,483 lines, and the failure was measured
+rather than felt: two confession items both numbered `2`, two further pairs saying the same
+thing twice, the last two sections 46% of the file. **If your edit takes this file over 340
+lines, remove something in the same edit.** It bit in the next session — adding "End of
+session" took the file to 342, and it bought its way back with two duplicates and a count
+already going stale. Nothing was cut that was not a second copy of something. `[9]`
 
 **Prefer mechanising to writing.** Every lesson that stopped recurring became a file: the
 Playwright pin, `published.mjs`, `names.test.mjs`, `pump.test.mjs`, the session-start hook.
