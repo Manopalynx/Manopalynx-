@@ -1727,7 +1727,7 @@ nothing else.
   contrast is the finding, because it is what rules out the network and points at the one
   app that owns a service worker.
 
-### State of the work
+### State of the work at the halfway point
 
 `main` carries **grandiose-v86**, verified from `origin/main` rather than from the working
 tree. All suites green on the merged tree, run one at a time:
@@ -1757,4 +1757,95 @@ Open:
 - The ledger's arithmetic is still untested, now in its eleventh session. Sam's last work
   day of the month is **the 31st**; he has notes and a month of real entries to bring,
   which is the fixture it has never had.
+- Everything Instances 3 and 4 left open still stands.
+
+### The second half: the novel, and what it changed
+
+Sam confirmed the service-worker fix from his phone in one line — *"matchbox works
+offline, v86 showing"* — and attached the novel, asking for a proper read before anything
+else. **86,621 words, 68 chapters, five interludes, read end to end.** It was worth every
+token and it changed the project.
+
+**The book's engine is pricing, not war.** Everyone in it keeps books: the Leader prices,
+Samuel keeps "the ledger of witness" until a scope converts it — *"a witness list is a
+target list"* — Harlow reads every report twice and both readings always sum, Ava's covers
+are an inventory, and the Neurex is the one counterparty whose ledger has no bottom. That
+makes an autobattler the right genre for a reason I could not have argued before reading
+it: **drafting is pricing.** You spend a pick, you get a unit, resolution tells you whether
+the trade was sound. The genre and the novel are the same shape.
+
+And Sam's own rule that a losing player gets an extra draft turned out to be the Leader's
+central doctrine — *"The Vanguard's sacrifice was not in vain. It purchased the war."* He
+specified it before I had read the book.
+
+**Decisions Sam took this half:** the name is **Grandiose — The Column** (a column of
+figures and a column of troops; Chapter 37 is *Both Columns*); restore the two elided board
+quotes; the frame is "every conquest entered twice"; the AI sees the board after round one
+and never the current round's picks; and **the player buys time rather than winning**,
+which he identified as the theme of the novel and of the first Grandiose without prompting.
+
+### The canon check, and my own instrument failing first
+
+All 30 board lines marked `qv: 1` checked against the manuscript. **The first run reported
+13 failures and every one I opened by hand differed by a full stop** — the check was
+comparing punctuation, not provenance. Corrected to compare words only: **28 of 30
+verbatim, nothing invented.** The recurring failure of Instances 2 and 3 did not recur in
+the data.
+
+The two that were not verbatim were elisions inside the sentence rather than trims at the
+ends, which is the one thing `data.js` promises about itself. Both restored in v87. Re-dok
+is now 259 characters against a previous board maximum of 167, so the fit was measured
+rather than assumed — differentially, the same panel rendered with old text and new: the
+quote block grows 42px on every phone size, nothing overflows sideways, and the panel that
+scrolls on an iPhone SE **was already scrolling before the change**.
+
+`engine.test.mjs` then failed, asserting a line ends in `.` or `?` — which a line carrying
+its own closing speech mark cannot. **The assertion was narrower than the case, not wrong.**
+Widened to look past a terminal quote mark, and mutation-tested both ways: a line cut
+mid-sentence still fails, and a quote mark hiding a missing full stop still fails.
+
+### The mistake worth handing on
+
+The first draft of `docs/column/README.md` gave Varan the line *"I did not want it. You
+wanted it more."* and attributed it to the novel.
+
+**It appears in the manuscript zero times.** It is a persona line written for the Ledger,
+sitting in `data.js` among the ones that are quoted, and it read exactly like the book
+**because it was written to**. I had read the whole novel that same session and still
+reached for it as canon.
+
+That is the fourth time this file records an instance inventing canon about this book, and
+it is the first time the invention came from the repository rather than from imagination —
+which is worse, because a game-written line has already passed one round of sounding right.
+Checking every attributed passage against the manuscript caught it and nothing else would
+have. The rule is now written into the project's own document: **every passage presented as
+the author's is verified before it ships, and the manuscript never enters the repository,
+because the repository is public and it is his book.**
+
+One proofing catch went back the other way: `a advance` for `an advance`, Chapter 37, the
+only error in 86,621 words.
+
+### State of the work
+
+`main` carries **grandiose-v87** and `docs/column/README.md`, both verified from
+`origin/main`. All suites green, run one at a time:
+
+| suite | result |
+|---|---|
+| Grandiose, `node --test docs/test/*.test.mjs` | 412 passed |
+| Offline, `test/offline.mjs` | 9 passed |
+| Grandiose UI probe | all checks passed, five viewports |
+| Published copies | 3 passed |
+
+Open, in the order it needs answering:
+
+- **The Column is designed and unbuilt.** Move 2 is the engine and the replay log; Move 3
+  is `matchup.mjs`, which is the go/no-go. Four things are still Sam's: roster size (12 is
+  an assumption), the go/no-go thresholds, round structure, and the shape of an ending.
+- **`workingwithsam.md` will need a fourth row in "Where things are" when the Column has
+  code.** It is at 340/340, so that addition must buy its line back in the same edit.
+  Deliberately not done yet — there is nothing to point at.
+- The ledger's arithmetic is still untested, in its eleventh session. **The 31st** is Sam's
+  last work day of the month; notes and a month of real entries are coming, which is the
+  fixture it has never had.
 - Everything Instances 3 and 4 left open still stands.
