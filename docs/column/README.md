@@ -242,3 +242,93 @@ his book.
    persists between rounds or resets.
 4. **Whether a run can be won.** Settled in principle — a run yes, the war no — but the
    shape of an ending has not been designed.
+
+---
+
+# What the first sweeps found
+
+**The engine and both instruments are built and the numbers are in.** This section is
+measured, not proposed. `docs/column/test/matchup.mjs` is the counter-graph;
+`docs/column/test/match.mjs` is Sam's round structure. Everything below is reproducible
+from a seed.
+
+## The counter-graph is real
+
+| claim | result |
+|---|---|
+| real cycles, every unit inside one | **holds** — 171 three-cycles at 60/40 or wider |
+| every unit is the best answer to something | **holds** |
+| nothing above 65% or below 35% | **fails** — and the reason matters more than the failure |
+
+Five tuning passes each flipped a unit from dead to dominant on a small change. That is
+the catalogue's tell, so I stopped tuning and measured the room instead:
+
+> **Of 132 pairings, 100 — 76% — are decided 95/5 or harder.**
+
+The resolver is near-binary. A unit's "overall win rate" is therefore not a rate but a
+**count of pairings won**, in steps of 1/11 ≈ 9 points. The 35–65% band admits only four
+possible values, so any unit that wins one more or one fewer matchup jumps outside it.
+**The threshold is finer than the model's resolution**, which is why every pass flipped
+something. Two dials made it worse and both are super-linear: `count` is quadratic (Line
+Infantry went 25.8% → 87.8% on one extra body) and an aura scales with enemies *and* with
+the square of its radius (Volt went 27.8% → 86.6%). `hp`, `dmg` and `rate` are the safe
+dials; `count`, `auraR` and `splash` are not.
+
+Mixed armies of nine cards soften it but not much: **60% still decided 95/5.**
+
+**Sam's decision.** Either accept that counters are decisive — which is legible and
+arguably right for a drafting game, and means restating the claim at the model's real
+resolution ("each card wins between four and seven of its eleven matchups") — or introduce
+variance so a matchup can genuinely be close. I lean to the first: you want "this beats
+that" to be learnable, and the uncertainty to live in composition rather than in dice.
+
+## Your extra pick is too weak, not too strong
+
+The risk was an oscillator — losing a round being how you win the next. Measured across
+five tables, 100 matches each:
+
+| table | human wins | rounds | alternation | bodies by the end | longest round |
+|---|---|---|---|---|---|
+| vs Varan | 45.0% | 7.7 | **50%** | 69 | 77s |
+| vs Harlow | 94.0% | 6.5 | 64% | 77 | 81s |
+| vs Hale | 100.0% | 6.2 | **67%** | 79 | 54s |
+| vs Vex | 98.0% | 6.3 | 66% | 81 | 82s |
+| vs The Leader | 79.0% | 7.6 | 55% | 85 | 49s |
+
+Alternation is how often the winner of a round also wins the next. **It runs 50–67% — the
+winner keeps winning slightly more often than not, so the rubber band is marginally too
+light rather than too heavy.** Your instinct was sound and the correction is small: a
+second bonus pick, or a wider offer for the loser.
+
+## Three of the five personas are worse than picking blind
+
+`house` — the harness policy that always takes the first card offered, with no thought at
+all — beats **Harlow 94%, Hale 100% and Vex 98%.** Only Varan is competitive at 45%.
+
+The three that lose are the three that draft by a single stat. Varan is the one that reads
+the board and answers it. **In a game decided by counters, drafting by stat is not a
+personality, it is a handicap.** The personas need to be variations on *how* they counter —
+what they are willing to trade, how far ahead they read — not stat-maximisers wearing
+different names. That is a rewrite of `POLICIES`, not a tuning pass.
+
+## The real constraint is legibility
+
+A match ends with **about 85 bodies a side — 171 on screen — at roughly 36pt of space
+each** on a 393pt portrait field. Performance is not the problem; Matchbox runs 26,390
+cells at 2.5ms a frame. Telling them apart is.
+
+The first version of this check counted *cards* and would have reported a comfortable
+field at a third of the real crowd. A card deploys up to ten bodies.
+
+**Options, all Sam's:** cap the field and bench the rest, retire early cards as later ones
+arrive, merge duplicate cards into one stronger body, or shrink the squad counts. This is
+the first thing to settle, because *observation* is the step the whole loop hangs on and
+it is the step that breaks first.
+
+## Open, in the order it now needs answering
+
+1. **Decisive counters, or add variance?** Everything else follows from it.
+2. **The field is too crowded by round six.** Which of the four options above.
+3. **The personas need rewriting** as counter-policies rather than stat-policies.
+4. Strengthen the loser's bonus slightly — 50–67% wants to be 50%.
+5. A round runs 49–82 seconds at its longest. Is that too long to watch on a phone?
