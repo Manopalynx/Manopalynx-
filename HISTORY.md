@@ -2407,3 +2407,44 @@ module in the game missing.
 Also caught: the roster still said *"a marker's letter is the card"* after the letters were
 gone. Interface copy going stale in meaning while its digits stay right, which is already in
 the catalogue and got past me anyway.
+
+### Part seven — notes eight and nine, and a rounding defect under a cosmetic ask
+
+**8, "slow the fights 35%", was his number and needed no discussion** — but implementing it
+literally exposed a defect. The playback speed was `Math.ceil(frames / 230)`, integer steps,
+so a 246-tick battle rounded to 2 ticks a frame and played at nearly **double** the intended
+rate while a 230-tick one played correctly. Playback length had been inconsistent for reasons
+that had nothing to do with the battle. **A cosmetic ask is a reason to read the code that
+does the thing, not just the number in it.**
+
+**9, formation by role, is the best change on the list and it was his.** Rank 0 sits furthest
+from the enemy, so a newly drafted card landed at the FRONT whatever it was — artillery in the
+front rank because it happened to be the ninth pick. He spotted that from playing; no sweep
+in this folder was pointed at it.
+
+Built as a **derived** rule rather than a role typed onto each card: band by range (`>35`
+artillery, `7–35` ranged, `≤6` the line), least durable first inside a band so the toughest
+end up in front. A card cannot stand in a rank that disagrees with what it is, and adding a
+card never means remembering to classify it.
+
+**Measured in a scratch copy before shipping**, because it re-derives every figure in the
+suite: mixed compositions settled 95/5 fell **64% → 59%**, one extra card fell **82% → 78%**,
+alternation and draws unchanged, unit graph untouched. Better on both figures that matter,
+worse on none. **Deploying seekers in front of everything was tried** on the reasoning that
+they charge anyway — worse, 83%, so it was dropped. Reasoning proposed it; measuring refused
+it, in the same ten minutes.
+
+And a consequence nobody predicted: **throwing the opening round now loses** on the table
+`match.mjs` runs (46.3% against 48.7%, from +3.7pt). Formation may have closed the exploit he
+had decided to leave open. One table is not the 6,000-match sweep that established it, so it
+is reported as provisional and the sweep re-run rather than claimed.
+
+### On note 10, which was a design discussion and stayed one
+
+He asked for endless survival with buffs, and for the loop to mean something between matches.
+The pushback that mattered: **if both sides gain a buff every match, the buffs cancel** — the
+run gets longer without getting harder. The asymmetry a roguelite runs on is that **you choose
+yours and they do not**, same count, and choice compounds where randomness does not. Also
+argued: score the run by *how long you held* against a clock that climbs whether you win or
+lose, because "buying time" is the theme of the book and of the first Grandiose, and a mode
+scored by match count is any autobattler's.
