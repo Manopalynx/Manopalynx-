@@ -596,6 +596,19 @@ played the game.** So `match.mjs` no longer asserts that it does not pay — it 
 edge stays under 15 points, which is the difference between a line a good player can take and
 the only way to play.
 
+## The way out of a match
+
+Tapping the header — *Round 4 · Varan ☰* — pauses. Roster, abandon and start again, or back
+to the round. Without it the roster was reachable only before the first pick and the
+opponent could not be changed without spending five lives or clearing browser storage:
+technically present, unreachable, which reads correctly as not shipped.
+
+`play.mjs` exercises it mid-match and backs out again. **The first version of that check was
+worthless**: with the close button broken, every part of it still passed — the cards are
+still in the DOM under the overlay — and the suite only failed thirty seconds later on a
+click that landed on the sheet. It asserts the sheet is *gone* now, and bails rather than
+playing on, so a broken pause reports as a finding instead of a crash.
+
 ## Next, and it is his
 
 **Battlefield variety.** His answer to 65% of compositions settling 95/5 is not to soften the

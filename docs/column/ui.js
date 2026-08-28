@@ -215,7 +215,7 @@ function cardFace(tok, i) {
 function render() {
   el.la.innerHTML = hearts(S.lives[0]);
   el.lb.innerHTML = hearts(S.lives[1]);
-  el.who.textContent = `Round ${S.round + 1} · ${PERSONAS[S.opp].n}`;
+  el.who.innerHTML = `Round ${S.round + 1} &middot; ${PERSONAS[S.opp].n} &nbsp;&#9776;`;
   paint(board());
   el.cards.innerHTML = '';
   el.go.hidden = true;
@@ -302,6 +302,33 @@ function sheet(html) {
   return d;
 }
 
+// THE WAY OUT OF A MATCH. Without this the roster is reachable only before the
+// first pick and the opponent cannot be changed without finishing five lives or
+// clearing the browser's storage -- which is "technically present but
+// unreachable", and reads, correctly, as not shipped.
+el.who.addEventListener('click', () => {
+  if (!S || document.querySelector('.sheet')) return;
+  const d = sheet(`<h1>${PERSONAS[S.opp].n}</h1>
+    <p>Round ${S.round + 1}. ${S.lives[0]} ${S.lives[0] === 1 ? 'life' : 'lives'} to
+       ${S.lives[1]}, ${armyFrom(S.army[0]).cards.length} cards to
+       ${armyFrom(S.army[1]).cards.length}.</p>
+    <button class="pick" id="close"><b>Back to the round</b></button>
+    <button class="pick" id="roster2"><b>The roster</b><i>What every card does, and which
+      lines are the author's.</i></button>
+    <button class="pick" id="quit"><b>Abandon and start again</b><i>Choose a different
+      opponent. This match is not kept.</i></button>
+    <div class="foot">${BUILD}</div>`);
+  d.querySelector('#close').onclick = () => d.remove();
+  d.querySelector('#roster2').onclick = () => roster();
+  d.querySelector('#quit').onclick = () => {
+    try { localStorage.removeItem(SAVE); } catch (e) {}
+    S = null;
+    document.querySelectorAll('.sheet').forEach(x => x.remove());
+    paint([]);
+    menu();
+  };
+});
+
 function menu() {
   const saved = localStorage.getItem(SAVE) && load();
   const d = sheet(`
@@ -321,7 +348,7 @@ function menu() {
     <div class="foot">${BUILD}</div>`);
 
   d.querySelectorAll('[data-opp]').forEach(b =>
-    b.onclick = () => { d.remove(); newMatch(b.dataset.opp); });
+    b.onclick = () => { document.querySelectorAll('.sheet').forEach(x => x.remove()); newMatch(b.dataset.opp); });
   const r = d.querySelector('#resume');
   if (r) r.onclick = () => { d.remove(); render(); };
   d.querySelector('#roster').onclick = () => roster();

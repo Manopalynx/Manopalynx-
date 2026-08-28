@@ -103,6 +103,7 @@ let rounds = 0, mismatch = null, deadEnd = null;
 // mid-flight, and the result. He is phone-only — a screenshot is the only
 // instrument pointed at this until it is on his Home Screen.
 const shot = {};
+let pause = null;
 for (let guard = 0; guard < 400; guard++) {
   const s = await state();
   if (!s.phase) break;
@@ -111,6 +112,33 @@ for (let guard = 0; guard < 400; guard++) {
   if (s.phase === 'pick') {
     if (s.offer !== 3) { deadEnd = `offered ${s.offer} cards at ${s.prompt}`; break; }
     if (s.round === 3 && !shot.draft) { shot.draft = 1; await page.screenshot({ path: rp(HERE, 'play-draft.png') }); }
+    // THE WAY OUT, exercised mid-match and then backed out of. A pause that
+    // cannot be closed, or that loses the match it paused, is worse than none.
+    if (s.round === 1 && pause === null) {
+      await page.click('#who');
+      const has = await page.evaluate(() => ['#close', '#roster2', '#quit'].map(q => !!document.querySelector(q)));
+      await page.click('#roster2');
+      const rows = await page.locator('.rosterRow').count();
+      await page.click('#back');
+      await page.click('#close');
+      // THE SHEET MUST BE GONE, and that is the assertion, not "the state behind
+      // it still looks right". Breaking the close button left every other part of
+      // this check green -- the cards are still in the DOM underneath -- and the
+      // suite only failed later, when a click landed on the overlay instead of a
+      // card. A crash three steps downstream is not this check doing its job.
+      const gone = await page.evaluate(() => !document.querySelector('.sheet'));
+      const after = await state();
+      pause = has.every(Boolean) && rows === 12 && gone && after.phase === 'pick' &&
+              after.offer === 3 && after.cards[0] === s.cards[0]
+        ? true
+        : `buttons ${has.join('/')}, roster rows ${rows}, ` +
+          `${gone ? 'sheet closed' : 'THE SHEET DID NOT CLOSE'}, ` +
+          `back at ${after.phase} with ${after.offer} cards offered`;
+      // Stop here rather than playing on. A pause that did not close leaves an
+      // overlay over the cards, so every later tap lands on it and the run dies
+      // in a click timeout thirty seconds later -- a crash instead of a finding.
+      if (pause !== true) { deadEnd = `the pause did not back out: ${pause}`; break; }
+    }
     await page.locator('#cards .card').first().click();
   } else if (s.go === 'Continue') {
     await page.click('#go');
@@ -190,6 +218,12 @@ else bad('the arithmetic closes', [
 if (end.saveGone) ok('a finished match does not come back as a resume');
 else bad('a finished match does not come back as a resume', ['the save survived the result screen']);
 
+if (pause === true) ok('the round can be paused for the roster and backed out of, mid-match');
+else bad('the round can be paused for the roster and backed out of', [
+  pause === null ? 'the pause was never reached' : pause,
+  'without a way back to the menu a match cannot be abandoned or an opponent changed'
+]);
+
 if (!errors.length) ok('nothing threw, start to finish');
 else bad('nothing threw, start to finish', errors.slice(0, 4));
 
@@ -197,6 +231,6 @@ await page.screenshot({ path: rp(HERE, 'play.png') });
 await browser.close();
 server.close();
 
-console.log(`\n${9 - failed} of 9 claims hold`);
+console.log(`\n${10 - failed} of 10 claims hold`);
 console.log(`written: docs/column/test/play-draft.png, play-battle.png, play.png\n`);
 process.exit(failed ? 1 : 0);
