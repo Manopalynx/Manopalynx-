@@ -2475,3 +2475,42 @@ that side just committed. Reverting `popKeys` reproduces his symptom verbatim.
 **And the shape of how it was found matters.** No check in this folder was pointed at it, and
 no amount of reading would have been: it needed someone who knew which card they had tapped.
 His screenshots are still the only instrument aimed at the real thing.
+
+### Part nine — the market, and the risk it was measured against
+
+He agreed to every recommendation and said go, so stage one of the survival loop was built
+inside the match that already exists rather than as a mode.
+
+**The thing worth carrying is his, and he did not flag it as the strongest part of his own
+idea: money for surviving units.** A win with one survivor and a win with twenty were
+identical in every version of this game — nothing anywhere rewarded winning cleanly. That
+rule fills a hole nobody had named.
+
+**Kill money was cut** after being proposed: a side is already paid for winning, and paying
+per kill pays for losing rounds in which you did damage, which is the extra-pick comeback a
+second time. Two income sources, not three, so it is predictable enough to plan against and
+to tune.
+
+**The economy went in the engine, not the interface, and both sides use it.** A shop only the
+screen knew about could not be swept — and the first question it had to answer was one I had
+named in advance: does paying the winner turn the match into a snowball? **It does, a little:
+alternation went 55% to 62% against a ceiling of 65%.** It holds. There is not much room, and
+the fix is already chosen rather than improvised: move the flat purse to the loser and leave
+the survivor money with the winner.
+
+**A prediction made before building and then measured is worth more than one made after.**
+That is the whole of the value in this part.
+
+Also learned, unforced: the harness's human floor fell about ten points once both sides could
+shop. Nothing asymmetric — money amplifies the draft, and that policy takes the first card
+offered. **An economy magnifies whatever skill gap already exists**, which is worth knowing
+before any number here is tuned.
+
+### Two interface faults the pictures caught, not the code
+
+The first market screen listed **one row per upgradeable card** — nine at round three, twelve
+by round nine. It passed every check and read as a wall. Collapsed to one row and a chooser.
+
+And the battle-wait in `play.mjs` only knew how to end a round into the next round, not into
+the market, so it waited out its timeout and reported the battle as hanging. **A predicate
+that knows one of two exits fails on the other**, and it fails as the wrong symptom.
