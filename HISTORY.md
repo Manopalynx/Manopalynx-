@@ -2718,3 +2718,42 @@ purchases, because upgrades compound with copies and a spread does not. The rewr
 Worth stating rather than burying: **not every defect is a weakness, and fixing one can cost
 you something.** The right move was still to fix it, and the right move after that is to say
 what it cost.
+
+### Part sixteen — the booster re-cut, and the control I forgot twice
+
+Re-ran the old pool first, on the current build rather than the one it was measured on: same
+answer. One prize, four fillers, and the four that moved the economy moved nothing even after
+the specials, the kit and the rewritten shopper had tripled it. **Third pass at the same
+sentence: the draft is the game.**
+
+The new pool is draft-shaped — a fourth pick, five cards offered, cards arriving pre-upgraded,
+a unit always in the offer — with one economy booster kept **deliberately**, so the conclusion
+stays falsifiable instead of becoming an assumption.
+
+### The mistake, and it is the same one twice in one session
+
+The new pool measured against *taking whatever came first* read: Veterans +0.62, a fourth pick
++0.23, and **three negatives**. I was one edit from cutting three boosters.
+
+They were not negative. **Preferring a mediocre booster means not taking the best one**, so
+anything that is not the best in a pool reads as a loss. That is a ranking, not a value.
+
+`playRun({ take: -1 })` takes nothing at all — the control that had been missing. Taking
+nothing survives **1.67** matches; every booster in the pool is worth between **+0.63 and
++1.63**. A live pool with no dead options, from the same runs that had looked like three duds.
+
+**A difference between two options is not a value; it needs a control that is neither.** The
+other instance was earlier the same session: a mirror match whose baseline was 23%, not the
+50% I had assumed, which made a piece of kit read as a penalty. Twice, hours apart, and the
+catalogue's existing line — prefer a differential to an absolute — is what I thought I was
+obeying both times. **A differential still needs a zero.** That went into the operating file.
+
+### And an exploit the new machinery opened in the same hour
+
+A booster can now carry an argument (`named:walker`). A side that had bought a Kraken and then
+named it would have been dealt Krakens **for nothing, every round** — the whole of what
+shop-only was protecting, undone by a feature added two hours later.
+
+Guarded in two places: the naming only chooses from the draft pool, and `offer()` refuses to
+force a card the draft cannot deal, because that function is the one that *promises* an offer
+contains no special. **The guard belongs where the promise is, not only where the mistake was.**

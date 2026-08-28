@@ -239,23 +239,23 @@ Every entry found by measurement, in two or more sessions, in code that threw no
 **Your instrument is wrong more often than the code is.** Four to five broken checks per
 session, each of which would have shipped a confident wrong answer: a probe reporting on the
 wrong element and returning a truthy string so the fallback never ran; a value printed at
-the end of a run and labelled "peak"; a live reference read after a later step mutated it; a
-measurement that deleted the field it was measuring; an exit code attached to a wrapper
-`echo`; a `sed` mutation that never applied because `\|` is alternation to GNU sed. **When a
-check fails, ask whether the assertion is stale before touching code** — and **prefer a
-differential measurement to an absolute one**: render twice, cause on and off, and diff,
-which cannot be fooled by whatever else is in frame. `[3,4,5,7,8]`
+the end of a run and labelled "peak"; a live reference read after a later step mutated it; an
+exit code attached to a wrapper `echo`; a `sed` mutation that never applied because `\|` is
+alternation to GNU sed. **When a check fails, ask whether the assertion is stale before
+touching code**, and **prefer a differential to an absolute**: render twice, cause on and off,
+and diff. But **a difference between two options is not a value — it needs a control that is
+neither**: a mirror baseline was 23% and not the 50% assumed, making a buff read as a penalty,
+and five boosters read as three duds until one run took none. `[3,4,5,7,8,12]`
 
 **The thing that is broken is the thing nothing complains about.** Nine ledger defects; five
 capabilities an opponent never had; a `fitLabels` that had been a no-op since it was
 written; a document that existed twice; a `simTick` stepped with one pass missing. None
 threw, warned, or looked wrong on screen. `[1,3,4,5,7,8]`
 
-**Mutation-test every check.** Break what it guards and watch it go red; if it stays green
-it is decoration — and **suspect the fixture before the assertion**: three checks in one
-session were vacuous because the table had two seats where three were needed, nothing was
-pledged, `busy` was never set. **Print what a check covered, not only that it passed.**
-`[4,7,8]`
+**Mutation-test every check.** Break what it guards and watch it go red; if it stays green it
+is decoration — and **suspect the fixture before the assertion**: three checks were vacuous
+because the table had two seats where three were needed. **Print what a check covered, not
+only that it passed.** `[4,7,8]`
 
 **A number written twice will disagree, and the second copy is usually in the check.** The
 citadel price was `gc * 5 / 2` in six places and wrong in all six; the probe that should have
