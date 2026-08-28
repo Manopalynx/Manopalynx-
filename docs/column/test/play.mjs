@@ -26,6 +26,10 @@ import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve as rp, extname, join } from 'path';
 import { chromium } from 'playwright';
+// The draft pool, read from the data rather than restated: the point of the claim
+// below is that a NAMED unit is one the draft can deal, and a hand-typed list here
+// would be a second copy of the very thing being checked.
+import { DRAFT, SPECIALS } from '../data.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DOCS = rp(HERE, '..', '..');
@@ -49,7 +53,16 @@ const base = `http://127.0.0.1:${server.address().port}`;
 // check -- so a hardcoded total prints "20 of 20" while nineteen ran, which is a
 // vacuous pass wearing a green tick. It also stops the total needing an edit
 // every time a claim is added, which is a number written twice.
+//
+// AND COVERAGE IS PRINTED, because counting as they fire fixes the wrong number
+// and leaves the right one invisible. THE PAGE SEEDS EVERY MATCH FROM
+// `Date.now() ^ Math.random()` -- correct for the game, and it means this suite
+// takes a different path each time it runs. Two runs an hour apart printed
+// "24 of 24" and "21 of 21": the second lost its opening match, so the four
+// checks past that point never ran, and nothing said so. Both look like a clean
+// green. `skipped` is what a claim count cannot say on its own.
 let failed = 0, ran = 0;
+const skipped = [];
 const ok = m => { ran++; console.log(` ok   ${m}`); };
 const bad = (m, why) => { ran++; failed++; console.log(`FAIL  ${m}`); (why || []).forEach(w => w && console.log(`        · ${w}`)); };
 
@@ -468,7 +481,10 @@ await page.screenshot({ path: rp(HERE, 'play.png') });
   if (!survived) {
     if (/run ends/i.test(end.text)) ok('a lost run says so and scores what was survived');
     else bad('a lost run says so', ['the result screen never mentioned the run']);
+    skipped.push("the opponent's booster is drawn and named", 'the ramp is stated and applied',
+                 'lives carry into the next match', 'a booster each carries into match 2');
   } else {
+    skipped.push('a lost run says so and scores what was survived');
     // THREE OFFERED, ONE DRAWN FOR THEM. The asymmetry is the choice, so the
     // count on each side is what has to be right.
     const drawn = /theirs is drawn, yours is chosen/i.test(end.text);
@@ -476,6 +492,35 @@ await page.screenshot({ path: rp(HERE, 'play.png') });
     else bad("the opponent's booster is drawn and named", ['the screen never said what they took']);
 
     await page.locator('.sheet [data-b]').first().click();
+
+    // STANDING MUSTER OPENS A SECOND SHEET, and this is where the suite used to
+    // die. Taking `named` asks you to name a unit, so the run screen's `#on` is
+    // not there yet -- and because the page seeds each match from the clock, the
+    // booster offered first is a different one every run. The result was a suite
+    // that crashed outright, with no FAIL line, on roughly one run in three that
+    // got this far. The branch is handled rather than avoided, so the naming
+    // screen is now covered instead of being a hazard.
+    const naming = await page.locator('.sheet [data-id]').count();
+    if (naming) {
+      // READ THE SHEET BEFORE CLICKING IT AWAY. The first version of this took the
+      // list afterwards, got an empty one, and `[].every()` is true -- so it
+      // printed "0 offered" and passed. A claim whose subject has already left
+      // the screen is the vacuous pass this suite exists to refuse.
+      const offered = await page.locator('.sheet [data-id]').evaluateAll(
+        els => els.map(e => e.dataset.id));
+      const named = offered[0];
+      await page.locator('.sheet [data-id]').first().click();
+      // ONLY A CARD THE DRAFT CAN DEAL. Naming a bought special would have it
+      // dealt free every round, which is the whole of what shop-only protects.
+      const special = offered.filter(id => SPECIALS.some(u => u.id === id));
+      if (offered.length && !special.length && offered.every(id => DRAFT.some(u => u.id === id)))
+        ok(`Standing muster names only cards the draft can deal — ${offered.length} offered, took ${named}`);
+      else bad('Standing muster names only cards the draft can deal', [
+        offered.length ? `the naming screen offered ${special.join(', ') || offered.join(', ')}`
+                       : 'the naming screen offered nothing to read — the check had no subject',
+        'a named special would be dealt free every round, which is what shop-only protects']);
+    }
+
     const stated = await page.evaluate(() => (document.querySelector('.sheet') || {}).textContent || '');
     await page.click('#on');
     const two = await page.evaluate(() => {
@@ -507,5 +552,10 @@ await browser.close();
 server.close();
 
 console.log(`\n${ran - failed} of ${ran} claims hold`);
+if (skipped.length) {
+  console.log(`${skipped.length} did not run on this path — the page seeds each match from the clock,`);
+  console.log(`so which branch is taken is not this suite's to choose. Re-run to exercise them:`);
+  skipped.forEach(m => console.log(`        · ${m}`));
+}
 console.log(`written: play-roster.png, play-draft.png, play-inspect.png, play-market.png, play-battle.png, play-run.png, play.png\n`);
 process.exit(failed ? 1 : 0);

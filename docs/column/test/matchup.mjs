@@ -10,7 +10,7 @@
 //      one-card-type army beating another outright is the TARGET, not a fault.
 //      The old claim here -- nothing above 65% or below 35% -- measured exactly
 //      the case that is allowed to be lopsided, and it was also finer than the
-//      model can resolve: with 76% of pairings decided 95/5, an "overall win
+//      model can resolve: with 86% of pairings decided 95/5, an "overall win
 //      rate" moves in steps of 1/11 and the 35-65% band admitted four values.
 //      Whether COMPOSITIONS are decisive is the real question and it is asked in
 //      test/match.mjs, where mixed armies live.
@@ -27,6 +27,7 @@
 
 import { UNITS, DRAFT, SPECIALS, BY_ID } from '../data.js';
 import { resolve } from '../engine.js';
+import { GLYPH } from '../glyphs.js';
 
 const SEEDS = +process.argv[2] || 12;
 const SQUAD = 3;              // equal CARDS a side. A pick is a pick, so this is the fair comparison
@@ -159,6 +160,23 @@ else bad('every unit is the best answer to something', [
     'a card the drafted roster cannot answer ends the game rather than deepening it'
   ]);
 }
+
+/* --------------------------------- does every unit have a face? ------------- */
+// A UNIT WITHOUT A GLYPH IS A BLANK COUNTER AND NOTHING THROWS. `glyph()`
+// returns an empty string for an id it does not know, which is right for the
+// renderer -- a missing mark must not take the battlefield down -- and is exactly
+// why it needs a check somewhere else. `detail` is separate because it is drawn
+// only at card size, so a glyph missing it looks perfect on the field and blank
+// on the deck, which is the harder version of the same defect to notice.
+const faceless = UNITS.filter(u => !GLYPH[u.id] || !GLYPH[u.id].d || !GLYPH[u.id].d.length);
+const detailless = UNITS.filter(u => GLYPH[u.id] && !Array.isArray(GLYPH[u.id].detail));
+const orphan = Object.keys(GLYPH).filter(id => !UNITS.some(u => u.id === id));
+if (!faceless.length && !detailless.length && !orphan.length)
+  ok(`every one of the ${UNITS.length} units has a mark, and every mark has a unit`);
+else bad('every unit has a mark and every mark has a unit', [
+  faceless.length ? `no glyph: ${faceless.map(u => u.id).join(', ')} — these deploy as blank counters` : '',
+  detailless.length ? `no detail strokes: ${detailless.map(u => u.id).join(', ')} — blank on a card face` : '',
+  orphan.length ? `glyph with no unit: ${orphan.join(', ')}` : '']);
 
 console.log(`\n${ran - failed} of ${ran} claims hold\n`);
 process.exit(failed ? 1 : 0);

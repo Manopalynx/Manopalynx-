@@ -406,6 +406,29 @@ const run = async () => {
     else bad(label, [...new Set(missing)]);
   }
 
+  // ---------------------------------------------------------------------------
+  // A NUMBER WRITTEN TWICE WILL DISAGREE. `docs/data.js` carries BUILD, which is
+  // the marker Sam reads on screen to tell whether his phone got the new files;
+  // `docs/sw.js` carries CACHE, which is what actually decides whether it does.
+  // They are the same string on purpose, and keeping them so was a remembered
+  // rule in the operating document until it was this check: bump one without the
+  // other and the phone serves the old build under the new build's name, which
+  // is the one failure mode where the screen lies about its own version.
+  //
+  // The Column has its own marker, `column-v14` in docs/column/data.js, which is
+  // deliberately NOT this string -- it versions the app, not the cache. It still
+  // rides on this CACHE, so shipping a change to it needs this bumped too, and
+  // nothing here can check that for you.
+  {
+    const build = (readFileSync(join(DOCS, 'data.js'), 'utf8')
+      .match(/^export const BUILD = '([^']+)';$/m) || [])[1];
+    const cache = currentCacheName();
+    if (build && build === cache) ok(`docs/data.js BUILD and docs/sw.js CACHE agree  [${cache}]`);
+    else bad('docs/data.js BUILD and docs/sw.js CACHE agree', [
+      `BUILD is ${JSON.stringify(build ?? null)}, CACHE is ${JSON.stringify(cache)}`,
+      'the screen would show one version while the worker served another']);
+  }
+
   await browser.close();
   server.close();
   sockets.forEach(s => s.destroy());

@@ -347,7 +347,12 @@ export const KIT = [
   { id: 'drill',  n: 'Field drill',    cost: 30,
     d: 'Every light body of yours carries 70 more health, for the rest of the run.' }
 ];
-export const SABOTAGE = { cost: 26, half: 0.4 };
+// `left` is the FRACTION OF HEALTH THE TARGET KEEPS, not the fraction taken off,
+// and it is 0.4 rather than 0.5. It was called `half` while holding 0.4 -- nothing
+// read the name so nothing was wrong on screen (the interface derives the figure
+// it prints from this number), but a constant whose name disagrees with its value
+// is a trap laid for whoever tunes it next.
+export const SABOTAGE = { cost: 26, left: 0.4 };
 export const ORDERS = [
   { id: 'march',  n: 'Forced march',  cost: 11,
     d: 'Next round only: your column advances at double pace and your seekers run harder.' },

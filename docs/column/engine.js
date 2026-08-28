@@ -15,7 +15,7 @@
 // would give whichever side was iterated first a systematic opening strike, and
 // nothing about the game would look wrong.
 
-import { UNITS, DRAFT, SPECIALS, BY_ID, FIELD, TICK, MAX_TICKS, RULES, UPGRADE, SHOP, RUN,
+import { UNITS, DRAFT, SPECIALS, BY_ID, FIELD, MAX_TICKS, RULES, UPGRADE, SHOP, RUN,
          BOOSTS, KIT, ORDERS, SABOTAGE, BY_KIT, BY_ORDER } from './data.js';
 
 /* ------------------------------------------------------------------------ rng */
@@ -100,7 +100,7 @@ export function specFor(id, lvl, eq, ord, sab) {
   }
   // Sabotage lands on the deployment, not on the card: half the health it would
   // have had, this round, with everything else intact.
-  if (hit) s.hp = s.hp * SABOTAGE.half;
+  if (hit) s.hp = s.hp * SABOTAGE.left;
   return s;
 }
 
@@ -588,9 +588,8 @@ function counterScore(tok, theirs, picks = []) {
 // WHAT A ROUND PAYS. A purse to both sides, and one a body still standing to the
 // winner. The survivor count is the resolver's own `left`, so the game cannot
 // pay out a number the battle did not produce.
-export const earn = (left, winner, boosts = [[], []]) =>
-  [0, 1].map(s => SHOP.purse +
-    (s === winner ? left[s] * (boosts[s].includes('salvage') ? 2 : 1) : 0));
+export const earn = (left, winner) =>
+  [0, 1].map(s => SHOP.purse + (s === winner ? left[s] : 0));
 
 // What a booster changes, each read where it is used rather than baked into a
 // copy of the rule. `has` is the only place an id is compared, and it matches on
@@ -817,7 +816,7 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
     // A wider offer is bought for ONE round and is spent by getting here.
     wide[0] = wide[1] = 0;
 
-    const paid = earn(out.left, 1 - lost, boosts);
+    const paid = earn(out.left, 1 - lost);
     money[0] += paid[0]; money[1] += paid[1];
 
     // Every third round the market opens for both sides.
@@ -874,18 +873,26 @@ export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = nu
     if (!won) break;
     money = r.money[0];
     lives = r.lives[0];
-    // A booster each, and the asymmetry is the choice: three offered to you,
-    // one at random to them. `take` indexes your pick, so a sweep can ask what a
-    // particular preference is worth.
-    // take: -1 means TAKE NOTHING. Without that control, every figure here is a
-    // ranking against whatever else is in the pool rather than a value -- and a
-    // booster can read as negative purely because preferring it means not
-    // taking the best one.
-    const mine = take < 0 ? [] : boosterOffer(rand, boosts[0]);
-    // `prefer` takes a named booster whenever it is offered, which is how a
-    // sweep asks what ONE of them is worth rather than what the pool averages.
-    const want = prefer && mine.indexOf(prefer);
-    if (mine.length) boosts[0].push(nameIt(mine[want > 0 || want === 0 ? want : Math.min(take, mine.length - 1)], r.army[0]));
+    // A booster each, and the asymmetry is the choice: three offered to you, one
+    // at random to them. THREE ARMS, and the difference between the last two is
+    // the whole reason a dead booster can hide:
+    //
+    //   take >= 0, no prefer   take the offer at that index — what the pool averages
+    //   take >= 0, prefer X    take X when offered, ANYTHING ELSE when it is not
+    //                          — a PREFERENCE, and it still collects other boosters
+    //   take < 0,  prefer X    take X when offered and NOTHING when it is not
+    //                          — X ISOLATED, which is the only arm the control
+    //                            (take < 0, no prefer: nothing, ever) can be
+    //                            subtracted from
+    //
+    // The middle arm was read as the value of X for a whole session. It is not:
+    // an id the engine does not implement at all measures +0.58 there, at three
+    // standard errors, because the arm is still taking real boosters on every
+    // match its dead one is not offered. A check built on it passes the defect it
+    // exists to catch, which is how this was found -- by breaking it on purpose.
+    const mine = (take < 0 && !prefer) ? [] : boosterOffer(rand, boosts[0]);
+    const at = prefer ? mine.indexOf(prefer) : Math.min(take, mine.length - 1);
+    if (mine.length && at >= 0) boosts[0].push(nameIt(mine[at], r.army[0]));
     const theirs = boosterOffer(rand, boosts[1]);
     if (theirs.length) boosts[1].push(nameIt(theirs[0], r.army[1]));
   }

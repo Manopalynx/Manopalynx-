@@ -2,11 +2,17 @@
 // for the cards and the roster.
 //
 // WHY GLYPHS ARE POSSIBLE AT ALL. A counter is 23-29pt across on Sam's phone and
-// the mark inside it is about 14pt. Twelve silhouettes at 14pt are not reliably
+// the mark inside it is about 14pt. Fifteen silhouettes at 14pt are not reliably
 // tellable apart -- which is why this started as letters. But the counter's
 // OUTER SHAPE already carries the weight class, so a glyph only has to be
-// distinct within its class, and the roster is exactly four heavy, four medium,
-// four light. Four shapes at 14pt is comfortable.
+// distinct within its class, and the roster is five heavy, five medium, five
+// light. Five shapes at 14pt is still comfortable; the three specials are what
+// took each class from four to five, and a SIXTH in any class is the point to
+// re-check this argument rather than assume it still holds.
+//
+// A MISSING GLYPH IS SILENT: `glyph()` below returns an empty string for an id
+// it does not know, which is right here -- one unnamed unit must not take the
+// battlefield down -- and is why test/matchup.mjs asserts every unit has a mark.
 //
 // EVERY ONE IS FROM THE BOOK, and the phrase it is drawn from is named beside
 // it. Where the manuscript contradicts itself -- the Karkinos has four vast legs

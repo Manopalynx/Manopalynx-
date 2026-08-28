@@ -4,11 +4,80 @@ A tactical drafting autobattler set in *Grandiose: The Rise to Power* (S. T. Cha
 Two commanders draft armies from what the war makes available, surrender control, and
 watch the consequences. Portrait, phone, one hand.
 
-**The engine and both instruments are built. There is no interface yet, deliberately.**
-Everything down to *What the sweeps found* is the design as proposed; that last section is
-what measuring it actually returned, and **where the two disagree the measurement wins** —
-read the proposal for intent and the findings for what is true. Sam owns every decision
-here; where a choice is still open it says so rather than guessing.
+**It is built, published and playable** at
+[`/Manopalynx-/column/`](https://manopalynx.github.io/Manopalynx-/column/), on a phone,
+offline, from the Home Screen.
+
+## How to read this document
+
+**The first section is the design as proposed. Everything after it is a build log**, in
+the order it was built, and each entry is what was true when it was written. That format
+is deliberate — it keeps the wrong turns and the measurements that corrected them — but it
+has one cost worth stating at the top: **a heading that says "Still open" was still open
+*then*.** Later sections supersede earlier ones without going back to strike them, so the
+last mention of anything is the true one.
+
+So this section, and only this section, is the present tense. **Where it and the log
+disagree, this wins; where this and the code disagree, the code wins** — every figure below
+is printed by a suite named beside it, and none of them is typed here from memory.
+
+Sam owns every decision here. Where a choice is still open it says so rather than guessing.
+
+## Where it stands
+
+`BUILD` is `column-v14` in `data.js`; the service worker that carries it is
+`grandiose-v88` in `docs/sw.js`, and those two move together or the phone gets a stale
+build.
+
+**A match.** Five lives. Three picks a round, each a blind simultaneous commitment
+revealed before the next; three cards offered a pick. A round ends when one army is wiped
+out, the loser drops a life and opens the next round with **one extra pick**, and the
+field resets. Deployment is by role — artillery at the back, then ranged, then the line,
+least durable first inside a band.
+
+**A market, every third round.** Both sides earn a purse of ₡10 at a round's end and the
+winner also takes **one credit a surviving body**, which is the only rule in the game that
+pays for winning *cleanly*. The market sells what the draft cannot: a named card (₡21), a
+level on a card you choose (₡18), a life (₡44), a wider offer next round (₡14), a piece of
+kit that lasts the run (₡30), sabotage on a card the opponent holds (₡26), a one-shot
+order for next round (₡11–₡20), and **one of three special units** (₡70–₡90, one of each a
+side, never dealt by the draft).
+
+**A run.** Match after match against `vex → hale → harlow → leader → varan`, the army
+redrafted every time and the **credits and the lives carried**. The opponent starts each
+match with ₡18 a match already survived and gains an extra pick a round every third match.
+After each match survived you take **one booster of three offered**; the opponent takes one
+at random.
+
+**The roster is fifteen cards** — twelve the draft deals, three the market sells. Every
+line on every card is the author's; one unit, the Deflector, was invented for the game and
+says so on its own card.
+
+| what | measured | by |
+|---|---|---|
+| single-type pairings settled 95/5 | 86% — counters are decisive, as intended | `test/matchup.mjs` |
+| mixed nine-card armies settled 95/5 | **59%** — open, and his call | `test/match.mjs` |
+| alternation, worst persona table | 49–59%, neither snowball nor oscillator | `test/match.mjs` |
+| bodies a side at the end | 34–38, legible on a portrait phone | `test/match.mjs` |
+| battles unresolved at the tick ceiling | 0% | `test/match.mjs` |
+| a floor player against each persona | Vex 88%, Hale 82%, Harlow 55%, Leader 71%, Varan 30% | `test/match.mjs` |
+| throwing the opening round | **+4.3pt** over 15,000 paired matches, worst +10.9pt vs Harlow | `test/match.mjs` |
+| boosters worth more than taking none | **two of five**, isolated | `test/match.mjs` |
+
+**Two of those are red, and both are decisions rather than tuning misses.**
+
+- **59% of mixed compositions are settled 95/5.** His answer is battlefield variety rather
+  than softer counters — the mechanism is unspecified and deliberately not guessed at.
+- **Three of the five boosters are worth nothing on their own.** Isolated over 300 runs a
+  side: Veterans +0.92 matches (11.5σ), A fourth pick +0.44 (6.6σ), then Standing muster
+  +0.09, Requisition +0.09 and Wider muster +0.05 — all three inside noise. See *The
+  booster figures measured the wrong thing* below; which of the three to cut, buff or keep
+  is his.
+
+**Also open:** **merging** — design point 4, specified and never built — and whether the
+opponent gets back the strength its shopper rewrite cost it. Throwing the opening round
+still pays +4.3pt and is still legitimate, by his ruling, until he has played the game.
+Nothing else in this document is open, whatever an older heading says.
 
 ## Why "The Column"
 
@@ -187,11 +256,18 @@ function of its seed and the actions applied to it, which is the only reason tho
 can be asserted at all"*.
 
 ```
-docs/column/data.js     units, cards, personas — data only
+docs/column/data.js     units, cards, personas, prices — data only, no logic
 docs/column/engine.js   the rules. No DOM, no timers, no Math.random
+docs/column/render.js   the battlefield, in FIELD UNITS. Knows no pixels either
+docs/column/glyphs.js   fifteen unit marks as SVG paths, each drawn from a line
 docs/column/ui.js       the screen. Reads the log; never computes an outcome
 docs/column/test/       tests, and the instruments that explain a number
 ```
+
+Five modules, and **all five are in `docs/sw.js`**. `glyphs.js` once was not: online the
+page loaded it and looked perfect, offline it painted nothing, and no test noticed until
+`test/offline.mjs` learned to walk the import graph from each published page rather than
+trusting a hand-written list.
 
 **One addition, and it is the most important decision in the build: the resolver emits a
 replay log, and the renderer only ever reads that log.** Every tick, every move, every
@@ -207,10 +283,18 @@ target, every hit.
 ### Publishing
 
 It lives at `docs/column/`, which Pages serves at `/Manopalynx-/column/`, so it reaches
-the phone. That path is one directory deeper than `docs/sw.js`, so **it gets its own
-service worker and its own cache prefix** — and a row in `APPS` in `docs/sw.js` and in
-`test/offline.mjs`, which is what makes it work on a train and stops shipping it deleting
-Grandiose's saved files. See `docs/README.md` for why that is not optional.
+the phone.
+
+> **This paragraph used to say it gets its own service worker and its own cache prefix. It
+> does not, and the truth is the opposite.** A worker's scope is the folder its script sits
+> in, so `docs/sw.js` is in charge of everything under `docs/` — the column folder
+> included. There is one worker, **one cache** (`grandiose-v88`), and **one `addAll`, which
+> is atomic**: a single bad path in `docs/sw.js` takes down the precache for all three apps
+> at once, which has happened. Shipping the Column means bumping that shared `CACHE`, and
+> a row in `APPS` in `docs/sw.js` and in `test/offline.mjs`. See `docs/README.md`.
+
+That is what makes it work on a train and stops shipping it deleting Grandiose's saved
+files — and none of it is optional.
 
 ## Canon
 
@@ -1221,7 +1305,162 @@ deal — because that function is the one that promises an offer contains no spe
 
 ## Next, and it is his
 
-**Battlefield variety.** His answer to 65% of compositions settling 95/5 is not to soften the
+**Battlefield variety.** His answer to 59% of compositions settling 95/5 is not to soften the
 counters but to stop every battle being fought on the same empty rectangle — the same two
 armies currently have one fixed answer because they always meet on identical ground. The
 mechanism is unspecified and deliberately not guessed at here.
+
+
+---
+
+# The audit — four checks that were measuring the wrong thing
+
+Sam asked for a pass over everything built and written here. Nothing in the game's rules
+changed; what changed is what the instruments look at, and four of them were pointed
+somewhere other than where their name said.
+
+## The booster figures measured the wrong thing
+
+The table above under *the control I kept forgetting* is the third version of this
+measurement and it is **still not what its caption says**. It was found by breaking the new
+check on purpose: a booster id the engine does not implement at all — a pure no-op — scored
+**+0.58 matches at 2.9 standard errors**, and the check passed it.
+
+The reason is one line in `playRun`. The arm was `prefer: X, take: 0`: take X when it is
+offered, **and take something else when it is not**. Over a run that is mostly *other
+boosters*, so every arm beat the do-nothing control simply by taking boosters at all. The
+figure was real; it was the value of *a preference within the pool*, not of the booster.
+
+`prefer: X, take: -1` now means take X when offered and **nothing** when it is not, which
+is the only arm where X is the sole difference from the control. Isolated, over 300 runs an
+arm from a `counter` seat:
+
+| | matches survived | against taking nothing | |
+|---|---|---|---|
+| taking nothing | 1.61 ±0.04 | — | the control |
+| **Veterans** | 2.53 ±0.07 | **+0.92** | 11.5σ |
+| **A fourth pick** | 2.05 ±0.05 | **+0.44** | 6.6σ |
+| Standing muster | 1.70 ±0.04 | +0.09 | 1.6σ |
+| Requisition | 1.70 ±0.04 | +0.09 | 1.6σ |
+| Wider muster | 1.66 ±0.04 | +0.05 | 0.9σ |
+
+**Two boosters, not five.** And the shape of the answer is the one this project keeps
+producing: the two that survive are the two that change *what a pick is worth* and *how
+many you get*. Wider muster shows five cards instead of three and is worth a twentieth of a
+match, which says the third card was never the binding constraint.
+
+Which of the three to cut, to buff, or to keep as texture is Sam's. Nothing has been changed
+on the strength of this.
+
+**Three goes at one control.** Ranked against each other → three read negative. Against a
+do-nothing run → all five read positive, for the wrong reason. Isolated → two. Each stage
+looked finished, and the only thing that exposed the middle one was breaking it deliberately
+and watching it not go red.
+
+## Throwing the opening round: the check was aimed at the one opponent it does not beat
+
+`match.mjs` measured this against `varan` alone for its whole life. Varan is the single
+persona throwing does **not** beat. Over 15,000 paired matches on the current build:
+
+| | straight | thrown | |
+|---|---|---|---|
+| vs Varan | 48.5% | 47.9% | −0.5pt |
+| vs Vex | 95.4% | 98.1% | +2.7pt |
+| vs Hale | 90.4% | 94.1% | +3.7pt |
+| vs Leader | 86.9% | 91.8% | +4.9pt |
+| **vs Harlow** | 48.6% | 59.5% | **+10.9pt** |
+| **overall** | 74.0% | 78.3% | **+4.3pt** |
+
+So the figure has not moved at all since it was first taken — the market, the specials, the
+kit and the booster re-cut left it exactly where it was — and the green tick beside it was
+green because of the fixture, not the game. The check now sweeps all five and **claims on
+the worst opponent rather than the average**, because an edge that averages +4pt and is
++11pt against one persona is a dominant line in every match against that persona.
+
+Sam's ruling stands: legitimate until he has played it.
+
+## Two fixtures that were quietly smaller than they looked
+
+**The persona table had a duplicate row and a missing persona.** It read
+`['counter','varan','harlow','hale','leader']`, and `counter` is a one-line alias of `varan`
+in `POLICIES` — two of the five rows were the same policy printing identical figures to the
+digit, 200 matches an run spent re-measuring a row already on screen, while **`vex`, the
+run's first opponent, was never measured at all.** It is derived from `RUN.order` now, so the
+table cannot drift from the sequence a run actually plays. Vex turns out to be the weakest
+opponent in the game — a floor player beats it 88% of the time.
+
+**And the run's difficulty order has one inversion.** Against the floor player the five read
+Vex 88%, Hale 82%, Harlow 55%, Leader 71%, Varan 30% — so `RUN.order` climbs, dips at
+Leader, then climbs again. Whether that matters is a design question, not a defect.
+
+## The page suite crashed on one booster in three, and nobody knew
+
+`test/play.mjs` plays a real match through the real interface. **The page seeds every match
+from `Date.now() ^ Math.random()`** — right for the game, and it means the suite takes a
+different path every run. Two things fell out of that, and the second is worse.
+
+**Its coverage moves and its output does not say so.** Two runs an hour apart printed
+`24 of 24 claims hold` and `21 of 21 claims hold`. The second lost its opening match, so the
+four checks past that point — the ramp, lives carrying, boosters carrying, the opponent's
+booster being named — never ran. Both look like a clean green. Counting claims as they fire
+fixed the wrong number and left the right one invisible; the suite now **prints what did not
+run and why**.
+
+**And it crashed outright on the naming screen.** Taking *Standing muster* asks you to name
+a unit, which is a second sheet — so the run screen's `#on` button is not there yet. The
+suite clicked the first booster offered and then waited thirty seconds for a button on a
+screen it was not on, and died with a Playwright timeout and no FAIL line. It needed the
+harness to survive its opening match *and* be offered `named` first, so it fired on roughly
+one run in three of the ones that got that far, in a suite that had been green all session.
+It arrived with the booster re-cut and had been in the repository ever since.
+
+The branch is handled now rather than avoided, so the naming screen is **covered** instead
+of being a hazard — and the claim on it asserts the guard that matters: the naming screen
+offers only cards the draft can deal, because a named Kraken would be dealt free every round.
+Mutation-tested by making the screen offer all fifteen; it names `kraken, purifier, adarnas`
+and goes red.
+
+That claim's own first version was vacuous — it read the list of offered cards *after*
+clicking one away, got an empty array, and `[].every()` is `true`, so it printed
+`0 offered` and passed. It reads the screen before clicking it now.
+
+## Three things nothing was guarding
+
+| new check | the defect it makes impossible | where |
+|---|---|---|
+| every unit has a mark, every mark has a unit | `glyph()` returns an empty string for an id it does not know, so a new unit deploys as a **blank counter** and nothing throws | `test/matchup.mjs` |
+| the opponent reaches every shelf and no others | the shop grew an item the opponent could not buy **twice**; the reverse — an action only one side has — is the Ledger's money pump | `test/match.mjs` |
+| `docs/data.js` BUILD and `docs/sw.js` CACHE agree | bump one without the other and the phone serves the old build **under the new build's name** — the one failure where the screen lies about its own version | `test/offline.mjs` |
+| Standing muster names only cards the draft can deal | a named special would be **dealt free every round**, undoing the whole of what shop-only protects | `test/play.mjs` |
+
+All four were mutation-tested: each was broken on purpose and watched go red before it was
+kept. That is also how the booster flaw above was found — the mutation *passed*, which is
+the only reason anyone looked at the arm.
+
+## Housekeeping in the same pass
+
+- **The header of this document said there was no interface.** It had said so since before
+  the game was playable, and it was the first thing anyone read. The root `README.md` said
+  `docs/column/` was *"design only, nothing built yet"*.
+- **The publishing section said the Column gets its own service worker and cache prefix.**
+  It gets neither, and the truth is the opposite: one worker, one cache, one atomic
+  `addAll` shared with Grandiose and Matchbox. Corrected in place, because that one is not
+  stale — it is wrong in the direction that costs all three apps their files.
+- **`SABOTAGE.half` held `0.4`.** The interface derives the figure it prints, so nothing was
+  wrong on screen; a constant whose name disagrees with its value is a trap for whoever
+  tunes it next. It is `SABOTAGE.left` now — the fraction the target keeps.
+- **`docs/README.md` listed two published apps and looked forward to a third.** The third
+  has been live for a day.
+- **`earn()` still branched on a `salvage` booster** removed in the re-cut, three lines under
+  a comment claiming `has()` was the only place a booster id is compared.
+- Six unused imports; a `TICK` the engine imports and never reads.
+- **`package.json` had no `"type": "module"`**, so every suite run printed a reparse warning.
+  Warning noise in a test log is how a real red goes unread.
+- `match.mjs` now takes `THROW=` and `RUNS=` so its two expensive sweeps can be cut down for
+  a smoke run — which is what makes mutation-testing its claims affordable, and a check
+  nobody can afford to break on purpose is a check nobody has proved goes red.
+
+**The suite costs what it measures.** `test/match.mjs` takes about nine minutes: five
+persona tables at 200 matches each, 600 paired throw matches across the five opponents, 360
+runs of booster arms, and a 400-pair composition sweep. It is not a check to run on every
+save, and `THROW=` and `RUNS=` exist so it does not have to be.

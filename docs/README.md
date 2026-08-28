@@ -20,8 +20,9 @@ Pages serves `/docs` as the **root of one site**, so everything published here s
 origin and a directory:
 
 ```
-https://manopalynx.github.io/Manopalynx-/                 index.html   Grandiose
-https://manopalynx.github.io/Manopalynx-/matchbox.html                 Matchbox
+https://manopalynx.github.io/Manopalynx-/                 index.html         Grandiose
+https://manopalynx.github.io/Manopalynx-/matchbox.html                       Matchbox
+https://manopalynx.github.io/Manopalynx-/column/          column/index.html  The Column
 ```
 
 A service worker's scope is the folder its script sits in, so `sw.js` is in charge of
@@ -46,8 +47,16 @@ there**; before that it survives only by happening to have been fetched since th
 build, which is not a promise worth making.
 
 `test/offline.mjs` asserts all of it, against the mechanism rather than against Matchbox,
-so a third app arrives already covered. **Adding an app means a row in `APPS` in `sw.js`
-and a row in `APPS` in `test/offline.mjs`.**
+which is why the third app — **The Column**, at `/column/` — arrived already covered.
+**Adding an app means a row in `APPS` in `sw.js` and a row in `APPS` in
+`test/offline.mjs`.**
+
+The Column is the case that showed the registry is not enough on its own: it is five ES
+modules deep, `sw.js` named four of them, and the fifth — `glyphs.js` — loaded fine online
+and left the page blank offline, because a module that fails to load throws no dialogue and
+paints nothing. `test/offline.mjs` now **walks the import graph** from each published page
+rather than trusting the list, so a module a page reaches cannot be absent from `APPS`
+without going red.
 
 ## State
 

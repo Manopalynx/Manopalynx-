@@ -12,7 +12,7 @@
 //      pure oscillation is 0%, pure snowball is 100%.
 //
 //   2. DOES COMPOSITION CREATE THE CLOSENESS THAT SINGLE MATCHUPS LACK?
-//      76% of one-card-type pairings are decided 95/5 or harder. If mixed
+//      86% of one-card-type pairings are decided 95/5 or harder. If mixed
 //      armies are decided just as hard, the game is settled at the draft and
 //      the battle is a formality. If they are not, the closeness lives in
 //      composition, which is where a drafting game wants it.
@@ -29,12 +29,20 @@
 //
 // Run:  node docs/column/test/match.mjs [matches]
 
-import { UNITS, BY_ID, RULES, UPGRADE, SHOP } from '../data.js';
-import { playMatch, resolve, rng, offer, armyFrom, isUp } from '../engine.js';
+import { UNITS, BY_ID, RULES, UPGRADE, SHOP, RUN, BOOSTS } from '../data.js';
+import { playMatch, playRun, resolve, rng, offer, armyFrom, isUp,
+         stock, spend } from '../engine.js';
 
 const N = +process.argv[2] || 200;
 const HUMAN = 'house';
-const AGAINST = ['counter', 'varan', 'harlow', 'hale', 'leader'];
+// THE FIVE PERSONAS THE RUN ACTUALLY SEATS, and no duplicate. This list read
+// ['counter','varan','harlow','hale','leader'] for its whole life, and `counter`
+// is a one-line alias of `varan` in POLICIES -- so two of the five rows were the
+// same policy printing identical figures to the digit, 200 matches spent
+// re-measuring a row that was already on screen, while `vex` (the run's FIRST
+// opponent) was never measured at all. Derived from RUN.order rather than typed,
+// so the table cannot drift from the sequence a run actually plays.
+const AGAINST = [...RUN.order];
 // A draft is pick TOKENS, and an upgrade token puts nothing on the field. Count
 // through armyFrom rather than restating the rule: this figure is the one the
 // legibility claim rests on, and a second copy of a rule is how it goes wrong.
@@ -47,6 +55,7 @@ console.log('table                        human wins   rounds   alternation  fin
 console.log('─'.repeat(118));
 
 let worstAlt = null, worstAltN = 0, biggest = 0, edgeWin = 0, straightWin = 0, thrownWin = 0, ups = 0, upsN = 0;
+let worstThrow = -1, worstThrowOpp = '';
 
 for (const persona of AGAINST) {
   let humanWins = 0, rounds = 0, alt = 0, altN = 0, army = 0, longest = 0, up = 0, earned = 0;
@@ -176,17 +185,136 @@ const edge = {};
 // first pick. Same opponent, same seeds. If throwing wins more, losing pays and
 // the rule needs a guard -- and this is the Ledger's money-pump class of defect,
 // which is why it is a sweep rather than a hunch.
+//
+// AGAINST ALL FIVE, and that is the whole correction. This measured `varan`
+// alone for its entire life, and varan is the ONE opponent throwing does not
+// beat: -0.5pt against it, +2.7 to +10.9 against the other four, +4.3 overall
+// across 15,000 paired matches. So the check sat green on the single fixture
+// where the effect vanishes -- the same fault as the persona table above, one
+// row of which was a duplicate. A guard aimed at the case that does not show the
+// defect is decoration, and this one was.
 {
-  let straight = 0, thrown = 0;
-  const M = 300;
-  for (let m = 0; m < M; m++) {
-    if (playMatch({ a: 'counter', b: 'varan', seed: m * 17 + 9 }).winner === 0) straight++;
-    if (playMatch({ a: 'thrower', b: 'varan', seed: m * 17 + 9 }).winner === 0) thrown++;
+  const M = +process.env.THROW || 120;
+  let sAll = 0, tAll = 0, n = 0;
+  console.log('throwing the opening round, against each opponent:');
+  for (const opp of RUN.order) {
+    let s = 0, t = 0;
+    for (let m = 0; m < M; m++) {
+      if (playMatch({ a: 'counter', b: opp, seed: m * 17 + 9 }).winner === 0) s++;
+      if (playMatch({ a: 'thrower', b: opp, seed: m * 17 + 9 }).winner === 0) t++;
+    }
+    sAll += s; tAll += t; n += M;
+    const d = (t - s) / M;
+    if (d > worstThrow) { worstThrow = d; worstThrowOpp = opp; }
+    console.log(`  vs ${opp.padEnd(8)} straight ${(s / M * 100).toFixed(1)}%   thrown ${(t / M * 100).toFixed(1)}%` +
+                `   ${d >= 0 ? '+' : ''}${(d * 100).toFixed(1)}pt`);
   }
-  straightWin = straight / M; thrownWin = thrown / M;
-  console.log(`playing straight from pick one : ${(straightWin * 100).toFixed(1)}% of ${M} matches`);
-  console.log(`throwing the opening round     : ${(thrownWin * 100).toFixed(1)}%\n`);
+  straightWin = sAll / n; thrownWin = tAll / n;
+  console.log(`  ${'overall'.padEnd(11)} straight ${(straightWin * 100).toFixed(1)}%   thrown ${(thrownWin * 100).toFixed(1)}%` +
+              `   ${thrownWin >= straightWin ? '+' : ''}${((thrownWin - straightWin) * 100).toFixed(1)}pt` +
+              `   over ${n} paired matches, se about ${(Math.sqrt(0.5 / n) * 100).toFixed(1)}pt\n`);
 }
+
+/* -------------- can the opponent reach every shelf, and only the shelves? ---- */
+// BOTH DIRECTIONS, because the action surface has two sides and this project has
+// already been bitten by each of them. The shop grew an item the opponent could
+// not buy TWICE; and in the Ledger, `sellDevelopment` was a player action no
+// opponent had, which is why a money pump survived every sweep that existed.
+//
+// So: every kind `stock()` puts on the player's screen must be a kind `spend()`
+// actually buys, and every kind `spend()` buys must be one `stock()` offers. An
+// item only one side can reach is not a market, it is an asymmetry nobody wrote
+// down -- and the shopper rewrite that made this true cost the opponent real
+// strength, which is a price worth keeping something red about.
+let shelfKinds = '', shelfWhy = [];
+{
+  const r = rng(90210);
+  const shelved = new Set(), bought = new Set();
+  // Real armies, not hand-typed ones: a shelf that depends on holding something
+  // upgradeable or on the enemy fielding a target only appears against a draft.
+  for (let i = 0; i < 60; i++) {
+    const mine = [], theirs = [];
+    for (let k = 0; k < 6; k++) { mine.push(offer(r, 1)[0]); theirs.push(offer(r, 1)[0]); }
+    // A held card, so `upgrade` is reachable; the duplicate is what an upgrade needs.
+    mine.push(mine[0]);
+    for (const money of [15, 25, 35, 60, 90, 140, 220, 320]) {
+      for (const lives of [1, 3, RULES.lives]) {
+        stock(money, mine, lives, theirs, []).forEach(x => shelved.add(x.k));
+        spend(money, mine, lives, theirs, []).forEach(x => bought.add(x.k));
+      }
+    }
+  }
+  const unreachable = [...shelved].filter(k => !bought.has(k));
+  const unlisted = [...bought].filter(k => !shelved.has(k));
+  shelfKinds = [...shelved].sort().join(', ');
+  shelfWhy = [
+    unreachable.length ? `on the player's screen, never bought by the opponent: ${unreachable.join(', ')}` : '',
+    unlisted.length ? `bought by the opponent, never on the player's screen: ${unlisted.join(', ')}` : ''
+  ].filter(Boolean);
+  console.log(`market shelves reachable by both sides: ${shelfKinds}\n`);
+}
+
+/* ------------------- is any booster in the pool a dud? (the control) --------- */
+// THE GUARD FOR A CLASS, NOT AN INSTANCE. A booster that changes nothing is
+// invisible: the run still ends, the screen still names it, and nothing throws.
+// So every booster in BOOSTS is measured the same way, and the pool cannot grow
+// a dead option without this going red.
+//
+// THE CONTROL IS THE WHOLE POINT, and getting it right took three goes.
+//
+//   1. Ranked against EACH OTHER, three of the five read NEGATIVE and were nearly
+//      cut: preferring a mediocre booster means not taking the best one, so
+//      anything below the top of the pool reads as a loss. A ranking, not a value.
+//   2. Against a run that takes NOTHING, all five read +0.63 to +1.63 -- but the
+//      arm was "prefer X, take something else when X is not offered", so it was
+//      still collecting real boosters. A booster id the engine does not implement
+//      scores +0.58 at 2.9 standard errors in that arm. This check PASSED that
+//      mutation, which is the only reason the flaw was found.
+//   3. `prefer: X, take: -1` takes X when offered and nothing when it is not.
+//      That is the arm subtracted from the control below, and a dead id now
+//      measures zero in it, because it is the only arm where X is the only thing
+//      that differs.
+// THE SEAT AND THE UNIT ARE PART OF THE FIGURE. This measures a `counter` seat
+// -- a competent drafter, not the `house` floor the tables above use -- and
+// counts matches SURVIVED, not matches played. Both were left unstated when
+// these numbers were first published, and a measured figure whose parameters are
+// not written down is not reproducible: the same pool re-measured as played
+// matches from the floor seat gives 2.43 against 1.67 and neither is wrong.
+// 60 an arm costs about two minutes and puts the smallest real gap (+0.63) at
+// roughly four standard errors, which is enough for a claim that only has to
+// decide 'better than nothing'. RUNS=200 tightens it when a figure is being
+// quoted rather than guarded.
+const RUNS = +process.env.RUNS || 60;
+// MEAN AND ITS ERROR, because "better than nothing" needs a bar and 0 is not one.
+// A booster that does nothing measures 0 ± the noise, so a threshold of "above
+// zero" catches a dead one about half the time -- which is a check that reads
+// green on the defect it exists for. The bar is TWO standard errors of the
+// difference instead. The seeds are fixed, so this is reproducible run to run;
+// the error bar is about telling a real effect from a lucky one, not about the
+// figure moving when nothing changed.
+const runLen = prefer => {
+  const v = [];
+  for (let i = 0; i < RUNS; i++) v.push(playRun({ a: 'counter', seed: i * 7 + 1, prefer, take: -1 }).survived);
+  const m = v.reduce((a, b) => a + b, 0) / RUNS;
+  const sd = Math.sqrt(v.reduce((a, b) => a + (b - m) ** 2, 0) / Math.max(1, RUNS - 1));
+  return { m, se: sd / Math.sqrt(RUNS) };
+};
+console.log(`booster value — matches SURVIVED by a counter seat, ${RUNS} runs an arm`);
+const control = runLen(null);
+console.log(`  ${'taking nothing'.padEnd(18)} ${control.m.toFixed(2)}   (the control)`);
+// EVERY dead one, not the first. Reporting one at a time turns a pool that needs
+// re-cutting into a queue of single fixes, and the shape of the answer -- which
+// KIND of booster is dead -- is only visible when they are listed together.
+const deadBoosts = [];
+for (const b of BOOSTS) {
+  const v = runLen(b.id);
+  const d = v.m - control.m, se = Math.hypot(v.se, control.se);
+  console.log(`  ${b.n.padEnd(18)} ${v.m.toFixed(2)}   ${d >= 0 ? '+' : ''}${d.toFixed(2)}  (${(d / se).toFixed(1)}σ)`);
+  if (d <= 2 * se)
+    deadBoosts.push(`${b.n}: ${d >= 0 ? '+' : ''}${d.toFixed(2)} matches against taking nothing, ` +
+                    `${(d / se).toFixed(1)}σ — not distinguishable from a booster that does nothing`);
+}
+console.log('');
 
 /* --------------------------------------------------------------------- claims */
 // Counted as they fire. A total typed at the bottom is a number written twice,
@@ -245,18 +373,33 @@ else bad('battles resolve', [
 ]);
 
 // SAM'S RULING, not a target this file invented. Throwing the opening round DOES
-// pay once upgrades exist -- +4.3 points across 6,000 paired matches, positive
-// against all four opponents -- and he has decided to leave it legitimate until
-// he has played the game himself rather than guard it on a sweep's say-so. So
+// pay, and re-measured on the current build -- after the market, the specials,
+// the kit and the booster re-cut -- it pays exactly what it always did:
+// +4.3 points across 15,000 paired matches, positive against four of the five
+// personas and flat (-0.5pt) against varan. He has decided to leave it
+// legitimate until he has played the game himself rather than guard it on a
+// sweep's say-so. So
 // the claim is no longer "it must not pay". It is "it must not be the only way
 // to play": an edge a good player can take is a line, a 15-point edge is a
 // dominant strategy and the first three rounds stop mattering.
+// WHAT THE SAMPLE CAN SEE, checked before the threshold was. The natural claim is
+// on the WORST opponent -- an edge that averages +4pt and is +15pt against one
+// persona is a dominant line in every match against that persona. But at 120
+// paired matches an opponent the standard error is about 6.5pt, so a 15pt bar on
+// a single row is a coin toss dressed as a guard, and raising the sample until it
+// is not costs about 12,000 matches. So the TRIGGER is the overall figure, where
+// 600 paired matches give a standard error near 2pt, and the worst row is printed
+// and named in the failure so a per-persona blow-up is still visible. The
+// per-opponent spread itself is not news to be caught: +10.9pt against Harlow and
+// -0.5pt against Varan is measured, documented and Sam's to rule on.
 const gap = thrownWin - straightWin;
 if (gap <= 0.15) ok(`throwing the opening round is a line, not the only line ` +
-  `(${(thrownWin * 100).toFixed(1)}% against ${(straightWin * 100).toFixed(1)}%, ${gap >= 0 ? '+' : ''}${(gap * 100).toFixed(1)}pt)`);
+  `(+${(gap * 100).toFixed(1)}pt overall, worst +${(worstThrow * 100).toFixed(1)}pt vs ${worstThrowOpp})`);
 else bad('throwing the opening round is a line, not the only line', [
-  `throwing wins ${(thrownWin * 100).toFixed(1)}% against ${(straightWin * 100).toFixed(1)}% playing straight`,
-  'an edge that large is not a strategy a player chooses, it is the strategy'
+  `against ${worstThrowOpp} throwing the opening round is worth +${(worstThrow * 100).toFixed(1)}pt, ` +
+  `and +${(gap * 100).toFixed(1)}pt averaged over all five`,
+  'an edge that large is not a strategy a player chooses, it is the strategy',
+  'Sam left this legitimate until he had played the game; it is a decision, not a tuning miss'
 ]);
 
 const upRate = ups / upsN;
@@ -266,6 +409,15 @@ else bad('upgrades are a real pick and not the only pick', [
   upRate < 0.10 ? 'nobody takes them: an upgrade is not worth a pick, so the crowd never shrinks'
                 : 'everybody takes them: reinforcement is dead and the army never grows'
 ]);
+
+if (!shelfWhy.length) ok(`the opponent reaches every shelf and no others — ${shelfKinds}`);
+else bad('the opponent reaches every shelf and no others', shelfWhy);
+
+if (!deadBoosts.length) ok(`every booster beats taking none — the pool has no dead option (${RUNS} runs an arm)`);
+else bad(`the booster pool has no dead option — ${deadBoosts.length} of ${BOOSTS.length} do not clear the control`, [
+  ...deadBoosts,
+  'a booster that does not beat the control is a choice the player is asked to make for nothing',
+  'which of these to cut, buff or keep as texture is a design decision, not a tuning miss']);
 
 console.log(`\n${ran - failed} of ${ran} claims hold\n`);
 process.exit(failed ? 1 : 0);

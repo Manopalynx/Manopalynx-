@@ -11,8 +11,8 @@
 // watch IS what was resolved. It cannot drift, because there is nothing to
 // drift from.
 
-import { BY_ID, RULES, PERSONAS, UPGRADE, WEIGHT, UNITS, DRAFT, SPECIALS, SHOP, RUN,
-         BOOSTS, BY_BOOST, KIT, BY_KIT, ORDERS, BY_ORDER, SABOTAGE, COIN, BUILD } from './data.js';
+import { BY_ID, RULES, PERSONAS, UPGRADE, DRAFT, SPECIALS, SHOP, RUN,
+         BY_BOOST, BY_KIT, BY_ORDER, SABOTAGE, COIN, BUILD } from './data.js';
 import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId,
          earn, stock, spend, upgradeable, specialsFor, kitFor, ordersFor, boosterOffer,
          offerSize, picksFor, marketEvery, priceFor, pickTokens, boostArg, nameIt } from './engine.js';
@@ -287,7 +287,7 @@ function endRound() {
   S.pending = [[], []];
   // What the round paid, through the ENGINE's rule and off the resolver's own
   // survivor count. The screen does not get to decide what a body is worth.
-  S.paid = earn(S.left || [0, 0], 1 - S.result, S.boosts);
+  S.paid = earn(S.left || [0, 0], 1 - S.result);
   S.money[0] += S.paid[0];
   S.money[1] += S.paid[1];
   S.phase = S.lives[0] <= 0 || S.lives[1] <= 0 ? 'over' : 'round';
@@ -665,7 +665,7 @@ function market() {
     if (it.k === 'order') return `<button class="pick" data-i="${i}"><b>An order — from ${coin(it.cost)}</b>
       <i>Next round only. Given before the fight, because nothing is commanded during one.</i></button>`;
     if (it.k === 'sabotage') return `<button class="pick" data-i="${i}"><b>Sabotage — ${coin(it.cost)}</b>
-      <i>One card of theirs deploys on ${(SABOTAGE.half * 100) | 0}% health next round. The only
+      <i>One card of theirs deploys on ${(SABOTAGE.left * 100) | 0}% health next round. The only
       thing here that makes them weaker rather than you stronger.</i></button>`;
     if (it.k === 'offer') return `<button class="pick" data-i="${i}"><b>A wider offer — ${coin(it.cost)}</b>
       <i>Four cards instead of three, next round only.</i></button>`;
@@ -730,7 +730,7 @@ function chooser(kind) {
     card: `${coin(priceFor(S.boosts[0], SHOP.card))} spent. It joins your column where its role puts it, like any other.`,
     upgrade: `${coin(priceFor(S.boosts[0], SHOP.upgrade))} spent. +${(UPGRADE.step * 100) | 0}% health and damage on every copy you hold.`,
     special: 'One of each weight class, once each. The draft never offers these — they are bought or they are not had.',
-    sabotage: `${coin(priceFor(S.boosts[0], SABOTAGE.cost))} spent. Their card deploys on ${(SABOTAGE.half * 100) | 0}% health next round — every copy of it.`
+    sabotage: `${coin(priceFor(S.boosts[0], SABOTAGE.cost))} spent. Their card deploys on ${(SABOTAGE.left * 100) | 0}% health next round — every copy of it.`
   }[kind];
 
   // A sabotage chooser shows THEIR counters, in their colour, because that is
