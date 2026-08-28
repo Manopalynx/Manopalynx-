@@ -38,31 +38,40 @@ export function rng(seed) {
 // that is an artefact rather than a finding.
 const PER_RANK = 6;
 
-function deploy(cards, side, rand) {
-  // A card deploys `count` bodies. Expanded here rather than by the caller so
-  // that every route into a battle — sweep, match, replay — lays out the same
-  // army the same way from the same list of picks.
-  const ids = [];
-  for (const id of cards) for (let k = 0; k < (BY_ID[id].count || 1); k++) ids.push(id);
+// A CARD'S BODIES STAND TOGETHER. This is not cosmetic and it was wrong first
+// time: the original laid every body out across the rank at FIELD.w / 7 = 14.3
+// apart, while splash radii are 8 to 16. A three-body light squad was therefore
+// spread wider than any blast could reach, so AOE hit exactly one of them and
+// the whole "AOE punishes numbers, durability absorbs AOE" mechanism -- the
+// thing that is meant to stop card count being the whole game -- could not fire.
+// One extra card was winning 82% of otherwise identical armies because of it.
+const SQUAD_SPREAD = 3.2;    // how far apart bodies of one card stand
 
-  return ids.map((id, i) => {
+function deploy(cards, side, rand) {
+  const out = [];
+  cards.forEach((id, ci) => {
     const u = BY_ID[id];
-    const rank = Math.floor(i / PER_RANK);
-    const col = i % PER_RANK;
-    const wide = Math.min(ids.length - rank * PER_RANK, PER_RANK);
-    const x = FIELD.w / 2 + (col - (wide - 1) / 2) * (FIELD.w / (PER_RANK + 1))
-            + (rand() - 0.5) * 2;
-    const depth = 10 + rank * 9 + (rand() - 0.5) * 2;
-    return {
-      id, side, i,
-      x,
-      y: side === 0 ? depth : FIELD.d - depth,
-      hp: u.hp, max: u.hp,
-      cd: 0,               // ticks until this unit may attack again
-      dot: 0, dotT: 0,     // damage-over-time in progress
-      alive: true
-    };
+    const n = u.count || 1;
+    const rank = Math.floor(ci / PER_RANK);
+    const col = ci % PER_RANK;
+    const wide = Math.min(cards.length - rank * PER_RANK, PER_RANK);
+    // Where this CARD stands in the line.
+    const cx = FIELD.w / 2 + (col - (wide - 1) / 2) * (FIELD.w / (PER_RANK + 1));
+    const cy = 10 + rank * 9;
+    for (let k = 0; k < n; k++) {
+      out.push({
+        id, side, i: out.length,
+        // Where this BODY stands within its own squad.
+        x: cx + (k - (n - 1) / 2) * SQUAD_SPREAD + (rand() - 0.5) * 1.2,
+        y: (side === 0 ? cy : FIELD.d - cy) + (rand() - 0.5) * 1.2,
+        hp: u.hp, max: u.hp,
+        cd: 0,               // ticks until this unit may attack again
+        dot: 0, dotT: 0,     // damage-over-time in progress
+        alive: true
+      });
+    }
   });
+  return out;
 }
 
 /* -------------------------------------------------------------------- targeting */
@@ -249,6 +258,19 @@ export const POLICIES = {
   // armies are small, the expensive answers once they are not.
   leader: (cards, mine) =>
     mine.length >= 9 ? best(cards, power) : best(cards, id => -power(id)),
+
+  // Counters what is actually on the other side of the field. The only policy
+  // that reads the board, and on the first sweep the only one that beat picking
+  // blind -- in a game decided by counters, drafting by a stat is a handicap.
+  counter: (cards, mine, theirs) => POLICIES.varan(cards, mine, theirs),
+
+  // NOT A PERSONA. This exists only to answer Sam's question: is deliberately
+  // losing a round worth more than winning it, because of the extra pick? It
+  // throws its opening round by taking the weakest card offered, then plays to
+  // counter for the rest of the match. If it outperforms the same policy playing
+  // straight, losing on purpose pays and the rule needs a guard.
+  thrower: (cards, mine, theirs) =>
+    mine.length < 3 ? best(cards, id => -power(id)) : POLICIES.varan(cards, mine, theirs),
 
   // The human seat in a sweep, and deliberately unsophisticated: it exists to
   // exercise every path, not to play well. Every "the player wins X%" figure

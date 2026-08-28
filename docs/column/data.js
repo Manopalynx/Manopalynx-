@@ -32,30 +32,34 @@ export const TICK = 0.1;
 export const MAX_TICKS = 3000;          // 5 minutes; a battle this long is a draw
 
 /* -------------------------------------------------------------------- the units */
-// TWELVE cards, per Sam, with room to grow. A card deploys `count` bodies —
-// "Crawler Swarm" is six crawlers, a Walker is one Walker — because in Sam's
-// structure a pick is a pick and there is no cost curve to balance against.
-// That has a consequence worth stating plainly: BALANCE HERE COMES ENTIRELY
-// FROM COUNTERS, not from price. There is no cheap-but-weak card, only cards
-// that beat different things. The first roster carried a `cost` field with no
-// reader and a one-body swarm, and the first sweep said so.
+// THREE WEIGHT CLASSES, per Sam. A card deploys bodies according to its class
+// and nothing else, so battlefield population is bounded by construction rather
+// than by tuning:
 //
-// N bodies have N times the health AND N times the output, so a card's raw
-// strength goes roughly as COUNT SQUARED. Measured, not assumed: taking Line
-// Infantry from 5 bodies to 6 while nudging hp and damage moved it from 25.8%
-// against the pool to 87.8% -- dead pick to dominant, on what looked like a
-// small change. TUNE hp AND dmg; LEAVE count ALONE unless the card's whole
-// role is changing.
+//   heavy  1 body    medium  2 bodies    light  3 bodies
 //
-// The same shape bit twice. An AURA scales with the number of enemies inside it
-// AND with the square of its radius, so it is quadratic too: volt went 27.8% ->
-// 86.6% on aura 1.3 -> 1.6 with the radius moving 17 -> 19. The dials that are
-// safe to tune are hp, dmg and rate. count, auraR and splash are not. These are set to put every card near
-// the same count^2 x hp x dps and to differ in HOW they spend it.
+// `count` is DERIVED from the class and is not a field a card may set, because
+// the previous roster let a Crawler Swarm deploy ten and that one number put 171
+// bodies on a phone screen by the end of a match.
 //
-// Fields:
+// THESE ARE NOT EQUAL-POWER CARDS, deliberately. The earlier roster tried to put
+// every card near the same count^2 x hp x dps; Sam's direction rejects that.
+// A heavy is individually formidable, a light is weak per body and earns its
+// place through numbers, and the classes are meant to be strategically
+// different rather than mathematically identical. Balance comes from counters:
 //
-//   count  bodies this card deploys
+//   light swarms overwhelm slow single-target attackers
+//   AOE punishes light, because three bodies stand close enough to share a blast
+//   heavy hp absorbs AOE efficiently, because a splash hits one body not three
+//   damage-over-time ignores armour, so it is what punishes a heavy
+//   fast units bypass a frontline and reach ranged and support
+//
+// Good composition should have several of those running at once, which is why
+// the go/no-go now measures MIXED armies rather than single-card ones.
+//
+// Fields (count is derived; w is the class):
+//
+//   w      'heavy' | 'medium' | 'light' — decides how many bodies deploy
 //   hp     health of each body
 //   dmg    damage per attack, before the defender's armour
 //   rate   ticks between attacks
@@ -72,55 +76,65 @@ export const MAX_TICKS = 3000;          // 5 minutes; a battle this long is a dr
 //
 // These numbers are a FIRST GUESS, chosen to make the counter-graph expressible
 // rather than balanced. test/matchup.mjs exists to tell us they are wrong.
-export const UNITS = [
-  { id: 'line', n: 'Line Infantry', count: 5,
-    hp: 168, dmg: 19, rate: 8, rng: 3, spd: 1.0, tgt: 'near',
-    q: 'You’re soldiers of the Union. The fleet has not fired. Until it fires, you check your sectors.' },
+export const WEIGHT = { heavy: 1, medium: 2, light: 3 };
 
-  { id: 'walker', n: 'Walker', count: 1,
-    hp: 780, dmg: 70, rate: 26, rng: 20, spd: 0.35, arm: 4, splash: 8, tgt: 'near',
+export const UNITS = [
+  // ---- heavy: one body, individually formidable -------------------------
+  { id: 'walker', n: 'Walker', w: 'heavy',
+    hp: 820, dmg: 75, rate: 26, rng: 20, spd: 0.35, arm: 4, splash: 8, tgt: 'near',
     q: 'Four stories of articulated war machine, and the world went white and sideways.' },
 
-  { id: 'ultra', n: 'Ultra Armor', count: 2,
-    hp: 425, dmg: 32, rate: 12, rng: 5, spd: 0.7, arm: 9, tgt: 'near',
-    q: 'Every round the survivors put on them skidded off the black plate like rain off glass.', qv: 1 },
-
-  { id: 'karkinos', n: 'Karkinos', count: 2,
-    hp: 400, dmg: 37, rate: 10, rng: 6, spd: 1.6, tgt: 'back',
-    q: 'Front legs punching anchor-deep into the plate and stone, the rear legs following.' },
-
-  { id: 'amabie', n: 'Amabie', count: 1,
-    hp: 250, dmg: 112, rate: 32, rng: 62, spd: 0.28, splash: 14, tgt: 'big',
-    q: 'A walking artillery piece the size of a customs house.' },
-
-  { id: 'swarm', n: 'Crawler Swarm', count: 10,
-    hp: 95, dmg: 10, rate: 4, rng: 2, spd: 2.0, tgt: 'big',
-    q: 'They hit the crowded street the way current hits a shoal.' },
-
-  { id: 'brute', n: 'Brute', count: 1,
-    hp: 900, dmg: 66, rate: 18, rng: 4, spd: 0.6, arm: 3, tgt: 'near',
+  { id: 'brute', n: 'Brute', w: 'heavy',
+    hp: 980, dmg: 70, rate: 18, rng: 4, spd: 0.62, arm: 3, tgt: 'near',
     q: 'It went through a Union squad the way weather goes through paper.' },
 
-  { id: 'neurite', n: 'Neurite', count: 3,
-    hp: 165, dmg: 21, rate: 9, rng: 32, spd: 0.8, tgt: 'near',
-    q: 'They aren’t animals. Whatever is behind their eyes was aiming.', qv: 1 },
+  { id: 'ultra', n: 'Ultra Armor', w: 'heavy',
+    hp: 780, dmg: 72, rate: 11, rng: 5, spd: 0.62, arm: 12, tgt: 'near',
+    q: 'Every round the survivors put on them skidded off the black plate like rain off glass.', qv: 1 },
 
-  { id: 'acid', n: 'Acid Thrower', count: 2,
-    hp: 200, dmg: 10, rate: 14, rng: 30, spd: 0.65, dot: 5, dotT: 60, tgt: 'big',
-    q: 'It clung to shields and ate through, sheeted across hulls and kept eating.' },
+  { id: 'amabie', n: 'Amabie', w: 'heavy',
+    hp: 300, dmg: 130, rate: 32, rng: 62, spd: 0.28, splash: 16, tgt: 'big',
+    q: 'A walking artillery piece the size of a customs house.' },
 
-  { id: 'volt', n: 'Volt Battery', count: 2,
-    hp: 320, dmg: 0, rate: 999, rng: 0, spd: 0.78, aura: 1.42, auraR: 18, tgt: 'near',
-    q: 'The volt round’s enormous older sibling, charged projectiles that didn’t need to hit to hurt.' },
+  // ---- medium: two bodies, specialised roles -----------------------------
+  { id: 'karkinos', n: 'Karkinos', w: 'medium',
+    hp: 380, dmg: 40, rate: 10, rng: 6, spd: 1.6, tgt: 'back',
+    q: 'Front legs punching anchor-deep into the plate and stone, the rear legs following.' },
 
-  { id: 'deflector', n: 'Deflector', count: 2,
-    hp: 400, dmg: 24, rate: 12, rng: 4, spd: 0.75, defl: 0.85, tgt: 'near',
+  { id: 'deflector', n: 'Deflector', w: 'medium',
+    hp: 420, dmg: 26, rate: 12, rng: 4, spd: 0.72, defl: 0.85, tgt: 'near',
     q: 'Its shields are tuned for weapons fire. Pods fall through.', qv: 1 },
 
-  { id: 'fireship', n: 'Fireship', count: 2,
-    hp: 200, dmg: 4, rate: 20, rng: 3, spd: 1.15, tgt: 'near', boom: { r: 17, d: 150 },
+  { id: 'volt', n: 'Volt Battery', w: 'medium',
+    hp: 330, dmg: 0, rate: 999, rng: 0, spd: 0.78, aura: 1.5, auraR: 18, tgt: 'near',
+    q: 'The volt round’s enormous older sibling, charged projectiles that didn’t need to hit to hurt.' },
+
+  // Damage over time is not reduced by armour, which is what makes this the
+  // answer to a heavy rather than one more ranged attacker.
+  { id: 'acid', n: 'Acid Thrower', w: 'medium',
+    hp: 230, dmg: 12, rate: 14, rng: 30, spd: 0.65, dot: 6, dotT: 60, tgt: 'big',
+    q: 'It clung to shields and ate through, sheeted across hulls and kept eating.' },
+
+  // ---- light: three bodies, strong in numbers, soft to AOE ---------------
+  { id: 'line', n: 'Line Infantry', w: 'light',
+    hp: 215, dmg: 33, rate: 8, rng: 3, spd: 1.05, tgt: 'near',
+    q: 'You’re soldiers of the Union. The fleet has not fired. Until it fires, you check your sectors.' },
+
+  { id: 'swarm', n: 'Crawler Swarm', w: 'light',
+    hp: 155, dmg: 27, rate: 4, rng: 2, spd: 2.1, tgt: 'big',
+    q: 'They hit the crowded street the way current hits a shoal.' },
+
+  { id: 'neurite', n: 'Neurite', w: 'light',
+    hp: 180, dmg: 31, rate: 9, rng: 32, spd: 0.85, tgt: 'near',
+    q: 'They aren’t animals. Whatever is behind their eyes was aiming.', qv: 1 },
+
+  { id: 'fireship', n: 'Fireship', w: 'light',
+    hp: 175, dmg: 4, rate: 20, rng: 3, spd: 1.15, tgt: 'near', boom: { r: 15, d: 120 },
     q: 'Set autopilot, best speed, into the swarm’s central mass. Then get to your pods.' }
 ];
+
+// Derived, so a card cannot disagree with its own class.
+UNITS.forEach(u => { u.count = WEIGHT[u.w]; });
 
 export const BY_ID = Object.fromEntries(UNITS.map(u => [u.id, u]));
 

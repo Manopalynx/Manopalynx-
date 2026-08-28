@@ -243,92 +243,89 @@ his book.
 4. **Whether a run can be won.** Settled in principle — a run yes, the war no — but the
    shape of an ending has not been designed.
 
+
 ---
 
-# What the first sweeps found
+# What the sweeps found
 
-**The engine and both instruments are built and the numbers are in.** This section is
-measured, not proposed. `docs/column/test/matchup.mjs` is the counter-graph;
-`docs/column/test/match.mjs` is Sam's round structure. Everything below is reproducible
-from a seed.
+Measured, not proposed. `test/matchup.mjs` is the unit graph; `test/match.mjs` is the
+round structure. Both reproducible from a seed. Sam's design direction of 28 August is
+implemented: three weight classes, decisive counters, no combat randomness.
 
-## The counter-graph is real
+## The unit graph passes
 
 | claim | result |
 |---|---|
-| real cycles, every unit inside one | **holds** — 171 three-cycles at 60/40 or wider |
+| local counters are decisive | **holds** — 79% of single-type pairings settle 95/5 |
+| real cycles, every unit inside one | **holds** — 129 three-cycles at 60/40 or wider |
 | every unit is the best answer to something | **holds** |
-| nothing above 65% or below 35% | **fails** — and the reason matters more than the failure |
 
-Five tuning passes each flipped a unit from dead to dominant on a small change. That is
-the catalogue's tell, so I stopped tuning and measured the room instead:
+The old first claim — nothing above 65% or below 35% — was **deleted, because it measured
+the wrong thing.** Sam's principle is *decisive local counters, but rarely a single
+decisive counter to an entire composition*, so a one-card-type army beating another
+outright is the target. It was also finer than the model can resolve: at 79% decisive, an
+overall win rate moves in steps of 1/11.
 
-> **Of 132 pairings, 100 — 76% — are decided 95/5 or harder.**
+**Weight classes bounded the crowd by construction**: heavy 1 body, medium 2, light 3, with
+`count` derived from the class so a card cannot disagree with itself. Twenty-six cards used
+to be able to put 260 bodies on the field; the ceiling is now 78.
 
-The resolver is near-binary. A unit's "overall win rate" is therefore not a rate but a
-**count of pairings won**, in steps of 1/11 ≈ 9 points. The 35–65% band admits only four
-possible values, so any unit that wins one more or one fewer matchup jumps outside it.
-**The threshold is finer than the model's resolution**, which is why every pass flipped
-something. Two dials made it worse and both are super-linear: `count` is quadratic (Line
-Infantry went 25.8% → 87.8% on one extra body) and an aura scales with enemies *and* with
-the square of its radius (Volt went 27.8% → 86.6%). `hp`, `dmg` and `rate` are the safe
-dials; `count`, `auraR` and `splash` are not.
+## Losing on purpose does not pay — which Sam asked to be tested rather than guarded
 
-Mixed armies of nine cards soften it but not much: **60% still decided 95/5.**
+`thrower` deliberately loses its opening round to bank the extra pick, then plays to
+counter. `counter` plays straight. Same opponent, same 300 seeds:
 
-**Sam's decision.** Either accept that counters are decisive — which is legible and
-arguably right for a drafting game, and means restating the claim at the model's real
-resolution ("each card wins between four and seven of its eleven matchups") — or introduce
-variance so a matchup can genuinely be close. I lean to the first: you want "this beats
-that" to be learnable, and the uncertainty to live in composition rather than in dice.
+| | match win rate |
+|---|---|
+| playing straight from pick one | **51.0%** |
+| throwing the opening round | **34.3%** |
 
-## Your extra pick is too weak, not too strong
+**Throwing costs you seventeen points.** The extra pick compensates for a lost round; it
+does not overpay for one. No anti-exploit system is needed, which is the answer Sam wanted
+before anyone built one.
 
-The risk was an oscillator — losing a round being how you win the next. Measured across
-five tables, 100 matches each:
+## The one real problem, and it is structural rather than a tuning miss
 
-| table | human wins | rounds | alternation | bodies by the end | longest round |
-|---|---|---|---|---|---|
-| vs Varan | 45.0% | 7.7 | **50%** | 69 | 77s |
-| vs Harlow | 94.0% | 6.5 | 64% | 77 | 81s |
-| vs Hale | 100.0% | 6.2 | **67%** | 79 | 54s |
-| vs Vex | 98.0% | 6.3 | 66% | 81 | 82s |
-| vs The Leader | 79.0% | 7.6 | 55% | 85 | 49s |
+Three claims fail and they are all the same finding: **raw card count dominates
+composition**, which is precisely what design point 6 refuses.
 
-Alternation is how often the winner of a round also wins the next. **It runs 50–67% — the
-winner keeps winning slightly more often than not, so the rubber band is marginally too
-light rather than too heavy.** Your instinct was sound and the correction is small: a
-second bonus pick, or a wider offer for the loser.
+| | |
+|---|---|
+| one extra card against an otherwise identical army | wins **80%** |
+| two extra cards | 88% |
+| three extra cards | 89% |
+| mixed nine-card armies settled 95/5 | **72%** |
+| alternation (winner of a round wins the next) | 50–69% |
 
-## Three of the five personas are worse than picking blind
+It saturates after the first card, which is the signature of **Lanchester's square law**: in
+a fight to annihilation, N bodies have N times the health *and* N times the output, so an
+edge of one compounds into a near-certain win. That is arithmetic, not balance — no amount
+of stat tuning will move it, and it is why the alternation figure also refuses to come down.
 
-`house` — the harness policy that always takes the first card offered, with no thought at
-all — beats **Harlow 94%, Hale 100% and Vex 98%.** Only Varan is competitive at 45%.
+**One real bug was found and fixed on the way**: a card's bodies deployed 14.3 field units
+apart, spread across the whole rank, while splash radii are 8–16. A three-body light squad
+was therefore wider than any blast could reach, so AOE hit exactly one body and the
+"AOE punishes numbers, durability absorbs AOE" mechanism could not fire at all. Bodies of
+one card now stand together. It improved the unit graph and did **not** fix the square law,
+which is how we know the two are separate problems.
 
-The three that lose are the three that draft by a single stat. Varan is the one that reads
-the board and answers it. **In a game decided by counters, drafting by stat is not a
-personality, it is a handicap.** The personas need to be variations on *how* they counter —
-what they are willing to trade, how far ahead they read — not stat-maximisers wearing
-different names. That is a rewrite of `POLICIES`, not a tuning pass.
+### What would actually fix it — Sam's decision
 
-## The real constraint is legibility
+1. **Frontage.** Cap how many bodies can engage at once, so extra cards add depth and
+   reserve rather than multiplied firepower. This is the standard answer to the square law
+   and it is diegetic — a battle line has a width. It would also help legibility.
+2. **Make AOE scale hard with density**, so more bodies is self-punishing and the extra
+   card buys less the more you already have.
+3. **Accept it and change the comeback rule** — if an extra card is worth 80%, the loser's
+   bonus is not a nudge, and the design would be honest to say so.
 
-A match ends with **about 85 bodies a side — 171 on screen — at roughly 36pt of space
-each** on a 393pt portrait field. Performance is not the problem; Matchbox runs 26,390
-cells at 2.5ms a frame. Telling them apart is.
+I would take (1). It is the only one that attacks the mechanism rather than its symptoms.
 
-The first version of this check counted *cards* and would have reported a comfortable
-field at a third of the real crowd. A card deploys up to ten bodies.
+## Still open
 
-**Options, all Sam's:** cap the field and bench the rest, retire early cards as later ones
-arrive, merge duplicate cards into one stronger body, or shrink the squad counts. This is
-the first thing to settle, because *observation* is the step the whole loop hangs on and
-it is the step that breaks first.
-
-## Open, in the order it now needs answering
-
-1. **Decisive counters, or add variance?** Everything else follows from it.
-2. **The field is too crowded by round six.** Which of the four options above.
-3. **The personas need rewriting** as counter-policies rather than stat-policies.
-4. Strengthen the loser's bonus slightly — 50–67% wants to be 50%.
-5. A round runs 49–82 seconds at its longest. Is that too long to watch on a phone?
+- **The field is 108 bodies on screen at the end**, about 45pt each on a 393pt portrait
+  field. Better than 171 but not yet legible; frontage would help here too.
+- **Upgrade cards and merging** (design points 3 and 4) are specified and unbuilt. They
+  need the square-law question settled first, because both change how numbers convert into
+  strength.
+- A round runs up to about 80 seconds at its longest.

@@ -34,7 +34,7 @@ import { playMatch, resolve, rng, offer } from '../engine.js';
 
 const N = +process.argv[2] || 200;
 const HUMAN = 'house';
-const AGAINST = ['varan', 'harlow', 'hale', 'vex', 'leader'];
+const AGAINST = ['counter', 'varan', 'harlow', 'hale', 'leader'];
 const bodies = cards => cards.reduce((n, id) => n + (BY_ID[id].count || 1), 0);
 
 console.log(`\n${N} matches per table · ${RULES.lives} lives · ${RULES.picksPerRound} picks a round ` +
@@ -42,7 +42,7 @@ console.log(`\n${N} matches per table · ${RULES.lives} lives · ${RULES.picksPe
 console.log('table                        human wins   rounds   alternation  final bodies   longest round');
 console.log('─'.repeat(92));
 
-let worstAlt = null, biggest = 0;
+let worstAlt = null, biggest = 0, edgeWin = 0, straightWin = 0, thrownWin = 0;
 
 for (const persona of AGAINST) {
   let humanWins = 0, rounds = 0, alt = 0, altN = 0, army = 0, longest = 0;
@@ -112,6 +112,43 @@ for (let i = 0; i < 400; i++) {
 console.log(`mixed armies of ${SIZE} cards, 400 pairs over 8 seeds each:`);
 console.log(`  ${decisive} of ${total} (${(decisive / total * 100).toFixed(0)}%) decided 95/5 or harder\n`);
 
+/* ------------------------- does an extra card just win? (Sam's point 6) ------ */
+// "number of cards drafted = probability of winning" is the thing the design is
+// meant to refuse. Same random composition on both sides, then one extra card
+// given to side 0. If that alone decides it, the draft is arithmetic.
+{
+  const r2 = rng(4242);
+  let won = 0, n = 0;
+  for (let i = 0; i < 300; i++) {
+    const base = [];
+    for (let k = 0; k < 8; k++) base.push(offer(r2, 1)[0]);
+    const extra = offer(r2, 1)[0];
+    const out = resolve([...base, extra], base, i * 13 + 1);
+    if (out.winner === 0) won++;
+    n++;
+  }
+  edgeWin = won / n;
+  console.log(`one extra card against an otherwise identical army: wins ${(edgeWin * 100).toFixed(0)}% of 300\n`);
+}
+
+/* ---------------- is it worth losing on purpose? (Sam's point 5) ------------- */
+// Sam asked for this by name. `thrower` deliberately loses its opening round to
+// bank the extra pick, then plays to counter; `counter` plays straight from the
+// first pick. Same opponent, same seeds. If throwing wins more, losing pays and
+// the rule needs a guard -- and this is the Ledger's money-pump class of defect,
+// which is why it is a sweep rather than a hunch.
+{
+  let straight = 0, thrown = 0;
+  const M = 300;
+  for (let m = 0; m < M; m++) {
+    if (playMatch({ a: 'counter', b: 'varan', seed: m * 17 + 9 }).winner === 0) straight++;
+    if (playMatch({ a: 'thrower', b: 'varan', seed: m * 17 + 9 }).winner === 0) thrown++;
+  }
+  straightWin = straight / M; thrownWin = thrown / M;
+  console.log(`playing straight from pick one : ${(straightWin * 100).toFixed(1)}% of ${M} matches`);
+  console.log(`throwing the opening round     : ${(thrownWin * 100).toFixed(1)}%\n`);
+}
+
 /* --------------------------------------------------------------------- claims */
 let failed = 0;
 const ok = m => console.log(` ok   ${m}`);
@@ -130,5 +167,24 @@ else bad('the field stays legible on a phone', [
   `on a 393pt portrait field that is roughly ${Math.sqrt(393 * 550 / (biggest * 2)).toFixed(0)}pt of space each`
 ]);
 
-console.log(`\n${2 - failed} of 2 claims hold\n`);
+// Sam's principle: decisive LOCAL counters, but rarely a single decisive counter
+// to a whole composition. matchup.mjs checks the first half; this is the second.
+if (decisive / total < 0.40) ok(`compositions are contested — only ${(decisive / total * 100).toFixed(0)}% of mixed armies settle 95/5`);
+else bad('compositions are contested', [
+  `${(decisive / total * 100).toFixed(0)}% of mixed nine-card armies settle 95/5`,
+  'a composition decided as hard as a single matchup means the battle is a formality'
+]);
+
+if (edgeWin <= 0.70) ok(`an extra card is an advantage, not a result (${(edgeWin * 100).toFixed(0)}%)`);
+else bad('an extra card is an advantage, not a result', [
+  `one extra card alone wins ${(edgeWin * 100).toFixed(0)}% — card count is close to being the whole game`
+]);
+
+if (thrownWin <= straightWin + 0.03) ok(`losing on purpose does not pay (${(thrownWin * 100).toFixed(1)}% against ${(straightWin * 100).toFixed(1)}%)`);
+else bad('losing on purpose does not pay', [
+  `throwing the opening round wins ${(thrownWin * 100).toFixed(1)}% against ${(straightWin * 100).toFixed(1)}% playing straight`,
+  'the extra pick is worth more than the round it costs'
+]);
+
+console.log(`\n${5 - failed} of 5 claims hold\n`);
 process.exit(failed ? 1 : 0);

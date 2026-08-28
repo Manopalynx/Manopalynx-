@@ -5,7 +5,15 @@
 // against it. If they fail, the roster changes while there is still no interface
 // to change.
 //
-//   1. No dominant unit and no dead one — nothing above 65% or below 35% overall.
+//   1. Local counters ARE decisive. Sam's direction is "decisive local counters,
+//      but rarely a single decisive counter to an entire composition", so a
+//      one-card-type army beating another outright is the TARGET, not a fault.
+//      The old claim here -- nothing above 65% or below 35% -- measured exactly
+//      the case that is allowed to be lopsided, and it was also finer than the
+//      model can resolve: with 76% of pairings decided 95/5, an "overall win
+//      rate" moves in steps of 1/11 and the 35-65% band admitted four values.
+//      Whether COMPOSITIONS are decisive is the real question and it is asked in
+//      test/match.mjs, where mixed armies live.
 //   2. Real cycles — at least one A>B>C>A with every edge at 60/40 or wider, and
 //      every unit inside at least one such cycle.
 //   3. Every unit is somebody's answer — for each U there is a V it beats better
@@ -85,12 +93,10 @@ const bad = (m, why) => { failed++; console.log(`FAIL  ${m}`); (why || []).forEa
 console.log('');
 
 // 1 -----------------------------------------------------------------------
-const hot = ids.filter(a => overall[a] > 0.65);
-const cold = ids.filter(a => overall[a] < 0.35);
-if (!hot.length && !cold.length) ok('no unit is dominant and none is dead (all 35-65%)');
-else bad('no unit is dominant and none is dead', [
-  ...hot.map(a => `${a} wins ${(overall[a] * 100).toFixed(1)}% of the pool — dominant`),
-  ...cold.map(a => `${a} wins ${(overall[a] * 100).toFixed(1)}% of the pool — dead pick`)
+if (decisive / pairs.length >= 0.5)
+  ok(`local counters are decisive — ${(decisive / pairs.length * 100).toFixed(0)}% of single-type pairings settled 95/5`);
+else bad('local counters are decisive', [
+  `only ${(decisive / pairs.length * 100).toFixed(0)}% of pairings settle 95/5; a counter the player cannot feel is not a counter`
 ]);
 
 // 2 -----------------------------------------------------------------------
