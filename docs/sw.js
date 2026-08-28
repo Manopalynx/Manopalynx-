@@ -84,6 +84,7 @@ const APPS = [
       './column/index.html',
       './column/ui.js',
       './column/render.js',
+      './column/glyphs.js',
       './column/engine.js',
       './column/data.js',
       './column/column.webmanifest',

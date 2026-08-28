@@ -74,9 +74,17 @@ const rosterRows = await page.locator('.rosterRow').count();
 const written = await page.locator('.src').allTextContents();
 if (rosterRows === 12) ok('the roster shows all twelve cards');
 else bad('the roster shows all twelve cards', [`found ${rosterRows}`]);
-if (written.length === 12 && written.every(t => /author|written for the game/i.test(t)))
-  ok('every card says whose line it carries');
-else bad('every card says whose line it carries', [`${written.length} provenance marks`]);
+// TWO QUESTIONS, NOT ONE. Whether the LINE is the author's, and whether the
+// UNIT is. The Deflector's line is his and the unit is mine, and that is the one
+// thing in this game Sam cannot check for himself without opening a file.
+const invented = written.filter(t => /invented/i.test(t)).length;
+if (written.length === 12 && written.every(t => /author|invented|written for the game/i.test(t)) && invented === 1)
+  ok(`every card says whose line it carries, and the one invented unit says so`);
+else bad('every card says whose line it carries', [
+  `${written.length} provenance marks, ${invented} marked invented (expected 12 and 1)`]);
+// The roster is a page Sam reads rather than plays; worth a look without him
+// having to find it.
+await page.screenshot({ path: rp(HERE, 'play-roster.png') });
 await page.click('#back');
 
 /* ------------------------------------------------------------- play a match */
@@ -93,8 +101,8 @@ const state = () => page.evaluate(() => {
     // is 140 deep and the viewBox is untransformed, so these are the engine's
     // own units read back off the screen.
     midY: [0, 1].map(side => {
-      const t = [...document.querySelectorAll(`#field g[data-side="${side}"] text`)]
-        .map(e => +e.getAttribute('y')).filter(n => !Number.isNaN(n));
+      const t = [...document.querySelectorAll(`#field g[data-side="${side}"]`)]
+        .map(e => +e.getAttribute('data-y')).filter(n => !Number.isNaN(n));
       return t.length ? t.reduce((a, b) => a + b, 0) / t.length : null;
     }),
     fx: document.querySelectorAll('#field .fx').length,
@@ -145,7 +153,15 @@ for (let guard = 0; guard < 400; guard++) {
 
   if (s.phase === 'pick') {
     if (s.offer !== 3) { deadEnd = `offered ${s.offer} cards at ${s.prompt}`; break; }
-    if (s.round === 3 && !shot.draft) { shot.draft = 1; await page.screenshot({ path: rp(HERE, 'play-draft.png') }); }
+    if (s.round === 3 && !shot.draft) {
+      shot.draft = 1;
+      await page.screenshot({ path: rp(HERE, 'play-draft.png') });
+      // And the same screen with a counter tapped, which is where a unit says
+      // what it is and whose line it carries.
+      await page.locator('#field g[data-side="0"]').first().click();
+      await page.screenshot({ path: rp(HERE, 'play-inspect.png') });
+      await page.locator('#field').click({ position: { x: 30, y: 30 } });
+    }
     // THE WAY OUT, exercised mid-match and then backed out of. A pause that
     // cannot be closed, or that loses the match it paused, is worse than none.
     if (s.round === 1 && pause === null) {
@@ -321,5 +337,5 @@ await browser.close();
 server.close();
 
 console.log(`\n${15 - failed} of 15 claims hold`);
-console.log(`written: docs/column/test/play-draft.png, play-battle.png, play.png\n`);
+console.log(`written: play-roster.png, play-draft.png, play-inspect.png, play-battle.png, play.png\n`);
 process.exit(failed ? 1 : 0);

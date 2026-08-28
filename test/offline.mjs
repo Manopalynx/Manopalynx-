@@ -43,7 +43,7 @@
 import { createServer } from 'http';
 import { readFileSync, existsSync, statSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { dirname, resolve, extname, join } from 'path';
+import { dirname, resolve, extname, join, normalize } from 'path';
 import { chromium } from 'playwright';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -365,6 +365,45 @@ const run = async () => {
     if (missing && missing.length === 0) ok(`${label}  [${promised.length}: ${promised.join(', ')}]`);
     else if (missing) bad(label, [`named but not saved: ${missing.join(', ')}`]);
     else bad(label, [`the check could not run: ${err}`]);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 5. Every module the pages actually import must be named in docs/sw.js.
+  //    Check 4 asks whether what the worker PROMISES is held; this asks whether
+  //    it promised everything. A module added to the graph and not to the list
+  //    opens fine online and paints an empty screen on a train, which is the
+  //    worst shape a fault can have: invisible to everyone who can see it.
+  //    Found by hand once -- glyphs.js -- which is once too often.
+  // ---------------------------------------------------------------------------
+  {
+    const named = new Set(promisedFiles());
+    const seen = new Set();
+    const missing = [];
+    const walk = (rel) => {
+      if (seen.has(rel)) return;
+      seen.add(rel);
+      const file = join(DOCS, rel);
+      if (!existsSync(file)) return;
+      const src = readFileSync(file, 'utf8');
+      const dir = dirname(rel);
+      // A page enters its module graph through a <script src>, not through an
+      // import statement. The first version of this matched only imports, so it
+      // followed three files, stopped at the page, and would have passed with
+      // every module in the game missing from the list.
+      const refs = rel.endsWith('.html')
+        ? src.matchAll(/(?:src|href)=["'](\.[^"']+)["']/g)
+        : src.matchAll(/(?:from|import)\s*['"](\.[^'"]+)['"]/g);
+      for (const m of refs) {
+        const target = normalize(join(dir, m[1])).replace(/\\/g, '/');
+        if (!named.has(target)) missing.push(`${rel} imports ${target}`);
+        walk(target);
+      }
+    };
+    for (const app of APPS) walk(app.url.replace(/^\//, ''));
+
+    const label = 'every module a page imports is named in docs/sw.js';
+    if (!missing.length) ok(`${label}  [${seen.size} files followed]`);
+    else bad(label, [...new Set(missing)]);
   }
 
   await browser.close();

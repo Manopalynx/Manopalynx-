@@ -77,16 +77,22 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
    with a four-line hint is taller than one with two, so the deck grew and shrank
    with whatever happened to be offered. The row is a fixed box and the cards
    fill it. */
-#cards{display:flex;gap:8px;height:118px}
+#cards{display:flex;gap:8px;height:132px}
 .card{flex:1 1 0;min-width:0;height:100%;overflow:hidden;border:0;border-radius:12px;
   background:var(--card);color:var(--cardInk);
   box-shadow:inset 0 -13px 0 var(--cardIn);padding:9px 6px 18px;text-align:center;font:inherit;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
 .card:active{transform:translateY(1px)}
 .card.up{background:var(--up);box-shadow:inset 0 -13px 0 var(--upIn)}
-.card b{font-size:13.5px;line-height:1.15}
+.card b{font-size:13px;line-height:1.1}
 .card .cls{font-size:9px;letter-spacing:.8px;text-transform:uppercase;opacity:.6}
-.card .hint{font-size:9.5px;opacity:.75;line-height:1.25}
+.card .hint{font-size:9px;opacity:.7;line-height:1.2}
+/* The drawing, at 40pt on a 117pt card — sixteen times the area of the counter
+   it stands for, and the only place a unit can carry any detail at all. */
+.card .art{display:block;line-height:0;position:relative}
+.card .art svg{display:block}
+.card .chev{position:absolute;right:-11px;top:-3px;font-size:11px;color:#2f7a3a}
+#info .ill{float:right;margin:-2px -2px 0 8px;line-height:0}
 /* Fixed height, like everything else down here. An EMPTY button is twenty-two
    pixels shorter than one with a word in it, and hiding it with visibility keeps
    its box but not its content -- so the deck still changed size between a pick

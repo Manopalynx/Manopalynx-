@@ -13,7 +13,8 @@
 
 import { BY_ID, RULES, PERSONAS, UPGRADE, WEIGHT, UNITS, BUILD } from './data.js';
 import { rng, offer, resolve, deployment, POLICIES, armyFrom, isUp, tokId } from './engine.js';
-import { draw, effects, auras, GROUND, CODE, SIDE, shape } from './render.js';
+import { draw, effects, auras, GROUND, SIDE, shape } from './render.js';
+import { glyph } from './glyphs.js';
 
 const $ = id => document.getElementById(id);
 const el = { bar: $('bar'), la: $('livesA'), lb: $('livesB'), who: $('who'),
@@ -249,7 +250,12 @@ const hearts = n => '&#9829;'.repeat(Math.max(0, n)) +
 // number in data.js and the card face changes with it.
 function traits(u) {
   const t = [];
-  if (u.rng > 4) t.push(`range ${Math.round(u.rng)}`); else t.push('melee');
+  // A Volt Battery has range 0 and no attack at all -- it is simply expensive to
+  // stand near. The resolver's melee cutoff is <= 4, so reading it straight
+  // called the one card that never swings a "melee" unit.
+  if (!u.dmg) t.push('no attack');
+  else if (u.rng > 4) t.push(`range ${Math.round(u.rng)}`);
+  else t.push('melee');
   if (u.move === 'seek') t.push('seeks');
   if (u.splash) t.push('splash');
   if (u.dot) t.push('burns');
@@ -260,6 +266,11 @@ function traits(u) {
   return t;
 }
 
+// The unit drawn at size, on ink rather than on the field's palette. The card
+// is 117x118pt -- sixteen times a counter -- so the detail strokes are on.
+const art = (id, px, colour = '#3a2f1e', w = 0.62) =>
+  `<svg width="${px}" height="${px}" viewBox="-6 -6 12 12">${glyph(id, 0, 0, 5, colour, w, true)}</svg>`;
+
 function cardFace(tok, i) {
   const up = isUp(tok), id = tokId(tok), u = BY_ID[id];
   const lvl = (armyFrom(S.army[0]).up[id] || 0) + 1;
@@ -268,14 +279,15 @@ function cardFace(tok, i) {
   b.className = 'card' + (up ? ' up' : '');
   b.onclick = () => commit(i);
   b.innerHTML = up
-    ? `<b>${u.n}<br>UP!</b><span class="cls">upgrade</span>` +
+    ? `<span class="art up">${art(id, 34)}<span class="chev">&#9650;</span></span>` +
+      `<b>${u.n} UP!</b><span class="cls">upgrade</span>` +
       `<span class="hint">+${(UPGRADE.step * 100) | 0}% health &amp; damage<br>` +
       `level ${lvl} of ${UPGRADE.max} &middot; ${copies} on the field</span>`
-    : `<b>${u.n}</b><span class="cls">${u.w} &middot; ${u.count} ${u.count === 1 ? 'body' : 'bodies'}</span>` +
-      // Three at most on a card face. A fourth line fits the box only because
-      // the box now clips, and a clipped trait is a trait the player cannot
-      // read; the roster shows all of them.
-      `<span class="hint">${traits(u).slice(0, 3).join('<br>')}</span>`;
+    : `<span class="art">${art(id, 40)}</span>` +
+      `<b>${u.n}</b><span class="cls">${u.w} &middot; ${u.count} ${u.count === 1 ? 'body' : 'bodies'}</span>` +
+      // Two at most on a card face now that the drawing has the top of it. The
+      // roster and the inspect panel carry all of them.
+      `<span class="hint">${traits(u).slice(0, 2).join(' &middot; ')}</span>`;
   return b;
 }
 
@@ -332,6 +344,15 @@ function render() {
   save();
 }
 
+// WHOSE IS IT. Two different questions, and the interface must not blur them:
+// whether the LINE is the author's, and whether the UNIT is. The Deflector's
+// line is his and the unit is not, and that has to be visible without opening a
+// file -- it is the one thing in this game he cannot check for himself.
+function provenance(u) {
+  if (u.nv) return "invented for the game &middot; the line is the author's";
+  return u.qv ? "the author's line" : 'written for the game';
+}
+
 const label = tok => isUp(tok)
   ? `${BY_ID[tokId(tok)].n} UP!`
   : `${BY_ID[tok].n} ×${BY_ID[tok].count}`;
@@ -365,9 +386,10 @@ el.field.addEventListener('click', e => {
   // resized the deck, and resizing the deck moves the battlefield -- the same
   // fault as the cards, arriving by a different route.
   el.info.className = 'on';
-  el.info.innerHTML = `<b>${u.n}</b> — ${u.w}, ${u.count} ${u.count === 1 ? 'body' : 'bodies'} ` +
+  el.info.innerHTML = `<span class="ill">${art(u.id, 46, SIDE[+g.dataset.side].line, 0.7)}</span>` +
+    `<b>${u.n}</b> — ${u.w}, ${u.count} ${u.count === 1 ? 'body' : 'bodies'} ` +
     `&middot; ${traits(u).join(' &middot; ')}<q>${u.q}</q>` +
-    `<span class="src">${u.qv ? "the author's line" : 'written for the game'}</span>`;
+    `<span class="src">${provenance(u)}</span>`;
   paint(board());
 });
 
@@ -442,25 +464,28 @@ function menu() {
 }
 
 function roster() {
+  // The counter exactly as the field draws it, beside the name. That mapping is
+  // the whole of learning the game, and a roster that draws it differently
+  // teaches the wrong thing.
   const row = u => {
     const s = { heavy: 3.7, medium: 3.2, light: 2.9 }[u.w];
     return `<div class="rosterRow">
-      <svg width="34" height="34" viewBox="-5 -5 10 10">${shape(u.w, 0, 0, s, SIDE[0].fill, SIDE[0].line)}
-        <text x="0" y="1.3" text-anchor="middle" font-size="3.6" font-weight="700"
-          fill="${SIDE[0].ink}" font-family="system-ui,sans-serif">${CODE[u.id]}</text></svg>
+      <svg width="38" height="38" viewBox="-5 -5 10 10">${shape(u.w, 0, 0, s, SIDE[0].fill, SIDE[0].line)}
+        ${glyph(u.id, 0, 0, s * 0.62, SIDE[0].ink, 1.15)}</svg>
       <div><b>${u.n}</b> <em>${u.w} · ${u.count} ${u.count === 1 ? 'body' : 'bodies'}</em>
         <em style="display:block">${traits(u).join(' · ')}</em>
-        <q>${u.q}</q><span class="src">${u.qv ? "the author's line" : 'written for the game'}</span></div>
+        <q>${u.q}</q><span class="src">${provenance(u)}</span></div>
     </div>`;
   };
   const d = sheet(`<h1>The roster</h1>
     <p><b>Square</b> is heavy — one body, hard to shift. <b>Diamond</b> is medium — two
     bodies, one job each. <b>Circle</b> is light — three bodies, strong in numbers and soft
-    to anything that hits an area. A marker's letter is the card; its colour is the side.</p>
+    to anything that hits an area. The drawing inside a marker is the card; its colour is
+    the side. A mark only has to be told from the three others in its own shape.</p>
     ${UNITS.map(row).join('')}
-    <p style="margin-top:18px">Every unit is from <i>Grandiose: The Rise to Power</i>. Lines
-    marked <b>the author's</b> are lifted from the manuscript; the rest were written for the
-    game and are the first thing to strike if they do not sound like the book.</p>
+    <p style="margin-top:18px">Every unit is from <i>Grandiose: The Rise to Power</i>, and
+    every line on this page is checked word by word against the manuscript. Anything marked
+    <b>invented for the game</b> is mine and is the first thing to strike.</p>
     <button class="pick" id="back"><b>Back</b></button>`);
   d.querySelector('#back').onclick = () => d.remove();
 }

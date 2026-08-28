@@ -692,6 +692,73 @@ rather than of my intentions:
   one, red.
 - **the result headline sits between 22% and 62% down the screen.**
 
+# The units, drawn
+
+Sam asked whether a unit could be more than a shape with a letter in it. The answer was
+bounded by measurement rather than taste, so it was measured first.
+
+| | |
+|---|---|
+| 1 field unit | 3.92pt on a 393×852 phone |
+| counter across | **29pt** heavy, 25pt medium, 23pt light |
+| nearest neighbour, end-of-match deployment | median **35pt**, smallest 31pt |
+| counters overlapping at deployment | **0 of 4,054** |
+
+So the overlaps he saw are mid-battle convergence, not the layout — and **a counter cannot
+get bigger**: a 29pt heavy inside a 35pt gap has three points of clearance either side. Any
+detail has to fit the 23–29pt already there, which leaves a mark of about 14pt.
+
+**Twelve silhouettes at 14pt are not reliably tellable apart. Four are.** The counter's outer
+shape already carries the weight class, so a glyph only has to be distinct from the three
+others in its own class — and the roster is exactly four heavy, four medium, four light.
+That is the whole reason this works, and it is why `test/glyphs.mjs` lays the sheet out by
+class: any other comparison is a comparison the player never has to make.
+
+`test/glyphs.mjs` draws every unit at **both real sizes** with nothing magnified — inside its
+real class shape at 3.92pt/unit, and at 72pt on a card face with the detail strokes on. Four
+of the twelve failed it on the first pass and were redrawn: the Walker read as a table until
+its legs got knees, the Brute as a beetle until its arms bent downward, the Neurite as a head
+on a lens until the pupil stopped being as tall as the eye, and the Crawler as a squiggle
+until its back closed into a shell.
+
+**Every glyph is from the book**, with the phrase it is drawn from named in `glyphs.js`
+beside it: the Brute's *four arms*, the Neurite's *lid-to-lid black eyes*, the crawlers
+*dog-sized* and *mid-leap*, the Amabie that *opened the wall at dawn*.
+
+## Provenance, corrected in both directions
+
+Checking the manuscript for drawing references meant checking the lines too, word by word.
+
+**All twelve lines are the author's. Seven were marked "written for the game" and were not.**
+Four were verbatim and had simply never been checked; three were his words stitched together
+and have been restored to the sentences they came from. So the game had been telling him that
+five of his own sentences were mine.
+
+That is the same failure as inventing a quotation, running the other way — and it was *caused*
+by the correction to one. An early draft gave Varan a line that reads exactly like the book
+and appears in it zero times; the session that caught that over-corrected into marking
+anything unverified as invented, and nobody went back with the manuscript open.
+
+The **Karkinos has six legs**, not four. The manuscript says both — *"waiting on its four vast
+legs"* of one machine, Samuel's, and *"crab-bodied urban mechs … on six legs apiece, railguns
+folded along their backs"* of the squads. A previous session read the first, declared six an
+invention, and wrote that down. The card is the type.
+
+`data.js` now carries two separate marks, because they are two separate questions: **`qv`**
+says the line is his, **`nv`** says the unit was invented for the game. The Deflector is the
+only `nv` in the roster — his line, my unit — and the interface says exactly that, so he can
+strike it without opening a file.
+
+## And the module that was not in the service worker
+
+`glyphs.js` is a new file in the page's module graph and was not in `docs/sw.js`. Online it
+loads; **offline the page paints nothing and says nothing** — the worst shape a fault can
+have. `test/offline.mjs` gained a thirteenth check that follows the import graph from each
+published page and asserts every module it reaches is named in the worker's list. Its own
+first version followed three files and stopped at the page, because a page enters its module
+graph through a `<script src>` and not an import statement; it would have passed with every
+module in the game missing.
+
 ## Next, and it is his
 
 **Battlefield variety.** His answer to 65% of compositions settling 95/5 is not to soften the

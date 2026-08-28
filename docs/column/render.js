@@ -16,6 +16,7 @@
 // copy is usually the one nobody is looking at.
 
 import { BY_ID, FIELD } from './data.js';
+import { glyph } from './glyphs.js';
 
 // YOU ARE AT THE BOTTOM. Sam's note: the cards are down there, so after every
 // pick your eye has to travel to the top of the screen to see what you bought.
@@ -100,7 +101,11 @@ export function draw(live, opt = {}) {
     // Wrapped, and tagged with the card it is. A tap has to be able to ask what
     // a marker is -- "inspect what worked" is the step the whole loop hangs on,
     // and a field of letters you cannot interrogate teaches nobody the counters.
+    // data-x/data-y are the renderer saying where it put this counter. A tap
+    // target, and the only honest way for a check to ask whether your army is
+    // drawn at the bottom of the field.
     return `<g data-key="${g.key}" data-id="${g.id}" data-side="${g.side}"` +
+      ` data-x="${g.x.toFixed(2)}" data-y="${g.y.toFixed(2)}"` +
       (shake ? ` transform="translate(${shake} 0)"` : '') + `>` + ring +
       landed + (hit ? shape(spec.w, g.x, g.y, s + 1.2, 'none', '#ffffff', 0) : '') +
       shape(spec.w, g.x, g.y, s, c.fill, c.line) +
@@ -109,8 +114,11 @@ export function draw(live, opt = {}) {
       // marker hides it against a dark field exactly when it matters.
       `<rect x="${g.x - s}" y="${g.y + s + 0.6}" width="${s * 2}" height="0.9" fill="#000" fill-opacity="0.55"/>` +
       `<rect x="${g.x - s}" y="${g.y + s + 0.6}" width="${(s * 2 * hurt).toFixed(2)}" height="0.9" fill="${c.line}"/>` +
-      `<text x="${g.x}" y="${g.y + 1.25}" text-anchor="middle" font-size="3.6" font-weight="700"
-         fill="${c.ink}" font-family="system-ui,sans-serif">${CODE[g.id]}</text>` +
+      // THE UNIT, not a letter for it. The mark only has to be distinct from the
+      // three others in its own weight class, because the counter's outer shape
+      // has already said which class it is -- and the roster is exactly four
+      // heavy, four medium, four light.
+      glyph(g.id, g.x, g.y, s * 0.62, c.ink, 1.15) +
       (spec.count > 1
         ? `<text x="${g.x + s + 0.4}" y="${g.y - s + 1.8}" font-size="2.3" fill="${c.line}"
              font-family="system-ui,sans-serif">${g.n}</text>` : '') +

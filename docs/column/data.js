@@ -5,18 +5,22 @@
 // exactly one place.
 //
 // CANON. Every unit is from Grandiose: The Rise to Power (S. T. Chalk, 2026).
-// `q` is the line shown with the unit; `qv: 1` means it is the author's, lifted
-// from the manuscript and trimmed only at its ends. No `qv` means it was
-// written for the game and is the first thing to strike if it does not sound
-// like the book. The manuscript is NOT in this repository and must not be — the
-// repository is public and the novel is his.
+// `q` is the line shown with the unit and `qv: 1` means it is the author's,
+// lifted from the manuscript and trimmed only at its ends or re-cased at its
+// start. `nv: 1` means the UNIT was invented for the game even where its line is
+// his -- two different questions, and the interface must not blur them. The
+// manuscript is NOT in this repository and must not be: the repository is public
+// and the novel is his.
 //
-// An early draft of the design document gave Varan a line that reads exactly
-// like the book and appears in it zero times; it was a persona line written for
-// the Ledger. Nothing here is attributed to the author unless it has been
-// checked against the manuscript, which is why most of these carry no `qv`.
+// ALL TWELVE LINES ARE NOW THE AUTHOR'S, checked word by word against the
+// manuscript. Seven of them were marked "written for the game" and were not --
+// four were verbatim and had simply never been checked, and three were his words
+// stitched, which have been restored to the sentences they came from. The
+// failure ran BOTH ways: an early draft gave Varan a line that reads exactly
+// like the book and appears in it zero times, and the correction to that
+// over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v5';
+export const BUILD = 'column-v6';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -116,11 +120,11 @@ export const UNITS = [
   // ---- heavy: one body, individually formidable -------------------------
   { id: 'walker', n: 'Walker', w: 'heavy',
     hp: 820, dmg: 75, rate: 26, rng: 20, spd: 0.35, arm: 4, splash: 8, tgt: 'near',
-    q: 'Four stories of articulated war machine, and the world went white and sideways.' },
+    q: 'The walker was four stories of articulated war machine.', qv: 1 },
 
   { id: 'brute', n: 'Brute', w: 'heavy',
     hp: 980, dmg: 70, rate: 18, rng: 4, spd: 0.62, arm: 3, tgt: 'near',
-    q: 'It went through a Union squad the way weather goes through paper.' },
+    q: 'It went through a Union squad the way weather goes through paper.', qv: 1 },
 
   { id: 'ultra', n: 'Ultra Armor', w: 'heavy',
     hp: 780, dmg: 72, rate: 11, rng: 5, spd: 0.62, arm: 12, tgt: 'near',
@@ -128,40 +132,44 @@ export const UNITS = [
 
   { id: 'amabie', n: 'Amabie', w: 'heavy',
     hp: 300, dmg: 130, rate: 32, rng: 62, spd: 0.28, splash: 16, tgt: 'big',
-    q: 'A walking artillery piece the size of a customs house.' },
+    q: 'A walking artillery piece the size of a customs house.', qv: 1 },
 
   // ---- medium: two bodies, specialised roles -----------------------------
-  // Four legs, not six -- "waiting on its four vast legs". It breaches by
-  // climbing: over the wall rather than through the gate, which is why it seeks.
+  // SIX legs. The manuscript says both -- "waiting on its four vast legs" of one
+  // machine, Samuel's, and "crab-bodied urban mechs ... on six legs apiece,
+  // railguns folded along their backs" of the squads. A previous session read
+  // the first, called six an invention, and wrote that down; the card is the
+  // TYPE, so it is six. It breaches by climbing -- over the wall rather than
+  // through the gate -- which is why it seeks.
   { id: 'karkinos', n: 'Karkinos', w: 'medium',
     hp: 380, dmg: 40, rate: 10, rng: 6, spd: 1.6, tgt: 'back', move: 'seek',
-    q: 'Front legs punching anchor-deep into the plate and stone, the rear legs following.' },
+    q: 'Front legs punching anchor-deep into the plate and stone, rear legs following.', qv: 1 },
 
   // INVENTED. "Deflector" appears in the manuscript zero times -- the name and
   // the unit are written for the game. Only its line is the author's, and that
   // line is the Kraken's shield, which is where the property comes from.
   { id: 'deflector', n: 'Deflector', w: 'medium',
     hp: 420, dmg: 26, rate: 12, rng: 4, spd: 0.72, defl: 0.85, tgt: 'near',
-    q: 'Its shields are tuned for weapons fire. Pods fall through.', qv: 1 },
+    q: 'Its shields are tuned for weapons fire. Pods fall through.', qv: 1, nv: 1 },
 
   { id: 'volt', n: 'Volt Battery', w: 'medium',
     hp: 330, dmg: 0, rate: 999, rng: 0, spd: 0.78, aura: 1.5, auraR: 18, tgt: 'near',
-    q: 'The volt round’s enormous older sibling, charged projectiles that didn’t need to hit to hurt.' },
+    q: 'The volt round’s enormous older sibling, charged projectiles that didn’t need to hit to hurt.', qv: 1 },
 
   // Damage over time is not reduced by armour, which is what makes this the
   // answer to a heavy rather than one more ranged attacker.
   { id: 'acid', n: 'Acid Thrower', w: 'medium',
     hp: 230, dmg: 12, rate: 14, rng: 30, spd: 0.65, dot: 6, dotT: 60, tgt: 'big',
-    q: 'It clung to shields and ate through, sheeted across hulls and kept eating.' },
+    q: 'The stuff clung to shields and ate through, sheeted across hulls and kept eating.', qv: 1 },
 
   // ---- light: three bodies, strong in numbers, soft to AOE ---------------
   { id: 'line', n: 'Line Infantry', w: 'light',
     hp: 215, dmg: 33, rate: 8, rng: 3, spd: 1.05, tgt: 'near',
-    q: 'You’re soldiers of the Union. The fleet has not fired. Until it fires, you check your sectors.' },
+    q: 'You’re soldiers of the Union. The fleet has not fired. Until it fires, you check your sectors.', qv: 1 },
 
   { id: 'swarm', n: 'Crawler Swarm', w: 'light',
     hp: 155, dmg: 27, rate: 4, rng: 2, spd: 2.1, tgt: 'big', move: 'seek',
-    q: 'They hit the crowded street the way current hits a shoal.' },
+    q: 'They hit the crowded street the way current hits a shoal.', qv: 1 },
 
   { id: 'neurite', n: 'Neurite', w: 'light',
     hp: 180, dmg: 31, rate: 9, rng: 32, spd: 0.85, tgt: 'near',
@@ -169,7 +177,7 @@ export const UNITS = [
 
   { id: 'fireship', n: 'Fireship', w: 'light',
     hp: 175, dmg: 4, rate: 20, rng: 3, spd: 1.15, tgt: 'near', move: 'seek', boom: { r: 15, d: 120 },
-    q: 'Set autopilot, best speed, into the swarm’s central mass. Then get to your pods.' }
+    q: 'Set autopilot, best speed, into the swarm’s central mass.', qv: 1 }
 ];
 
 // Derived, so a card cannot disagree with its own class.
