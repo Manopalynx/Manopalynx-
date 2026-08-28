@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v9';
+export const BUILD = 'column-v10';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -227,13 +227,42 @@ export const RULES = {
 // selling +10% damage sells nothing.
 //
 // Every number here is a first guess.
+// Credits, ₡ — the same coin as Grandiose, because it is the same universe and
+// two names for one currency across two games in one book is two things to
+// learn for no reason.
+export const COIN = '₡';
+
 export const SHOP = {
   every: 3,        // rounds between markets
-  purse: 10,       // to the winner of a round, on top of 1 a surviving body
-  card: 12,        // any one card in the roster, chosen
-  upgrade: 10,     // one level on a card you name
-  life: 25,
-  offer: 8         // next round you are offered four cards instead of three
+  // BOTH sides take the purse and only the winner is paid for survivors, which
+  // is Sam's balancing call. Paying the purse to the winner alone pushed
+  // round-to-round alternation from 55% to 62% against a 65% ceiling: winning
+  // bought the money that bought the next win. The flat half is now income and
+  // the survivor half is the reward, so a bad round still leaves you able to buy.
+  purse: 10,       // to BOTH sides at a round's end
+  // PRICED AGAINST THE INCOME, and re-priced when the income changed. Paying the
+  // purse to both sides took total payout across a match from ~125 to ~218, so
+  // the same prices were suddenly half price: army sizes went from 38 to 44
+  // bodies a side and the field got denser, which is the one thing the counters
+  // cannot afford. Multiplied by the change in income rather than guessed.
+  card: 21,        // any one card in the roster, chosen
+  upgrade: 18,     // one level on a card you name
+  life: 44,
+  offer: 14        // next round you are offered four cards instead of three
+};
+
+/* ---------------------------------------------------------------------- a run */
+// Stage two. A run is match after match: the army is redrafted every time,
+// because the draft is the game and a carried army makes match two a formality,
+// and the CREDITS carry, because saving for something is a decision.
+//
+// The opponent ramps with every match survived — a head start in credits, and an
+// extra pick a round every few matches. It is stated on the screen before each
+// match rather than hidden, so a loss is legible.
+export const RUN = {
+  ramp: 18,        // credits the opponent starts with, per match already survived
+  pickEvery: 3,    // matches between the opponent gaining an extra pick each round
+  order: ['vex', 'hale', 'harlow', 'leader', 'varan']
 };
 
 /* ----------------------------------------------------------------- the personas */

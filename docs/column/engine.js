@@ -15,7 +15,7 @@
 // would give whichever side was iterated first a systematic opening strike, and
 // nothing about the game would look wrong.
 
-import { UNITS, BY_ID, FIELD, TICK, MAX_TICKS, RULES, UPGRADE, SHOP } from './data.js';
+import { UNITS, BY_ID, FIELD, TICK, MAX_TICKS, RULES, UPGRADE, SHOP, RUN } from './data.js';
 
 /* ------------------------------------------------------------------------ rng */
 // mulberry32. Small, fast, and — the only property that matters here — the same
@@ -527,11 +527,11 @@ function counterScore(tok, theirs, picks = []) {
 }
 
 /* --------------------------------------------------------------------- the market */
-// WHAT A ROUND PAYS. One a body still standing, and a purse to the winner. The
-// survivor count is the resolver's own `left`, so the game cannot pay out a
-// number the battle did not produce.
+// WHAT A ROUND PAYS. A purse to both sides, and one a body still standing to the
+// winner. The survivor count is the resolver's own `left`, so the game cannot
+// pay out a number the battle did not produce.
 export const earn = (left, winner) =>
-  [0, 1].map(s => left[s] + (s === winner ? SHOP.purse : 0));
+  [0, 1].map(s => SHOP.purse + (s === winner ? left[s] : 0));
 
 // What the market has in it for a given side, and what it costs. Derived from
 // the army rather than listed, so an upgrade that cannot apply is never offered
@@ -598,12 +598,16 @@ export function spend(money, picks, lives) {
  *
  * @returns {{winner:number, rounds:object[], lives:number[]}}
  */
-export function playMatch({ a = 'house', b = 'varan', seed = 1 } = {}) {
+export function playMatch({ a = 'house', b = 'varan', seed = 1,
+                            money: purse = [0, 0], picks = [0, 0] } = {}) {
   const rand = rng(seed);
   const policy = [POLICIES[a], POLICIES[b]];
   const army = [[], []];
   const lives = [RULES.lives, RULES.lives];
-  const money = [0, 0];
+  // Credits carried in from earlier matches, and any extra picks a side has
+  // earned by being the thing you are running from.
+  const money = [purse[0], purse[1]];
+  const perRound = [0, 1].map(s => RULES.picksPerRound + picks[s]);
   const wide = [0, 0];                   // a wider offer, bought, for one round
   const rounds = [];
   let loser = null;                      // who opens with the bonus pick
@@ -621,14 +625,18 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1 } = {}) {
     // Three picks, each committed blind by both sides and then revealed. Both
     // policies read the board as it stood BEFORE this pick, which is what makes
     // the commitment simultaneous rather than sequential.
-    for (let p = 0; p < RULES.picksPerRound; p++) {
+    for (let p = 0; p < Math.max(perRound[0], perRound[1]); p++) {
       const seen = [army[0].slice(), army[1].slice()];
-      const cA = offer(rand, RULES.offer + wide[0], seen[0]);
-      const cB = offer(rand, RULES.offer + wide[1], seen[1]);
-      const iA = policy[0](cA, seen[0], seen[1]);
-      const iB = policy[1](cB, seen[1], seen[0]);
-      army[0].push(cA[iA]);
-      army[1].push(cB[iB]);
+      // A side that has run out of picks takes none, and draws nothing off the
+      // stream -- so a seeded run replays whatever the pick counts are.
+      if (p < perRound[0]) {
+        const c = offer(rand, RULES.offer + wide[0], seen[0]);
+        army[0].push(c[policy[0](c, seen[0], seen[1])]);
+      }
+      if (p < perRound[1]) {
+        const c = offer(rand, RULES.offer + wide[1], seen[1]);
+        army[1].push(c[policy[1](c, seen[1], seen[0])]);
+      }
     }
 
     const out = resolve(army[0], army[1], (seed * 7919 + r) >>> 0, false);
@@ -662,4 +670,30 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1 } = {}) {
   }
 
   return { winner: lives[0] > 0 ? 0 : 1, rounds, lives, army, money };
+}
+
+/**
+ * A RUN. Match after match until you lose one. The army is redrafted every time
+ * and the credits carry; the opponent takes a head start that grows with every
+ * match you have survived, and an extra pick a round every few matches.
+ *
+ * Sweepable, which is the point of putting it here: "how far does the floor
+ * get" is the only number that says whether a run is a run or a treadmill.
+ */
+export function playRun({ a = 'house', seed = 1, max = 40 } = {}) {
+  const matches = [];
+  let money = 0;
+  for (let n = 0; n < max; n++) {
+    const opp = RUN.order[n % RUN.order.length];
+    const r = playMatch({
+      a, b: opp, seed: (seed * 131 + n) >>> 0,
+      money: [money, n * RUN.ramp],
+      picks: [0, Math.floor(n / RUN.pickEvery)]
+    });
+    const won = r.winner === 0;
+    matches.push({ n, opp, won, rounds: r.rounds.length, cards: r.army[0].length });
+    if (!won) break;
+    money = r.money[0];
+  }
+  return { survived: matches.filter(m => m.won).length, matches, money };
 }

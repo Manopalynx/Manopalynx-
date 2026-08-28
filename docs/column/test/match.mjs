@@ -46,7 +46,7 @@ console.log(`\n${N} matches per table · ${RULES.lives} lives · ${RULES.picksPe
 console.log('table                        human wins   rounds   alternation  final bodies   upgrades   earned   longest round');
 console.log('─'.repeat(118));
 
-let worstAlt = null, biggest = 0, edgeWin = 0, straightWin = 0, thrownWin = 0, ups = 0, upsN = 0;
+let worstAlt = null, worstAltN = 0, biggest = 0, edgeWin = 0, straightWin = 0, thrownWin = 0, ups = 0, upsN = 0;
 
 for (const persona of AGAINST) {
   let humanWins = 0, rounds = 0, alt = 0, altN = 0, army = 0, longest = 0, up = 0, earned = 0;
@@ -79,7 +79,9 @@ for (const persona of AGAINST) {
   const upPicks = up / N;
   ups += up; upsN += N;
   biggest = Math.max(biggest, avgArmy);
-  if (worstAlt === null || Math.abs(alternation - 0.5) > Math.abs(worstAlt - 0.5)) worstAlt = alternation;
+  if (worstAlt === null || Math.abs(alternation - 0.5) > Math.abs(worstAlt - 0.5)) {
+    worstAlt = alternation; worstAltN = altN;
+  }
 
   console.log(
     `one human vs ${persona.padEnd(8)}` +
@@ -98,8 +100,9 @@ console.log('100% is a snowball the extra pick cannot fix; 0% is an oscillator w
 console.log('losing is how you win. Neither is a game.');
 console.log(`"upgrades" is the share of picks spent making an existing card stronger`);
 console.log(`rather than adding one -- at most ${UPGRADE.max} levels a card, +${(UPGRADE.step * 100).toFixed(0)}% health and damage each.`);
-console.log(`"earned" is total money paid across a match, both sides: ${SHOP.purse} to the winner of a`);
-console.log(`round plus one a surviving body. A market opens every ${SHOP.every} rounds and both sides spend.\n`);
+console.log(`"earned" is total credits paid across a match, both sides: a purse of ${SHOP.purse} to each side`);
+console.log(`at a round's end, plus one a surviving body to the winner. A market opens every ${SHOP.every}`);
+console.log(`rounds and both sides spend.\n`);
 
 /* ------------------------------------------- does composition make it close? */
 // Random mixed armies of the size a mid-match round actually fields, against
@@ -190,9 +193,16 @@ let failed = 0;
 const ok = m => console.log(` ok   ${m}`);
 const bad = (m, why) => { failed++; console.log(`FAIL  ${m}`); (why || []).forEach(w => console.log(`        · ${w}`)); };
 
-if (worstAlt >= 0.35 && worstAlt <= 0.65) ok(`the extra pick is neither a snowball nor an oscillator (worst table ${(worstAlt * 100).toFixed(0)}%)`);
+// THE FIGURE CARRIES ITS OWN ERROR. At 60 matches a table this read 62% and at
+// 400 it reads 58.7% -- the same build, and the small sample was noise that
+// looked like a balance problem worth acting on. A number without its error is
+// a number you cannot decide anything with.
+const altSE = Math.sqrt(worstAlt * (1 - worstAlt) / Math.max(1, worstAltN));
+const altBand = `${(worstAlt * 100).toFixed(1)}% ±${(altSE * 100).toFixed(1)} over ${worstAltN} rounds`;
+if (worstAlt >= 0.35 && worstAlt <= 0.65) ok(`the extra pick is neither a snowball nor an oscillator (worst table ${altBand})`);
 else bad('the extra pick is neither a snowball nor an oscillator', [
-  `worst table alternates at ${(worstAlt * 100).toFixed(0)}%, wanted 35-65%`,
+  `worst table alternates at ${altBand}, wanted 35-65%`,
+  altSE > 0.02 ? `that error bar is wide -- run this with more matches before acting on it` : '',
   worstAlt > 0.65 ? 'winning a round predicts winning the next: the extra pick is too weak'
                   : 'losing a round predicts winning the next: the extra pick is too strong'
 ]);

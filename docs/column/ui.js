@@ -11,7 +11,7 @@
 // watch IS what was resolved. It cannot drift, because there is nothing to
 // drift from.
 
-import { BY_ID, RULES, PERSONAS, UPGRADE, WEIGHT, UNITS, SHOP, BUILD } from './data.js';
+import { BY_ID, RULES, PERSONAS, UPGRADE, WEIGHT, UNITS, SHOP, RUN, COIN, BUILD } from './data.js';
 import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId,
          earn, stock, spend, upgradeable } from './engine.js';
 import { draw, effects, auras, GROUND, SIDE, shape } from './render.js';
@@ -23,6 +23,8 @@ const el = { bar: $('bar'), la: $('livesA'), lb: $('livesB'), who: $('who'),
              sub: $('sub'), cards: $('cards'), go: $('go'), cash: $('cash') };
 
 const SAVE = 'column-save';
+const BEST = 'column-best';
+const coin = n => `${COIN}${n}`;
 // A battle takes as long as it takes -- 90 ticks or 800 -- and the playback must
 // not. The speed is chosen per battle so every round runs for about the same
 // four seconds: long enough to watch the lines meet, short enough that a phone
@@ -62,17 +64,30 @@ let stream = null;
 const rand = () => { S.draw++; return stream(); };
 function rebuild() { stream = rng(S.seed); for (let i = 0; i < S.draw; i++) stream(); }
 
-function newMatch(opp) {
+/**
+ * @param {string} opp      persona id
+ * @param {object} [run]    { n, credits } when this match is part of a run
+ */
+function newMatch(opp, run) {
+  const n = run ? run.n : 0;
   S = {
     v: 1, opp, seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0, draw: 0,
     army: [[], []], lives: [RULES.lives, RULES.lives], round: 0, loser: null,
-    money: [0, 0], wide: [0, 0],
+    // The opponent's head start and its extra picks are the whole of the ramp,
+    // and both are stated on the screen before the match rather than hidden.
+    money: [run ? run.credits : 0, n * RUN.ramp],
+    perRound: [RULES.picksPerRound, RULES.picksPerRound + Math.floor(n / RUN.pickEvery)],
+    run: run ? { n } : null,
+    wide: [0, 0],
     phase: 'pick', pickNo: 0, bonus: null,
     offer: [], mine: null, theirs: null, inspect: null
   };
   rebuild();
   startRound();
 }
+
+const bestRun = () => { try { return +localStorage.getItem(BEST) || 0; } catch (e) { return 0; } };
+const setBest = n => { try { if (n > bestRun()) localStorage.setItem(BEST, String(n)); } catch (e) {} };
 
 function save() {
   // Frames are the battle replayed body by body -- tens of thousands of objects,
@@ -95,6 +110,7 @@ function load() {
     // purse, and defaulting is kinder than throwing his game away.
     S.money = S.money || [0, 0];
     S.wide = S.wide || [0, 0];
+    S.perRound = S.perRound || [RULES.picksPerRound, RULES.picksPerRound];
     // A battle is not saved mid-playback; a reload lands on the fight instead.
     if (S.phase === 'battle') S.phase = 'ready';
     return true;
@@ -127,9 +143,21 @@ function next() {
     S.solo = true; S.phase = 'pick';
     return render();
   }
-  if (S.pickNo < RULES.picksPerRound) {
+  // A ramped opponent drafts more per round than you do. When your picks run
+  // out and theirs have not, they take the rest alone and in the open -- the
+  // ramp has to be watchable, not just felt.
+  if (S.pickNo < Math.max(S.perRound[0], S.perRound[1])) {
+    if (S.pickNo >= S.perRound[0]) {
+      const c = offer(rand, RULES.offer + S.wide[1], S.army[1]);
+      const tok = c[POLICIES[S.opp](c, S.army[1].slice(), S.army[0].slice())];
+      S.army[1].push(tok);
+      S.pickNo++;
+      S.mine = null; S.theirs = tok;
+      return reveal(popKeys(1, tok));
+    }
     S.offer = offer(rand, RULES.offer + S.wide[0], S.army[0]);
-    S.oppOffer = offer(rand, RULES.offer + S.wide[1], S.army[1]);
+    S.withThem = S.pickNo < S.perRound[1];
+    if (S.withThem) S.oppOffer = offer(rand, RULES.offer + S.wide[1], S.army[1]);
     S.solo = false; S.phase = 'pick';
     return render();
   }
@@ -146,11 +174,13 @@ function commit(i) {
   const keys = popKeys(0, tok);
   if (S.solo) { S.bonus = null; }
   else {
-    const t = S.oppOffer[POLICIES[S.opp](S.oppOffer, seen[1], seen[0])];
-    S.army[1].push(t);
-    S.theirs = t;
+    if (S.withThem) {
+      const t = S.oppOffer[POLICIES[S.opp](S.oppOffer, seen[1], seen[0])];
+      S.army[1].push(t);
+      S.theirs = t;
+      keys.push(...popKeys(1, t));
+    }
     S.pickNo++;
-    keys.push(...popKeys(1, t));
   }
   reveal(keys);
 }
@@ -348,7 +378,7 @@ function cardFace(tok, i) {
 function render() {
   el.la.innerHTML = hearts(S.lives[0]);
   el.lb.innerHTML = hearts(S.lives[1]);
-  el.cash.textContent = S.money[0] ? `${S.money[0]}` : '';
+  el.cash.textContent = S.money[0] ? coin(S.money[0]) : '';
   el.who.innerHTML = `Round ${S.round + 1} &middot; ${PERSONAS[S.opp].n} &nbsp;&#9776;`;
   paint(board());
   el.cards.innerHTML = '';
@@ -358,7 +388,7 @@ function render() {
   const theirs = armyFrom(S.army[1]).cards.length;
 
   if (S.phase === 'pick') {
-    el.prompt.textContent = S.solo ? 'Your extra pick' : `Pick ${S.pickNo + 1} of ${RULES.picksPerRound}`;
+    el.prompt.textContent = S.solo ? 'Your extra pick' : `Pick ${S.pickNo + 1} of ${S.perRound[0]}`;
     el.sub.innerHTML = S.solo
       ? `You lost the round, so this one is yours alone &middot; ${size} cards to ${theirs}`
       : `${size} cards to ${theirs} &middot; they are choosing at the same time`;
@@ -392,8 +422,8 @@ function render() {
     const pay = S.paid ? S.paid[0] : 0;
     el.sub.textContent = (won ? `${PERSONAS[S.opp].n} drops a life. `
                               : 'You drop a life, and open the next round with an extra pick. ') +
-      (pay ? `${pay} earned — ${S.left[0]} still standing${won ? `, and a purse of ${SHOP.purse}` : ''}.`
-           : 'Nothing earned: nothing was left standing.');
+      `${coin(pay)} earned — a purse of ${coin(SHOP.purse)}` +
+      (won ? ` and ${S.left[0]} still standing.` : '.');
     if (marketDue()) button('The market', () => { opponentShops(); market(); });
     else button('Next round', () => { startRound(); save(); });
   }
@@ -498,7 +528,11 @@ function menu() {
     fight, so the whole game is what you drafted.</p>
     ${saved ? `<h2>In progress</h2><button class="pick" id="resume"><b>Resume — round ${S.round + 1}
        against ${PERSONAS[S.opp].n}</b><i>${S.lives[0]} lives to ${S.lives[1]}</i></button>` : ''}
-    <h2>Choose your opponent</h2>
+    <h2>A run</h2>
+    <button class="pick" id="run"><b>Begin a run</b><i>Match after match. Your column is
+      drafted again each time; your credits carry. They start further ahead every time you
+      survive one.${bestRun() ? ` Best so far: ${bestRun()} matches.` : ''}</i></button>
+    <h2>Or a single match</h2>
     ${Object.entries(PERSONAS).filter(([k]) => POLICIES[k]).map(([k, p]) =>
       `<button class="pick" data-opp="${k}"><b>${p.n}</b><i>${p.d}</i></button>`).join('')}
     <h2>Reference</h2>
@@ -508,6 +542,10 @@ function menu() {
 
   d.querySelectorAll('[data-opp]').forEach(b =>
     b.onclick = () => { document.querySelectorAll('.sheet').forEach(x => x.remove()); newMatch(b.dataset.opp); });
+  d.querySelector('#run').onclick = () => {
+    document.querySelectorAll('.sheet').forEach(x => x.remove());
+    newMatch(RUN.order[0], { n: 0, credits: 0 });
+  };
   const r = d.querySelector('#resume');
   // A match saved mid-reveal has no timer waiting to advance it -- the timer
   // does not survive a closed tab. Advancing is the same call the timer would
@@ -557,19 +595,19 @@ function market() {
   const up = upgradeable(S.army[0]);
 
   const line = (it, i) => {
-    if (it.k === 'card') return `<button class="pick" data-i="${i}"><b>A card of your choosing — ${it.cost}</b>
+    if (it.k === 'card') return `<button class="pick" data-i="${i}"><b>A card of your choosing — ${coin(it.cost)}</b>
       <i>Any one of the twelve, named rather than offered.</i></button>`;
-    if (it.k === 'upgrade') return `<button class="pick" data-i="${i}"><b>An upgrade — ${it.cost}</b>
+    if (it.k === 'upgrade') return `<button class="pick" data-i="${i}"><b>An upgrade — ${coin(it.cost)}</b>
       <i>+${(UPGRADE.step * 100) | 0}% health and damage on every copy of a card you name.
       ${up.length} to choose from.</i></button>`;
-    if (it.k === 'offer') return `<button class="pick" data-i="${i}"><b>A wider offer — ${it.cost}</b>
+    if (it.k === 'offer') return `<button class="pick" data-i="${i}"><b>A wider offer — ${coin(it.cost)}</b>
       <i>Four cards instead of three, next round only.</i></button>`;
-    return `<button class="pick" data-i="${i}"><b>A life — ${it.cost}</b>
+    return `<button class="pick" data-i="${i}"><b>A life — ${coin(it.cost)}</b>
       <i>Back to ${S.lives[0] + 1} of ${RULES.lives}.</i></button>`;
   };
 
   const d = sheet(`<h1>The market</h1>
-    <p>Round ${S.round}. You have <b>${S.money[0]}</b>${S.money[1] ? `; ${PERSONAS[S.opp].n} spent theirs already` : ''}.</p>
+    <p>Round ${S.round}. You have <b>${coin(S.money[0])}</b>${S.money[1] ? `; ${PERSONAS[S.opp].n} spent theirs already` : ''}.</p>
     ${items.length ? items.map(line).join('') : '<p>Nothing here you can afford yet.</p>'}
     <button class="pick" id="leave"><b>Leave the market</b><i>What you keep carries to the next
       market.</i></button>`, items.length < 3);
@@ -592,7 +630,7 @@ function chooser(kind) {
     : upgradeable(S.army[0]);
   const cost = kind === 'card' ? SHOP.card : SHOP.upgrade;
   const d = sheet(`<h1>${kind === 'card' ? 'Choose a card' : 'Choose an upgrade'}</h1>
-    <p>${cost} spent. ${kind === 'card'
+    <p>${coin(cost)} spent. ${kind === 'card'
         ? 'It joins your column where its role puts it, like any other.'
         : `+${(UPGRADE.step * 100) | 0}% health and damage on every copy you hold.`}</p>
     ${list.map(it => { const u = BY_ID[it.id]; return `<button class="pick shopRow" data-id="${u.id}">
@@ -615,20 +653,58 @@ function over() {
   const opp = PERSONAS[S.opp].n;
   const mine = armyFrom(S.army[0]);
   const ups = S.army[0].filter(isUp).length;
+  const run = S.run;
+  const credits = S.money[0];
   try { localStorage.removeItem(SAVE); } catch (e) {}
   clearTimeout(revealTimer);
+
+  // IN A RUN, a win is not an ending. The score is how far you got, so a win
+  // rolls straight into the next opponent and only a loss stops.
+  if (run && won) {
+    const nextN = run.n + 1;
+    setBest(nextN);
+    const d = sheet(`<h1>Match ${run.n + 1} survived</h1>
+      <p>${opp} is out of lives after ${S.round} rounds. You carry
+         <b>${coin(credits)}</b> forward; your column is drafted again from nothing.</p>
+      ${nextMatchNote(nextN)}
+      <button class="pick" id="on"><b>March on</b></button>
+      <button class="pick" id="stop"><b>End the run here</b><i>Best so far: ${bestRun()} matches.</i></button>`, true);
+    d.querySelector('#on').onclick = () => {
+      document.querySelectorAll('.sheet').forEach(x => x.remove());
+      newMatch(RUN.order[nextN % RUN.order.length], { n: nextN, credits });
+    };
+    d.querySelector('#stop').onclick = () => {
+      document.querySelectorAll('.sheet').forEach(x => x.remove());
+      S = null; paint([]); menu();
+    };
+    return;
+  }
+
   const d = sheet(`<h1>${won ? 'The field is yours' : 'The column is broken'}</h1>
     <p>${won ? `${opp} is out of lives after ${S.round} rounds.`
              : `${opp} takes it after ${S.round} rounds.`}</p>
+    ${run ? `<h2>The run ends</h2><p>You survived <b>${run.n}</b>
+       ${run.n === 1 ? 'match' : 'matches'} before this one. Best: ${bestRun()}.</p>` : ''}
     <h2>Your column</h2>
     <p>${mine.cards.length} cards${ups ? `, ${ups} pick${ups === 1 ? '' : 's'} spent on upgrades` : ''} —
        ${mine.cards.reduce((n, id) => n + BY_ID[id].count, 0)} bodies at the end.
-       ${S.lives[0]} ${S.lives[0] === 1 ? 'life' : 'lives'} left.</p>
+       ${S.lives[0]} ${S.lives[0] === 1 ? 'life' : 'lives'} left, ${coin(credits)} unspent.</p>
     <button class="pick" id="again"><b>Again</b></button>`, true);
   d.querySelector('#again').onclick = () => {
     document.querySelectorAll('.sheet').forEach(x => x.remove());
     S = null; paint([]); menu();
   };
+}
+
+// What the next opponent brings. Stated, so a loss is legible rather than
+// mysterious -- the ramp is the thing you are running from and hiding it turns
+// a run into a difficulty setting nobody chose.
+function nextMatchNote(n) {
+  const opp = PERSONAS[RUN.order[n % RUN.order.length]];
+  const extra = Math.floor(n / RUN.pickEvery);
+  return `<h2>Next: ${opp.n}</h2><p>${opp.d}</p>
+    <p>They begin with <b>${coin(n * RUN.ramp)}</b>${extra
+      ? ` and draft <b>${RULES.picksPerRound + extra}</b> cards a round to your ${RULES.picksPerRound}` : ''}.</p>`;
 }
 
 /* -------------------------------------------------------------------- start */

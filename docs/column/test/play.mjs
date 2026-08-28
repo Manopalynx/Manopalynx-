@@ -398,9 +398,77 @@ if (!errors.length) ok('nothing threw, start to finish');
 else bad('nothing threw, start to finish', errors.slice(0, 4));
 
 await page.screenshot({ path: rp(HERE, 'play.png') });
+
+/* ------------------------------------------------------------------- a run */
+// A run is the loop now, and none of the above touches it: everything so far is
+// one match against one persona. This plays the first match of a run and checks
+// what happens at its end -- which is the only part of a run that is new.
+{
+  await page.evaluate(() => localStorage.clear());
+  await page.reload({ waitUntil: 'load' });
+  await page.click('#run');
+
+  let ended = false;
+  for (let guard = 0; guard < 400 && !ended; guard++) {
+    const s = await state();
+    if (!s.phase) { ended = true; break; }
+    if (s.phase === 'revealed') { await page.waitForTimeout(120); continue; }
+    if (s.phase === 'pick') { await page.locator('#cards .card').first().click(); continue; }
+    if (s.go === 'The market') { await page.click('#go'); await page.click('#leave'); continue; }
+    if (s.go === 'Next round') { await page.click('#go'); continue; }
+    if (s.go === 'Fight') {
+      await page.click('#go');
+      for (let w = 0; w < 60; w++) {
+        const done = await page.evaluate(() => {
+          const g = document.getElementById('go');
+          return !!document.querySelector('.sheet') ||
+                 (!g.classList.contains('off') &&
+                  (g.textContent === 'Next round' || g.textContent === 'The market'));
+        });
+        if (done) break;
+        await page.waitForTimeout(250);
+      }
+      continue;
+    }
+    if (await page.locator('.sheet').count()) { ended = true; break; }
+    break;
+  }
+
+  const end = await page.evaluate(() => ({
+    head: (document.querySelector('.sheet h1') || {}).textContent || null,
+    on: !!document.querySelector('#on'),
+    stop: !!document.querySelector('#stop'),
+    again: !!document.querySelector('#again'),
+    text: (document.querySelector('.sheet') || {}).textContent || ''
+  }));
+
+  const survived = /survived/i.test(end.head || '');
+  if (survived ? (end.on && end.stop) : end.again)
+    ok(`a run's first match ends into the run, not into a menu ("${end.head}")`);
+  else bad("a run's first match ends into the run", [
+    `headline ${JSON.stringify(end.head)}, march-on ${end.on}, end-run ${end.stop}, again ${end.again}`]);
+
+  if (!survived) {
+    if (/run ends/i.test(end.text)) ok('a lost run says so and scores what was survived');
+    else bad('a lost run says so', ['the result screen never mentioned the run']);
+  } else {
+    // The ramp must be STATED before the next match, and then actually applied.
+    const stated = /begin with/i.test(end.text);
+    await page.click('#on');
+    const two = await page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem('column-save') || 'null');
+      return s && { n: s.run && s.run.n, money: s.money, per: s.perRound };
+    });
+    if (stated && two && two.n === 1 && two.money[1] === 18)
+      ok(`the ramp is stated and applied — match 2's opponent starts on ${two.money[1]}`);
+    else bad('the ramp is stated and applied', [
+      `stated ${stated}, match ${two && two.n}, their purse ${two && two.money[1]}, picks ${two && two.per}`]);
+  }
+}
+
 await browser.close();
 server.close();
 
-console.log(`\n${18 - failed} of 18 claims hold`);
+console.log(`\n${20 - failed} of 20 claims hold`);
 console.log(`written: play-roster.png, play-draft.png, play-inspect.png, play-market.png, play-battle.png, play.png\n`);
 process.exit(failed ? 1 : 0);

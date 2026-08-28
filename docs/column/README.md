@@ -875,11 +875,62 @@ first card offered — and its win rate fell about ten points once both sides co
 Nothing is asymmetric; the better drafter simply earns more and compounds it. That is probably
 right, and it is worth knowing before the numbers are tuned.
 
+# Stage two — the run, and Sam's rebalance
+
+**Both sides now take the purse at a round's end; only the winner is paid for survivors.**
+His call, and it is the fix I had named in advance for the snowball: paying the purse to the
+winner alone meant winning bought the money that bought the next win.
+
+| alternation, worst table | |
+|---|---|
+| purse to the winner only | 62% |
+| purse to both, survivors to the winner | **58.7% ±1.0** |
+
+**And a lesson about the first of those numbers.** At 60 matches a table this read 62%; at 400
+it reads 58.7% ±1.0 — the same build. The small sample was noise that looked like a balance
+problem worth acting on, and `match.mjs` now prints the error bar and the round count beside
+the figure so it cannot happen again.
+
+**Prices were re-set, not guessed.** Paying both sides took total payout across a match from
+~125 to ~218, so the same prices were suddenly half price — army sizes went from 38 to 44
+bodies a side and the field got denser, which is the one thing the counters cannot afford.
+Prices were multiplied by the change in income: card 21, upgrade 18, wider offer 14, life 44.
+Bodies came back to 35–40.
+
+**The currency is credits, ₡ — the same coin as Grandiose**, because it is the same universe
+and two names for one currency across two games in one book is two things to learn for
+nothing.
+
+## The run
+
+Match after match until you lose one. **The army is redrafted every time** — the draft is the
+game, and a carried army makes match two a formality — and **the credits carry**, because
+saving for something is a decision.
+
+The opponent ramps with every match survived: **₡18 of head start per match**, and an extra
+pick a round every third match. Both are **stated on the screen before the match**, because a
+ramp you cannot see is a difficulty setting nobody chose. When their picks outnumber yours
+they take the extras alone and in the open, so you watch it happen.
+
+`playRun()` is in the engine, so a run is sweepable — which is the only way to answer whether
+it is a run or a treadmill:
+
+| drafting policy | mean matches survived | best |
+|---|---|---|
+| `house` — takes the first card offered, the floor | 2.2 | 5 |
+| `harlow` — most health per pick | 2.7 | 4 |
+| `counter` / `varan` — read the board | **3.2** | **7** |
+
+A floor player gets two, a good drafter gets three and can reach seven. The ramp bites, and it
+bites later for someone who drafts well, which is what a run is supposed to do.
+
+`play.mjs` is at twenty claims: a run's first match must end into the run rather than into a
+menu, and the ramp must be both stated and applied — match two's opponent starts on ₡18.
+
 ## Still to come in this loop
 
-Stage two chains matches into a run with the army redrafted each time and the money carried;
-stage three is the booster between matches, chosen from three for the player and random for
-the opponent. Neither is built.
+Stage three, the booster between matches — chosen from three for the player, random for the
+opponent — is specified and not built.
 
 ## Next, and it is his
 
