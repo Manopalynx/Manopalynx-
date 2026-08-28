@@ -154,16 +154,30 @@ const nearest = (u, foes) => {
 // are banded by range like anything else.
 const band = u => (u.rng > 35 ? 0 : u.rng > 6 ? 1 : 2);
 const bulk = u => u.hp * (u.count || 1);
-function formation(cards) {
-  return cards.slice().sort((a, b) => {
-    const A = BY_ID[a], B = BY_ID[b];
-    return band(A) - band(B) || bulk(A) - bulk(B);
+
+/**
+ * Deployment order, as INDICES INTO THE DRAFT rather than a re-sorted list of
+ * ids. Returning ids loses which copy is which, and the interface needs exactly
+ * that: it rings the card you just committed, and with two Acid Throwers in the
+ * army there is no way back from an id to the one that was added. The first
+ * version returned ids, and the ring landed on whichever unit happened to be at
+ * the front of the line -- Sam saw it in one screenshot.
+ *
+ * @param {string[]} cards  card ids in draft order
+ * @returns {number[]} draft indices, rear rank first
+ */
+export function formation(cards) {
+  return cards.map((_, i) => i).sort((a, b) => {
+    const A = BY_ID[cards[a]], B = BY_ID[cards[b]];
+    // Draft order breaks a tie, so two identical cards deploy in the order they
+    // were picked and the same army always lays out the same way.
+    return band(A) - band(B) || bulk(A) - bulk(B) || a - b;
   });
 }
 
 function deploy(picks, side, rand) {
   const { cards: drafted, up } = armyFrom(picks);
-  const cards = formation(drafted);
+  const cards = formation(drafted).map(i => drafted[i]);
   // One spec object per unit type, not per body: an upgraded card's stats are
   // computed once and every body of it holds the same reference, so no body can
   // end up at a different level from its squadmate.

@@ -12,7 +12,7 @@
 // drift from.
 
 import { BY_ID, RULES, PERSONAS, UPGRADE, WEIGHT, UNITS, BUILD } from './data.js';
-import { rng, offer, resolve, deployment, POLICIES, armyFrom, isUp, tokId } from './engine.js';
+import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId } from './engine.js';
 import { draw, effects, auras, GROUND, SIDE, shape } from './render.js';
 import { glyph } from './glyphs.js';
 
@@ -154,9 +154,16 @@ function commit(i) {
 // improved -- which is also the honest picture of what the pick did.
 function popKeys(side, tok) {
   const cards = armyFrom(S.army[side]).cards;
-  if (!isUp(tok)) return [side + ':' + (cards.length - 1)];
+  // THROUGH THE FORMATION, not the draft. A counter's key is where the card
+  // DEPLOYS, and since note 9 that is no longer where it was picked -- so a ring
+  // computed from draft order landed on whatever the sort had put in that slot,
+  // which was reliably whatever stood at the front. One function decides the
+  // order, and both the field and this now ask it.
+  const slot = new Map(formation(cards).map((draftIndex, ci) => [draftIndex, ci]));
+  const at = d => side + ':' + slot.get(d);
+  if (!isUp(tok)) return [at(cards.length - 1)];
   const id = tokId(tok);
-  return cards.map((x, i) => (x === id ? side + ':' + i : null)).filter(Boolean);
+  return cards.map((x, i) => (x === id ? at(i) : null)).filter(Boolean);
 }
 
 // Show what was committed, then move on by itself.

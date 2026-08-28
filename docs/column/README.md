@@ -803,6 +803,27 @@ single-type army has nothing to sort.
 anyway, and it is worse — one extra card goes back up to 83% — so they are banded by range
 like anything else.
 
+## The ring on the wrong unit
+
+Sam picked an Acid Thrower and the ring landed on his Brute. **A defect introduced by note 9
+in the same session that shipped it.**
+
+A counter's key is *where the card deploys*. Formation-by-role made that different from where
+it was drafted — and `popKeys` still computed the key from draft order, so the ring landed on
+whatever the sort had put in that slot, which is reliably whatever stands at the front.
+
+`formation()` now returns **indices into the draft** rather than a re-sorted list of ids, and
+is exported. Returning ids loses which copy is which, and the interface needs exactly that:
+with two Acid Throwers there is no way back from an id to the one just added. Both the field
+and the ring ask the same function now.
+
+`play.mjs` gained a sixteenth claim — **every ring must sit on a counter whose card id matches
+what that side just committed** — and reverting `popKeys` to draft order reproduces his
+symptom exactly: *"0:line rung, but side 0 committed acid"*.
+
+**This is the catalogue's own entry and it still got past me**: when you make a structural
+move, grep for what assumed the old world.
+
 ## Next, and it is his
 
 **Battlefield variety.** His answer to 65% of compositions settling 95/5 is not to soften the

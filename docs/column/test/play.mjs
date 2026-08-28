@@ -111,6 +111,13 @@ const state = () => page.evaluate(() => {
     lit: [...document.querySelectorAll('#livesA')].map(e => e.innerHTML.split('<span')[0].length),
     prompt: document.getElementById('prompt').textContent,
     solo: !!(s && s.solo),
+    // What was just committed, and what the screen is ringing. Two answers to
+    // the same question, from opposite ends: the draft, and the counters.
+    committed: s ? [s.mine, s.theirs].map(t => (t ? t.replace(/^up:/, '') : null)) : [null, null],
+    pops: [...document.querySelectorAll('#field .pop')].map(e => {
+      const g = e.closest('g[data-id]');
+      return g ? `${g.dataset.side}:${g.dataset.id}` : '?';
+    }),
     go: (() => { const g = document.getElementById('go');
                  return g.classList.contains('off') ? null : g.textContent; })(),
     // THE FIELD'S OWN HEIGHT. It is a flex sibling of the deck, so anything the
@@ -123,6 +130,7 @@ const state = () => page.evaluate(() => {
 
 let rounds = 0, mismatch = null, deadEnd = null;
 let sides = null, fxStill = null, fxFiring = 0;
+let popWrong = null, popsSeen = 0;
 // Every field height seen during the draft, and whether a reveal ever needed a
 // tap. Both of these are measurements of Sam's notes 4 and 5.
 const heights = new Set();
@@ -147,6 +155,16 @@ for (let guard = 0; guard < 400; guard++) {
     // end, which is the thing that got tedious.
     revealsSeen++;
     if (s.go !== null) revealTaps++;
+    // THE RING MUST BE ON THE CARD THAT WAS PICKED. A counter's key is where the
+    // card DEPLOYS, and formation-by-role made that different from where it was
+    // drafted -- so the ring landed on whatever the sort had put in that slot,
+    // reliably whatever stood at the front. Sam found it in a screenshot; this
+    // is so the next reordering cannot.
+    for (const p of s.pops) {
+      const [side, id] = p.split(':');
+      if (s.committed[+side] !== id) { popWrong = popWrong || `${p} rung, but side ${side} committed ${s.committed[+side]}`; }
+      popsSeen++;
+    }
     await page.waitForTimeout(120);
     continue;
   }
@@ -302,6 +320,12 @@ else bad('a reveal ends by itself', [
   'a tap that carries no decision, three times a round, nine rounds a match'
 ]);
 
+if (popsSeen > 0 && !popWrong) ok(`the ring lands on the card that was picked (${popsSeen} of them)`);
+else bad('the ring lands on the card that was picked', [
+  popsSeen === 0 ? 'no committed card was ever ringed' : popWrong,
+  'a counter\'s key is where the card DEPLOYS, which since formation-by-role is not where it was drafted'
+]);
+
 if (sides === true) ok('your army is drawn at the bottom of the field, theirs at the top');
 else bad('your army is drawn at the bottom of the field', [
   sides === null ? 'never reached a deployment to measure' : sides,
@@ -336,6 +360,6 @@ await page.screenshot({ path: rp(HERE, 'play.png') });
 await browser.close();
 server.close();
 
-console.log(`\n${15 - failed} of 15 claims hold`);
+console.log(`\n${16 - failed} of 16 claims hold`);
 console.log(`written: play-roster.png, play-draft.png, play-inspect.png, play-battle.png, play.png\n`);
 process.exit(failed ? 1 : 0);
