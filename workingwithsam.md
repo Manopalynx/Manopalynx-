@@ -186,12 +186,12 @@ One branch, `main`, carries three projects sharing no code.
 | **Ledger** | sales-desk call and uplift ledger; the original | `upliftledger.html`, `test/interaction.mjs` | `README.md` |
 | **Grandiose** | Monopoly-shaped game set in his novel | `docs/` | `docs/README.md` |
 | **Matchbox** | single-file falling-sand toy with a heat model | `matchbox.html`, `test/matchbox-*.mjs` | `MATCHBOX.md` |
+| **The Column** | drafting autobattler in his novel; engine and instruments, no interface | `docs/column/` | `docs/column/README.md` |
 
 **GitHub Pages serves `/docs` from `main`** — hence the folder name, and why the root
-`upliftledger.html` and `matchbox.html` are unpublished. `docs/matchbox.html` is the
-published copy; `test/published.mjs` asserts the two are byte-identical. **The repository
-is public**, checked against the API rather than assumed — so anything written into a file
-here is published, test fixtures and worked examples included.
+`upliftledger.html` and `matchbox.html` are unpublished; `test/published.mjs` asserts
+`docs/matchbox.html` is byte-identical to the root copy. **The repository is public**,
+checked against the API — so anything written here is published, fixtures and examples too.
 
 **He is the author of the novel.** Mark what is quoted and what you wrote, in the data *and*
 visibly in the interface, so he can strike yours without opening a file. `[2]`

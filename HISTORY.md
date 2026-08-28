@@ -1955,3 +1955,66 @@ Open, in order:
 - `workingwithsam.md` needs its fourth row in "Where things are" now the Column has code.
   340/340, so it must buy the line back.
 - The ledger's arithmetic, in its eleventh session. **The 31st.**
+
+### He asked how it would look on his phone, and nobody had looked
+
+Sam sent five screenshots of a game with the shape he had in mind — portrait, three cards
+across the middle, armies stacking at each end, hearts for lives, a per-pick timer — and
+asked whether that was what I had been going for, "or were you going for something else
+and if so what were you thinking?"
+
+**The honest answer was that no screen had been designed at all.** The engine had a spatial
+model — a 100×140 portrait field, ranks of six, squads standing together — and in five
+sessions nothing had ever drawn it. I had been measuring outcomes and had never once looked
+at the thing the player looks at.
+
+So `preview.mjs` renders real positions out of the real resolver at 393×852, three moments
+in one round. It found in a single picture what no numeric check had:
+
+- **Deployment is right.** Two blocks facing, squads visibly grouped, heavy/medium/light
+  readable by size alone. Close to his screenshots.
+- **The formation then dissolves.** By eleven seconds the whole battle is one diagonal
+  clump drifting into a corner. **There is no front line**, because every body walks
+  directly at whatever its targeting rule picked and nothing holds a line. Design point 7
+  asks the player to be able to see "why a frontline collapses"; there is no frontline to
+  collapse.
+- **Crowding is not the problem.** 49 bodies at peak is about 64pt of space each, which is
+  legible. I had been treating the body count as the legibility risk for two sessions and
+  it is the formation that is unreadable, not the density.
+
+**And his screenshots carry a mechanism I had deferred as optional.** Four rounds in, his
+player has roughly thirteen bodies, not the twenty-five twelve cards would produce — because
+several picks were *"Parasite UP!"* and *"Parasite x2"* rather than *"+2 Parasite"*. Upgrade
+and multiplier cards are a body-count SINK: growth goes into strength instead of population.
+That is his design point 3, and I had parked it as "needs the square law settled first" when
+it is plausibly part of the answer to it — a pick that adds no bodies cannot compound under
+Lanchester the way a pick that adds three does. Recorded as a hypothesis with a test, not as
+a finding.
+
+**The lesson, and it is one this file already half-carries.** His screenshots are the only
+instrument pointed at the real thing, and that entry has always been about bug reports from
+a phone. This time he had not reported a bug at all — he asked a plain question about
+appearance, and the question exposed two sessions of measuring the wrong property. *Answer
+the plain questions properly* now has a third instance behind it.
+
+One smaller instrument failure, in the same turn: my own guard on the operating document's
+ceiling asserted on `split('\n').length`, which is one more than `wc -l` on any file ending
+in a newline, so it reported 341 against a ceiling of 340 on a file that was correctly at
+340. The edit was right and the check was wrong — the file's own top entry, in miniature.
+
+### State of the work
+
+`main` carries `column-v1`, `grandiose-v87`, and the operating document at **340/340** with
+The Column added to *Where things are* and a five-line paragraph tightened to four to pay
+for it. Nothing was cut that was not restated more briefly.
+
+Open, in order:
+- **The formation.** Units need to advance and hold a line rather than converge on a target
+  and drift. Sam's call, because it changes how combat looks and feels rather than only how
+  it resolves.
+- **The square law.** Frontage, density-scaled AOE, or an honest change to the comeback
+  rule. Frontage would answer the formation problem at the same time, which is now the
+  strongest argument for it.
+- **Upgrade and multiplier cards** — specified, unbuilt, and now suspected of being part of
+  the square-law answer rather than a later nicety.
+- The ledger's arithmetic, in its eleventh session. **The 31st.**
