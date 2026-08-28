@@ -21,8 +21,7 @@ more numbers is stronger, and a line with no bracket has no session behind it ye
    `MATCHBOX.md`). They carry the design and every measured figure — do not re-derive or
    restate them.
 3. **Run the harness before forming a view.** Every session that reasoned its way to a
-   confident verdict here was wrong; every one that measured found the truth. Eight
-   sessions, no exceptions. `[1,2,3,4,7,8]`
+   confident verdict was wrong; every one that measured found the truth. `[1,2,3,4,7,8,12]`
 4. **Ask what he wants before measuring how to do it.** One session produced a good
    instrument and a good measurement in service of a design he binned in a line. `[8]` For
    Grandiose lore, ask him to re-attach the novel — the `.docx` does not survive context
@@ -186,12 +185,13 @@ One branch, `main`, carries three projects sharing no code.
 | **Ledger** | sales-desk call and uplift ledger; the original | `upliftledger.html`, `test/interaction.mjs` | `README.md` |
 | **Grandiose** | Monopoly-shaped game set in his novel | `docs/` | `docs/README.md` |
 | **Matchbox** | single-file falling-sand toy with a heat model | `matchbox.html`, `test/matchbox-*.mjs` | `MATCHBOX.md` |
-| **The Column** | drafting autobattler in his novel; engine and instruments, no interface | `docs/column/` | `docs/column/README.md` |
+| **The Column** | drafting autobattler in his novel; playable, published under `docs/` | `docs/column/` | `docs/column/README.md` |
 
 **GitHub Pages serves `/docs` from `main`** — hence the folder name, and why the root
 `upliftledger.html` and `matchbox.html` are unpublished; `test/published.mjs` asserts
-`docs/matchbox.html` is byte-identical to the root copy. **The repository is public**,
-checked against the API — so anything written here is published, fixtures and examples too.
+`docs/matchbox.html` is byte-identical. **Three apps share one service worker**, and
+`addAll` is atomic: one bad path in `docs/sw.js` costs every app its files. `[12]` **The
+repository is public** — so anything written here is published, fixtures and examples too.
 
 **He is the author of the novel.** Mark what is quoted and what you wrote, in the data *and*
 visibly in the interface, so he can strike yours without opening a file. `[2]`
@@ -224,9 +224,9 @@ something off the shelf. The specificity is the point. `[1]`
 - **The matchbox sim suite outruns a 600s bash timeout** — background it and poll for
   "passed,". **Never run two Chromium suites at once or into one log**: both give false reds
   and interleaved output that reads as a pass. `[2,4]`
-- **Bump `CACHE` in `docs/sw.js` on every Grandiose change** or he gets a stale build. And
+- **Bump `CACHE` in `docs/sw.js` on every Grandiose change** or he gets a stale build, and
   **his matchbox grid is smaller than either suite's** (figures in `MATCHBOX.md`) — lay
-  scenes out from `f` and `cx` and clamp, or they run off his screen and not yours.
+  scenes from `f` and `cx` and clamp, or they run off his screen and not yours.
 - **This sandbox cannot reach `manopalynx.github.io`** — 403 from the proxy, so the one page
   he looks at cannot be checked from here. Merge, then ask him to confirm the marker. `[7]`
 

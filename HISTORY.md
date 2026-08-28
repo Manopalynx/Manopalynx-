@@ -2211,3 +2211,55 @@ draws half the marks for the same battle. Nothing chosen; it is his.
 
 The engine gained one field for it, `c`, the card a body came from. A renderer that wants
 to draw cards would otherwise have to group bodies by position, which is a guess.
+
+### Later the same session — Sam's three decisions, and the game became playable
+
+He answered all three in one message: **counters, one per card**; **leave deliberate losing
+legitimate until he has played it**; and, on 65% of compositions settling 95/5, *"it needs
+some battlefield variety rather than absolute fixed outcomes"*.
+
+**Read the noun.** He did not ask for softer counters or for randomness in combat — he
+named the *battlefield*. Every round is fought on the same empty rectangle, so the same two
+armies have one fixed answer. That is his mechanism and it is a better one than anything I
+had proposed; the specific form of it is still his to decompress and was deliberately not
+guessed at.
+
+`docs/column/index.html`, `ui.js`, `render.js` — the game on a phone. The rule that made it
+cheap: **the interface owns nothing**. The deployment between picks is `deployment()`, the
+battle is the resolver's own tick sampler, the loser is the resolver's answer, and the card
+faces derive their traits from the numbers the resolver reads. There is nothing for the
+screen to disagree with, which is the Ledger's oldest defect designed out rather than
+tested for.
+
+### Three defects, and only one of them was in the game
+
+1. **Bodies killed during a tick are still in that tick's frame with negative health.** The
+   sampler hands over the array captured at the START of the tick. The strength bar was
+   drawing at width −2.1, erroring every frame. Found by the first run of `play.mjs`.
+2. **`addAll` is atomic.** Adding a bare `./column/` — which the test server 404s — took the
+   whole precache down and **every app** lost its offline files, so `test/offline.mjs` went
+   red on *Grandiose's* files. The check earned its place: on real Pages the directory would
+   have served and this would have shipped as a fault only the test could see.
+3. **`test/offline.mjs`'s own parser read a path out of a comment I had just written**
+   explaining why that path was not in the list. It strips comments now. A check that goes
+   red for a comment teaches you to read red as noise.
+
+### The check that was decoration, caught by mutation and not by reading
+
+`play.mjs`'s "the arithmetic closes" compared the round count on screen with the round count
+the harness had just counted itself — two views of the same number. Mutated the game to
+spend a life on every *other* round and it **stayed green**. It reads the hearts now, which
+is what the player reads. The other mutation, grouping counters by unit type instead of by
+card, went red as it should.
+
+**Mutation-testing found this; reading the test did not, and I wrote it.** Both mutations
+took two minutes.
+
+### And the answer to his design point 5 flipped
+
+Throwing the opening round now **pays**: +4.3 points across 6,000 paired matches, positive
+against all four opponents, because a pick banked early buys an upgrade and upgrades
+compound with copies held. He ruled it legitimate until he has played. `match.mjs` no longer
+asserts it does not pay — it asserts the edge stays under 15 points, the difference between
+a line and the only line. **A test that asserts a thing the owner has decided to allow is a
+test that will be ignored**; re-aim it at what he would actually want to know.
