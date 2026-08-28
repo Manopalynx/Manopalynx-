@@ -2448,3 +2448,30 @@ yours and they do not**, same count, and choice compounds where randomness does 
 argued: score the run by *how long you held* against a clock that climbs whether you win or
 lose, because "buying time" is the theme of the book and of the first Grandiose, and a mode
 scored by match count is any autobattler's.
+
+### Part eight — the ring on the wrong unit, and it was mine
+
+He picked an Acid Thrower and the commit ring landed on his Brute. **A defect I introduced by
+note 9, in the session that shipped note 9.**
+
+A counter's key is *where the card deploys*. Formation-by-role made that different from where
+it was drafted, and `popKeys` still computed the key from draft order — so the ring landed on
+whatever the sort had put in that slot, which is reliably whatever stands at the front. Every
+one of his screenshots showed it on the front unit and I read that as a coincidence of layout
+until he said it in words.
+
+**The catalogue already carries this entry** — *grep for what assumed the old world after a
+structural move* — and it still got past me, in the same hour I wrote the structural move.
+Writing the rule down is not the same as running it.
+
+The fix is also a small lesson: `formation()` now returns **indices into the draft** rather
+than a re-sorted list of ids. Returning ids loses which copy is which, and the interface needs
+exactly that — with two Acid Throwers there is no way back from an id to the one just added.
+**A sort that discards identity is a sort you cannot ask a question of afterwards.**
+
+Guarded rather than remembered: every ring must sit on a counter whose card id matches what
+that side just committed. Reverting `popKeys` reproduces his symptom verbatim.
+
+**And the shape of how it was found matters.** No check in this folder was pointed at it, and
+no amount of reading would have been: it needed someone who knew which card they had tapped.
+His screenshots are still the only instrument aimed at the real thing.
