@@ -2355,3 +2355,55 @@ what that pick did rather than a message saying so.
 was his proposed remedy, not his complaint, and fixing the complaint was better than
 implementing the remedy — while his remedy is exactly what the inspect panel became, because
 there the content genuinely cannot be bounded.
+
+### Part six — the units drawn, and seven of his own lines returned to him
+
+He asked whether a unit could be more than a shape with a letter, and asked for thoughts
+before changes. The measurement came first and it decided the answer: a counter is **23–29pt**
+on his phone with a **median 35pt** to its nearest neighbour, so it cannot get bigger, and any
+detail has to fit a **14pt mark**. Twelve silhouettes at 14pt are not tellable apart — which is
+why it was letters — but the outer shape already carries the weight class, so a glyph only
+has to be distinct from the three others in its class, and the roster is **exactly four heavy,
+four medium, four light**. That fact is the whole reason this was possible.
+
+**Built the instrument before the design**, again: `test/glyphs.mjs` draws all twelve at both
+real sizes with nothing magnified. **Four failed it on the first pass** — the Walker read as a
+table, the Brute as a beetle, the Neurite as a head on a lens, the Crawler as a squiggle. All
+four were obvious in the picture and none of them were obvious in the path data.
+
+### The bigger finding, and it is a confession
+
+Checking the manuscript for drawing references meant checking the *lines*, word by word, for
+the first time. **All twelve are the author's. Seven were marked "written for the game" and
+were not.** Four were verbatim and had simply never been checked; three were his words
+stitched, and are now restored to the sentences they came from.
+
+**The game had been telling Sam that five of his own sentences were mine.** That is the
+fabrication failure running backwards, and it was *caused by the correction to one*: an early
+draft gave Varan a line that reads exactly like the book and appears in it zero times, and the
+session that caught that over-corrected into marking anything unverified as invented — and
+nobody went back with the manuscript open.
+
+Same shape at the Karkinos: it has **six legs**. The manuscript says both, *"four vast legs"*
+of one machine and *"six legs apiece"* of the squads; a previous session read the first,
+declared six an invention, and wrote that down in a comment that has been quoted twice since.
+
+**An over-correction is a fabrication.** "Unverified" and "invented" are not the same claim,
+and `data.js` now separates the two questions it had blurred: `qv` for whose the line is,
+`nv` for whose the unit is.
+
+### The module nobody would have noticed was missing
+
+`glyphs.js` was a new file in the page's module graph and not in `docs/sw.js`. **Online it
+loads; offline the page paints nothing and says nothing** — the worst shape a fault can have,
+invisible to everyone who can see it. Found by hand.
+
+Mechanised rather than remembered: `test/offline.mjs` now walks the import graph from each
+published page and asserts every module it reaches is named in the worker's list. **Its own
+first version followed three files and stopped at the page**, because a page enters its module
+graph through a `<script src>` and not an import statement — it would have passed with every
+module in the game missing.
+
+Also caught: the roster still said *"a marker's letter is the card"* after the letters were
+gone. Interface copy going stale in meaning while its digits stay right, which is already in
+the catalogue and got past me anyway.
