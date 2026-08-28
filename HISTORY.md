@@ -2263,3 +2263,24 @@ compound with copies held. He ruled it legitimate until he has played. `match.mj
 asserts it does not pay — it asserts the edge stays under 15 points, the difference between
 a line and the only line. **A test that asserts a thing the owner has decided to allow is a
 test that will be ignored**; re-aim it at what he would actually want to know.
+
+### Part three — the gap that blocks the person who has to test it
+
+He asked what the next move was. Before answering I checked whether the thing I had just
+shipped could actually be *used*, and it could not: once a match started there was no way
+back to the menu or the roster. He could not change opponent without spending five lives or
+clearing browser storage, and could not look up a card at the moment he needs to — during a
+draft. **"Where is X?" means under-delivered, not broken**, and this was that shape exactly.
+
+Fixed by making the header a pause. Small, and it is the difference between him being able
+to give notes and not.
+
+**The check I wrote for it was worthless and mutation testing said so in one run.** With the
+close button broken, every part of it still passed — the cards are still in the DOM under
+the overlay — and the suite failed thirty seconds later on a click that landed on the sheet.
+A crash three steps downstream is not a check doing its job. It asserts the sheet is *gone*
+now, and bails rather than playing on.
+
+Second time in one session that a check I had just written was decoration until it was
+mutated, and both times reading it had told me nothing. **Write the mutation before
+believing the green.**
