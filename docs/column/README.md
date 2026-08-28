@@ -927,6 +927,14 @@ bites later for someone who drafts well, which is what a run is supposed to do.
 `play.mjs` is at twenty claims: a run's first match must end into the run rather than into a
 menu, and the ramp must be both stated and applied — match two's opponent starts on ₡18.
 
+## The suite stopped counting itself wrong
+
+`play.mjs` printed a hardcoded total. Some of its claims are conditional — a run whose first
+match is lost never reaches the ramp check — so it could print **"20 of 20" while nineteen
+ran**, which is a vacuous pass wearing a green tick. It had also drifted: 21 claims were
+firing against a total of 20. Claims are counted as they fire now, so the number cannot be
+wrong and never needs editing again.
+
 ## Still to come in this loop
 
 Stage three, the booster between matches — chosen from three for the player, random for the
