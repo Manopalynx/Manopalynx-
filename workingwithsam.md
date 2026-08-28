@@ -135,7 +135,7 @@ tapped for Mrs Smith becomes J Patel's note field, so your next tap edits the wr
 customer" is the answer he wanted. `[1]`
 
 **He runs completeness checks** — "anything else?", "does it seem solid?" — and takes *"no,
-it's solid, stop"* as a real answer. Manufacturing work to look useful is wrong here. `[1]`
+it's solid, stop"* as a real answer. `[1]`
 
 **He redesigns rather than only reporting**, and his arithmetic holds — check it, don't
 assume it. **He interrupts** when you are going the wrong way, which is faster than letting
@@ -259,8 +259,8 @@ pledged, `busy` was never set. **Print what a check covered, not only that it pa
 
 **A number written twice will disagree, and the second copy is usually in the check.** The
 citadel price was `gc * 5 / 2` in six places and wrong in all six; the probe that should have
-caught it did the arithmetic itself as a seventh copy, and failed on the fix rather than the
-defect. **Derive, never restate — then check that the screen derived too.** `[2,4,5,7]`
+caught it was a seventh copy, and failed on the fix rather than the defect. **Derive, never
+restate — then check that the screen derived too.** `[2,4,5,7]`
 
 **An engine function whose only caller is a human button.** Six found, plus `sellDevelopment`
 — the reverse, a player action no opponent had, and why the money pump survived every sweep.
@@ -275,7 +275,8 @@ which copy goes stale. A test naming the citadel would have caught the citadel. 
 **A flaky check is worse than no check** — it teaches you to read red as noise, which is how
 one build shipped on an unread failure. **Read "1 failure(s)" as a thing to open.** When a
 threshold looks wrong, check what the sample can *see* before touching the number; when a
-tolerance change flips everything at once, the metric has no room in it. `[7,8]`
+tolerance change flips everything at once, the metric has no room in it. **Count the runs that
+did not finish** — a draw scored as half a win made 28% dead battles read as balance. `[7,8,12]`
 
 **A lever measured alone tells you about the lever, not the game.** The sign was predicted
 wrong on five balance levers across two sessions, always the same way, and the truth was
@@ -324,9 +325,8 @@ drifted 130 lines apart with nothing noticing. `[5]`
 **Ceiling: 340 lines.** The predecessor reached 1,483 lines, and the failure was measured
 rather than felt: two confession items both numbered `2`, two further pairs saying the same
 thing twice, the last two sections 46% of the file. **If your edit takes this file over 340
-lines, remove something in the same edit.** It bit in the next session — adding "End of
-session" took the file to 342, and it bought its way back with two duplicates and a count
-already going stale. Nothing was cut that was not a second copy of something. `[9]`
+lines, remove something in the same edit.** It has bitten twice since, and both times
+nothing was cut that was not a second copy of something. `[9,12]`
 
 **Prefer mechanising to writing.** Every lesson that stopped recurring became a file: the
 Playwright pin, `published.mjs`, `names.test.mjs`, `pump.test.mjs`, the session-start hook.

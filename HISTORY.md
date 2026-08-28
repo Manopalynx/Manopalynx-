@@ -2139,3 +2139,75 @@ Open, in order:
 - **Alternation sits at 65%**, exactly on the boundary. The loser's bonus is very slightly
   light.
 - The ledger's arithmetic, in its eleventh session. **The 31st.**
+
+## Instance 12 — 28 August 2026
+
+### The session in one line
+
+Built the upgrade cards Sam's design brief asked for, and while sanity-checking them found
+that the previous session's headline balance finding was substantially an artefact of
+battles that never finished.
+
+### The defect, which is the thing to carry
+
+**The Volt Battery has range 0.** `reach` filters foes by range *before* targeting, so a
+range-0 card never acquires a target — and a card with no target advanced by a **fixed
+downfield sign**. It therefore advanced, and kept advancing, past the enemy and into the
+far wall. Two batteries finished a battle pinned to opposite edges of the field at full
+health, three thousand ticks, a draw, with the aura — the entire card — having touched
+nothing.
+
+**28% of battles ended that way**, and `match.mjs` scores a draw as half a win everywhere,
+so a third of the sample was voting "contested" without ever being fought. Instance 11's
+"line and seek movement is what fixed the square law" was mostly that. With battles that
+finish: one extra card **59% → 82%**, mixed armies settled 95/5 **29% → 65%**. The unit
+graph went the other way and improved — **86%** of pairings decisive, **126** cycles.
+
+Two general shapes under it, both already in the catalogue and both re-earned:
+
+- **An improvement measured against a metric that a defect deflates is not an
+  improvement.** The draw rate was in the resolver's return value the whole time and
+  nothing printed it.
+- **The unit that never complains is the one with the degenerate stat.** Eleven cards have
+  a range and stop when they reach something. One has range 0 and there is no such thing
+  as "in reach" for it, so the branch nobody wrote for it is the branch it always takes.
+
+Fixed by marching toward the nearest enemy and never past it, with sideways closing gated
+on contact — straight marching is what holds a line, and with no sideways component at all
+two lines a few units offset stand level and never touch (that variant draws 17%).
+`match.mjs` now asserts fewer than 5% of battles reach the ceiling and prints the rate
+beside every contested figure. **A test naming the Volt Battery would have caught the Volt
+Battery.**
+
+### The threshold I invented
+
+`match.mjs` asserted "one extra card wins ≤70%". Sam never said 70%; he said numerical
+advantage should be **non-linear**. Measuring what he asked for instead — the same
+advantage at every army size — says the comeback pick is self-limiting (**94%** of a
+two-card army, **75%** of a sixteen-card one) while a *proportional* edge is decisive at
+every size (~96%). Frontage does not bend it: swept at 3, 4, 5 and 6 cards a rank,
+narrower was **worse**.
+
+**A threshold nobody asked for turns a design question into a failing test**, and the
+failing test then buys tuning that answers nothing. Ask what the person actually asked for
+before choosing the number that decides whether the answer is yes.
+
+### Upgrades, which did work
+
+Pick tokens: a plain id is a reinforcement, `up:walker` an upgrade. +35% health and every
+damage channel per level, three levels, never `count`, armour, range or speed. Offered
+only for a type already fielded. **Bodies on screen at match end 107 → 70**, upgrades
+**28%** of picks, so reinforcement is not dead either. Alternation moved off its 65%
+boundary to 54% — but both changes landed together and **I did not separate them**, which
+is the honest state of that number.
+
+### The screen
+
+Sam asked whether the field could look like a tactical map with the units as logos, and
+whether cosmetic work comes later. `look.mjs` draws one real tick three ways at 393×852 —
+dots, one marker per body, one counter per card. **Identity by glyph, not by hue**: twelve
+hues are not tellable apart on a phone and twelve letters are. The per-card treatment
+draws half the marks for the same battle. Nothing chosen; it is his.
+
+The engine gained one field for it, `c`, the card a body came from. A renderer that wants
+to draw cards would otherwise have to group bodies by position, which is a guess.
