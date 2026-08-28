@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v8';
+export const BUILD = 'column-v9';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -197,6 +197,43 @@ export const RULES = {
   loserBonusPicks: 1,
   offer: 3,             // cards shown per pick
   maxRounds: 20         // a match is 5-9 rounds; this only catches a runaway
+};
+
+/* -------------------------------------------------------------------- the market */
+// Stage one of Sam's survival loop, built inside the match that already exists
+// rather than as a new mode. Two rules and one screen:
+//
+//   · a side earns 1 for every BODY it still has standing when a round ends,
+//     and the winner also takes a flat purse
+//   · every third round a market opens and both sides spend
+//
+// THE SURVIVOR MONEY IS THE POINT, and it is his. A win with one survivor and a
+// win with twenty are currently identical -- the game does not reward winning
+// cleanly at all, anywhere. This is the only rule that does.
+//
+// Money for KILLS was proposed and cut: a side is already paid for winning, and
+// paying per kill pays you for losing rounds in which you did damage, which is
+// the extra-pick comeback a second time. Two sources, not three, so income is
+// predictable enough for a player to plan and for a sweep to tune.
+//
+// THE ECONOMY IS IN THE ENGINE AND BOTH SIDES USE IT. A shop that only the
+// interface knew about could not be swept, and the first question it has to
+// answer is whether paying the winner turns the match into a snowball --
+// alternation sits at 55% and match.mjs measures exactly that.
+//
+// The market sells what the draft CANNOT: a named card instead of a random
+// offer, a level on a card you choose, a life, a wider offer next round. Money
+// buying certainty is what makes a drafting game feel like progress; a shop
+// selling +10% damage sells nothing.
+//
+// Every number here is a first guess.
+export const SHOP = {
+  every: 3,        // rounds between markets
+  purse: 10,       // to the winner of a round, on top of 1 a surviving body
+  card: 12,        // any one card in the roster, chosen
+  upgrade: 10,     // one level on a card you name
+  life: 25,
+  offer: 8         // next round you are offered four cards instead of three
 };
 
 /* ----------------------------------------------------------------- the personas */

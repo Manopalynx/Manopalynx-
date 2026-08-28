@@ -66,6 +66,14 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
    pick belongs in the line under it, which has room for two lines already. */
 #head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;height:22px;overflow:hidden}
 #head .hearts{font-size:15px;letter-spacing:1.5px}
+#head .right{display:flex;align-items:baseline;gap:9px;white-space:nowrap}
+/* The purse. Empty when it is empty, because a nought is a thing to read and
+   nothing is not. */
+#cash{font-size:12px;color:#e8c877;font-weight:600}
+#cash:not(:empty)::before{content:'\00A4 '}
+.shopRow{display:flex;align-items:center;gap:11px}
+.shopRow svg{flex:0 0 34px}
+.shopRow span{min-width:0}
 #prompt{font-size:12px;color:var(--ink);font-weight:600;margin-bottom:2px}
 /* FIXED HEIGHTS, ALL THREE. The deck is a flex sibling of the field, so every
    pixel it gains or loses moves the battlefield -- which is exactly what Sam
@@ -143,7 +151,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
     <div id="info"></div>
   </div>
   <div id="deck">
-    <div id="head"><div id="prompt"></div><div class="hearts" id="livesA"></div></div>
+    <div id="head"><div id="prompt"></div>
+      <div class="right"><span id="cash"></span><span class="hearts" id="livesA"></span></div></div>
     <div id="sub"></div>
     <div id="cards"></div>
     <button id="go" class="off"></button>

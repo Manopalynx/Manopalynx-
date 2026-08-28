@@ -15,7 +15,7 @@
 // would give whichever side was iterated first a systematic opening strike, and
 // nothing about the game would look wrong.
 
-import { UNITS, BY_ID, FIELD, TICK, MAX_TICKS, RULES, UPGRADE } from './data.js';
+import { UNITS, BY_ID, FIELD, TICK, MAX_TICKS, RULES, UPGRADE, SHOP } from './data.js';
 
 /* ------------------------------------------------------------------------ rng */
 // mulberry32. Small, fast, and — the only property that matters here — the same
@@ -526,6 +526,67 @@ function counterScore(tok, theirs, picks = []) {
        + gain(tok, picks) * 1e-9;
 }
 
+/* --------------------------------------------------------------------- the market */
+// WHAT A ROUND PAYS. One a body still standing, and a purse to the winner. The
+// survivor count is the resolver's own `left`, so the game cannot pay out a
+// number the battle did not produce.
+export const earn = (left, winner) =>
+  [0, 1].map(s => left[s] + (s === winner ? SHOP.purse : 0));
+
+// What the market has in it for a given side, and what it costs. Derived from
+// the army rather than listed, so an upgrade that cannot apply is never offered
+// and a maxed card never appears twice.
+export function stock(money, picks, lives) {
+  const out = [];
+  if (money >= SHOP.card) out.push({ k: 'card', cost: SHOP.card });
+  // ONE upgrade row, not one a card. Nine rows at round three and twelve by
+  // round nine is a wall rather than a market, and the choice of WHICH card
+  // belongs on the screen that shows the cards.
+  if (money >= SHOP.upgrade && upgradeable(picks).length)
+    out.push({ k: 'upgrade', cost: SHOP.upgrade });
+  if (money >= SHOP.offer) out.push({ k: 'offer', cost: SHOP.offer });
+  if (money >= SHOP.life && lives < RULES.lives) out.push({ k: 'life', cost: SHOP.life });
+  return out;
+}
+
+// Which cards an upgrade could apply to, with the level it would reach. Derived,
+// so a maxed card is never offered and a card you do not hold never appears.
+export function upgradeable(picks) {
+  const { cards, up } = armyFrom(picks);
+  return [...new Set(cards)]
+    .filter(id => (up[id] || 0) < UPGRADE.max)
+    .map(id => ({ id, lvl: (up[id] || 0) + 1, held: cards.filter(x => x === id).length }));
+}
+
+// The opponent's spending, and it is deliberately simple: upgrade the card it
+// holds most of, because an upgrade compounds with copies and a card does not;
+// otherwise buy the strongest card on paper; buy a life only on the last one.
+// It exists so the market can be SWEPT -- a shop only the interface knew about
+// could not be, and the first question this economy has to answer is whether
+// paying the winner turns the match into a snowball.
+export function spend(money, picks, lives) {
+  const buys = [];
+  let m = money, army = picks.slice();
+  for (let guard = 0; guard < 12; guard++) {
+    if (lives === 1 && m >= SHOP.life) { buys.push({ k: 'life' }); m -= SHOP.life; lives++; continue; }
+    const { cards, up } = armyFrom(army);
+    const count = {};
+    for (const id of cards) count[id] = (count[id] || 0) + 1;
+    const best = Object.keys(count)
+      .filter(id => (up[id] || 0) < UPGRADE.max)
+      .sort((x, y) => count[y] - count[x] || power(y) - power(x))[0];
+    if (best && m >= SHOP.upgrade) {
+      buys.push({ k: 'upgrade', id: best }); m -= SHOP.upgrade; army.push(UP_TAG + best); continue;
+    }
+    if (m >= SHOP.card) {
+      const id = UNITS.map(u => u.id).sort((x, y) => power(y) - power(x))[0];
+      buys.push({ k: 'card', id }); m -= SHOP.card; army.push(id); continue;
+    }
+    break;
+  }
+  return buys;
+}
+
 /* ----------------------------------------------------------------- a whole match */
 /**
  * Sam's structure, played out.
@@ -542,6 +603,8 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1 } = {}) {
   const policy = [POLICIES[a], POLICIES[b]];
   const army = [[], []];
   const lives = [RULES.lives, RULES.lives];
+  const money = [0, 0];
+  const wide = [0, 0];                   // a wider offer, bought, for one round
   const rounds = [];
   let loser = null;                      // who opens with the bonus pick
 
@@ -550,7 +613,7 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1 } = {}) {
     // doctrine as a rule: a round you lose pays for the round after it.
     if (loser !== null) {
       for (let k = 0; k < RULES.loserBonusPicks; k++) {
-        const cards = offer(rand, RULES.offer, army[loser]);
+        const cards = offer(rand, RULES.offer + wide[loser], army[loser]);
         army[loser].push(cards[policy[loser](cards, army[loser], army[1 - loser])]);
       }
     }
@@ -560,7 +623,8 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1 } = {}) {
     // the commitment simultaneous rather than sequential.
     for (let p = 0; p < RULES.picksPerRound; p++) {
       const seen = [army[0].slice(), army[1].slice()];
-      const cA = offer(rand, RULES.offer, seen[0]), cB = offer(rand, RULES.offer, seen[1]);
+      const cA = offer(rand, RULES.offer + wide[0], seen[0]);
+      const cB = offer(rand, RULES.offer + wide[1], seen[1]);
       const iA = policy[0](cA, seen[0], seen[1]);
       const iB = policy[1](cB, seen[1], seen[0]);
       army[0].push(cA[iA]);
@@ -575,8 +639,27 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1 } = {}) {
       : 1 - out.winner;
     lives[lost]--;
     loser = lost;
-    rounds.push({ r, size: [army[0].length, army[1].length], ticks: out.ticks, lost, lives: [...lives] });
+    // A wider offer is bought for ONE round and is spent by getting here.
+    wide[0] = wide[1] = 0;
+
+    const paid = earn(out.left, 1 - lost);
+    money[0] += paid[0]; money[1] += paid[1];
+
+    // Every third round the market opens for both sides.
+    if ((r + 1) % SHOP.every === 0 && lives[0] > 0 && lives[1] > 0) {
+      for (const s of [0, 1]) {
+        for (const buy of spend(money[s], army[s], lives[s])) {
+          if (buy.k === 'life') { lives[s]++; money[s] -= SHOP.life; }
+          else if (buy.k === 'upgrade') { army[s].push(UP_TAG + buy.id); money[s] -= SHOP.upgrade; }
+          else if (buy.k === 'card') { army[s].push(buy.id); money[s] -= SHOP.card; }
+          else if (buy.k === 'offer') { wide[s] = 1; money[s] -= SHOP.offer; }
+        }
+      }
+    }
+
+    rounds.push({ r, size: [army[0].length, army[1].length], ticks: out.ticks, lost,
+                  lives: [...lives], money: [...money], paid });
   }
 
-  return { winner: lives[0] > 0 ? 0 : 1, rounds, lives, army };
+  return { winner: lives[0] > 0 ? 0 : 1, rounds, lives, army, money };
 }

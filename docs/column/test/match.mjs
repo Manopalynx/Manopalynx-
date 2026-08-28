@@ -29,7 +29,7 @@
 //
 // Run:  node docs/column/test/match.mjs [matches]
 
-import { UNITS, BY_ID, RULES, UPGRADE } from '../data.js';
+import { UNITS, BY_ID, RULES, UPGRADE, SHOP } from '../data.js';
 import { playMatch, resolve, rng, offer, armyFrom, isUp } from '../engine.js';
 
 const N = +process.argv[2] || 200;
@@ -43,13 +43,13 @@ const upShare = picks => picks.filter(isUp).length / (picks.length || 1);
 
 console.log(`\n${N} matches per table · ${RULES.lives} lives · ${RULES.picksPerRound} picks a round ` +
             `· loser opens with ${RULES.loserBonusPicks} extra\n`);
-console.log('table                        human wins   rounds   alternation  final bodies   upgrades   longest round');
-console.log('─'.repeat(104));
+console.log('table                        human wins   rounds   alternation  final bodies   upgrades   earned   longest round');
+console.log('─'.repeat(118));
 
 let worstAlt = null, biggest = 0, edgeWin = 0, straightWin = 0, thrownWin = 0, ups = 0, upsN = 0;
 
 for (const persona of AGAINST) {
-  let humanWins = 0, rounds = 0, alt = 0, altN = 0, army = 0, longest = 0, up = 0;
+  let humanWins = 0, rounds = 0, alt = 0, altN = 0, army = 0, longest = 0, up = 0, earned = 0;
 
   for (let m = 0; m < N; m++) {
     const r = playMatch({ a: HUMAN, b: persona, seed: m * 31 + 5 });
@@ -61,6 +61,9 @@ for (const persona of AGAINST) {
     // three times the real crowd.
     army += bodies(r.army[0]) + bodies(r.army[1]);
     up += (upShare(r.army[0]) + upShare(r.army[1])) / 2;
+    // What a match pays out in total, both sides. The market is priced against
+    // this number and against nothing else.
+    for (const rd of r.rounds) earned += rd.paid[0] + rd.paid[1];
     for (const rd of r.rounds) longest = Math.max(longest, rd.ticks);
     // Did the winner of round n also win round n+1?
     for (let i = 1; i < r.rounds.length; i++) {
@@ -85,7 +88,8 @@ for (const persona of AGAINST) {
     `${(alternation * 100).toFixed(0).padStart(11)}%` +
     `${avgArmy.toFixed(1).padStart(13)}` +
     `${(upPicks * 100).toFixed(0).padStart(10)}%` +
-    `${(longest / 10).toFixed(0).padStart(15)}s`
+    `${(earned / N).toFixed(0).padStart(9)}` +
+    `${(longest / 10).toFixed(0).padStart(14)}s`
   );
 }
 
@@ -93,7 +97,9 @@ console.log('\n"alternation" is how often the winner of a round also wins the ne
 console.log('100% is a snowball the extra pick cannot fix; 0% is an oscillator where');
 console.log('losing is how you win. Neither is a game.');
 console.log(`"upgrades" is the share of picks spent making an existing card stronger`);
-console.log(`rather than adding one -- at most ${UPGRADE.max} levels a card, +${(UPGRADE.step * 100).toFixed(0)}% health and damage each.\n`);
+console.log(`rather than adding one -- at most ${UPGRADE.max} levels a card, +${(UPGRADE.step * 100).toFixed(0)}% health and damage each.`);
+console.log(`"earned" is total money paid across a match, both sides: ${SHOP.purse} to the winner of a`);
+console.log(`round plus one a surviving body. A market opens every ${SHOP.every} rounds and both sides spend.\n`);
 
 /* ------------------------------------------- does composition make it close? */
 // Random mixed armies of the size a mid-match round actually fields, against

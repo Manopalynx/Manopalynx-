@@ -824,6 +824,63 @@ symptom exactly: *"0:line rung, but side 0 committed acid"*.
 **This is the catalogue's own entry and it still got past me**: when you make a structural
 move, grep for what assumed the old world.
 
+# The market — stage one of the survival loop
+
+Sam's idea, built inside the match that already exists rather than as a new mode. Two rules
+and one screen.
+
+**A side earns 1 for every body it still has standing when a round ends, and the winner also
+takes a purse of 10.** The survivor money is the point and it is his: **a win with one
+survivor and a win with twenty were identical**, everywhere, in every version of this game.
+Nothing else rewards winning cleanly.
+
+Money for **kills was proposed and cut**. A side is already paid for winning, and paying per
+kill pays you for losing rounds in which you did damage — the extra-pick comeback a second
+time. Two sources, not three, so income is predictable enough to plan against and to tune.
+
+**Every third round a market opens and both sides spend.** The economy is in the engine, not
+the interface: a shop only the screen knew about could not be swept, and the first question it
+has to answer is whether paying the winner turns the match into a snowball.
+
+It sells what the draft cannot promise:
+
+| | |
+|---|---|
+| a card of your choosing | 12 |
+| an upgrade on a card you name | 10 |
+| a wider offer, four cards not three, next round | 8 |
+| a life | 25 |
+
+One upgrade row rather than one a card — nine rows at round three and twelve by round nine is
+a wall, not a market — and both the card and the upgrade open the same chooser, with every
+unit drawn as it will stand on the field.
+
+## What it did, measured
+
+| | before | after |
+|---|---|---|
+| alternation, worst table | 55% | **62%** |
+| final bodies a side | 39 | 38 |
+| upgrades as a share of picks | 28% | 34% |
+| mixed compositions settled 95/5 | 59% | 59% |
+| paid out across a match, both sides | — | ~125 |
+
+**The snowball risk was real and it is close.** Paying the winner pushed alternation from 55%
+to 62% against a ceiling of 65%. It holds, but there is not much room, and the fix if it goes
+over is already known: **move the flat purse to the loser** and leave the survivor money with
+the winner.
+
+**Money amplifies the draft.** The harness's human is a deliberate floor — it always takes the
+first card offered — and its win rate fell about ten points once both sides could shop.
+Nothing is asymmetric; the better drafter simply earns more and compounds it. That is probably
+right, and it is worth knowing before the numbers are tuned.
+
+## Still to come in this loop
+
+Stage two chains matches into a run with the army redrafted each time and the money carried;
+stage three is the booster between matches, chosen from three for the player and random for
+the opponent. Neither is built.
+
 ## Next, and it is his
 
 **Battlefield variety.** His answer to 65% of compositions settling 95/5 is not to soften the

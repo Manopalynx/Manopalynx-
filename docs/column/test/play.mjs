@@ -111,6 +111,8 @@ const state = () => page.evaluate(() => {
     lit: [...document.querySelectorAll('#livesA')].map(e => e.innerHTML.split('<span')[0].length),
     prompt: document.getElementById('prompt').textContent,
     solo: !!(s && s.solo),
+    money: s ? s.money : null,
+    picks: s ? [s.army[0].length, s.army[1].length] : null,
     // What was just committed, and what the screen is ringing. Two answers to
     // the same question, from opposite ends: the draft, and the counters.
     committed: s ? [s.mine, s.theirs].map(t => (t ? t.replace(/^up:/, '') : null)) : [null, null],
@@ -131,6 +133,7 @@ const state = () => page.evaluate(() => {
 let rounds = 0, mismatch = null, deadEnd = null;
 let sides = null, fxStill = null, fxFiring = 0;
 let popWrong = null, popsSeen = 0;
+let marketsSeen = 0, bought = 0, buyWrong = null, marketRounds = [];
 // Every field height seen during the draft, and whether a reveal ever needed a
 // tap. Both of these are measurements of Sam's notes 4 and 5.
 const heights = new Set();
@@ -149,6 +152,8 @@ for (let guard = 0; guard < 400; guard++) {
   // button, and the field is not being tapped through then.
   if (s.phase === 'pick' || s.phase === 'revealed' || s.phase === 'ready')
     heights.add(`${s.fieldH}px at ${s.phase}${s.solo && s.phase === 'pick' ? ' (extra pick)' : ''}`);
+
+  if (s.phase === 'round' && s.go === 'The market') marketRounds.push(s.round);
 
   if (s.phase === 'revealed') {
     // NO TAP HERE. If a button has appeared, the reveal is asking permission to
@@ -227,9 +232,13 @@ for (let guard = 0; guard < 400; guard++) {
         // with "the button is showing" can never see the end of a match. It
         // didn't: the first version of this waited out its whole timeout on a
         // finished game, and read as the page hanging.
+        // A round can end into the market instead of into the next round, and a
+        // predicate that only knows one of those waits out its timeout on the
+        // other -- which reads as the battle hanging.
         const g = document.getElementById('go');
         return !!document.querySelector('#again') ||
-               (!g.classList.contains('off') && g.textContent === 'Next round');
+               (!g.classList.contains('off') &&
+                (g.textContent === 'Next round' || g.textContent === 'The market'));
       });
       if (done) break;
       // DIFFERENTIAL, half two: mid-battle, with the log driving the screen.
@@ -250,6 +259,29 @@ for (let guard = 0; guard < 400; guard++) {
     }
     if (!done) { deadEnd = 'the battle never returned to a result'; break; }
     rounds++;
+  } else if (s.go === 'The market') {
+    // THE MARKET IS SHOPPED, not skipped. Buying is the only part of the economy
+    // the interface owns, and a run that steps past it measures nothing.
+    marketsSeen++;
+    const before = { money: s.money[0], picks: s.picks[0], lives: s.lives[0] };
+    await page.click('#go');
+    if (!shot.market) { shot.market = 1; await page.screenshot({ path: rp(HERE, 'play-market.png') }); }
+    const offered = await page.evaluate(() =>
+      [...document.querySelectorAll('.sheet [data-i]')].map(b => b.querySelector('b').textContent));
+    if (offered.length) {
+      await page.locator('.sheet [data-i]').first().click();
+      // A card or an upgrade opens a chooser: take the first.
+      if (await page.locator('.sheet [data-id]').count()) await page.locator('.sheet [data-id]').first().click();
+      const after = await state();
+      const cost = +(offered[0].match(/(\d+)\s*$/) || [0, 0])[1];
+      const spent = before.money - after.money[0];
+      const grew = after.picks[0] > before.picks || after.lives[0] > before.lives ||
+                   await page.evaluate(() => !!(JSON.parse(localStorage.getItem('column-save')).wide || [0])[0]);
+      if (spent !== cost) buyWrong = buyWrong || `paid ${spent} for something priced ${cost}`;
+      else if (!grew) buyWrong = buyWrong || `paid ${spent} and nothing reached the army, the lives or the offer`;
+      else bought++;
+    }
+    await page.click('#leave');
   } else if (s.go === 'Next round') {
     await page.click('#go');
   } else if (await page.locator('#again').count()) {
@@ -320,6 +352,15 @@ else bad('a reveal ends by itself', [
   'a tap that carries no decision, three times a round, nine rounds a match'
 ]);
 
+if (marketsSeen > 0 && marketRounds.every(r => r % 3 === 0))
+  ok(`the market opens every third round and not otherwise (rounds ${[...new Set(marketRounds)].join(', ')})`);
+else bad('the market opens every third round', [
+  marketsSeen === 0 ? 'no market opened in a whole match' : `opened after rounds ${marketRounds.join(', ')}`]);
+
+if (bought > 0 && !buyWrong) ok(`buying takes the price and delivers the goods (${bought} purchases)`);
+else bad('buying takes the price and delivers the goods', [
+  buyWrong || 'nothing was ever bought', 'the price on the button is the only price a player sees']);
+
 if (popsSeen > 0 && !popWrong) ok(`the ring lands on the card that was picked (${popsSeen} of them)`);
 else bad('the ring lands on the card that was picked', [
   popsSeen === 0 ? 'no committed card was ever ringed' : popWrong,
@@ -360,6 +401,6 @@ await page.screenshot({ path: rp(HERE, 'play.png') });
 await browser.close();
 server.close();
 
-console.log(`\n${16 - failed} of 16 claims hold`);
-console.log(`written: play-roster.png, play-draft.png, play-inspect.png, play-battle.png, play.png\n`);
+console.log(`\n${18 - failed} of 18 claims hold`);
+console.log(`written: play-roster.png, play-draft.png, play-inspect.png, play-market.png, play-battle.png, play.png\n`);
 process.exit(failed ? 1 : 0);

@@ -11,15 +11,16 @@
 // watch IS what was resolved. It cannot drift, because there is nothing to
 // drift from.
 
-import { BY_ID, RULES, PERSONAS, UPGRADE, WEIGHT, UNITS, BUILD } from './data.js';
-import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId } from './engine.js';
+import { BY_ID, RULES, PERSONAS, UPGRADE, WEIGHT, UNITS, SHOP, BUILD } from './data.js';
+import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId,
+         earn, stock, spend, upgradeable } from './engine.js';
 import { draw, effects, auras, GROUND, SIDE, shape } from './render.js';
 import { glyph } from './glyphs.js';
 
 const $ = id => document.getElementById(id);
 const el = { bar: $('bar'), la: $('livesA'), lb: $('livesB'), who: $('who'),
              field: $('field'), toast: $('toast'), info: $('info'), prompt: $('prompt'),
-             sub: $('sub'), cards: $('cards'), go: $('go') };
+             sub: $('sub'), cards: $('cards'), go: $('go'), cash: $('cash') };
 
 const SAVE = 'column-save';
 // A battle takes as long as it takes -- 90 ticks or 800 -- and the playback must
@@ -65,6 +66,7 @@ function newMatch(opp) {
   S = {
     v: 1, opp, seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0, draw: 0,
     army: [[], []], lives: [RULES.lives, RULES.lives], round: 0, loser: null,
+    money: [0, 0], wide: [0, 0],
     phase: 'pick', pickNo: 0, bonus: null,
     offer: [], mine: null, theirs: null, inspect: null
   };
@@ -89,6 +91,10 @@ function load() {
     const s = JSON.parse(raw);
     if (!s || s.v !== 1 || s.phase === 'over' || !PERSONAS[s.opp]) return false;
     S = s; rebuild();
+    // The market arrived mid-development. A match saved before it existed has no
+    // purse, and defaulting is kinder than throwing his game away.
+    S.money = S.money || [0, 0];
+    S.wide = S.wide || [0, 0];
     // A battle is not saved mid-playback; a reload lands on the fight instead.
     if (S.phase === 'battle') S.phase = 'ready';
     return true;
@@ -110,20 +116,20 @@ function startRound() {
 function next() {
   S.inspect = null; el.info.className = '';
   if (S.bonus === 1) {                       // the opponent's extra pick, in the open
-    const cards = offer(rand, RULES.offer, S.army[1]);
+    const cards = offer(rand, RULES.offer + S.wide[1], S.army[1]);
     const tok = cards[POLICIES[S.opp](cards, S.army[1].slice(), S.army[0].slice())];
     S.army[1].push(tok);
     S.bonus = null; S.mine = null; S.theirs = tok;
     return reveal(popKeys(1, tok));
   }
   if (S.bonus === 0) {                       // your extra pick, taken alone
-    S.offer = offer(rand, RULES.offer, S.army[0]);
+    S.offer = offer(rand, RULES.offer + S.wide[0], S.army[0]);
     S.solo = true; S.phase = 'pick';
     return render();
   }
   if (S.pickNo < RULES.picksPerRound) {
-    S.offer = offer(rand, RULES.offer, S.army[0]);
-    S.oppOffer = offer(rand, RULES.offer, S.army[1]);
+    S.offer = offer(rand, RULES.offer + S.wide[0], S.army[0]);
+    S.oppOffer = offer(rand, RULES.offer + S.wide[1], S.army[1]);
     S.solo = false; S.phase = 'pick';
     return render();
   }
@@ -197,6 +203,7 @@ function fight() {
   S.result = out.winner === null
     ? (out.left[0] <= out.left[1] ? 0 : 1)
     : 1 - out.winner;
+  S.left = out.left;
   S.phase = 'battle'; S.f = 0;
   render();
   play();
@@ -223,9 +230,42 @@ function endRound() {
   S.lives[S.result]--;
   S.loser = S.result;
   S.round++;
+  // A wider offer is bought for one round and is spent by having played it.
+  S.wide = [0, 0];
+  // What the round paid, through the ENGINE's rule and off the resolver's own
+  // survivor count. The screen does not get to decide what a body is worth.
+  S.paid = earn(S.left || [0, 0], 1 - S.result);
+  S.money[0] += S.paid[0];
+  S.money[1] += S.paid[1];
   S.phase = S.lives[0] <= 0 || S.lives[1] <= 0 ? 'over' : 'round';
   S.frames = null;
   save(); render();
+}
+
+// Every third round. The opponent spends at the same moment and by the same
+// rules -- its ramp is why a run gets harder, and a market only you could use
+// would be a difficulty setting rather than an economy.
+const marketDue = () => S.round % SHOP.every === 0 && S.lives[0] > 0 && S.lives[1] > 0;
+
+function buy(item) {
+  const cost = item.cost;
+  if (S.money[0] < cost) return false;
+  S.money[0] -= cost;
+  if (item.k === 'life') S.lives[0]++;
+  else if (item.k === 'upgrade') S.army[0].push('up:' + item.id);
+  else if (item.k === 'card') S.army[0].push(item.id);
+  else if (item.k === 'offer') S.wide[0] = 1;
+  save();
+  return true;
+}
+
+function opponentShops() {
+  for (const b of spend(S.money[1], S.army[1], S.lives[1])) {
+    if (b.k === 'life') { S.lives[1]++; S.money[1] -= SHOP.life; }
+    else if (b.k === 'upgrade') { S.army[1].push('up:' + b.id); S.money[1] -= SHOP.upgrade; }
+    else if (b.k === 'card') { S.army[1].push(b.id); S.money[1] -= SHOP.card; }
+    else if (b.k === 'offer') { S.wide[1] = 1; S.money[1] -= SHOP.offer; }
+  }
 }
 
 /* ---------------------------------------------------------------- painting */
@@ -308,6 +348,7 @@ function cardFace(tok, i) {
 function render() {
   el.la.innerHTML = hearts(S.lives[0]);
   el.lb.innerHTML = hearts(S.lives[1]);
+  el.cash.textContent = S.money[0] ? `${S.money[0]}` : '';
   el.who.innerHTML = `Round ${S.round + 1} &middot; ${PERSONAS[S.opp].n} &nbsp;&#9776;`;
   paint(board());
   el.cards.innerHTML = '';
@@ -348,10 +389,13 @@ function render() {
   if (S.phase === 'round') {
     const won = S.result === 1;
     el.prompt.textContent = won ? 'You hold the field' : 'Your column breaks';
-    el.sub.textContent = won
-      ? `${PERSONAS[S.opp].n} drops a life. You have ${S.lives[0]}.`
-      : `You drop a life — and open the next round with an extra pick.`;
-    button('Next round', () => { startRound(); save(); });
+    const pay = S.paid ? S.paid[0] : 0;
+    el.sub.textContent = (won ? `${PERSONAS[S.opp].n} drops a life. `
+                              : 'You drop a life, and open the next round with an extra pick. ') +
+      (pay ? `${pay} earned — ${S.left[0]} still standing${won ? `, and a purse of ${SHOP.purse}` : ''}.`
+           : 'Nothing earned: nothing was left standing.');
+    if (marketDue()) button('The market', () => { opponentShops(); market(); });
+    else button('Next round', () => { startRound(); save(); });
   }
 
   if (S.phase === 'over') return over();
@@ -502,6 +546,68 @@ function roster() {
     <b>invented for the game</b> is mine and is the first thing to strike.</p>
     <button class="pick" id="back"><b>Back</b></button>`);
   d.querySelector('#back').onclick = () => d.remove();
+}
+
+// THE MARKET. It sells what the draft cannot promise you: a card by name rather
+// than a random offer, a level on a card you choose, a life, a wider offer next
+// round. Money buying certainty is what makes a drafting game feel like it is
+// going somewhere; a shop selling a damage multiplier sells nothing.
+function market() {
+  const items = stock(S.money[0], S.army[0], S.lives[0]);
+  const up = upgradeable(S.army[0]);
+
+  const line = (it, i) => {
+    if (it.k === 'card') return `<button class="pick" data-i="${i}"><b>A card of your choosing — ${it.cost}</b>
+      <i>Any one of the twelve, named rather than offered.</i></button>`;
+    if (it.k === 'upgrade') return `<button class="pick" data-i="${i}"><b>An upgrade — ${it.cost}</b>
+      <i>+${(UPGRADE.step * 100) | 0}% health and damage on every copy of a card you name.
+      ${up.length} to choose from.</i></button>`;
+    if (it.k === 'offer') return `<button class="pick" data-i="${i}"><b>A wider offer — ${it.cost}</b>
+      <i>Four cards instead of three, next round only.</i></button>`;
+    return `<button class="pick" data-i="${i}"><b>A life — ${it.cost}</b>
+      <i>Back to ${S.lives[0] + 1} of ${RULES.lives}.</i></button>`;
+  };
+
+  const d = sheet(`<h1>The market</h1>
+    <p>Round ${S.round}. You have <b>${S.money[0]}</b>${S.money[1] ? `; ${PERSONAS[S.opp].n} spent theirs already` : ''}.</p>
+    ${items.length ? items.map(line).join('') : '<p>Nothing here you can afford yet.</p>'}
+    <button class="pick" id="leave"><b>Leave the market</b><i>What you keep carries to the next
+      market.</i></button>`, items.length < 3);
+
+  d.querySelectorAll('[data-i]').forEach(b => b.onclick = () => {
+    const it = items[+b.dataset.i];
+    if (it.k === 'card') { d.remove(); return chooser('card'); }
+    if (it.k === 'upgrade') { d.remove(); return chooser('upgrade'); }
+    if (buy(it)) { d.remove(); market(); }
+  });
+  d.querySelector('#leave').onclick = () => { d.remove(); startRound(); save(); };
+}
+
+// CHOOSING WHICH is the whole reason either item is worth buying, so both open
+// the same screen: the cards, drawn as they will stand on the field.
+const MARK = { heavy: 3.7, medium: 3.2, light: 2.9 };
+function chooser(kind) {
+  const list = kind === 'card'
+    ? UNITS.map(u => ({ id: u.id }))
+    : upgradeable(S.army[0]);
+  const cost = kind === 'card' ? SHOP.card : SHOP.upgrade;
+  const d = sheet(`<h1>${kind === 'card' ? 'Choose a card' : 'Choose an upgrade'}</h1>
+    <p>${cost} spent. ${kind === 'card'
+        ? 'It joins your column where its role puts it, like any other.'
+        : `+${(UPGRADE.step * 100) | 0}% health and damage on every copy you hold.`}</p>
+    ${list.map(it => { const u = BY_ID[it.id]; return `<button class="pick shopRow" data-id="${u.id}">
+      <svg width="34" height="34" viewBox="-5 -5 10 10">${shape(u.w, 0, 0, MARK[u.w], SIDE[0].fill, SIDE[0].line)}
+        ${glyph(u.id, 0, 0, MARK[u.w] * 0.62, SIDE[0].ink, 1.15)}</svg>
+      <span><b>${u.n}${kind === 'upgrade' ? ` to level ${it.lvl}` : ''}</b><i>${kind === 'upgrade'
+        ? `${it.held} on the field · ${traits(u).join(' · ')}`
+        : `${u.w} · ${u.count} ${u.count === 1 ? 'body' : 'bodies'} · ${traits(u).join(' · ')}`}</i></span>
+    </button>`; }).join('')}
+    <button class="pick" id="never"><b>Change your mind</b></button>`);
+  d.querySelectorAll('[data-id]').forEach(b => b.onclick = () => {
+    buy({ k: kind, id: b.dataset.id, cost });
+    d.remove(); market();
+  });
+  d.querySelector('#never').onclick = () => { d.remove(); market(); };
 }
 
 function over() {
