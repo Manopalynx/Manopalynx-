@@ -89,6 +89,15 @@ const state = () => page.evaluate(() => {
     cards: s && [s.army[0].filter(t => !t.startsWith('up:')).length,
                  s.army[1].filter(t => !t.startsWith('up:')).length],
     markers: document.querySelectorAll('#field g[data-id]').length,
+    // Mean vertical position of each side's counters, in field units. The field
+    // is 140 deep and the viewBox is untransformed, so these are the engine's
+    // own units read back off the screen.
+    midY: [0, 1].map(side => {
+      const t = [...document.querySelectorAll(`#field g[data-side="${side}"] text`)]
+        .map(e => +e.getAttribute('y')).filter(n => !Number.isNaN(n));
+      return t.length ? t.reduce((a, b) => a + b, 0) / t.length : null;
+    }),
+    fx: document.querySelectorAll('#field .fx').length,
     hearts: [document.getElementById('livesA').textContent.replace(/\s/g, '').length,
              document.getElementById('livesB').textContent.replace(/\s/g, '').length],
     lit: [...document.querySelectorAll('#livesA')].map(e => e.innerHTML.split('<span')[0].length),
@@ -99,6 +108,7 @@ const state = () => page.evaluate(() => {
 });
 
 let rounds = 0, mismatch = null, deadEnd = null;
+let sides = null, fxStill = null, fxFiring = 0;
 // Three moments Sam can look at without running anything: the draft, the battle
 // mid-flight, and the result. He is phone-only — a screenshot is the only
 // instrument pointed at this until it is on his Home Screen.
@@ -147,6 +157,12 @@ for (let guard = 0; guard < 400; guard++) {
     // alive, so this is the one place the two counts must agree exactly.
     if (s.markers !== s.cards[0] + s.cards[1])
       mismatch = `${s.markers} counters drawn for ${s.cards[0]} + ${s.cards[1]} cards`;
+    // SAM'S NOTE 3, at the moment both armies are drawn up and nothing has moved.
+    if (sides === null && s.midY[0] !== null && s.midY[1] !== null)
+      sides = s.midY[0] > 70 && s.midY[1] < 70 ? true
+        : `your counters average y=${s.midY[0].toFixed(0)}, theirs y=${s.midY[1].toFixed(0)} of 140`;
+    // DIFFERENTIAL, half one: nothing is being fired, so nothing may be drawn.
+    if (fxStill === null) fxStill = s.fx;
     await page.click('#go');
     let done = false;
     for (let w = 0; w < 60; w++) {
@@ -160,13 +176,21 @@ for (let guard = 0; guard < 400; guard++) {
                (!g.hidden && g.textContent === 'Next round');
       });
       if (done) break;
-      if (w === 1 && !shot.battle) { shot.battle = 1; await page.screenshot({ path: rp(HERE, 'play-battle.png') }); }
+      // DIFFERENTIAL, half two: mid-battle, with the log driving the screen.
+      // An absolute count would pass on a renderer that draws a ring whether or
+      // not anything fired; the pair cannot.
+      const now = await page.evaluate(() => document.querySelectorAll('#field .fx').length);
+      fxFiring = Math.max(fxFiring, now);
+      // Screenshot a frame where something is actually being fired. Sampling on
+      // a timer caught the advance instead, and a picture of two lines walking
+      // is not evidence that the shots are drawn.
+      if (now > 3 && s.round >= 4 && !shot.battle) { shot.battle = 1; await page.screenshot({ path: rp(HERE, 'play-battle.png') }); }
       if (process.env.TRACE && w > 2) console.log('   waiting', w, JSON.stringify(await page.evaluate(() => ({
         prompt: document.getElementById('prompt').textContent,
         go: document.getElementById('go').textContent,
         marks: document.querySelectorAll('#field g[data-id]').length
       }))));
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(250);
     }
     if (!done) { deadEnd = 'the battle never returned to a result'; break; }
     rounds++;
@@ -218,6 +242,20 @@ else bad('the arithmetic closes', [
 if (end.saveGone) ok('a finished match does not come back as a resume');
 else bad('a finished match does not come back as a resume', ['the save survived the result screen']);
 
+if (sides === true) ok('your army is drawn at the bottom of the field, theirs at the top');
+else bad('your army is drawn at the bottom of the field', [
+  sides === null ? 'never reached a deployment to measure' : sides,
+  'the engine still deploys side 0 at low y — this is the renderer mirroring, and only the renderer'
+]);
+
+if (fxStill === 0 && fxFiring > 0)
+  ok(`shots and blasts are drawn only while the battle runs (${fxStill} still, ${fxFiring} firing)`);
+else bad('shots and blasts are drawn only while the battle runs', [
+  `${fxStill} effects on a drawn-up field, ${fxFiring} mid-battle`,
+  fxFiring === 0 ? 'the replay log is not reaching the screen'
+                 : 'effects are drawn when nothing is being fired, so they are decoration'
+]);
+
 if (pause === true) ok('the round can be paused for the roster and backed out of, mid-match');
 else bad('the round can be paused for the roster and backed out of', [
   pause === null ? 'the pause was never reached' : pause,
@@ -231,6 +269,6 @@ await page.screenshot({ path: rp(HERE, 'play.png') });
 await browser.close();
 server.close();
 
-console.log(`\n${10 - failed} of 10 claims hold`);
+console.log(`\n${12 - failed} of 12 claims hold`);
 console.log(`written: docs/column/test/play-draft.png, play-battle.png, play.png\n`);
 process.exit(failed ? 1 : 0);

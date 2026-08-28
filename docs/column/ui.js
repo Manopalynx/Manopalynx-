@@ -13,7 +13,7 @@
 
 import { BY_ID, RULES, PERSONAS, UPGRADE, WEIGHT, UNITS, BUILD } from './data.js';
 import { rng, offer, resolve, deployment, POLICIES, armyFrom, isUp, tokId } from './engine.js';
-import { draw, GROUND, CODE, SIDE, shape } from './render.js';
+import { draw, effects, auras, GROUND, CODE, SIDE, shape } from './render.js';
 
 const $ = id => document.getElementById(id);
 const el = { bar: $('bar'), la: $('livesA'), lb: $('livesB'), who: $('who'),
@@ -26,6 +26,13 @@ const SAVE = 'column-save';
 // four seconds: long enough to watch the lines meet, short enough that a phone
 // is not held still through a stalemate.
 const PLAYBACK_FRAMES = 230;
+
+// How many ticks of shots a single painted frame shows. Drawing only the ticks
+// just stepped over is exactly right and invisible: a short battle plays at one
+// tick a frame, so every shot would flash for a single 16ms frame and the field
+// would look empty while it was being fought. Four ticks of overlap costs
+// nothing and is the difference between seeing fire and not.
+const LINGER = 4;
 
 /* ------------------------------------------------------------------- state */
 let S = null;
@@ -54,8 +61,10 @@ function save() {
   // and derivable from the seed in a millisecond. Storing them would put a
   // quota failure between the player and their match, which is the Ledger's
   // oldest defect wearing a different hat.
-  try { localStorage.setItem(SAVE, JSON.stringify({ ...S, frames: undefined, lastFrame: undefined })); }
-  catch (e) {}
+  try {
+    localStorage.setItem(SAVE, JSON.stringify(
+      { ...S, frames: undefined, lastFrame: undefined, ev: undefined }));
+  } catch (e) {}
 }
 function load() {
   try {
@@ -126,7 +135,15 @@ function commit(i) {
 function fight() {
   const seed = (S.seed * 7919 + S.round) >>> 0;
   S.frames = [];
-  const out = resolve(S.army[0], S.army[1], seed, false, (t, live) => S.frames.push(live));
+  // THE LOG IS ON NOW. It has existed since the engine was written and nothing
+  // had ever read it, so a battle was a crowd of markers thinning out for no
+  // visible reason: no projectile, no blast, no flinch. Sam's first two notes
+  // are both answered by drawing what the resolver already recorded.
+  const out = resolve(S.army[0], S.army[1], seed, true, (t, live) => S.frames.push(live));
+  // Indexed by tick, so a playback step can ask for the ticks it just skipped
+  // rather than for "the last thing that happened".
+  S.ev = [];
+  for (const entry of out.log) S.ev[entry.t] = entry.ev;
   // The loser is the engine's, not the screen's. A draw costs whoever has fewer
   // left standing, so a stalled field still moves the match on.
   S.result = out.winner === null
@@ -143,7 +160,8 @@ function play() {
     if (S.phase !== 'battle' || !S.frames) return;
     S.f += speed;
     if (S.f >= S.frames.length) { endRound(); return; }
-    paint(S.frames[S.f | 0]);
+    const now = S.f | 0;
+    paint(S.frames[now], now - Math.max(speed, LINGER) + 1, now);
     requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
@@ -163,8 +181,21 @@ function endRound() {
 }
 
 /* ---------------------------------------------------------------- painting */
-function paint(live) {
-  el.field.innerHTML = GROUND + draw(live || [], { pick: S && S.inspect });
+// `from` and `to` are the tick range this painted step covers. At speed 14 a
+// frame skips thirteen ticks, and drawing only the newest one would throw away
+// almost every shot fired.
+function paint(live, from, to) {
+  const bodies = live || [];
+  let fx = '', flash = null;
+  if (S && S.ev && to !== undefined) {
+    const byKey = new Map(bodies.map(u => [u.k, u]));
+    const evs = [];
+    for (let t = Math.max(0, from); t <= to; t++) if (S.ev[t]) evs.push(...S.ev[t]);
+    const out = effects(evs, byKey);
+    fx = out.svg; flash = out.flash;
+  }
+  el.field.innerHTML = GROUND + (bodies.length ? auras(bodies) : '') + fx +
+    draw(bodies, { pick: S && S.inspect, flash });
 }
 
 // What is on the field right now: mid-battle it is the frame being played, and

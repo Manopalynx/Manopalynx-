@@ -27,7 +27,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
 /* ---------------------------------------------------------------- the bar */
 #bar{flex:0 0 auto;height:52px;display:flex;align-items:center;justify-content:space-between;
   padding:0 14px;background:linear-gradient(#171f29,#0f141b);border-bottom:1px solid var(--edge)}
-.hearts{font-size:17px;letter-spacing:2px;color:var(--heart);min-width:76px}
+.hearts{font-size:17px;letter-spacing:2px;color:var(--heart)}
 .hearts.r{text-align:right}
 .hearts .off{color:var(--heartOff)}
 #who{font-size:10.5px;letter-spacing:1.4px;color:var(--dim);text-align:center;text-transform:uppercase;
@@ -45,6 +45,11 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
 /* --------------------------------------------------------------- the deck */
 #deck{flex:0 0 auto;background:linear-gradient(#0f141b,#171f29);border-top:1px solid var(--edge);
   padding:9px 12px calc(9px + env(safe-area-inset-bottom))}
+/* YOUR hearts live down here with your cards and your half of the field; theirs
+   stay in the top bar with their half. Sam's note 3 — the game should sit on
+   your side of the screen. */
+#head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+#head .hearts{font-size:15px;letter-spacing:1.5px}
 #prompt{font-size:12px;color:var(--ink);font-weight:600;margin-bottom:2px}
 #sub{font-size:11px;color:var(--dim);margin-bottom:8px;min-height:15px}
 #cards{display:flex;gap:8px}
@@ -86,7 +91,6 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
 <body>
 <div id="app">
   <div id="bar">
-    <div class="hearts" id="livesA"></div>
     <div id="who">The Column</div>
     <div class="hearts r" id="livesB"></div>
   </div>
@@ -95,7 +99,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
     <div id="toast"></div>
   </div>
   <div id="deck">
-    <div id="prompt"></div>
+    <div id="head"><div id="prompt"></div><div class="hearts" id="livesA"></div></div>
     <div id="sub"></div>
     <div id="cards"></div>
     <button id="go" hidden></button>

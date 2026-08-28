@@ -609,6 +609,42 @@ still in the DOM under the overlay — and the suite only failed thirty seconds 
 click that landed on the sheet. It asserts the sheet is *gone* now, and bails rather than
 playing on, so a broken pause reports as a finding instead of a crash.
 
+# Sam's first three notes, all built
+
+He played it and sent three. All three were interface, all three were clear, and one of them
+had a trap in it.
+
+**1 and 2 — projectiles, area damage, and a flinch.** The resolver has emitted a full replay
+log since the engine was written — every hit with attacker, target and damage, every death,
+every detonation — and **nothing had ever read it**. A battle was a crowd of markers thinning
+out for no visible reason. `keepLog` is on now and `render.js` draws it:
+
+- a **tracer** from attacker to target when the attacker's range is what the resolver calls
+  ranged; a spark at the point of impact when it is not
+- a **splash ring** at the target using the attacker's own `splash` radius, and a detonation
+  ring using its own `boom.r` — so a ring that looks wrong means a number is wrong in
+  `data.js`, and it is wrong in the fight too
+- a **white rim and a half-unit shake** on any counter that took a hit
+- **aura circles** as standing ground rather than as events, because an aura needs no attack
+  and never appears in the log
+
+Nothing here invents a rule. Every radius, every range test, comes from the same data the
+resolver read.
+
+**3 — you at the bottom, them at the top.** His reasoning: the cards are at the bottom, so
+after every pick your eye had to travel to the top of the screen to see what you bought.
+
+**The trap: the mirror is in the renderer and nowhere else.** Flipping the engine would
+change the deployment jitter, and with it every seeded battle, every figure in this folder's
+tests, and every saved match. It is one function, `flipY`, in the only layer allowed to have
+an opinion about screens. Your hearts moved down beside your cards; theirs stayed in the top
+bar with their half of the field.
+
+`play.mjs` grew two claims, and the second is a **differential** — zero effects on a drawn-up
+field, more than zero mid-battle. An absolute count would pass on a renderer that draws a
+ring whether or not anything fired. It caught its own first version immediately: aura circles
+carried the same class as event effects, so a still field reported four "shots".
+
 ## Next, and it is his
 
 **Battlefield variety.** His answer to 65% of compositions settling 95/5 is not to soften the

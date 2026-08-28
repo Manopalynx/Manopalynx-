@@ -324,7 +324,11 @@ export function resolve(a, b, seed, keepLog = false, onTick = null) {
     // reads a state that later ticks have already changed. That exact mistake
     // is in the Ledger's record twice.
     if (onTick) onTick(t, live.map(u => ({
-      id: u.id, side: u.side, c: u.c, lvl: u.s.lvl || 0,
+      // `k` is the SAME key the replay log uses for this body. Without it a
+      // renderer has to reconstruct the encoding to find out which marker a
+      // logged hit belongs to, and a second copy of an encoding is a second
+      // copy of a rule.
+      id: u.id, side: u.side, c: u.c, lvl: u.s.lvl || 0, k: u.i * 2 + u.side,
       x: u.x, y: u.y, hp: u.hp, max: u.max
     })));
   }

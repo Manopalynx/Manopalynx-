@@ -17,6 +17,11 @@
 //                  surviving bodies, with strength as a bar and the survivor
 //                  count on it. Same battle, a quarter of the marks.
 //
+// SAM CHOSE C, and the game now draws it — which means panel C is mirrored (you
+// at the bottom, by his note 3) while A and B are not. That is the record of a
+// decision rather than a live comparison; do not read the three as a like-for-
+// like any more.
+//
 // This is the readability layer from Sam's design point 7, which is not the same
 // thing as art: telling heavy from light, seeing what is engaging what, and
 // knowing how much of a card is left are all things the game has to do whatever
