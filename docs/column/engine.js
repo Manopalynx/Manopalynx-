@@ -15,7 +15,7 @@
 // would give whichever side was iterated first a systematic opening strike, and
 // nothing about the game would look wrong.
 
-import { UNITS, BY_ID, FIELD, TICK, MAX_TICKS, RULES } from './data.js';
+import { UNITS, BY_ID, FIELD, TICK, MAX_TICKS, RULES, UPGRADE } from './data.js';
 
 /* ------------------------------------------------------------------------ rng */
 // mulberry32. Small, fast, and — the only property that matters here — the same
@@ -28,6 +28,42 @@ export function rng(seed) {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/* ----------------------------------------------------------------- the draft */
+// A side's draft is a flat list of PICK TOKENS. A plain unit id is a
+// reinforcement; `up:walker` is an upgrade of a card already fielded. One list
+// of strings rather than a structure, because everything that reads a draft --
+// the resolver, the policies, the tests, eventually the screen -- then derives
+// the army through the same function instead of keeping its own copy of the
+// rule. A draft that contains no upgrades is exactly the array of ids it was
+// before upgrades existed, which is why every earlier test still means what it
+// meant.
+export const UP_TAG = 'up:';
+export const isUp = tok => tok.startsWith(UP_TAG);
+export const tokId = tok => (isUp(tok) ? tok.slice(UP_TAG.length) : tok);
+
+export function armyFrom(picks) {
+  const cards = [], up = {};
+  for (const p of picks) {
+    if (isUp(p)) { const id = tokId(p); up[id] = Math.min(UPGRADE.max, (up[id] || 0) + 1); }
+    else cards.push(p);
+  }
+  return { cards, up };
+}
+
+// The effective stats of a card at a level, and the ONLY place the upgrade rule
+// exists. Health and every damage channel scale -- direct, splash, the burn, the
+// aura, the detonation -- while count, armour, range and speed do not.
+export function specFor(id, lvl) {
+  const u = BY_ID[id];
+  if (!lvl) return u;
+  const k = 1 + UPGRADE.step * Math.min(lvl, UPGRADE.max);
+  const s = { ...u, lvl, hp: u.hp * k, dmg: u.dmg * k };
+  if (u.dot) s.dot = u.dot * k;
+  if (u.aura) s.aura = u.aura * k;
+  if (u.boom) s.boom = { r: u.boom.r, d: u.boom.d * k };
+  return s;
 }
 
 /* ------------------------------------------------------------------ deployment */
@@ -59,10 +95,48 @@ const SQUAD_SPREAD = 3.2;    // how far apart bodies of one card stand
 // point. That is also what the screenshots show: a line advances together.
 const COLUMN_PACE = 0.8;
 
-function deploy(cards, side, rand) {
+// How much of that pace a marching card may spend closing SIDEWAYS, and how
+// close it must already be before it is allowed to. A march straight down the
+// field is what holds a line -- and holding the line is what keeps extra bodies
+// queued behind it instead of all engaging at once, which is the whole defence
+// against card count deciding the game. But with no sideways component at all,
+// two lines a few units offset stand level with each other and never touch:
+// 17% of battles ended as draws at 3000 ticks.
+//
+// So sideways movement is gated on CONTACT. A card marches straight until it is
+// at the line of contact, and only then closes on what is in front of it.
+const DRIFT = 0.35;
+const CONTACT = 8;
+
+// A marching card advances toward a reference enemy and NEVER PAST IT. A fixed
+// downfield sign was the first version, and it walked both armies clean through
+// each other and out of the far wall: a Volt Battery has range 0, so it never
+// acquires a target, and two batteries finished a battle pinned to opposite
+// edges at full health with the aura -- the entire card -- having touched
+// nothing. Three thousand ticks, a draw, and nothing threw.
+function march(u, ref) {
+  const dy = ref.y - u.y, dx = ref.x - u.x;
+  const near = Math.abs(dy) <= CONTACT;
+  return [
+    near ? Math.sign(dx) * Math.min(COLUMN_PACE * DRIFT, Math.abs(dx)) : 0,
+    Math.sign(dy) * Math.min(COLUMN_PACE, Math.abs(dy))
+  ];
+}
+const nearest = (u, foes) => {
+  let best = null, bd = Infinity;
+  for (const e of foes) { const d = dist(u, e); if (d < bd) { bd = d; best = e; } }
+  return best;
+};
+
+function deploy(picks, side, rand) {
+  const { cards, up } = armyFrom(picks);
+  // One spec object per unit type, not per body: an upgraded card's stats are
+  // computed once and every body of it holds the same reference, so no body can
+  // end up at a different level from its squadmate.
+  const spec = {};
   const out = [];
   cards.forEach((id, ci) => {
-    const u = BY_ID[id];
+    const u = spec[id] || (spec[id] = specFor(id, up[id] || 0));
     const n = u.count || 1;
     const rank = Math.floor(ci / PER_RANK);
     const col = ci % PER_RANK;
@@ -72,7 +146,13 @@ function deploy(cards, side, rand) {
     const cy = 10 + rank * 9;
     for (let k = 0; k < n; k++) {
       out.push({
-        id, side, i: out.length,
+        // `s` is this body's OWN spec, upgrades applied. Everything in the
+        // resolver reads it instead of BY_ID, because BY_ID is the card as
+        // printed and this is the card as fielded.
+        // `c` is WHICH CARD this body came from. The engine does not need it;
+        // a renderer that wants to draw one marker per card instead of one per
+        // body does, and grouping by position afterwards would be a guess.
+        id, s: u, side, i: out.length, c: ci,
         // Where this BODY stands within its own squad.
         x: cx + (k - (n - 1) / 2) * SQUAD_SPREAD + (rand() - 0.5) * 1.2,
         y: (side === 0 ? cy : FIELD.d - cy) + (rand() - 0.5) * 1.2,
@@ -90,7 +170,7 @@ function deploy(cards, side, rand) {
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 function choose(unit, enemies) {
-  const spec = BY_ID[unit.id];
+  const spec = unit.s;
   let best = null, bestScore = Infinity;
   for (const e of enemies) {
     if (!e.alive) continue;
@@ -110,8 +190,8 @@ function choose(unit, enemies) {
 /**
  * Fight two armies to the end. Pure: same inputs, same result, every time.
  *
- * @param {string[]} a       unit ids for side 0
- * @param {string[]} b       unit ids for side 1
+ * @param {string[]} a       pick tokens for side 0 (ids, and `up:` upgrades)
+ * @param {string[]} b       pick tokens for side 1
  * @param {number}   seed
  * @param {boolean}  keepLog  build the replay log. Off for sweeps, where the log
  *                            is the largest cost and nothing reads it.
@@ -136,7 +216,7 @@ export function resolve(a, b, seed, keepLog = false, onTick = null) {
     const events = [];
 
     for (const u of live) {
-      const spec = BY_ID[u.id];
+      const spec = u.s;
       const foes = sides[1 - u.side];
 
       // Damage over time keeps working whatever else the unit is doing.
@@ -162,24 +242,23 @@ export function resolve(a, b, seed, keepLog = false, onTick = null) {
       // — and the counter graph had collapsed to 36% because nine of twelve
       // cards were never closing with anything.
       if (!tgt) {
+        // THE COLUMN MARCHES AT ONE PACE, toward the nearest enemy. Advancing
+        // at each unit's own speed made the army arrive in speed order — a
+        // crawler crossing the field in six seconds and an artillery piece in
+        // forty — so the fast cards arrived alone and died before the rest were
+        // there, and two lines never existed at the same moment to meet.
+        //
+        // A line card can only ever reach this branch, because `reach` has
+        // already filtered by range: if it has a target at all, the target is
+        // in range. So this is the whole of line movement.
         if (!seeks) {
-          moves.push([u, 0, (u.side === 0 ? 1 : -1) * COLUMN_PACE]);
+          const ref = nearest(u, foes);
+          if (ref) { const [dx, dy] = march(u, ref); moves.push([u, dx, dy]); }
           if (u.cd > 0) u.cd--;
         }
         continue;
       }
       const d = dist(u, tgt);
-
-      if (!seeks && d > spec.rng) {
-        // THE COLUMN MARCHES AT THE PACE OF ITS SLOWEST. Advancing at each
-        // unit's own speed made the army arrive in speed order — a crawler
-        // crossing the field in six seconds and an artillery piece in forty —
-        // so the fast cards arrived alone and died before the rest were there
-        // and two lines never existed at the same moment to meet.
-        moves.push([u, 0, (u.side === 0 ? 1 : -1) * COLUMN_PACE]);
-        if (u.cd > 0) u.cd--;
-        continue;
-      }
 
       if (d <= spec.rng && u.cd <= 0) {
         const dealt = [];
@@ -214,15 +293,14 @@ export function resolve(a, b, seed, keepLog = false, onTick = null) {
       if (u.hp <= 0 && u.alive) {
         u.alive = false;
         if (keepLog) events.push({ e: 'die', a: u.i * 2 + u.side });
-        const spec = BY_ID[u.id];
-        if (spec.boom) boomed.push(u);
+        if (u.s.boom) boomed.push(u);
       }
     }
     for (const u of boomed) {
-      const spec = BY_ID[u.id];
+      const spec = u.s;
       for (const e of units) {
         if (e.alive && e.side !== u.side && dist(u, e) <= spec.boom.r) {
-          e.hp -= Math.max(1, spec.boom.d - (BY_ID[e.id].arm || 0));
+          e.hp -= Math.max(1, spec.boom.d - (e.s.arm || 0));
           if (e.hp <= 0) e.alive = false;
         }
       }
@@ -236,7 +314,10 @@ export function resolve(a, b, seed, keepLog = false, onTick = null) {
     // copy, never the live array, because a caller that keeps a live reference
     // reads a state that later ticks have already changed. That exact mistake
     // is in the Ledger's record twice.
-    if (onTick) onTick(t, live.map(u => ({ id: u.id, side: u.side, x: u.x, y: u.y, hp: u.hp, max: u.max })));
+    if (onTick) onTick(t, live.map(u => ({
+      id: u.id, side: u.side, c: u.c, lvl: u.s.lvl || 0,
+      x: u.x, y: u.y, hp: u.hp, max: u.max
+    })));
   }
 
   const left = [0, 1].map(s => units.filter(u => u.alive && u.side === s).length);
@@ -247,21 +328,29 @@ export function resolve(a, b, seed, keepLog = false, onTick = null) {
 // Split out so splash and primary damage go through one place. Derived, never
 // restated: the deflection and armour rules live here and nowhere else.
 function hurtInto(target, amount, from, add, dealt) {
-  const spec = BY_ID[target.id];
+  const spec = target.s;
   let d = amount;
-  if (spec.defl && BY_ID[from.id].rng > 4) d *= (1 - spec.defl);
+  if (spec.defl && from.s.rng > 4) d *= (1 - spec.defl);
   d = Math.max(1, d - (spec.arm || 0));
   add(target, d);
   dealt.push(d);
 }
 
 /* --------------------------------------------------------------------- drafting */
-// Three cards offered, drawn without replacement from the twelve.
-export function offer(rand, n = RULES.offer) {
+// Three cards offered, drawn without replacement from the twelve. A card the
+// army already fields, and has not already maxed, may arrive as an UPGRADE of it
+// instead of another copy -- which is the whole of Sam's design point 3 on the
+// draft side. Both draws come off the same `rand`, so a seeded match still
+// replays exactly; and with no army passed there are no upgrades at all, which
+// is why matchup.mjs and preview.mjs still measure what they measured.
+export function offer(rand, n = RULES.offer, picks = []) {
+  const { cards, up } = armyFrom(picks);
   const pool = UNITS.map(u => u.id);
   const out = [];
   for (let i = 0; i < n && pool.length; i++) {
-    out.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
+    const id = pool.splice(Math.floor(rand() * pool.length), 1)[0];
+    const eligible = cards.includes(id) && (up[id] || 0) < UPGRADE.max;
+    out.push(eligible && rand() < UPGRADE.chance ? UP_TAG + id : id);
   }
   return out;
 }
@@ -269,14 +358,32 @@ export function offer(rand, n = RULES.offer) {
 // The personality IS the policy. Each returns an index into `cards`.
 // `mine` and `theirs` are the armies as they stand, so a persona may answer the
 // board — which is what makes Sam's reveal-after-every-pick structure matter.
-// One place for "how strong does this card look on paper". N bodies have N times
-// the health and N times the output, so raw strength goes as count squared. Every
-// policy that reads a number reads this one, so none of them can drift from it.
-export const power = id => {
-  const u = BY_ID[id];
-  const n = u.count || 1;
-  return n * n * u.hp * (u.dmg * 10 / u.rate);
-};
+// One place for "how strong does this look on paper". N bodies have N times the
+// health and N times the output, so raw strength goes as count squared.
+const paper = (u, n) => n * n * u.hp * (u.dmg * 10 / u.rate);
+
+// WHAT A PICK IS WORTH, reinforcement or upgrade, through one function. A
+// reinforcement is worth what it puts on the field; an upgrade is worth what it
+// adds to the copies already there, which is why upgrading gets better the more
+// of a card you hold and why it is worth nothing at all on a card you do not
+// field. Every policy that reads a number reads this, so none of them can drift
+// from it -- and none of them needs its own opinion about upgrades.
+export function gain(tok, picks = [], val = paper) {
+  if (!isUp(tok)) { const u = BY_ID[tok]; return val(u, u.count || 1); }
+  const { cards, up } = armyFrom(picks);
+  const id = tokId(tok), lvl = up[id] || 0;
+  const c = cards.filter(x => x === id).length;
+  if (!c || lvl >= UPGRADE.max) return -Infinity;
+  const n = c * (BY_ID[id].count || 1);
+  return val(specFor(id, lvl + 1), n) - val(specFor(id, lvl), n);
+}
+
+export const power = (tok, picks = []) => gain(tok, picks, paper);
+
+// Negating a score is not the same as reversing a preference: -(-Infinity) is
+// Infinity, so a policy that takes the WEAKEST card would otherwise take an
+// upgrade it cannot use, every time, in preference to anything real.
+const worst = g => (g === -Infinity ? -Infinity : -g);
 
 // Picks the best card by `score`, first index winning a tie so a policy is
 // deterministic and a sweep is reproducible.
@@ -285,21 +392,21 @@ const best = (cards, score) =>
 
 export const POLICIES = {
   // Takes the biggest number on the card. The pirate.
-  vex: cards => best(cards, power),
+  vex: (cards, mine = []) => best(cards, tok => gain(tok, mine, paper)),
 
   // Never trades. Most health on the field per pick.
-  harlow: cards => best(cards, id => (BY_ID[id].count || 1) * BY_ID[id].hp),
+  harlow: (cards, mine = []) => best(cards, tok => gain(tok, mine, (u, n) => n * u.hp)),
 
   // Tempo. Whatever closes fastest and hits hardest when it arrives.
-  hale: cards => best(cards, id => (BY_ID[id].count || 1) * BY_ID[id].spd * BY_ID[id].dmg),
+  hale: (cards, mine = []) => best(cards, tok => gain(tok, mine, (u, n) => n * u.spd * u.dmg)),
 
   // Denial. Picks whatever scores best AGAINST what the opponent has actually
   // fielded, which is only possible because the reveal happens between picks.
-  varan: (cards, mine, theirs) => {
+  varan: (cards, mine = [], theirs = []) => {
     if (!theirs.length) return 0;
     let best = 0, bestScore = -Infinity;
-    cards.forEach((id, i) => {
-      const s = counterScore(id, theirs);
+    cards.forEach((tok, i) => {
+      const s = counterScore(tok, theirs, mine);
       if (s > bestScore) { bestScore = s; best = i; }
     });
     return best;
@@ -307,8 +414,9 @@ export const POLICIES = {
 
   // Spends. Concedes early rounds to buy the late one: cheap bodies while the
   // armies are small, the expensive answers once they are not.
-  leader: (cards, mine) =>
-    mine.length >= 9 ? best(cards, power) : best(cards, id => -power(id)),
+  leader: (cards, mine = []) =>
+    mine.length >= 9 ? best(cards, tok => gain(tok, mine, paper))
+                     : best(cards, tok => worst(gain(tok, mine, paper))),
 
   // Counters what is actually on the other side of the field. The only policy
   // that reads the board, and on the first sweep the only one that beat picking
@@ -320,8 +428,9 @@ export const POLICIES = {
   // throws its opening round by taking the weakest card offered, then plays to
   // counter for the rest of the match. If it outperforms the same policy playing
   // straight, losing on purpose pays and the rule needs a guard.
-  thrower: (cards, mine, theirs) =>
-    mine.length < 3 ? best(cards, id => -power(id)) : POLICIES.varan(cards, mine, theirs),
+  thrower: (cards, mine = [], theirs = []) =>
+    mine.length < 3 ? best(cards, tok => worst(gain(tok, mine, paper)))
+                    : POLICIES.varan(cards, mine, theirs),
 
   // The human seat in a sweep, and deliberately unsophisticated: it exists to
   // exercise every path, not to play well. Every "the player wins X%" figure
@@ -329,11 +438,31 @@ export const POLICIES = {
   house: cards => 0
 };
 
-// How well one card answers an army, measured rather than asserted: fight it.
-// Cheap because the pool is twelve and the log is off.
-function counterScore(id, theirs) {
-  const r = resolve([id, id, id], theirs.slice(0, 3), 12345, false);
+// How well one PICK answers an army, measured rather than asserted: fight it.
+// Cheap because the pool is twelve, the trio is small and the log is off.
+const trio = (id, lvl) => {
+  const t = [id, id, id];
+  for (let i = 0; i < lvl; i++) t.push(UP_TAG + id);
+  return t;
+};
+// `theirs` is a draft, so take its CARDS -- three upgrade tokens sliced off the
+// front would otherwise fight an empty army and report a free win.
+function fight(mine, theirs) {
+  const r = resolve(mine, armyFrom(theirs).cards.slice(0, 3), 12345, false);
   return (r.winner === 0 ? 1000 : 0) - r.left[1] * 10;
+}
+function counterScore(tok, theirs, picks = []) {
+  if (!isUp(tok)) return fight(trio(tok, 0), theirs);
+  const { cards, up } = armyFrom(picks);
+  const id = tokId(tok), lvl = up[id] || 0;
+  const c = cards.filter(x => x === id).length;
+  if (!c || lvl >= UPGRADE.max) return -Infinity;
+  // DIFFERENTIAL: the same trio upgraded and not, against the same enemy, and
+  // the difference is the upgrade. An absolute score would be reading the trio
+  // rather than the level. The paper marginal breaks a tie, because two fights
+  // that end the same way cannot tell a good upgrade from a useless one.
+  return (fight(trio(id, lvl + 1), theirs) - fight(trio(id, lvl), theirs)) * c
+       + gain(tok, picks) * 1e-9;
 }
 
 /* ----------------------------------------------------------------- a whole match */
@@ -360,7 +489,7 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1 } = {}) {
     // doctrine as a rule: a round you lose pays for the round after it.
     if (loser !== null) {
       for (let k = 0; k < RULES.loserBonusPicks; k++) {
-        const cards = offer(rand);
+        const cards = offer(rand, RULES.offer, army[loser]);
         army[loser].push(cards[policy[loser](cards, army[loser], army[1 - loser])]);
       }
     }
@@ -370,7 +499,7 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1 } = {}) {
     // the commitment simultaneous rather than sequential.
     for (let p = 0; p < RULES.picksPerRound; p++) {
       const seen = [army[0].slice(), army[1].slice()];
-      const cA = offer(rand), cB = offer(rand);
+      const cA = offer(rand, RULES.offer, seen[0]), cB = offer(rand, RULES.offer, seen[1]);
       const iA = policy[0](cA, seen[0], seen[1]);
       const iB = policy[1](cB, seen[1], seen[0]);
       army[0].push(cA[iA]);

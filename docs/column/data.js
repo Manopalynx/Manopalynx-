@@ -87,6 +87,31 @@ export const MAX_TICKS = 3000;          // 5 minutes; a battle this long is a dr
 // rather than balanced. test/matchup.mjs exists to tell us they are wrong.
 export const WEIGHT = { heavy: 1, medium: 2, light: 3 };
 
+/* ------------------------------------------------------------------ upgrades */
+// Sam's design point 3: reinforcement cards AND upgrade cards. A reinforcement
+// pick adds a card, and therefore bodies. An UPGRADE pick adds nothing to the
+// field and makes what is already standing on it stronger.
+//
+// That is the answer to the crowd. A match currently ends with about 107 bodies
+// on a 393pt-wide screen, and no amount of drawing fixes a field that dense; the
+// upgrade pick is the only lever that reduces it without touching the round
+// structure or the square law, because a pick spent on an upgrade is a pick not
+// spent on three more crawlers.
+//
+// An upgrade is offered ONLY for a unit type the army already fields. An upgrade
+// to nothing is a wasted pick and the player cannot be asked to guess whether it
+// applies. Each level multiplies health and every damage channel; it never
+// touches `count`, armour, range or speed, so an upgrade makes a card more of
+// itself and cannot turn it into a different card.
+//
+// These three numbers are a first guess. test/match.mjs measures what they do to
+// army size and to how often the draft decides the battle.
+export const UPGRADE = {
+  step: 0.35,     // +35% health and damage per level
+  max: 3,         // levels above base
+  chance: 0.5     // how often an eligible offered card arrives as an upgrade
+};
+
 export const UNITS = [
   // ---- heavy: one body, individually formidable -------------------------
   { id: 'walker', n: 'Walker', w: 'heavy',

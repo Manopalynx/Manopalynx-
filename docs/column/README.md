@@ -355,6 +355,16 @@ that was a design choice — it was research.
 
 ## This is what fixed the square law
 
+> **CORRECTED, one session later. This heading is wrong and the table under it is
+> substantially an artefact.** The movement rule described here marched both armies
+> straight *through* each other and out of the far wall, and **28% of battles never
+> finished** — they hit the 3000-tick ceiling with both sides alive. Every figure in this
+> file counts a draw as half a win, so a third of the battles were quietly voting for
+> "contested" without ever being fought. With the movement defect fixed and battles
+> actually resolving, one extra card wins **82%**, not 59%. See *Marching through each
+> other* below. The rest of this section — the two movement modes, the four wrong turns —
+> still holds; only the balance claim does not.
+
 The frontage rule proposed earlier is **not needed**. Correct formation does the same job,
 because a line that holds means extra bodies queue behind it instead of all engaging at
 once — which is what frontage was for.
@@ -393,3 +403,108 @@ compositions are contested rather than settled at the draft. The unit graph stil
   slightly light.
 - **107 bodies on screen at the end.** Untouched by any of this — it is the upgrade-card
   problem, and upgrades are next.
+
+---
+
+# Upgrade cards, and a defect that had been flattering every figure
+
+Two things landed together. The second is the one that matters.
+
+## Upgrade cards — Sam's design point 3
+
+A draft is now a flat list of **pick tokens**. A plain unit id is a reinforcement; `up:walker`
+is an upgrade of a card already fielded. `armyFrom()` derives the army from the list, so the
+resolver, the policies, the tests and eventually the screen all read the same rule instead of
+each keeping a copy of it — and a draft containing no upgrades is byte-for-byte the array of
+ids it was before, which is why every earlier test still measures what it measured.
+
+- **+35% health and every damage channel per level**, to three levels. Direct, splash, the
+  burn, the aura and the detonation all scale; **`count`, armour, range and speed do not**, so
+  an upgrade makes a card more of itself and cannot turn it into a different card.
+- **Only offered for a unit type you already field.** An upgrade to nothing is a wasted pick,
+  and a player cannot be asked to guess whether it applies.
+- Every drafting policy scores it through one function, `gain()`. A reinforcement is worth
+  what it puts on the field; an upgrade is worth what it adds to the copies already there —
+  which is why upgrading gets better the more of a card you hold, and why no persona needed
+  its own opinion about upgrades.
+
+**They do the job they were added for.** The crowd was the open problem: 107 bodies on a
+393pt screen at the end of a match.
+
+| | before | after |
+|---|---|---|
+| bodies a side at match end | 53 | **35** |
+| bodies on screen | 107 | **70** |
+| share of picks spent on upgrades | — | **28%** |
+| round-to-round alternation, worst table | 65% | **54%** |
+
+Alternation moving off the 65% boundary is the open item from last session closing, but
+**both changes landed in the same session and I have not separated them** — the movement fix
+below could account for some of it.
+
+## Marching through each other
+
+**The Volt Battery has range 0.** It never acquires a target, because `reach` filters foes by
+range before targeting. A card with no target advanced by a **fixed downfield sign** — so it
+advanced, and kept advancing, past the enemy and into the far wall. Two batteries finished a
+battle pinned to opposite edges of the field at full health, three thousand ticks, a draw,
+with the aura — the entire card — having touched nothing.
+
+**28% of battles ended that way.** And a draw is scored as half a win everywhere in
+`match.mjs`, so a third of the sample was voting "contested" without ever being fought. That
+is what the previous session's headline finding was made of.
+
+The fix is two lines and a constant: a marching card advances **toward the nearest enemy and
+never past it**, and may only close **sideways** once it is already at the line of contact
+(`CONTACT`). Marching straight is what holds a line; without any sideways component at all,
+two lines a few units offset stand level with each other and never touch — that variant draws
+17%.
+
+| | before (as reported) | with battles that finish |
+|---|---|---|
+| battles ending in a draw at the ceiling | **28%** | **0%** |
+| one extra card against an identical army | 59% | **82%** |
+| mixed nine-card armies settled 95/5 | 29% | **65%** |
+| local counters decisive | 73% | **86%** |
+| three-cycles, every unit inside one | 66 | **126** |
+
+The unit graph got *better* — 3 of 3, 86% of pairings decisive, 126 cycles. The balance
+figures got worse, because they had been measuring unfinished battles.
+
+**The guard is in the suite, not in this file.** `match.mjs` now asserts that fewer than 5% of
+battles reach the tick ceiling, and prints the rate beside every contested figure it reports.
+A test naming the Volt Battery would have caught the Volt Battery.
+
+## Design point 6, measured as what Sam actually asked for
+
+The old check asserted "one extra card wins ≤70%". That threshold was invented here, not by
+him, and it is the wrong question: he asked for numerical advantage to be **non-linear**. So
+measure the same advantage at every army size a match reaches.
+
+| army size | one extra card wins | a quarter more army wins |
+|---|---|---|
+| 2 | 94% | 96% |
+| 4 | 92% | 91% |
+| 8 | 89% | 94% |
+| 12 | 75% | 96% |
+| 16 | 75% | 96% |
+
+**The comeback pick is self-limiting** — the same extra card is worth 94% to a small army and
+75% to a large one, so the loser's bonus cannot compound into a runaway. That is design point
+6 holding.
+
+**A proportional edge is not.** A quarter more army wins ~96% at every size. Force advantage
+in proportion is decisive, full stop, and no geometry fixes it: frontage was swept at 3, 4, 5
+and 6 cards a rank and narrower ranks were *worse*, not better.
+
+## Still open — and the first one is Sam's decision, not a tuning miss
+
+- **65% of mixed nine-card armies are settled 95/5.** Combat has no randomness and runs to
+  annihilation, both by design, so two fixed armies have a fixed answer; the closeness has to
+  live in composition and at 65% it mostly does not. The levers are his: stronger AOE and
+  durability non-linearity (his point 6, applied harder), an engagement cap, or accepting that
+  the draft is the game and the battle is the reveal. Nothing here should be tuned until he
+  picks one.
+- **Merging** — design point 4 — is specified and unbuilt.
+- **`docs/column/test/look.mjs`** draws the same real tick three ways at 393×852 to answer
+  Sam's question about a tactical map. Nothing is chosen yet.
