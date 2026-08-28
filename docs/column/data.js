@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v10';
+export const BUILD = 'column-v11';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -262,8 +262,34 @@ export const SHOP = {
 export const RUN = {
   ramp: 18,        // credits the opponent starts with, per match already survived
   pickEvery: 3,    // matches between the opponent gaining an extra pick each round
-  order: ['vex', 'hale', 'harlow', 'leader', 'varan']
+  order: ['vex', 'hale', 'harlow', 'leader', 'varan'],
+  // LIVES CARRY AND ONLY THE MARKET SELLS THEM. Sam's rule, and it is what turns
+  // credits into a real decision: every purse is a choice between a stronger
+  // column now and staying alive to draft another one. The OPPONENT resets to
+  // full every match, because they are a new opponent -- you are the one running
+  // the gauntlet, and a wounded opponent carried forward would make every match
+  // after the first a formality.
+  carryLives: true,
+  offered: 3       // boosters shown after a match survived
 };
+
+/* ------------------------------------------------------------------ boosters */
+// Stage three. After a match survived you choose one of three; the opponent
+// takes one at random. Same count, and the asymmetry is the CHOICE -- choice
+// compounds and randomness does not, which is the whole of what makes a run a
+// run rather than a treadmill.
+//
+// Every one of them changes how a side DRAFTS or what a round PAYS, because the
+// draft is the game. A booster that multiplied damage would move a number and
+// nothing else. Each can be taken once.
+export const BOOSTS = [
+  { id: 'wide',    n: 'Wider muster',   d: 'Four cards offered each round instead of three.' },
+  { id: 'extra',   n: 'A fourth pick',  d: 'Four picks a round instead of three.' },
+  { id: 'salvage', n: 'Salvage rights', d: 'Two credits a surviving body instead of one.' },
+  { id: 'chest',   n: 'War chest',      d: 'Begin every match with 30 credits.' },
+  { id: 'market',  n: 'Standing order', d: 'The market opens every second round, not every third.' }
+];
+export const BY_BOOST = Object.fromEntries(BOOSTS.map(b => [b.id, b]));
 
 /* ----------------------------------------------------------------- the personas */
 // The personality IS the drafting policy. Voice lines can come later; a persona

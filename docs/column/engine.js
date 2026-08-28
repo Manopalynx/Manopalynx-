@@ -15,7 +15,7 @@
 // would give whichever side was iterated first a systematic opening strike, and
 // nothing about the game would look wrong.
 
-import { UNITS, BY_ID, FIELD, TICK, MAX_TICKS, RULES, UPGRADE, SHOP, RUN } from './data.js';
+import { UNITS, BY_ID, FIELD, TICK, MAX_TICKS, RULES, UPGRADE, SHOP, RUN, BOOSTS } from './data.js';
 
 /* ------------------------------------------------------------------------ rng */
 // mulberry32. Small, fast, and — the only property that matters here — the same
@@ -530,8 +530,17 @@ function counterScore(tok, theirs, picks = []) {
 // WHAT A ROUND PAYS. A purse to both sides, and one a body still standing to the
 // winner. The survivor count is the resolver's own `left`, so the game cannot
 // pay out a number the battle did not produce.
-export const earn = (left, winner) =>
-  [0, 1].map(s => SHOP.purse + (s === winner ? left[s] : 0));
+export const earn = (left, winner, boosts = [[], []]) =>
+  [0, 1].map(s => SHOP.purse +
+    (s === winner ? left[s] * (boosts[s].includes('salvage') ? 2 : 1) : 0));
+
+// The three things a booster can change, each read where it is used rather than
+// baked into a copy of the rule. `has` is the only place an id is compared.
+const has = (boosts, id) => boosts.includes(id);
+export const offerSize = (boosts, wide) => RULES.offer + wide + (has(boosts, 'wide') ? 1 : 0);
+export const picksFor = (boosts, extra) => RULES.picksPerRound + extra + (has(boosts, 'extra') ? 1 : 0);
+export const marketEvery = boosts => (has(boosts, 'market') ? 2 : SHOP.every);
+export const chestFor = boosts => (has(boosts, 'chest') ? 30 : 0);
 
 // What the market has in it for a given side, and what it costs. Derived from
 // the army rather than listed, so an upgrade that cannot apply is never offered
@@ -599,15 +608,17 @@ export function spend(money, picks, lives) {
  * @returns {{winner:number, rounds:object[], lives:number[]}}
  */
 export function playMatch({ a = 'house', b = 'varan', seed = 1,
-                            money: purse = [0, 0], picks = [0, 0] } = {}) {
+                            money: purse = [0, 0], picks = [0, 0],
+                            lives: start = [RULES.lives, RULES.lives],
+                            boosts = [[], []] } = {}) {
   const rand = rng(seed);
   const policy = [POLICIES[a], POLICIES[b]];
   const army = [[], []];
-  const lives = [RULES.lives, RULES.lives];
+  const lives = [start[0], start[1]];
   // Credits carried in from earlier matches, and any extra picks a side has
   // earned by being the thing you are running from.
-  const money = [purse[0], purse[1]];
-  const perRound = [0, 1].map(s => RULES.picksPerRound + picks[s]);
+  const money = [purse[0] + chestFor(boosts[0]), purse[1] + chestFor(boosts[1])];
+  const perRound = [0, 1].map(s => picksFor(boosts[s], picks[s]));
   const wide = [0, 0];                   // a wider offer, bought, for one round
   const rounds = [];
   let loser = null;                      // who opens with the bonus pick
@@ -617,7 +628,7 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
     // doctrine as a rule: a round you lose pays for the round after it.
     if (loser !== null) {
       for (let k = 0; k < RULES.loserBonusPicks; k++) {
-        const cards = offer(rand, RULES.offer + wide[loser], army[loser]);
+        const cards = offer(rand, offerSize(boosts[loser], wide[loser]), army[loser]);
         army[loser].push(cards[policy[loser](cards, army[loser], army[1 - loser])]);
       }
     }
@@ -630,11 +641,11 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
       // A side that has run out of picks takes none, and draws nothing off the
       // stream -- so a seeded run replays whatever the pick counts are.
       if (p < perRound[0]) {
-        const c = offer(rand, RULES.offer + wide[0], seen[0]);
+        const c = offer(rand, offerSize(boosts[0], wide[0]), seen[0]);
         army[0].push(c[policy[0](c, seen[0], seen[1])]);
       }
       if (p < perRound[1]) {
-        const c = offer(rand, RULES.offer + wide[1], seen[1]);
+        const c = offer(rand, offerSize(boosts[1], wide[1]), seen[1]);
         army[1].push(c[policy[1](c, seen[1], seen[0])]);
       }
     }
@@ -650,12 +661,13 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
     // A wider offer is bought for ONE round and is spent by getting here.
     wide[0] = wide[1] = 0;
 
-    const paid = earn(out.left, 1 - lost);
+    const paid = earn(out.left, 1 - lost, boosts);
     money[0] += paid[0]; money[1] += paid[1];
 
     // Every third round the market opens for both sides.
-    if ((r + 1) % SHOP.every === 0 && lives[0] > 0 && lives[1] > 0) {
+    if (lives[0] > 0 && lives[1] > 0) {
       for (const s of [0, 1]) {
+        if ((r + 1) % marketEvery(boosts[s]) !== 0) continue;
         for (const buy of spend(money[s], army[s], lives[s])) {
           if (buy.k === 'life') { lives[s]++; money[s] -= SHOP.life; }
           else if (buy.k === 'upgrade') { army[s].push(UP_TAG + buy.id); money[s] -= SHOP.upgrade; }
@@ -680,20 +692,45 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
  * Sweepable, which is the point of putting it here: "how far does the floor
  * get" is the only number that says whether a run is a run or a treadmill.
  */
-export function playRun({ a = 'house', seed = 1, max = 40 } = {}) {
+export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = null } = {}) {
+  const rand = rng((seed * 7717 + 3) >>> 0);
   const matches = [];
-  let money = 0;
+  const boosts = [[], []];
+  let money = 0, lives = RULES.lives;
   for (let n = 0; n < max; n++) {
     const opp = RUN.order[n % RUN.order.length];
     const r = playMatch({
       a, b: opp, seed: (seed * 131 + n) >>> 0,
       money: [money, n * RUN.ramp],
-      picks: [0, Math.floor(n / RUN.pickEvery)]
+      picks: [0, Math.floor(n / RUN.pickEvery)],
+      // LIVES CARRY FOR YOU AND NOT FOR THEM. Only the market restores one.
+      lives: [RUN.carryLives ? lives : RULES.lives, RULES.lives],
+      boosts: [boosts[0].slice(), boosts[1].slice()]
     });
     const won = r.winner === 0;
-    matches.push({ n, opp, won, rounds: r.rounds.length, cards: r.army[0].length });
+    matches.push({ n, opp, won, rounds: r.rounds.length, cards: r.army[0].length,
+                   livesIn: RUN.carryLives ? lives : RULES.lives, livesOut: r.lives[0] });
     if (!won) break;
     money = r.money[0];
+    lives = r.lives[0];
+    // A booster each, and the asymmetry is the choice: three offered to you,
+    // one at random to them. `take` indexes your pick, so a sweep can ask what a
+    // particular preference is worth.
+    const mine = boosterOffer(rand, boosts[0]);
+    // `prefer` takes a named booster whenever it is offered, which is how a
+    // sweep asks what ONE of them is worth rather than what the pool averages.
+    const want = prefer && mine.indexOf(prefer);
+    if (mine.length) boosts[0].push(mine[want > 0 || want === 0 ? want : Math.min(take, mine.length - 1)]);
+    const theirs = boosterOffer(rand, boosts[1]);
+    if (theirs.length) boosts[1].push(theirs[0]);
   }
-  return { survived: matches.filter(m => m.won).length, matches, money };
+  return { survived: matches.filter(m => m.won).length, matches, money, boosts, lives };
+}
+
+// Three of the boosters a side has not already taken, drawn without replacement.
+export function boosterOffer(rand, held, n = RUN.offered) {
+  const pool = BOOSTS.map(b => b.id).filter(id => !held.includes(id));
+  const out = [];
+  for (let i = 0; i < n && pool.length; i++) out.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
+  return out;
 }

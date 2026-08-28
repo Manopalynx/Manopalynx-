@@ -935,10 +935,57 @@ ran**, which is a vacuous pass wearing a green tick. It had also drifted: 21 cla
 firing against a total of 20. Claims are counted as they fire now, so the number cannot be
 wrong and never needs editing again.
 
-## Still to come in this loop
+# Stage three — boosters, and lives that do not come back
 
-Stage three, the booster between matches — chosen from three for the player, random for the
-opponent — is specified and not built.
+**Lives carry between matches and only the market sells one.** Sam's rule, and it is what
+turns credits into a decision: every purse is a choice between a stronger column now and being
+alive to draft another one. **The opponent resets to full every match**, because they are a
+new opponent — you are the one running the gauntlet, and a wounded opponent carried forward
+would make every match after the first a formality.
+
+It costs about a quarter of a run, measured:
+
+| drafting policy | lives reset each match | **lives carry** |
+|---|---|---|
+| `house` — the floor | 2.2 | **1.8** |
+| `harlow` | 2.9 | **2.3** |
+| `counter` — reads the board | 3.3 | **2.4** |
+
+A life is ₡44 against roughly ₡100 of income a match, so buying one costs about two rounds'
+worth of column. That is the trade he asked for and it is now the sharpest decision in the
+game.
+
+**Boosters.** After each match survived you take one of three; the opponent takes one at
+random. Same count — **the asymmetry is the choice**. Each can be taken once, and every one of
+them changes how a side *drafts* or what a round *pays*, because a booster that multiplied
+damage would move a number and nothing else:
+
+| | |
+|---|---|
+| **Wider muster** | four cards offered each round instead of three |
+| **A fourth pick** | four picks a round instead of three |
+| **Salvage rights** | two credits a surviving body instead of one |
+| **War chest** | begin every match with ₡30 |
+| **Standing order** | your market opens every second round, not every third |
+
+Both sides' boosters are **named on the screen** — yours and theirs, at the run screen and in
+the pause — because a booster you cannot see is a rule change you did not agree to.
+
+## The finding that undercuts my own argument
+
+I argued that choice compounds where randomness does not. **Measured, it does not yet.** Taking
+the first, second or third of the three offered gives 2.37, 2.46 and 2.39 matches over 300 runs
+— indistinguishable.
+
+That measurement is not quite the right one: a fixed index is not a *choice*, it is a sample
+of the pool. But it does say something real — **the boosters are close enough in average value
+that the pool is flat**, and a flat pool makes choosing decoration. `playRun({ prefer })` takes
+a named booster whenever it is offered, which is how to ask what each is worth on its own; the
+first result is that always taking **Wider muster** is *worse* than taking whatever comes
+first (−0.16 matches), so at least one of them is a trap rather than a prize.
+
+That is the next thing to tune, and it is tuning rather than design: the boosters need to
+differ, and they need to differ *situationally*, or the choice is not a choice.
 
 ## Next, and it is his
 

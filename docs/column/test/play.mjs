@@ -413,10 +413,14 @@ await page.screenshot({ path: rp(HERE, 'play.png') });
   await page.reload({ waitUntil: 'load' });
   await page.click('#run');
 
-  let ended = false;
+  let ended = false, lastLives = null;
   for (let guard = 0; guard < 400 && !ended; guard++) {
     const s = await state();
     if (!s.phase) { ended = true; break; }
+    // The last lives seen while the match was still saved. `over()` clears the
+    // save, so reading it afterwards reads null -- which the first version of
+    // this check did, and reported as a carry failure.
+    lastLives = s.lives[0];
     if (s.phase === 'revealed') { await page.waitForTimeout(120); continue; }
     if (s.phase === 'pick') { await page.locator('#cards .card').first().click(); continue; }
     if (s.go === 'The market') { await page.click('#go'); await page.click('#leave'); continue; }
@@ -441,33 +445,52 @@ await page.screenshot({ path: rp(HERE, 'play.png') });
 
   const end = await page.evaluate(() => ({
     head: (document.querySelector('.sheet h1') || {}).textContent || null,
-    on: !!document.querySelector('#on'),
-    stop: !!document.querySelector('#stop'),
+    boosts: [...document.querySelectorAll('.sheet [data-b]')].map(b => b.dataset.b),
     again: !!document.querySelector('#again'),
     text: (document.querySelector('.sheet') || {}).textContent || ''
   }));
 
   const survived = /survived/i.test(end.head || '');
-  if (survived ? (end.on && end.stop) : end.again)
+  if (survived ? end.boosts.length === 3 : end.again)
     ok(`a run's first match ends into the run, not into a menu ("${end.head}")`);
   else bad("a run's first match ends into the run", [
-    `headline ${JSON.stringify(end.head)}, march-on ${end.on}, end-run ${end.stop}, again ${end.again}`]);
+    `headline ${JSON.stringify(end.head)}, boosters offered ${end.boosts.length}, again ${end.again}`]);
 
   if (!survived) {
     if (/run ends/i.test(end.text)) ok('a lost run says so and scores what was survived');
     else bad('a lost run says so', ['the result screen never mentioned the run']);
   } else {
-    // The ramp must be STATED before the next match, and then actually applied.
-    const stated = /begin with/i.test(end.text);
+    // THREE OFFERED, ONE DRAWN FOR THEM. The asymmetry is the choice, so the
+    // count on each side is what has to be right.
+    const drawn = /theirs is drawn, yours is chosen/i.test(end.text);
+    if (drawn) ok("the opponent's booster is drawn and named, yours is chosen");
+    else bad("the opponent's booster is drawn and named", ['the screen never said what they took']);
+
+    await page.locator('.sheet [data-b]').first().click();
+    const stated = await page.evaluate(() => (document.querySelector('.sheet') || {}).textContent || '');
     await page.click('#on');
     const two = await page.evaluate(() => {
       const s = JSON.parse(localStorage.getItem('column-save') || 'null');
-      return s && { n: s.run && s.run.n, money: s.money, per: s.perRound };
+      return s && { n: s.run && s.run.n, money: s.money, per: s.perRound,
+                    boosts: s.boosts, lives: s.lives };
     });
-    if (stated && two && two.n === 1 && two.money[1] === 18)
+    if (/begin with/i.test(stated) && two && two.n === 1 && two.money[1] >= 18)
       ok(`the ramp is stated and applied — match 2's opponent starts on ${two.money[1]}`);
     else bad('the ramp is stated and applied', [
-      `stated ${stated}, match ${two && two.n}, their purse ${two && two.money[1]}, picks ${two && two.per}`]);
+      `stated ${/begin with/i.test(stated)}, match ${two && two.n}, their purse ${two && two.money[1]}`]);
+
+    // LIVES CARRY, AND ONLY THE MARKET RESTORES THEM. If they reset, the whole
+    // point of the credit decision goes with them.
+    if (two && lastLives !== null && two.lives[0] === lastLives && two.lives[1] === 5)
+      ok(`lives carry into the next match (${two.lives[0]}) and theirs reset (${two.lives[1]})`);
+    else bad('lives carry into the next match', [
+      `you went in on ${two && two.lives[0]} after ending the last match on ${lastLives};`
+      + ` they went in on ${two && two.lives[1]}`]);
+
+    if (two && two.boosts[0].length === 1 && two.boosts[1].length === 1)
+      ok(`a booster each carries into match 2 (you ${two.boosts[0]}, them ${two.boosts[1]})`);
+    else bad('a booster each carries into match 2', [
+      `you ${two && two.boosts[0]}, them ${two && two.boosts[1]}`]);
   }
 }
 
