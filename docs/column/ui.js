@@ -15,7 +15,7 @@ import { BY_ID, RULES, PERSONAS, UPGRADE, WEIGHT, UNITS, DRAFT, SPECIALS, SHOP, 
          BOOSTS, BY_BOOST, KIT, BY_KIT, ORDERS, BY_ORDER, SABOTAGE, COIN, BUILD } from './data.js';
 import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId,
          earn, stock, spend, upgradeable, specialsFor, kitFor, ordersFor, boosterOffer,
-         offerSize, picksFor, marketEvery, chestFor } from './engine.js';
+         offerSize, picksFor, marketEvery, priceFor, pickTokens, boostArg, nameIt } from './engine.js';
 import { draw, effects, auras, GROUND, SIDE, shape } from './render.js';
 import { glyph } from './glyphs.js';
 
@@ -27,6 +27,13 @@ const el = { bar: $('bar'), la: $('livesA'), lb: $('livesB'), who: $('who'),
 const SAVE = 'column-save';
 const BEST = 'column-best';
 const coin = n => `${COIN}${n}`;
+// A booster id may carry what it names -- `named:walker` -- so nothing looks one
+// up by the raw string.
+const boostOf = b => BY_BOOST[b.split(':')[0]];
+const boostLabel = b => {
+  const def = boostOf(b), arg = b.split(':')[1];
+  return arg ? `${def.n} — ${BY_ID[arg].n}` : def.n;
+};
 // A battle takes as long as it takes -- 90 ticks or 800 -- and the playback must
 // not. The speed is chosen per battle so every round runs for about the same
 // four seconds: long enough to watch the lines meet, short enough that a phone
@@ -81,7 +88,7 @@ function newMatch(opp, run) {
     lives: [run && RUN.carryLives ? run.lives : RULES.lives, RULES.lives],
     // The opponent's head start and its extra picks are the whole of the ramp,
     // and both are stated on the screen before the match rather than hidden.
-    money: [(run ? run.credits : 0) + chestFor(boosts[0]), n * RUN.ramp + chestFor(boosts[1])],
+    money: [run ? run.credits : 0, n * RUN.ramp],
     perRound: [picksFor(boosts[0], 0), picksFor(boosts[1], Math.floor(n / RUN.pickEvery))],
     boosts,
     run: run ? { n, seed: run.seed } : null,
@@ -144,14 +151,14 @@ function startRound() {
 function next() {
   S.inspect = null; el.info.className = '';
   if (S.bonus === 1) {                       // the opponent's extra pick, in the open
-    const cards = offer(rand, offerSize(S.boosts[1], S.wide[1]), S.army[1]);
+    const cards = offer(rand, offerSize(S.boosts[1], S.wide[1]), S.army[1], boostArg(S.boosts[1], 'named'));
     const tok = cards[POLICIES[S.opp](cards, S.army[1].slice(), S.army[0].slice())];
-    S.army[1].push(tok);
+    S.army[1].push(...pickTokens(S.boosts[1], tok));
     S.bonus = null; S.mine = null; S.theirs = tok;
     return reveal(popKeys(1, tok));
   }
   if (S.bonus === 0) {                       // your extra pick, taken alone
-    S.offer = offer(rand, offerSize(S.boosts[0], S.wide[0]), S.army[0]);
+    S.offer = offer(rand, offerSize(S.boosts[0], S.wide[0]), S.army[0], boostArg(S.boosts[0], 'named'));
     S.solo = true; S.phase = 'pick';
     return render();
   }
@@ -160,16 +167,17 @@ function next() {
   // ramp has to be watchable, not just felt.
   if (S.pickNo < Math.max(S.perRound[0], S.perRound[1])) {
     if (S.pickNo >= S.perRound[0]) {
-      const c = offer(rand, offerSize(S.boosts[1], S.wide[1]), S.army[1]);
+      const c = offer(rand, offerSize(S.boosts[1], S.wide[1]), S.army[1], boostArg(S.boosts[1], 'named'));
       const tok = c[POLICIES[S.opp](c, S.army[1].slice(), S.army[0].slice())];
-      S.army[1].push(tok);
+      S.army[1].push(...pickTokens(S.boosts[1], tok));
       S.pickNo++;
       S.mine = null; S.theirs = tok;
       return reveal(popKeys(1, tok));
     }
-    S.offer = offer(rand, offerSize(S.boosts[0], S.wide[0]), S.army[0]);
+    S.offer = offer(rand, offerSize(S.boosts[0], S.wide[0]), S.army[0], boostArg(S.boosts[0], 'named'));
     S.withThem = S.pickNo < S.perRound[1];
-    if (S.withThem) S.oppOffer = offer(rand, offerSize(S.boosts[1], S.wide[1]), S.army[1]);
+    if (S.withThem) S.oppOffer = offer(rand, offerSize(S.boosts[1], S.wide[1]), S.army[1],
+                                       boostArg(S.boosts[1], 'named'));
     S.solo = false; S.phase = 'pick';
     return render();
   }
@@ -181,14 +189,14 @@ function commit(i) {
   S.inspect = null; el.info.className = '';
   const seen = [S.army[0].slice(), S.army[1].slice()];
   const tok = S.offer[i];
-  S.army[0].push(tok);
+  S.army[0].push(...pickTokens(S.boosts[0], tok));
   S.mine = tok; S.theirs = null;
   const keys = popKeys(0, tok);
   if (S.solo) { S.bonus = null; }
   else {
     if (S.withThem) {
       const t = S.oppOffer[POLICIES[S.opp](S.oppOffer, seen[1], seen[0])];
-      S.army[1].push(t);
+      S.army[1].push(...pickTokens(S.boosts[1], t));
       S.theirs = t;
       keys.push(...popKeys(1, t));
     }
@@ -298,7 +306,7 @@ const marketDue = () => S.round % marketEvery(S.boosts[0]) === 0 && S.lives[0] >
 function buy(item) {
   // A special is priced on the card, not in SHOP -- three prices, three cards,
   // and one place each of them lives.
-  const cost = item.k === 'special' ? BY_ID[item.id].cost : item.cost;
+  const cost = item.k === 'special' ? priceFor(S.boosts[0], BY_ID[item.id].cost) : item.cost;
   if (S.money[0] < cost) return false;
   S.money[0] -= cost;
   if (item.k === 'life') S.lives[0]++;
@@ -314,15 +322,16 @@ function buy(item) {
 }
 
 function opponentShops() {
-  for (const b of spend(S.money[1], S.army[1], S.lives[1], S.army[0])) {
-    if (b.k === 'life') { S.lives[1]++; S.money[1] -= SHOP.life; }
-    else if (b.k === 'upgrade') { S.army[1].push('up:' + b.id); S.money[1] -= SHOP.upgrade; }
-    else if (b.k === 'card') { S.army[1].push(b.id); S.money[1] -= SHOP.card; }
-    else if (b.k === 'special') { S.army[1].push(b.id); S.money[1] -= BY_ID[b.id].cost; }
-    else if (b.k === 'kit') { S.army[1].push('eq:' + b.id); S.money[1] -= BY_KIT[b.id].cost; }
-    else if (b.k === 'order') { S.pending[1].push('ord:' + b.id); S.money[1] -= BY_ORDER[b.id].cost; }
-    else if (b.k === 'sabotage') { S.pending[0].push('sab:' + b.id); S.money[1] -= SABOTAGE.cost; }
-    else if (b.k === 'offer') { S.wide[1] = 1; S.money[1] -= SHOP.offer; }
+  const P = c => priceFor(S.boosts[1], c);
+  for (const b of spend(S.money[1], S.army[1], S.lives[1], S.army[0], S.boosts[1])) {
+    if (b.k === 'life') { S.lives[1]++; S.money[1] -= P(SHOP.life); }
+    else if (b.k === 'upgrade') { S.army[1].push('up:' + b.id); S.money[1] -= P(SHOP.upgrade); }
+    else if (b.k === 'card') { S.army[1].push(b.id); S.money[1] -= P(SHOP.card); }
+    else if (b.k === 'special') { S.army[1].push(b.id); S.money[1] -= P(BY_ID[b.id].cost); }
+    else if (b.k === 'kit') { S.army[1].push('eq:' + b.id); S.money[1] -= P(BY_KIT[b.id].cost); }
+    else if (b.k === 'order') { S.pending[1].push('ord:' + b.id); S.money[1] -= P(BY_ORDER[b.id].cost); }
+    else if (b.k === 'sabotage') { S.pending[0].push('sab:' + b.id); S.money[1] -= P(SABOTAGE.cost); }
+    else if (b.k === 'offer') { S.wide[1] = 1; S.money[1] -= P(SHOP.offer); }
   }
 }
 
@@ -631,10 +640,10 @@ function roster() {
 // round. Money buying certainty is what makes a drafting game feel like it is
 // going somewhere; a shop selling a damage multiplier sells nothing.
 function market() {
-  const items = stock(S.money[0], S.army[0], S.lives[0], S.army[1]);
+  const items = stock(S.money[0], S.army[0], S.lives[0], S.army[1], S.boosts[0]);
   const up = upgradeable(S.army[0]);
 
-  const spec = specialsFor(S.money[0], S.army[0]);
+  const spec = specialsFor(S.money[0], S.army[0], S.boosts[0]);
   const line = (it, i) => {
     if (it.k === 'special') {
       const can = spec.filter(x => x.afford);
@@ -648,7 +657,7 @@ function market() {
       <i>+${(UPGRADE.step * 100) | 0}% health and damage on every copy of a card you name.
       ${up.length} to choose from.</i></button>`;
     if (it.k === 'kit') {
-      const can = kitFor(S.money[0], S.army[0]).filter(x => x.afford);
+      const can = kitFor(S.money[0], S.army[0], S.boosts[0]).filter(x => x.afford);
       return `<button class="pick" data-i="${i}"><b>Kit — from ${coin(it.cost)}</b>
         <i>Fitted to a role rather than a card, and it stays with you for the rest of the run.
         ${can.length} within reach.</i></button>`;
@@ -690,7 +699,8 @@ const MARK = { heavy: 3.7, medium: 3.2, light: 2.9 };
 // counters. Two screens rather than one because they are two kinds of thing, and
 // a chooser that draws a Kraken beside "Ablative plate" teaches the wrong shape.
 function plainChooser(kind) {
-  const list = kind === 'kit' ? kitFor(S.money[0], S.army[0]) : ordersFor(S.money[0]);
+  const list = kind === 'kit' ? kitFor(S.money[0], S.army[0], S.boosts[0])
+                              : ordersFor(S.money[0], S.boosts[0]);
   const by = kind === 'kit' ? BY_KIT : BY_ORDER;
   const d = sheet(`<h1>${kind === 'kit' ? 'Choose your kit' : 'Give an order'}</h1>
     <p>${kind === 'kit'
@@ -709,17 +719,18 @@ function plainChooser(kind) {
 
 function chooser(kind) {
   const list = kind === 'card' ? DRAFT.map(u => ({ id: u.id }))
-             : kind === 'special' ? specialsFor(S.money[0], S.army[0])
+             : kind === 'special' ? specialsFor(S.money[0], S.army[0], S.boosts[0])
              : kind === 'sabotage' ? [...new Set(armyFrom(S.army[1]).cards)].map(id => ({ id, cost: SABOTAGE.cost, afford: true }))
              : upgradeable(S.army[0]);
-  const flat = kind === 'card' ? SHOP.card : kind === 'upgrade' ? SHOP.upgrade : null;
+  const flat = kind === 'card' ? priceFor(S.boosts[0], SHOP.card)
+             : kind === 'upgrade' ? priceFor(S.boosts[0], SHOP.upgrade) : null;
   const title = { card: 'Choose a card', upgrade: 'Choose an upgrade', special: 'Choose a special',
                   sabotage: 'Choose a target' }[kind];
   const intro = {
-    card: `${coin(SHOP.card)} spent. It joins your column where its role puts it, like any other.`,
-    upgrade: `${coin(SHOP.upgrade)} spent. +${(UPGRADE.step * 100) | 0}% health and damage on every copy you hold.`,
+    card: `${coin(priceFor(S.boosts[0], SHOP.card))} spent. It joins your column where its role puts it, like any other.`,
+    upgrade: `${coin(priceFor(S.boosts[0], SHOP.upgrade))} spent. +${(UPGRADE.step * 100) | 0}% health and damage on every copy you hold.`,
     special: 'One of each weight class, once each. The draft never offers these — they are bought or they are not had.',
-    sabotage: `${coin(SABOTAGE.cost)} spent. Their card deploys on ${(SABOTAGE.half * 100) | 0}% health next round — every copy of it.`
+    sabotage: `${coin(priceFor(S.boosts[0], SABOTAGE.cost))} spent. Their card deploys on ${(SABOTAGE.half * 100) | 0}% health next round — every copy of it.`
   }[kind];
 
   // A sabotage chooser shows THEIR counters, in their colour, because that is
@@ -773,7 +784,7 @@ function over() {
     const r = rng((run.seed * 7717 + run.n) >>> 0);
     const mine = boosterOffer(r, boosts[0]);
     const theirs = boosterOffer(rng((run.seed * 7717 + run.n + 1013) >>> 0), boosts[1]);
-    if (theirs.length) boosts[1].push(theirs[0]);
+    if (theirs.length) boosts[1].push(nameIt(theirs[0], S.army[1]));
 
     const carryOn = () => {
       document.querySelectorAll('.sheet').forEach(x => x.remove());
@@ -802,7 +813,7 @@ function over() {
       ${mine.length ? `<h2>Take one</h2>${mine.map(id => `<button class="pick" data-b="${id}">
         <b>${BY_BOOST[id].n}</b><i>${BY_BOOST[id].d}</i></button>`).join('')}
         ${theirs.length ? `<p style="margin-top:14px">${opp} takes
-          <b>${BY_BOOST[theirs[0]].n}</b> — theirs is drawn, yours is chosen.</p>` : ''}`
+          <b>${boostLabel(theirs[0])}</b> — theirs is drawn, yours is chosen.</p>` : ''}`
       : '<p>Every booster is already taken.</p>'}`, !mine.length);
 
     if (!mine.length) {
@@ -811,6 +822,9 @@ function over() {
       b.onclick = onward; d.appendChild(b);
     }
     d.querySelectorAll('[data-b]').forEach(b => b.onclick = () => {
+      // A booster that names a unit asks which. It is the only one that does,
+      // and it is the whole of what "you choose and they do not" means here.
+      if (b.dataset.b === 'named') { d.remove(); return nameChooser(boosts, onward); }
       boosts[0].push(b.dataset.b);
       onward();
     });
@@ -836,6 +850,25 @@ function over() {
 // What the next opponent brings. Stated, so a loss is legible rather than
 // mysterious -- the ramp is the thing you are running from and hiding it turns
 // a run into a difficulty setting nobody chose.
+// Which unit Standing muster names. Drawn as they stand on the field, because
+// that is where you will be glad to see one.
+function nameChooser(boosts, done) {
+  const mine = [...new Set(armyFrom(S.army[0]).cards.filter(id => DRAFT.some(u => u.id === id)))];
+  const list = mine.length ? mine : DRAFT.map(u => u.id);
+  const d = sheet(`<h1>Name a unit</h1>
+    <p>It will be among the cards you are offered every round, for the rest of the run.
+    ${mine.length ? 'These are the ones you are fielding.' : ''}</p>
+    ${list.map(id => { const u = BY_ID[id]; return `<button class="pick shopRow" data-id="${id}">
+      <svg width="34" height="34" viewBox="-5 -5 10 10">${shape(u.w, 0, 0, MARK[u.w], SIDE[0].fill, SIDE[0].line)}
+        ${glyph(id, 0, 0, MARK[u.w] * 0.62, SIDE[0].ink, 1.15)}</svg>
+      <span><b>${u.n}</b><i>${u.w} · ${u.count} ${u.count === 1 ? 'body' : 'bodies'} · ${traits(u).join(' · ')}</i></span>
+    </button>`; }).join('')}`);
+  d.querySelectorAll('[data-id]').forEach(b => b.onclick = () => {
+    boosts[0].push('named:' + b.dataset.id);
+    d.remove(); done();
+  });
+}
+
 function nextMatchNote(n, lives) {
   const opp = PERSONAS[RUN.order[n % RUN.order.length]];
   const extra = Math.floor(n / RUN.pickEvery);
@@ -848,7 +881,7 @@ function nextMatchNote(n, lives) {
 // What a side is carrying. Named on the screen, because a booster you cannot see
 // is a rule change you did not agree to.
 const held = (list, who) => list.length
-  ? `<h2>${who}</h2><p>${list.map(id => `<b>${BY_BOOST[id].n}</b> — ${BY_BOOST[id].d}`).join('<br>')}</p>`
+  ? `<h2>${who}</h2><p>${list.map(b => `<b>${boostLabel(b)}</b> — ${boostOf(b).d}`).join('<br>')}</p>`
   : '';
 
 /* -------------------------------------------------------------------- start */

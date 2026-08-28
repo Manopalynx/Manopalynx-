@@ -1154,6 +1154,71 @@ lever if it needs one.
 | unit graph | 4 of 4 | 4 of 4 |
 | page suite | 24 of 24 | 24 of 24 |
 
+# The booster re-cut, and the control I kept forgetting
+
+The old pool was **one prize and four fillers** — only *A fourth pick* moved a run, and the
+four that moved the economy moved nothing. That was re-run after the specials, the kit and the
+rewritten shopper had made the economy three times richer, and it came out the same: **+0.39
+for the fourth pick, −0.04 to −0.19 for the rest.** Three passes at the same sentence: *the
+draft is the game.*
+
+So the pool is draft-shaped now, with one economy booster kept deliberately so that conclusion
+stays falsifiable rather than becoming an assumption.
+
+| | |
+|---|---|
+| **A fourth pick** | four picks a round instead of three |
+| **Wider muster** | five cards offered each round instead of three |
+| **Veterans** | every card you draft arrives already upgraded once |
+| **Standing muster** | one unit you name is always among the cards you are offered |
+| **Requisition** | the market opens every second round and everything costs a fifth less |
+
+## The measurement that nearly threw three good boosters away
+
+The first run of the new pool looked like this, against *taking whatever came first*:
+
+| | |
+|---|---|
+| Veterans | +0.62 |
+| A fourth pick | +0.23 |
+| Wider muster | **−0.38** |
+| Standing muster | **−0.33** |
+| Requisition | **−0.32** |
+
+Three negatives, and I was one edit from cutting them. **The negatives were an artefact of the
+comparison**: preferring a mediocre booster means *not taking Veterans*, so anything that is
+not the best in the pool reads as a loss. That is a ranking, not a value.
+
+`playRun({ take: -1 })` takes nothing at all, which is the control that had been missing:
+
+| | matches | against taking nothing |
+|---|---|---|
+| **taking nothing** | **1.67** | — |
+| Veterans | 3.30 | **+1.63** |
+| A fourth pick | 2.91 | +1.24 |
+| Requisition | 2.36 | +0.69 |
+| Standing muster | 2.35 | +0.69 |
+| Wider muster | 2.30 | +0.63 |
+
+**Every one of the five is worth between two-thirds of a match and a match and a half**, with a
+full match of spread between best and worst. That is a live pool with no dead options — the
+opposite of what the first table said, from the same runs.
+
+**A difference between two options is not a value. It needs a control that is neither**, and
+this is the second time in one session — the other was a mirror match whose baseline was 23%
+rather than the 50% I had assumed, which made a buff look like a penalty.
+
+## Two things the re-cut needed underneath
+
+**A booster can carry an argument.** *Standing muster* names a unit, stored as `named:walker`,
+so boosters are compared by prefix rather than by equality — and `nameIt` gives the opponent's
+one a target the same way, the card it holds most of.
+
+**And it opened a hole immediately.** A side that had bought a Kraken and then named it would
+have been dealt Krakens for nothing, free, every round. The guard is in **two** places: the
+naming only chooses from the draft pool, and `offer()` refuses to force a card the draft cannot
+deal — because that function is the one that promises an offer contains no special.
+
 ## Next, and it is his
 
 **Battlefield variety.** His answer to 65% of compositions settling 95/5 is not to soften the

@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v13';
+export const BUILD = 'column-v14';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -381,19 +381,28 @@ export const RUN = {
 
 /* ------------------------------------------------------------------ boosters */
 // Stage three. After a match survived you choose one of three; the opponent
-// takes one at random. Same count, and the asymmetry is the CHOICE -- choice
-// compounds and randomness does not, which is the whole of what makes a run a
-// run rather than a treadmill.
+// takes one at random. Same count, and the asymmetry is the CHOICE.
 //
-// Every one of them changes how a side DRAFTS or what a round PAYS, because the
-// draft is the game. A booster that multiplied damage would move a number and
-// nothing else. Each can be taken once.
+// RE-CUT, on a measurement taken twice. The first pool was one prize and four
+// fillers -- only "a fourth pick" moved a run at all, and the four that moved
+// the ECONOMY moved nothing. That was re-run after the specials, the kit and the
+// rewritten shopper had made the economy three times richer, and it came out the
+// same: +0.39 matches for the fourth pick, and -0.04 to -0.19 for the rest.
+//
+// So the pool is draft-shaped now. Every one of these changes what you are
+// offered, what a pick is worth, or how many you get -- because the draft is the
+// game, and that is the third time this project has measured its way to the same
+// sentence. One economy booster is kept, deliberately strengthened, so that
+// conclusion stays falsifiable rather than becoming an assumption.
+//
+// `named` carries an argument: the unit it names. It is stored as `named:<id>`,
+// which is why boosters are compared with a prefix rather than by equality.
 export const BOOSTS = [
-  { id: 'wide',    n: 'Wider muster',   d: 'Four cards offered each round instead of three.' },
-  { id: 'extra',   n: 'A fourth pick',  d: 'Four picks a round instead of three.' },
-  { id: 'salvage', n: 'Salvage rights', d: 'Two credits a surviving body instead of one.' },
-  { id: 'chest',   n: 'War chest',      d: 'Begin every match with 30 credits.' },
-  { id: 'market',  n: 'Standing order', d: 'The market opens every second round, not every third.' }
+  { id: 'extra',   n: 'A fourth pick',   d: 'Four picks a round instead of three.' },
+  { id: 'wide',    n: 'Wider muster',    d: 'Five cards offered each round instead of three.' },
+  { id: 'veteran', n: 'Veterans',        d: 'Every card you draft arrives already upgraded once.' },
+  { id: 'named',   n: 'Standing muster', d: 'One unit you name is always among the cards you are offered.' },
+  { id: 'requisition', n: 'Requisition', d: 'The market opens every second round and everything in it costs a fifth less.' }
 ];
 export const BY_BOOST = Object.fromEntries(BOOSTS.map(b => [b.id, b]));
 

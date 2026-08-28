@@ -450,7 +450,7 @@ function hurtInto(target, amount, from, add, dealt) {
 // draft side. Both draws come off the same `rand`, so a seeded match still
 // replays exactly; and with no army passed there are no upgrades at all, which
 // is why matchup.mjs and preview.mjs still measure what they measured.
-export function offer(rand, n = RULES.offer, picks = []) {
+export function offer(rand, n = RULES.offer, picks = [], force = null) {
   const { cards, up } = armyFrom(picks);
   // DRAFT, not UNITS. A special is bought or it is not had -- dealing one as a
   // free pick would put the roster's three biggest cards into a hand that was
@@ -462,6 +462,15 @@ export function offer(rand, n = RULES.offer, picks = []) {
     const eligible = cards.includes(id) && (up[id] || 0) < UPGRADE.max;
     out.push(eligible && rand() < UPGRADE.chance ? UP_TAG + id : id);
   }
+  // STANDING MUSTER. A named unit is always among the offer -- put in the last
+  // slot if the draw missed it, so the promise holds without changing how many
+  // cards are dealt or how much of the stream a deal consumes.
+  // DRAFT CARDS ONLY. A side that had bought a Kraken and then named it would
+  // have been dealt Krakens for nothing, which is the whole of what shop-only
+  // was protecting. The guard is here as well as at the naming, because this is
+  // the function that promises the offer contains no special.
+  if (force && DRAFT.some(u => u.id === force) && out.length &&
+      !out.some(t => tokId(t) === force)) out[out.length - 1] = force;
   return out;
 }
 
@@ -583,13 +592,24 @@ export const earn = (left, winner, boosts = [[], []]) =>
   [0, 1].map(s => SHOP.purse +
     (s === winner ? left[s] * (boosts[s].includes('salvage') ? 2 : 1) : 0));
 
-// The three things a booster can change, each read where it is used rather than
-// baked into a copy of the rule. `has` is the only place an id is compared.
-const has = (boosts, id) => boosts.includes(id);
-export const offerSize = (boosts, wide) => RULES.offer + wide + (has(boosts, 'wide') ? 1 : 0);
+// What a booster changes, each read where it is used rather than baked into a
+// copy of the rule. `has` is the only place an id is compared, and it matches on
+// a PREFIX because `named` carries the unit it names: `named:walker`.
+const has = (boosts, id) => boosts.some(b => b === id || b.startsWith(id + ':'));
+export const boostArg = (boosts, id) => {
+  const b = boosts.find(x => x.startsWith(id + ':'));
+  return b ? b.slice(id.length + 1) : null;
+};
+export const offerSize = (boosts, wide) => RULES.offer + wide + (has(boosts, 'wide') ? 2 : 0);
 export const picksFor = (boosts, extra) => RULES.picksPerRound + extra + (has(boosts, 'extra') ? 1 : 0);
-export const marketEvery = boosts => (has(boosts, 'market') ? 2 : SHOP.every);
-export const chestFor = boosts => (has(boosts, 'chest') ? 30 : 0);
+export const marketEvery = boosts => (has(boosts, 'requisition') ? 2 : SHOP.every);
+// Everything in the market, a fifth off.
+export const priceFor = (boosts, cost) => (has(boosts, 'requisition') ? Math.round(cost * 0.8) : cost);
+// A card drafted by a side with Veterans arrives already upgraded once, so the
+// pick is two tokens rather than one. One function, because the interface and
+// the sweep both take picks and neither may have its own idea of what a pick is.
+export const pickTokens = (boosts, tok) =>
+  (has(boosts, 'veteran') && !tok.includes(':') ? [tok, UP_TAG + tok] : [tok]);
 
 // What the market has in it for a given side, and what it costs. Derived from
 // the army rather than listed, so an upgrade that cannot apply is never offered
@@ -597,41 +617,44 @@ export const chestFor = boosts => (has(boosts, 'chest') ? 30 : 0);
 // The specials a side may still buy, with what each costs. One of each class a
 // side, so what you already hold is what decides the row.
 // The kit a side has not yet bought, with what each costs.
-export function kitFor(money, picks) {
+export function kitFor(money, picks, boosts = []) {
   const { eq } = armyFrom(picks);
-  return KIT.filter(x => !eq.has(x.id)).map(x => ({ id: x.id, cost: x.cost, afford: money >= x.cost }));
+  return KIT.filter(x => !eq.has(x.id))
+    .map(x => ({ id: x.id, cost: priceFor(boosts, x.cost), afford: money >= priceFor(boosts, x.cost) }));
 }
-export const ordersFor = money => ORDERS.map(x => ({ id: x.id, cost: x.cost, afford: money >= x.cost }));
+export const ordersFor = (money, boosts = []) => ORDERS
+  .map(x => ({ id: x.id, cost: priceFor(boosts, x.cost), afford: money >= priceFor(boosts, x.cost) }));
 
-export function specialsFor(money, picks) {
+export function specialsFor(money, picks, boosts = []) {
   const held = new Set(armyFrom(picks).cards);
   return SPECIALS.filter(u => !held.has(u.id))
-    .map(u => ({ id: u.id, cost: u.cost, afford: money >= u.cost }));
+    .map(u => ({ id: u.id, cost: priceFor(boosts, u.cost), afford: money >= priceFor(boosts, u.cost) }));
 }
 
-export function stock(money, picks, lives, theirs) {
+export function stock(money, picks, lives, theirs, boosts = []) {
+  const P = c => priceFor(boosts, c);
   const out = [];
   // THE SPECIALS FIRST, because they are what the credits are for. The row only
   // appears when there is one you can both afford and do not already hold.
-  const buyable = specialsFor(money, picks).filter(x => x.afford);
+  const buyable = specialsFor(money, picks, boosts).filter(x => x.afford);
   if (buyable.length) out.push({ k: 'special', cost: Math.min(...buyable.map(x => x.cost)) });
-  if (money >= SHOP.card) out.push({ k: 'card', cost: SHOP.card });
+  if (money >= P(SHOP.card)) out.push({ k: 'card', cost: P(SHOP.card) });
   // ONE upgrade row, not one a card. Nine rows at round three and twelve by
   // round nine is a wall rather than a market, and the choice of WHICH card
   // belongs on the screen that shows the cards.
-  if (money >= SHOP.upgrade && upgradeable(picks).length)
-    out.push({ k: 'upgrade', cost: SHOP.upgrade });
+  if (money >= P(SHOP.upgrade) && upgradeable(picks).length)
+    out.push({ k: 'upgrade', cost: P(SHOP.upgrade) });
   // KIT is permanent and each piece is bought once; an ORDER lasts a round and
   // may be bought again; SABOTAGE needs something of theirs to aim at.
   const { eq } = armyFrom(picks);
-  const kit = KIT.filter(x => !eq.has(x.id) && money >= x.cost);
-  if (kit.length) out.push({ k: 'kit', cost: Math.min(...kit.map(x => x.cost)) });
-  const ords = ORDERS.filter(x => money >= x.cost);
-  if (ords.length) out.push({ k: 'order', cost: Math.min(...ords.map(x => x.cost)) });
-  if (money >= SABOTAGE.cost && theirs && armyFrom(theirs).cards.length)
-    out.push({ k: 'sabotage', cost: SABOTAGE.cost });
-  if (money >= SHOP.offer) out.push({ k: 'offer', cost: SHOP.offer });
-  if (money >= SHOP.life && lives < RULES.lives) out.push({ k: 'life', cost: SHOP.life });
+  const kit = KIT.filter(x => !eq.has(x.id) && money >= P(x.cost));
+  if (kit.length) out.push({ k: 'kit', cost: Math.min(...kit.map(x => P(x.cost))) });
+  const ords = ORDERS.filter(x => money >= P(x.cost));
+  if (ords.length) out.push({ k: 'order', cost: Math.min(...ords.map(x => P(x.cost))) });
+  if (money >= P(SABOTAGE.cost) && theirs && armyFrom(theirs).cards.length)
+    out.push({ k: 'sabotage', cost: P(SABOTAGE.cost) });
+  if (money >= P(SHOP.offer)) out.push({ k: 'offer', cost: P(SHOP.offer) });
+  if (money >= P(SHOP.life) && lives < RULES.lives) out.push({ k: 'life', cost: P(SHOP.life) });
   return out;
 }
 
@@ -647,7 +670,8 @@ export function upgradeable(picks) {
 // The opponent's spending. It exists so the market can be SWEPT -- a shop only
 // the interface knew about could not be -- and it is rewritten here because the
 // first version reached three of the shop's five items and spammed one of them.
-export function spend(money, picks, lives, theirs = []) {
+export function spend(money, picks, lives, theirs = [], boosts = []) {
+  const P = c => priceFor(boosts, c);
   const buys = [];
   let m = money, army = picks.slice(), got = lives;
   // CAPS PER VISIT, because without them it spends the whole purse on whatever
@@ -659,12 +683,12 @@ export function spend(money, picks, lives, theirs = []) {
   for (let guard = 0; guard < 14; guard++) {
     // A life, and only on the last one: the opponent is trying to win this
     // match, not to survive a run.
-    if (got === 1 && m >= SHOP.life) { buys.push({ k: 'life' }); m -= SHOP.life; got++; continue; }
+    if (got === 1 && m >= P(SHOP.life)) { buys.push({ k: 'life' }); m -= P(SHOP.life); got++; continue; }
 
     // One special a visit. The biggest single step on the shelf, and taking all
     // three at once leaves nothing for anything else.
     if (specials < 1) {
-      const can = specialsFor(m, army).filter(x => x.afford);
+      const can = specialsFor(m, army, boosts).filter(x => x.afford);
       if (can.length) {
         const pick = can.sort((a, b) => b.cost - a.cost)[0];
         buys.push({ k: 'special', id: pick.id }); m -= pick.cost; army.push(pick.id); specials++; continue;
@@ -674,7 +698,7 @@ export function spend(money, picks, lives, theirs = []) {
     // One piece of kit a visit, and early, because kit carries between matches
     // and a card does not.
     if (kits < 1) {
-      const can = kitFor(m, army).filter(x => x.afford);
+      const can = kitFor(m, army, boosts).filter(x => x.afford);
       if (can.length) {
         const pick = can.sort((a, b) => b.cost - a.cost)[0];
         buys.push({ k: 'kit', id: pick.id }); m -= pick.cost; army.push(EQ_TAG + pick.id); kits++; continue;
@@ -689,32 +713,32 @@ export function spend(money, picks, lives, theirs = []) {
     const best = Object.keys(count)
       .filter(id => (up[id] || 0) < UPGRADE.max)
       .sort((x, y) => count[y] - count[x] || power(y) - power(x))[0];
-    if (ups < 2 && best && m >= SHOP.upgrade) {
-      buys.push({ k: 'upgrade', id: best }); m -= SHOP.upgrade; army.push(UP_TAG + best); ups++; continue;
+    if (ups < 2 && best && m >= P(SHOP.upgrade)) {
+      buys.push({ k: 'upgrade', id: best }); m -= P(SHOP.upgrade); army.push(UP_TAG + best); ups++; continue;
     }
 
     // SABOTAGE, aimed at the biggest thing they field. The only purchase whose
     // value sits on the other side of the board, and so the only one that has to
     // look at it.
     const enemy = armyFrom(theirs).cards;
-    if (!sabbed && enemy.length && m >= SABOTAGE.cost) {
+    if (!sabbed && enemy.length && m >= P(SABOTAGE.cost)) {
       const target = enemy.slice()
         .sort((x, y) => BY_ID[y].hp * BY_ID[y].count - BY_ID[x].hp * BY_ID[x].count)[0];
-      buys.push({ k: 'sabotage', id: target }); m -= SABOTAGE.cost; sabbed = true; continue;
+      buys.push({ k: 'sabotage', id: target }); m -= P(SABOTAGE.cost); sabbed = true; continue;
     }
 
-    if (m >= SHOP.card) {
+    if (m >= P(SHOP.card)) {
       // The card that best answers what it is up against would be better, and
       // the opponent does not know the enemy army here. Strongest on paper, of
       // the ones it holds fewest of, so it spreads rather than stacks.
       const id = DRAFT.map(u => u.id)
         .sort((x, y) => (count[x] || 0) - (count[y] || 0) || power(y) - power(x))[0];
-      buys.push({ k: 'card', id }); m -= SHOP.card; army.push(id); continue;
+      buys.push({ k: 'card', id }); m -= P(SHOP.card); army.push(id); continue;
     }
 
     // Then the small things, with whatever is left.
-    if (!wide && m >= SHOP.offer) { buys.push({ k: 'offer' }); m -= SHOP.offer; wide = true; continue; }
-    const ord = ORDERS.filter(x => m >= x.cost).sort((a, b) => b.cost - a.cost)[0];
+    if (!wide && m >= P(SHOP.offer)) { buys.push({ k: 'offer' }); m -= P(SHOP.offer); wide = true; continue; }
+    const ord = ordersFor(m, boosts).filter(x => x.afford).sort((a, b) => b.cost - a.cost)[0];
     if (!ordered && ord) { buys.push({ k: 'order', id: ord.id }); m -= ord.cost; ordered = true; continue; }
     break;
   }
@@ -742,7 +766,7 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
   const lives = [start[0], start[1]];
   // Credits carried in from earlier matches, and any extra picks a side has
   // earned by being the thing you are running from.
-  const money = [purse[0] + chestFor(boosts[0]), purse[1] + chestFor(boosts[1])];
+  const money = [purse[0], purse[1]];
   // Bought for the coming round and spent by fighting it: orders a side gave
   // itself, and sabotage the other side paid to put on it.
   const pending = [[], []];
@@ -756,8 +780,10 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
     // doctrine as a rule: a round you lose pays for the round after it.
     if (loser !== null) {
       for (let k = 0; k < RULES.loserBonusPicks; k++) {
-        const cards = offer(rand, offerSize(boosts[loser], wide[loser]), army[loser]);
-        army[loser].push(cards[policy[loser](cards, army[loser], army[1 - loser])]);
+        const cards = offer(rand, offerSize(boosts[loser], wide[loser]), army[loser],
+                            boostArg(boosts[loser], 'named'));
+        army[loser].push(...pickTokens(boosts[loser],
+                          cards[policy[loser](cards, army[loser], army[1 - loser])]));
       }
     }
 
@@ -769,12 +795,12 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
       // A side that has run out of picks takes none, and draws nothing off the
       // stream -- so a seeded run replays whatever the pick counts are.
       if (p < perRound[0]) {
-        const c = offer(rand, offerSize(boosts[0], wide[0]), seen[0]);
-        army[0].push(c[policy[0](c, seen[0], seen[1])]);
+        const c = offer(rand, offerSize(boosts[0], wide[0]), seen[0], boostArg(boosts[0], 'named'));
+        army[0].push(...pickTokens(boosts[0], c[policy[0](c, seen[0], seen[1])]));
       }
       if (p < perRound[1]) {
-        const c = offer(rand, offerSize(boosts[1], wide[1]), seen[1]);
-        army[1].push(c[policy[1](c, seen[1], seen[0])]);
+        const c = offer(rand, offerSize(boosts[1], wide[1]), seen[1], boostArg(boosts[1], 'named'));
+        army[1].push(...pickTokens(boosts[1], c[policy[1](c, seen[1], seen[0])]));
       }
     }
 
@@ -798,15 +824,16 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
     if (lives[0] > 0 && lives[1] > 0) {
       for (const s of [0, 1]) {
         if ((r + 1) % marketEvery(boosts[s]) !== 0) continue;
-        for (const buy of spend(money[s], army[s], lives[s], army[1 - s])) {
-          if (buy.k === 'life') { lives[s]++; money[s] -= SHOP.life; }
-          else if (buy.k === 'upgrade') { army[s].push(UP_TAG + buy.id); money[s] -= SHOP.upgrade; }
-          else if (buy.k === 'card') { army[s].push(buy.id); money[s] -= SHOP.card; }
-          else if (buy.k === 'special') { army[s].push(buy.id); money[s] -= BY_ID[buy.id].cost; }
-          else if (buy.k === 'kit') { army[s].push(EQ_TAG + buy.id); money[s] -= BY_KIT[buy.id].cost; }
-          else if (buy.k === 'order') { pending[s].push(ORD_TAG + buy.id); money[s] -= BY_ORDER[buy.id].cost; }
-          else if (buy.k === 'sabotage') { pending[1 - s].push(SAB_TAG + buy.id); money[s] -= SABOTAGE.cost; }
-          else if (buy.k === 'offer') { wide[s] = 1; money[s] -= SHOP.offer; }
+        const P = c => priceFor(boosts[s], c);
+        for (const buy of spend(money[s], army[s], lives[s], army[1 - s], boosts[s])) {
+          if (buy.k === 'life') { lives[s]++; money[s] -= P(SHOP.life); }
+          else if (buy.k === 'upgrade') { army[s].push(UP_TAG + buy.id); money[s] -= P(SHOP.upgrade); }
+          else if (buy.k === 'card') { army[s].push(buy.id); money[s] -= P(SHOP.card); }
+          else if (buy.k === 'special') { army[s].push(buy.id); money[s] -= P(BY_ID[buy.id].cost); }
+          else if (buy.k === 'kit') { army[s].push(EQ_TAG + buy.id); money[s] -= P(BY_KIT[buy.id].cost); }
+          else if (buy.k === 'order') { pending[s].push(ORD_TAG + buy.id); money[s] -= P(BY_ORDER[buy.id].cost); }
+          else if (buy.k === 'sabotage') { pending[1 - s].push(SAB_TAG + buy.id); money[s] -= P(SABOTAGE.cost); }
+          else if (buy.k === 'offer') { wide[s] = 1; money[s] -= P(SHOP.offer); }
         }
       }
     }
@@ -850,20 +877,41 @@ export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = nu
     // A booster each, and the asymmetry is the choice: three offered to you,
     // one at random to them. `take` indexes your pick, so a sweep can ask what a
     // particular preference is worth.
-    const mine = boosterOffer(rand, boosts[0]);
+    // take: -1 means TAKE NOTHING. Without that control, every figure here is a
+    // ranking against whatever else is in the pool rather than a value -- and a
+    // booster can read as negative purely because preferring it means not
+    // taking the best one.
+    const mine = take < 0 ? [] : boosterOffer(rand, boosts[0]);
     // `prefer` takes a named booster whenever it is offered, which is how a
     // sweep asks what ONE of them is worth rather than what the pool averages.
     const want = prefer && mine.indexOf(prefer);
-    if (mine.length) boosts[0].push(mine[want > 0 || want === 0 ? want : Math.min(take, mine.length - 1)]);
+    if (mine.length) boosts[0].push(nameIt(mine[want > 0 || want === 0 ? want : Math.min(take, mine.length - 1)], r.army[0]));
     const theirs = boosterOffer(rand, boosts[1]);
-    if (theirs.length) boosts[1].push(theirs[0]);
+    if (theirs.length) boosts[1].push(nameIt(theirs[0], r.army[1]));
   }
   return { survived: matches.filter(m => m.won).length, matches, money, boosts, lives };
 }
 
+// A booster that needs a target gets one: the card the side holds most of, which
+// is what a player naming a unit would be doing by hand.
+export function nameIt(id, picks) {
+  if (id !== 'named') return id;
+  // Only a card the draft can deal. Naming a special would be naming a card
+  // that is bought, and the point of Standing muster is a card you can rely on
+  // being OFFERED.
+  const pool = new Set(DRAFT.map(u => u.id));
+  const cards = armyFrom(picks || []).cards.filter(c => pool.has(c));
+  if (!cards.length) return 'named:' + DRAFT[0].id;
+  const count = {};
+  for (const c of cards) count[c] = (count[c] || 0) + 1;
+  return 'named:' + Object.keys(count).sort((a, b) => count[b] - count[a] || power(b) - power(a))[0];
+}
+
 // Three of the boosters a side has not already taken, drawn without replacement.
 export function boosterOffer(rand, held, n = RUN.offered) {
-  const pool = BOOSTS.map(b => b.id).filter(id => !held.includes(id));
+  // `named:walker` is `named` already taken, so held-ness is a prefix test too.
+  const pool = BOOSTS.map(b => b.id)
+    .filter(id => !held.some(h => h === id || h.startsWith(id + ':')));
   const out = [];
   for (let i = 0; i < n && pool.length; i++) out.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
   return out;
