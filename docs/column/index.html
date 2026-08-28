@@ -40,6 +40,19 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
 #toast{position:absolute;left:0;right:0;top:8px;text-align:center;pointer-events:none;
   font-size:12.5px;letter-spacing:.6px;color:var(--ink);text-shadow:0 1px 3px #000;
   opacity:0;transition:opacity .25s}
+/* Tapping a marker answers OVER the field, not in the deck. A four-line answer
+   in a fixed-height status line either clips or resizes the deck, and resizing
+   the deck moves the whole battlefield. */
+#info{position:absolute;left:10px;right:10px;bottom:10px;background:#131b25f2;
+  border:1px solid var(--edge);border-radius:12px;padding:10px 12px;font-size:12px;
+  color:#b8c6d6;line-height:1.4;display:none}
+#info.on{display:block}
+#info b{color:var(--ink)}
+#info q{display:block;color:#93a3b5;margin-top:4px;font-size:11.5px}
+/* A newly committed card lands rather than appears. Sam's note 5: the reveal is
+   the feedback, so it has to be visible without being waited on. */
+@keyframes pop{from{transform:scale(2.4);opacity:0}to{transform:scale(1);opacity:.95}}
+.pop{animation:pop .45s cubic-bezier(.2,.9,.3,1) both;transform-box:fill-box;transform-origin:center}
 #toast.on{opacity:1}
 
 /* --------------------------------------------------------------- the deck */
@@ -48,27 +61,51 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
 /* YOUR hearts live down here with your cards and your half of the field; theirs
    stay in the top bar with their half. Sam's note 3 — the game should sit on
    your side of the screen. */
-#head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+/* Fixed, like the row below it. "Your extra pick — you lost the round" wrapped
+   to two lines and moved the battlefield twenty-two pixels; the reason for a
+   pick belongs in the line under it, which has room for two lines already. */
+#head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;height:22px;overflow:hidden}
 #head .hearts{font-size:15px;letter-spacing:1.5px}
 #prompt{font-size:12px;color:var(--ink);font-weight:600;margin-bottom:2px}
-#sub{font-size:11px;color:var(--dim);margin-bottom:8px;min-height:15px}
-#cards{display:flex;gap:8px}
-.card{flex:1 1 0;min-width:0;border:0;border-radius:12px;background:var(--card);color:var(--cardInk);
+/* FIXED HEIGHTS, ALL THREE. The deck is a flex sibling of the field, so every
+   pixel it gains or loses moves the battlefield -- which is exactly what Sam
+   saw: pick a card and the whole board jumped. The card row keeps its box when
+   empty, the status line keeps two lines whatever it says, and the button keeps
+   its space when there is nothing to press. */
+#sub{font-size:11px;color:var(--dim);margin-bottom:8px;height:31px;overflow:hidden}
+/* THE CONTAINER DECIDES, NOT THE CONTENT. min-height was not enough: a card
+   with a four-line hint is taller than one with two, so the deck grew and shrank
+   with whatever happened to be offered. The row is a fixed box and the cards
+   fill it. */
+#cards{display:flex;gap:8px;height:118px}
+.card{flex:1 1 0;min-width:0;height:100%;overflow:hidden;border:0;border-radius:12px;
+  background:var(--card);color:var(--cardInk);
   box-shadow:inset 0 -13px 0 var(--cardIn);padding:9px 6px 18px;text-align:center;font:inherit;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:96px}
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
 .card:active{transform:translateY(1px)}
 .card.up{background:var(--up);box-shadow:inset 0 -13px 0 var(--upIn)}
 .card b{font-size:13.5px;line-height:1.15}
 .card .cls{font-size:9px;letter-spacing:.8px;text-transform:uppercase;opacity:.6}
 .card .hint{font-size:9.5px;opacity:.75;line-height:1.25}
-#go{width:100%;margin-top:9px;border:0;border-radius:11px;padding:13px;font:inherit;font-weight:700;
+/* Fixed height, like everything else down here. An EMPTY button is twenty-two
+   pixels shorter than one with a word in it, and hiding it with visibility keeps
+   its box but not its content -- so the deck still changed size between a pick
+   and the fight, and the battlefield still moved. */
+#go{width:100%;height:44px;margin-top:9px;border:0;border-radius:11px;padding:0;font:inherit;
+  font-weight:700;display:flex;align-items:center;justify-content:center;
   letter-spacing:1.2px;text-transform:uppercase;background:#2f5e7d;color:#eaf6ff}
 #go:active{background:#26506c}
 #go.ghost{background:#1b232e;color:var(--dim)}
+#go.off{visibility:hidden;pointer-events:none}
 
 /* --------------------------------------------------------------- overlays */
-.sheet{position:absolute;inset:0;background:rgba(8,12,17,.94);z-index:9;overflow-y:auto;
+.sheet{position:absolute;inset:0;background:var(--bg);z-index:9;overflow-y:auto;
   -webkit-overflow-scrolling:touch;padding:22px 18px calc(22px + env(safe-area-inset-bottom))}
+/* A short sheet -- the result of a match, the pause -- sits in the middle of the
+   screen. Top-aligned, three lines of text and a button hang off the top edge
+   with eight hundred pixels of nothing under them. */
+.sheet.centre{display:flex;flex-direction:column;justify-content:center}
+.sheet.centre h1{margin-bottom:6px}
 .sheet h1{font-size:21px;letter-spacing:2px;text-transform:uppercase;margin:6px 0 2px}
 .sheet h2{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);
   margin:22px 0 8px;font-weight:600}
@@ -97,12 +134,13 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
   <div id="fieldWrap">
     <svg id="field" viewBox="0 0 100 140" preserveAspectRatio="xMidYMid meet"></svg>
     <div id="toast"></div>
+    <div id="info"></div>
   </div>
   <div id="deck">
     <div id="head"><div id="prompt"></div><div class="hearts" id="livesA"></div></div>
     <div id="sub"></div>
     <div id="cards"></div>
-    <button id="go" hidden></button>
+    <button id="go" class="off"></button>
   </div>
 </div>
 <script type="module" src="./ui.js"></script>

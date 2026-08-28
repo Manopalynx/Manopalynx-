@@ -645,6 +645,53 @@ field, more than zero mid-battle. An absolute count would pass on a renderer tha
 ring whether or not anything fired. It caught its own first version immediately: aura circles
 carried the same class as event effects, so a still field reported four "shots".
 
+# Notes four to six — the deck was moving the battlefield
+
+**4 and 5 are the same fault seen from two sides, and 4 was never about the cards.**
+
+The deck is a **flex sibling of the field**. Every pixel it gains or loses comes out of the
+battlefield, so the whole board slides. Four separate things were changing its height:
+
+| what | how much |
+|---|---|
+| the card row emptying when a pick was committed | the whole row |
+| cards with a four-line hint next to cards with two | ~20px |
+| *"Your extra pick — you lost the round"* wrapping to two lines | 22px |
+| **an empty button being shorter than one with a word in it** | 22px |
+
+The last one is the one worth remembering. `visibility: hidden` keeps a button's *box* and
+not its *content*, so the deck still resized between a pick and the fight. Everything down
+there has a fixed height now — the card row, the status line, the prompt row, and the button
+— and **the container decides, not the content**: `min-height` was not enough, because a
+taller card still grows the row.
+
+Tapping a marker answers in a panel **over the field** rather than in the status line, for
+the same reason: four lines of answer in a fixed-height line either clips or resizes the deck.
+
+**5 — the reveal stopped asking permission.** A Continue button after every selection is a
+tap that carries no decision, three times a round, nine rounds a match. The reveal is still
+the point — you have to see what you both took — so it stays, at 750ms, with the committed
+counters **landing** on the field: a ring that scales in on the card just added, or on *every
+copy* of the card an upgrade improved, which is the honest picture of what that pick did.
+
+A saved match reloaded mid-reveal has no timer waiting for it, so resuming makes the same
+call the timer would have made, off the same seeded stream — the offer is the one it would
+have given.
+
+**6 — the result sits in the middle of the screen**, opaque rather than a wash over the
+board, and it says what the match was: cards, picks spent on upgrades, bodies at the end,
+lives left.
+
+`play.mjs` is at fifteen claims. Three are new and all three are measurements of his notes
+rather than of my intentions:
+
+- **the field's own height never changes during a draft** — a set of every height seen at
+  every draft phase, and it must have one member. It reported six at first, then two, then
+  one, and the last one was the empty button.
+- **no reveal shows a button.** Mutated by putting Continue back: 144 of 144 reveals showed
+  one, red.
+- **the result headline sits between 22% and 62% down the screen.**
+
 ## Next, and it is his
 
 **Battlefield variety.** His answer to 65% of compositions settling 95/5 is not to soften the

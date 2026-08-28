@@ -102,13 +102,23 @@ const state = () => page.evaluate(() => {
              document.getElementById('livesB').textContent.replace(/\s/g, '').length],
     lit: [...document.querySelectorAll('#livesA')].map(e => e.innerHTML.split('<span')[0].length),
     prompt: document.getElementById('prompt').textContent,
-    go: document.getElementById('go').hidden ? null : document.getElementById('go').textContent,
+    solo: !!(s && s.solo),
+    go: (() => { const g = document.getElementById('go');
+                 return g.classList.contains('off') ? null : g.textContent; })(),
+    // THE FIELD'S OWN HEIGHT. It is a flex sibling of the deck, so anything the
+    // deck gains or loses comes out of the battlefield and the whole board
+    // moves. This is the number Sam's note 4 is about.
+    fieldH: Math.round(document.getElementById('fieldWrap').getBoundingClientRect().height),
     offer: document.querySelectorAll('#cards .card').length
   };
 });
 
 let rounds = 0, mismatch = null, deadEnd = null;
 let sides = null, fxStill = null, fxFiring = 0;
+// Every field height seen during the draft, and whether a reveal ever needed a
+// tap. Both of these are measurements of Sam's notes 4 and 5.
+const heights = new Set();
+let revealTaps = 0, revealsSeen = 0;
 // Three moments Sam can look at without running anything: the draft, the battle
 // mid-flight, and the result. He is phone-only — a screenshot is the only
 // instrument pointed at this until it is on his Home Screen.
@@ -118,6 +128,20 @@ for (let guard = 0; guard < 400; guard++) {
   const s = await state();
   if (!s.phase) break;
   if (process.env.TRACE) console.log('   trace', guard, JSON.stringify(s));
+
+  // Draft phases only: the battle and the result legitimately show a different
+  // button, and the field is not being tapped through then.
+  if (s.phase === 'pick' || s.phase === 'revealed' || s.phase === 'ready')
+    heights.add(`${s.fieldH}px at ${s.phase}${s.solo && s.phase === 'pick' ? ' (extra pick)' : ''}`);
+
+  if (s.phase === 'revealed') {
+    // NO TAP HERE. If a button has appeared, the reveal is asking permission to
+    // end, which is the thing that got tedious.
+    revealsSeen++;
+    if (s.go !== null) revealTaps++;
+    await page.waitForTimeout(120);
+    continue;
+  }
 
   if (s.phase === 'pick') {
     if (s.offer !== 3) { deadEnd = `offered ${s.offer} cards at ${s.prompt}`; break; }
@@ -150,8 +174,6 @@ for (let guard = 0; guard < 400; guard++) {
       if (pause !== true) { deadEnd = `the pause did not back out: ${pause}`; break; }
     }
     await page.locator('#cards .card').first().click();
-  } else if (s.go === 'Continue') {
-    await page.click('#go');
   } else if (s.go === 'Fight') {
     // At the moment of the fight the deployment is on screen and every card is
     // alive, so this is the one place the two counts must agree exactly.
@@ -173,7 +195,7 @@ for (let guard = 0; guard < 400; guard++) {
         // finished game, and read as the page hanging.
         const g = document.getElementById('go');
         return !!document.querySelector('#again') ||
-               (!g.hidden && g.textContent === 'Next round');
+               (!g.classList.contains('off') && g.textContent === 'Next round');
       });
       if (done) break;
       // DIFFERENTIAL, half two: mid-battle, with the log driving the screen.
@@ -210,6 +232,14 @@ for (let guard = 0; guard < 400; guard++) {
 // with the round count this file had just counted itself, which stayed green
 // through a mutation that spent a life on every OTHER round.
 const end = await page.evaluate(() => ({
+  // Where the result sits on the screen. Top-aligned, it hangs off the top edge
+  // with most of a phone of nothing underneath it.
+  centred: (() => {
+    const h = document.querySelector('.sheet h1');
+    if (!h) return null;
+    const r = h.getBoundingClientRect();
+    return { mid: r.top + r.height / 2, view: window.innerHeight };
+  })(),
   lit: ['livesA', 'livesB'].map(id =>
     document.getElementById(id).innerHTML.split('<span')[0].replace(/\s/g, '').length),
   over: !!document.querySelector('#again'),
@@ -242,6 +272,20 @@ else bad('the arithmetic closes', [
 if (end.saveGone) ok('a finished match does not come back as a resume');
 else bad('a finished match does not come back as a resume', ['the save survived the result screen']);
 
+const px = new Set([...heights].map(h => h.split('px')[0]));
+if (px.size === 1) ok(`the battlefield never moves during a draft (${[...px][0]}px throughout)`);
+else bad('the battlefield never moves during a draft', [
+  ...[...heights].sort(),
+  'the deck is a flex sibling of the field, so every pixel it changes moves the whole board'
+]);
+
+if (revealsSeen > 0 && revealTaps === 0)
+  ok(`a reveal ends by itself — ${revealsSeen} of them, no taps`);
+else bad('a reveal ends by itself', [
+  revealsSeen === 0 ? 'no reveal was ever observed' : `${revealTaps} of ${revealsSeen} reveals showed a button`,
+  'a tap that carries no decision, three times a round, nine rounds a match'
+]);
+
 if (sides === true) ok('your army is drawn at the bottom of the field, theirs at the top');
 else bad('your army is drawn at the bottom of the field', [
   sides === null ? 'never reached a deployment to measure' : sides,
@@ -256,6 +300,13 @@ else bad('shots and blasts are drawn only while the battle runs', [
                  : 'effects are drawn when nothing is being fired, so they are decoration'
 ]);
 
+const c = end.centred;
+if (c && c.mid > c.view * 0.22 && c.mid < c.view * 0.62)
+  ok(`the result sits in the middle of the screen (${(c.mid / c.view * 100).toFixed(0)}% down)`);
+else bad('the result sits in the middle of the screen', [
+  c ? `the headline is ${(c.mid / c.view * 100).toFixed(0)}% down a ${c.view}px screen`
+    : 'no result headline found']);
+
 if (pause === true) ok('the round can be paused for the roster and backed out of, mid-match');
 else bad('the round can be paused for the roster and backed out of', [
   pause === null ? 'the pause was never reached' : pause,
@@ -269,6 +320,6 @@ await page.screenshot({ path: rp(HERE, 'play.png') });
 await browser.close();
 server.close();
 
-console.log(`\n${12 - failed} of 12 claims hold`);
+console.log(`\n${15 - failed} of 15 claims hold`);
 console.log(`written: docs/column/test/play-draft.png, play-battle.png, play.png\n`);
 process.exit(failed ? 1 : 0);

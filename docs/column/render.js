@@ -68,10 +68,12 @@ export function groupByCard(live) {
  * The whole field as SVG, in field units.
  * @param {object[]} live  bodies, as the resolver's onTick hands them over
  * @param {object}   opt   { pick: 'key' to ring one counter,
- *                          flash: Set of card keys that took a hit this frame }
+ *                          flash: Set of card keys that took a hit this frame,
+ *                          pop:   Set of card keys just committed in the draft }
  */
 export function draw(live, opt = {}) {
   const flash = opt.flash || new Set();
+  const pop = opt.pop || new Set();
   return groupByCard(live).map(g => {
     g.y = flipY(g.y);
     const spec = BY_ID[g.id], c = SIDE[g.side];
@@ -87,6 +89,11 @@ export function draw(live, opt = {}) {
     // marker flinches, something in the battle actually landed on it.
     const hit = flash.has(g.key);
     const shake = hit ? (g.n % 2 ? 0.5 : -0.5) : 0;
+    // JUST COMMITTED. A ring that lands on the counter, so a pick answers on the
+    // field instead of in a sentence you have to press past.
+    const landed = pop.has(g.key)
+      ? `<circle class="pop" cx="${g.x}" cy="${g.y}" r="${s + 2.6}" fill="none"
+           stroke="${c.line}" stroke-width="0.7"/>` : '';
     const ring = opt.pick === g.key
       ? `<circle cx="${g.x}" cy="${g.y}" r="${s + 2.2}" fill="none" stroke="${c.line}"
            stroke-width="0.5" stroke-dasharray="1.6 1.2" opacity="0.9"/>` : '';
@@ -95,7 +102,7 @@ export function draw(live, opt = {}) {
     // and a field of letters you cannot interrogate teaches nobody the counters.
     return `<g data-key="${g.key}" data-id="${g.id}" data-side="${g.side}"` +
       (shake ? ` transform="translate(${shake} 0)"` : '') + `>` + ring +
-      (hit ? shape(spec.w, g.x, g.y, s + 1.2, 'none', '#ffffff', 0) : '') +
+      landed + (hit ? shape(spec.w, g.x, g.y, s + 1.2, 'none', '#ffffff', 0) : '') +
       shape(spec.w, g.x, g.y, s, c.fill, c.line) +
       // Strength left as a bar under the counter. A card at 20% is the thing a
       // player needs to see before choosing the next pick, and fading the whole

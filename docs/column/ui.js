@@ -17,7 +17,7 @@ import { draw, effects, auras, GROUND, CODE, SIDE, shape } from './render.js';
 
 const $ = id => document.getElementById(id);
 const el = { bar: $('bar'), la: $('livesA'), lb: $('livesB'), who: $('who'),
-             field: $('field'), toast: $('toast'), prompt: $('prompt'),
+             field: $('field'), toast: $('toast'), info: $('info'), prompt: $('prompt'),
              sub: $('sub'), cards: $('cards'), go: $('go') };
 
 const SAVE = 'column-save';
@@ -33,6 +33,14 @@ const PLAYBACK_FRAMES = 230;
 // would look empty while it was being fought. Four ticks of overlap costs
 // nothing and is the difference between seeing fire and not.
 const LINGER = 4;
+
+// How long a committed pick stays on screen before the next three cards arrive.
+// Sam's note 5: a Continue button after every selection is a tap that carries no
+// decision, three times a round, nine rounds a match. The reveal is still the
+// point -- you have to SEE what you both took -- so it stays, it just stops
+// asking permission to end.
+const REVEAL_MS = 750;
+let revealTimer = null;
 
 /* ------------------------------------------------------------------- state */
 let S = null;
@@ -92,13 +100,13 @@ function startRound() {
 // it stood BEFORE this pick, then both are revealed, which is Sam's structure
 // and the reason a persona that reads the board is worth having.
 function next() {
-  S.inspect = null;
+  S.inspect = null; el.info.className = '';
   if (S.bonus === 1) {                       // the opponent's extra pick, in the open
     const cards = offer(rand, RULES.offer, S.army[1]);
     const tok = cards[POLICIES[S.opp](cards, S.army[1].slice(), S.army[0].slice())];
     S.army[1].push(tok);
-    S.bonus = null; S.mine = null; S.theirs = tok; S.phase = 'revealed';
-    return render();
+    S.bonus = null; S.mine = null; S.theirs = tok;
+    return reveal(popKeys(1, tok));
   }
   if (S.bonus === 0) {                       // your extra pick, taken alone
     S.offer = offer(rand, RULES.offer, S.army[0]);
@@ -116,20 +124,45 @@ function next() {
 }
 
 function commit(i) {
-  S.inspect = null;
+  S.inspect = null; el.info.className = '';
   const seen = [S.army[0].slice(), S.army[1].slice()];
   const tok = S.offer[i];
   S.army[0].push(tok);
   S.mine = tok; S.theirs = null;
+  const keys = popKeys(0, tok);
   if (S.solo) { S.bonus = null; }
   else {
     const t = S.oppOffer[POLICIES[S.opp](S.oppOffer, seen[1], seen[0])];
     S.army[1].push(t);
     S.theirs = t;
     S.pickNo++;
+    keys.push(...popKeys(1, t));
   }
+  reveal(keys);
+}
+
+// Which counters this pick lit up. A reinforcement is the card just added; an
+// UPGRADE adds nothing to the field, so it lights every copy of the card it
+// improved -- which is also the honest picture of what the pick did.
+function popKeys(side, tok) {
+  const cards = armyFrom(S.army[side]).cards;
+  if (!isUp(tok)) return [side + ':' + (cards.length - 1)];
+  const id = tokId(tok);
+  return cards.map((x, i) => (x === id ? side + ':' + i : null)).filter(Boolean);
+}
+
+// Show what was committed, then move on by itself.
+function reveal(keys) {
+  S.pop = keys;
   S.phase = 'revealed';
   save(); render();
+  clearTimeout(revealTimer);
+  revealTimer = setTimeout(() => {
+    if (!S || S.phase !== 'revealed') return;
+    S.pop = null;
+    S.phase = 'pick';
+    next();
+  }, REVEAL_MS);
 }
 
 function fight() {
@@ -195,7 +228,7 @@ function paint(live, from, to) {
     fx = out.svg; flash = out.flash;
   }
   el.field.innerHTML = GROUND + (bodies.length ? auras(bodies) : '') + fx +
-    draw(bodies, { pick: S && S.inspect, flash });
+    draw(bodies, { pick: S && S.inspect, flash, pop: S && S.pop && new Set(S.pop) });
 }
 
 // What is on the field right now: mid-battle it is the frame being played, and
@@ -239,7 +272,10 @@ function cardFace(tok, i) {
       `<span class="hint">+${(UPGRADE.step * 100) | 0}% health &amp; damage<br>` +
       `level ${lvl} of ${UPGRADE.max} &middot; ${copies} on the field</span>`
     : `<b>${u.n}</b><span class="cls">${u.w} &middot; ${u.count} ${u.count === 1 ? 'body' : 'bodies'}</span>` +
-      `<span class="hint">${traits(u).join('<br>')}</span>`;
+      // Three at most on a card face. A fourth line fits the box only because
+      // the box now clips, and a clipped trait is a trait the player cannot
+      // read; the roster shows all of them.
+      `<span class="hint">${traits(u).slice(0, 3).join('<br>')}</span>`;
   return b;
 }
 
@@ -249,17 +285,16 @@ function render() {
   el.who.innerHTML = `Round ${S.round + 1} &middot; ${PERSONAS[S.opp].n} &nbsp;&#9776;`;
   paint(board());
   el.cards.innerHTML = '';
-  el.go.hidden = true;
-  el.go.className = '';
+  noButton();
 
   const size = armyFrom(S.army[0]).cards.length;
   const theirs = armyFrom(S.army[1]).cards.length;
 
   if (S.phase === 'pick') {
-    el.prompt.textContent = S.solo
-      ? 'Your extra pick — you lost the round'
-      : `Pick ${S.pickNo + 1} of ${RULES.picksPerRound}`;
-    el.sub.innerHTML = `${size} cards to ${theirs} &middot; they are choosing at the same time`;
+    el.prompt.textContent = S.solo ? 'Your extra pick' : `Pick ${S.pickNo + 1} of ${RULES.picksPerRound}`;
+    el.sub.innerHTML = S.solo
+      ? `You lost the round, so this one is yours alone &middot; ${size} cards to ${theirs}`
+      : `${size} cards to ${theirs} &middot; they are choosing at the same time`;
     S.offer.forEach((tok, i) => el.cards.appendChild(cardFace(tok, i)));
   }
 
@@ -269,7 +304,6 @@ function render() {
       S.mine ? `<b style="color:var(--blue)">You: ${label(S.mine)}</b>` : '',
       S.theirs ? `<b style="color:var(--amber)">${PERSONAS[S.opp].n}: ${label(S.theirs)}</b>` : ''
     ].filter(Boolean).join(' &nbsp;·&nbsp; ');
-    button('Continue', () => { S.phase = 'pick'; save(); next(); });
   }
 
   if (S.phase === 'ready') {
@@ -302,10 +336,19 @@ const label = tok => isUp(tok)
   ? `${BY_ID[tokId(tok)].n} UP!`
   : `${BY_ID[tok].n} ×${BY_ID[tok].count}`;
 
+// The button always occupies its space and sometimes has nothing in it. Hiding
+// it with `hidden` collapsed the deck by fifty-three pixels, and the deck is a
+// flex sibling of the field, so the whole battlefield slid down the screen every
+// time a pick was made. That is Sam's note 4 and it was never about the cards.
 function button(text, fn) {
-  el.go.hidden = false;
+  el.go.className = '';
   el.go.textContent = text;
   el.go.onclick = fn;
+}
+function noButton() {
+  el.go.className = 'off';
+  el.go.textContent = '';
+  el.go.onclick = null;
 }
 
 /* --------------------------------------------------------------- inspecting */
@@ -315,19 +358,23 @@ function button(text, fn) {
 el.field.addEventListener('click', e => {
   if (!S) return;
   const g = e.target.closest && e.target.closest('g[data-id]');
-  if (!g) { S.inspect = null; paint(board()); return; }
+  if (!g) { S.inspect = null; el.info.className = ''; paint(board()); return; }
   const u = BY_ID[g.dataset.id];
   S.inspect = g.dataset.key;
-  el.sub.innerHTML = `<b>${u.n}</b> — ${u.w}, ${u.count} ${u.count === 1 ? 'body' : 'bodies'} ` +
-    `&middot; ${traits(u).join(' &middot; ')}<br><q style="color:#93a3b5">${u.q}</q>` +
-    `<span class="src">${u.qv ? 'from the novel' : 'written for the game'}</span>`;
+  // OVER the field, not in the deck. Four lines of answer in the status line
+  // resized the deck, and resizing the deck moves the battlefield -- the same
+  // fault as the cards, arriving by a different route.
+  el.info.className = 'on';
+  el.info.innerHTML = `<b>${u.n}</b> — ${u.w}, ${u.count} ${u.count === 1 ? 'body' : 'bodies'} ` +
+    `&middot; ${traits(u).join(' &middot; ')}<q>${u.q}</q>` +
+    `<span class="src">${u.qv ? "the author's line" : 'written for the game'}</span>`;
   paint(board());
 });
 
 /* ------------------------------------------------------------- the overlays */
-function sheet(html) {
+function sheet(html, centre) {
   const d = document.createElement('div');
-  d.className = 'sheet';
+  d.className = centre ? 'sheet centre' : 'sheet';
   d.innerHTML = html;
   document.getElementById('app').appendChild(d);
   return d;
@@ -348,11 +395,12 @@ el.who.addEventListener('click', () => {
       lines are the author's.</i></button>
     <button class="pick" id="quit"><b>Abandon and start again</b><i>Choose a different
       opponent. This match is not kept.</i></button>
-    <div class="foot">${BUILD}</div>`);
+    <div class="foot">${BUILD}</div>`, true);
   d.querySelector('#close').onclick = () => d.remove();
   d.querySelector('#roster2').onclick = () => roster();
   d.querySelector('#quit').onclick = () => {
     try { localStorage.removeItem(SAVE); } catch (e) {}
+    clearTimeout(revealTimer);
     S = null;
     document.querySelectorAll('.sheet').forEach(x => x.remove());
     paint([]);
@@ -381,7 +429,15 @@ function menu() {
   d.querySelectorAll('[data-opp]').forEach(b =>
     b.onclick = () => { document.querySelectorAll('.sheet').forEach(x => x.remove()); newMatch(b.dataset.opp); });
   const r = d.querySelector('#resume');
-  if (r) r.onclick = () => { d.remove(); render(); };
+  // A match saved mid-reveal has no timer waiting to advance it -- the timer
+  // does not survive a closed tab. Advancing is the same call the timer would
+  // have made, off the same seeded stream, so the offer is the one it would
+  // have given.
+  if (r) r.onclick = () => {
+    d.remove();
+    if (S.phase === 'revealed') { S.pop = null; S.phase = 'pick'; next(); }
+    else render();
+  };
   d.querySelector('#roster').onclick = () => roster();
 }
 
@@ -412,12 +468,22 @@ function roster() {
 function over() {
   const won = S.lives[1] <= 0;
   const opp = PERSONAS[S.opp].n;
+  const mine = armyFrom(S.army[0]);
+  const ups = S.army[0].filter(isUp).length;
   try { localStorage.removeItem(SAVE); } catch (e) {}
+  clearTimeout(revealTimer);
   const d = sheet(`<h1>${won ? 'The field is yours' : 'The column is broken'}</h1>
     <p>${won ? `${opp} is out of lives after ${S.round} rounds.`
-             : `${opp} takes it after ${S.round} rounds. You finished with ${armyFrom(S.army[0]).cards.length} cards.`}</p>
-    <button class="pick" id="again"><b>Again</b></button>`);
-  d.querySelector('#again').onclick = () => { d.remove(); document.querySelectorAll('.sheet').forEach(x => x.remove()); menu(); };
+             : `${opp} takes it after ${S.round} rounds.`}</p>
+    <h2>Your column</h2>
+    <p>${mine.cards.length} cards${ups ? `, ${ups} pick${ups === 1 ? '' : 's'} spent on upgrades` : ''} —
+       ${mine.cards.reduce((n, id) => n + BY_ID[id].count, 0)} bodies at the end.
+       ${S.lives[0]} ${S.lives[0] === 1 ? 'life' : 'lives'} left.</p>
+    <button class="pick" id="again"><b>Again</b></button>`, true);
+  d.querySelector('#again').onclick = () => {
+    document.querySelectorAll('.sheet').forEach(x => x.remove());
+    S = null; paint([]); menu();
+  };
 }
 
 /* -------------------------------------------------------------------- start */
