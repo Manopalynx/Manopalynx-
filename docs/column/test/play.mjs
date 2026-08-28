@@ -443,6 +443,7 @@ await page.screenshot({ path: rp(HERE, 'play.png') });
     break;
   }
 
+  await page.screenshot({ path: rp(HERE, 'play-run.png') });
   const end = await page.evaluate(() => ({
     head: (document.querySelector('.sheet h1') || {}).textContent || null,
     boosts: [...document.querySelectorAll('.sheet [data-b]')].map(b => b.dataset.b),
@@ -498,5 +499,5 @@ await browser.close();
 server.close();
 
 console.log(`\n${ran - failed} of ${ran} claims hold`);
-console.log(`written: play-roster.png, play-draft.png, play-inspect.png, play-market.png, play-battle.png, play.png\n`);
+console.log(`written: play-roster.png, play-draft.png, play-inspect.png, play-market.png, play-battle.png, play-run.png, play.png\n`);
 process.exit(failed ? 1 : 0);
