@@ -88,7 +88,7 @@ rather than balanced on a spreadsheet:
 |---|---|---|
 | **Walker** | four storeys, main cannon, Dominion | the knee joint; terrain — Horizon's terrace cut |
 | **Ultra Armor** | massed fire *"skidded off the black plate like rain off glass"* | ship-grade weapons, or a crack in the shoulder |
-| **Karkinos** | six-legged, climbs sheer walls | fire under its arc while it is committed to the climb |
+| **Karkinos** | **four** vast legs, climbs sheer walls, breaches by going over | fire under its arc while it is committed to the climb |
 | **Amabie** | walking siege gun, indirect, huge reach | anything that closes |
 | **Crawler swarm** | dog-sized, moves on walls and ceilings | area effects — **and it converges on mass, so it can be baited** |
 | **Brute** | four arms, absorbs massed fire | concentrated single-target |
@@ -334,3 +334,62 @@ I would take (1). It is the only one that attacks the mechanism rather than its 
   need the square-law question settled first, because both change how numbers convert into
   strength.
 - A round runs up to about 80 seconds at its longest.
+
+
+---
+
+# Movement: line and seek
+
+Sam approved this and the manuscript decided it. Combat now has two movement modes, set
+per card in the data rather than as one rule in the resolver:
+
+- **`line`** (nine cards) — advances with the army at one **`COLUMN_PACE`**, holds
+  formation, fights whatever comes within reach.
+- **`seek`** (three cards) — leaves the line and crosses the field for whatever `tgt`
+  names.
+
+**The three seekers are seekers because the book says so.** The Karkinos *"hauled itself
+over the wall's crown"*; the crawlers move *"up the walls and along the ceiling, moving in
+all planes at once"*; the fireship's entire purpose is to reach the enemy's centre. None of
+that was a design choice — it was research.
+
+## This is what fixed the square law
+
+The frontage rule proposed earlier is **not needed**. Correct formation does the same job,
+because a line that holds means extra bodies queue behind it instead of all engaging at
+once — which is what frontage was for.
+
+| | before | after |
+|---|---|---|
+| one extra card against an identical army | 80% | **59%** |
+| mixed nine-card armies settled 95/5 | 72% | **29%** |
+| local counters decisive | 79% | 73% |
+| three-cycles, every unit inside one | 129 | 66 |
+| losing on purpose | doesn't pay | doesn't pay |
+
+**Design point 6 now holds**: card count is an advantage rather than a result, and
+compositions are contested rather than settled at the draft. The unit graph still passes
+3 of 3 and the match claims went from 1 of 5 to 3 of 5.
+
+## Four wrong turns on the way, all cheap because the render caught them
+
+1. **One global movement rule** deleted three cards. Karkinos, Volt and Crawler Swarm fell
+   out of every cycle and the graph went 3 of 3 to 0 of 3, because their identity is
+   *where they walk*. Reverted, then done per-card.
+2. **"The column marches at the pace of its slowest"** is a good sentence and a bad
+   implementation: the slowest is the artillery at 0.28 against a crawler's 2.1, so the
+   whole line crawled for forty seconds while ranged cards shot it. `COLUMN_PACE` is one
+   fixed number now, and **`spd` means nothing for a card that marches in formation** — it
+   is a seeker's stat.
+3. **Line cards with nothing in reach fell through to `continue`** and never advanced at
+   all. Every line card stood on its start line for the whole battle while the seekers
+   fought alone. The render showed it in one frame: two untouched rows and a scuffle in
+   the middle.
+4. **Karkinos has four legs, not six.** Corrected above; it was invented.
+
+## Still open
+
+- **Alternation sits at 65%**, right on the boundary. The loser's bonus is still very
+  slightly light.
+- **107 bodies on screen at the end.** Untouched by any of this — it is the upgrade-card
+  problem, and upgrades are next.

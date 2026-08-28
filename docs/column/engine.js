@@ -47,6 +47,18 @@ const PER_RANK = 6;
 // One extra card was winning 82% of otherwise identical armies because of it.
 const SQUAD_SPREAD = 3.2;    // how far apart bodies of one card stand
 
+// A COLUMN MARCHES AT ONE PACE, and it is this number rather than each card's
+// own speed. Taking the slowest card in the column instead was tried and it
+// does not work: the slowest is the artillery at 0.28 against a crawler's 2.1,
+// a 7.5x spread, so the whole line crawled for forty seconds while ranged cards
+// shot it, range decided every battle, and seven of twelve cards fell out of
+// the counter graph.
+//
+// So `spd` means nothing for a card that marches in formation -- it is a
+// property of SEEKERS only, where crossing the field quickly is the whole
+// point. That is also what the screenshots show: a line advances together.
+const COLUMN_PACE = 0.8;
+
 function deploy(cards, side, rand) {
   const out = [];
   cards.forEach((id, ci) => {
@@ -136,9 +148,38 @@ export function resolve(a, b, seed, keepLog = false, onTick = null) {
         for (const e of foes) if (dist(u, e) <= spec.auraR) add(e, spec.aura);
       }
 
-      const tgt = choose(u, foes);
-      if (!tgt) continue;
+      // A SEEK card crosses the field for whatever `tgt` names — over the wall,
+      // along the ceiling, into the centre. A LINE card fights what has come
+      // within reach and otherwise advances with its army.
+      const seeks = spec.move === 'seek';
+      const reach = seeks ? foes : foes.filter(e => e.alive && dist(u, e) <= spec.rng);
+      const tgt = choose(u, reach);
+
+      // A line card with nothing in reach ADVANCES. The first version fell
+      // through to `continue` here, so every line card stood on its start line
+      // for the whole battle and only the seekers ever fought. The render
+      // showed it immediately — two untouched rows and a scuffle in the middle
+      // — and the counter graph had collapsed to 36% because nine of twelve
+      // cards were never closing with anything.
+      if (!tgt) {
+        if (!seeks) {
+          moves.push([u, 0, (u.side === 0 ? 1 : -1) * COLUMN_PACE]);
+          if (u.cd > 0) u.cd--;
+        }
+        continue;
+      }
       const d = dist(u, tgt);
+
+      if (!seeks && d > spec.rng) {
+        // THE COLUMN MARCHES AT THE PACE OF ITS SLOWEST. Advancing at each
+        // unit's own speed made the army arrive in speed order — a crawler
+        // crossing the field in six seconds and an artillery piece in forty —
+        // so the fast cards arrived alone and died before the rest were there
+        // and two lines never existed at the same moment to meet.
+        moves.push([u, 0, (u.side === 0 ? 1 : -1) * COLUMN_PACE]);
+        if (u.cd > 0) u.cd--;
+        continue;
+      }
 
       if (d <= spec.rng && u.cd <= 0) {
         const dealt = [];
@@ -159,7 +200,10 @@ export function resolve(a, b, seed, keepLog = false, onTick = null) {
     }
 
     // ---- apply ----
-    for (const [u, dx, dy] of moves) { u.x += dx; u.y += dy; }
+    for (const [u, dx, dy] of moves) {
+      u.x = Math.max(2, Math.min(FIELD.w - 2, u.x + dx));
+      u.y = Math.max(2, Math.min(FIELD.d - 2, u.y + dy));
+    }
     for (const [u, d] of damage) u.hp -= d;
     for (const u of live) if (u.dotT > 0) u.dotT--;
 

@@ -67,7 +67,16 @@ export const MAX_TICKS = 3000;          // 5 minutes; a battle this long is a dr
 //   spd    field units per tick
 //   arm    flat damage subtracted from every incoming hit, to a floor of 1
 //   splash radius of area damage around the target
-//   tgt    'near' | 'big' | 'back'  — who this unit walks towards
+//   tgt    'near' | 'big' | 'back'  — who it shoots, among what it can reach
+//   move   'line' (default) | 'seek'. A LINE card advances with the rest of its
+//          army and holds formation; a SEEK card leaves the line and crosses for
+//          whatever `tgt` names. Three cards seek, and the book says so of each:
+//          the Karkinos "hauled itself over the wall's crown", the crawlers move
+//          "up the walls and along the ceiling, moving in all planes at once",
+//          and the fireship's whole purpose is to reach the enemy's centre.
+//          One global movement rule was tried and it deleted those three units:
+//          the counter graph went 3 of 3 to 0 of 3 and all three fell out of
+//          every cycle, because their identity is WHERE THEY WALK.
 //   defl   fraction of RANGED damage refused. The Kraken rule: a shield tuned
 //          for weapons fire that slow things pass straight through
 //   dot    damage per tick applied for `dotT` ticks after a hit
@@ -97,10 +106,15 @@ export const UNITS = [
     q: 'A walking artillery piece the size of a customs house.' },
 
   // ---- medium: two bodies, specialised roles -----------------------------
+  // Four legs, not six -- "waiting on its four vast legs". It breaches by
+  // climbing: over the wall rather than through the gate, which is why it seeks.
   { id: 'karkinos', n: 'Karkinos', w: 'medium',
-    hp: 380, dmg: 40, rate: 10, rng: 6, spd: 1.6, tgt: 'back',
+    hp: 380, dmg: 40, rate: 10, rng: 6, spd: 1.6, tgt: 'back', move: 'seek',
     q: 'Front legs punching anchor-deep into the plate and stone, the rear legs following.' },
 
+  // INVENTED. "Deflector" appears in the manuscript zero times -- the name and
+  // the unit are written for the game. Only its line is the author's, and that
+  // line is the Kraken's shield, which is where the property comes from.
   { id: 'deflector', n: 'Deflector', w: 'medium',
     hp: 420, dmg: 26, rate: 12, rng: 4, spd: 0.72, defl: 0.85, tgt: 'near',
     q: 'Its shields are tuned for weapons fire. Pods fall through.', qv: 1 },
@@ -121,7 +135,7 @@ export const UNITS = [
     q: 'You’re soldiers of the Union. The fleet has not fired. Until it fires, you check your sectors.' },
 
   { id: 'swarm', n: 'Crawler Swarm', w: 'light',
-    hp: 155, dmg: 27, rate: 4, rng: 2, spd: 2.1, tgt: 'big',
+    hp: 155, dmg: 27, rate: 4, rng: 2, spd: 2.1, tgt: 'big', move: 'seek',
     q: 'They hit the crowded street the way current hits a shoal.' },
 
   { id: 'neurite', n: 'Neurite', w: 'light',
@@ -129,7 +143,7 @@ export const UNITS = [
     q: 'They aren’t animals. Whatever is behind their eyes was aiming.', qv: 1 },
 
   { id: 'fireship', n: 'Fireship', w: 'light',
-    hp: 175, dmg: 4, rate: 20, rng: 3, spd: 1.15, tgt: 'near', boom: { r: 15, d: 120 },
+    hp: 175, dmg: 4, rate: 20, rng: 3, spd: 1.15, tgt: 'near', move: 'seek', boom: { r: 15, d: 120 },
     q: 'Set autopilot, best speed, into the swarm’s central mass. Then get to your pods.' }
 ];
 
