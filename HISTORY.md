@@ -2284,3 +2284,36 @@ now, and bails rather than playing on.
 Second time in one session that a check I had just written was decoration until it was
 mutated, and both times reading it had told me nothing. **Write the mutation before
 believing the green.**
+
+### Part four — his first three notes, and the trap in the third
+
+He played it and sent three notes: **visual projectiles and AOE**, **damage indicators — a
+flash or a slight vibration**, and **flip the screen so the player is at the bottom, with the
+cards, rather than looking at the top after every selection.**
+
+All three were interface, all three were unambiguous, and none of them needed discussing.
+The instruction to discuss first protects *his design suggestions*; notes correcting my
+interface are the other direction and are simply work.
+
+**Notes 1 and 2 were already paid for and nobody had collected.** The resolver has emitted a
+full replay log since the engine was written — every hit with attacker, target and damage,
+every death, every detonation — and **nothing had ever read it**. So a battle was a crowd of
+markers thinning out for no visible reason. Turning `keepLog` on and drawing it answered both
+notes with no new rule anywhere: the tracer test is the resolver's own melee cutoff, the
+splash ring is the attacker's own `splash`, the detonation is its own `boom.r`. **A ring that
+looks wrong means the number is wrong in `data.js`, and it is wrong in the fight too.**
+
+**Note 3 had the trap.** The obvious implementation is to flip the deployment. That would
+change the deployment jitter, and with it every seeded battle, every figure in this folder's
+tests, and every saved match — a cosmetic note silently rewriting the game. The mirror is one
+function in `render.js` and the engine still deploys side 0 at low `y`.
+
+Related and worth keeping: **effects that are correct are still invisible.** Drawing only the
+ticks a painted frame stepped over is exactly right, and a short battle plays at one tick a
+frame, so every shot flashed for a single 16ms frame and the field looked empty while it was
+being fought. Four ticks of overlap fixed it. *Right and unseeable is a defect.*
+
+The new check is a **differential** — zero effects on a drawn-up field, more than zero
+mid-battle — and it caught its own first version in one run: aura circles carried the same
+class as event effects, so a still field reported four "shots". An absolute count would have
+passed on a renderer that draws rings whether or not anything fired.
