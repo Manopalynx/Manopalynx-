@@ -2066,3 +2066,76 @@ is the role boundary this file has an entry about.
 **The other thing his screenshots carry**, unchanged from the last section: upgrade and
 multiplier cards are load-bearing, not a later nicety. In two of the five shots they are two
 of the three cards offered.
+
+### Line and seek, and the frontage rule that turned out to be unnecessary
+
+Sam approved per-card movement and re-attached the manuscript for unit research. Both went
+in, and the second one decided the first.
+
+**Three cards seek because the book says so**, not because it suited the model. The
+Karkinos *"hauled itself over the wall's crown"*; the crawlers move *"up the walls and
+along the ceiling, moving in all planes at once"*; the fireship exists to reach the enemy's
+centre. Everything else advances with the army and holds formation. That is research, not
+design, and it took four greps.
+
+**Correct formation fixed the square law, so the frontage rule I recommended is not
+needed.** A line that holds means extra bodies queue behind it instead of all engaging —
+which is exactly what frontage was for. One extra card against an identical army fell
+**80% → 59%**; mixed armies settled 95/5 fell **72% → 29%**. Sam's design point 6 now
+holds. Unit graph still 3 of 3; match claims 1 of 5 → 3 of 5.
+
+Two canon corrections from the same research: **Karkinos has four legs, not six** — the
+six was invented and had been sitting in the design document — and **"Deflector" appears
+in the manuscript zero times.** The unit and its name are written for the game; only its
+quoted line is the author's, and that line is the Kraken's shield. Both now marked in
+`data.js` beside the entry, which is the Grandiose convention for a departure.
+
+### Four wrong turns, all caught by the render rather than by a number
+
+This is the section worth keeping, because the pattern is the same each time and the
+instrument that caught it was a picture.
+
+1. **One global movement rule deleted three cards.** The counter graph went 3 of 3 to 0 of
+   3 and Karkinos, Volt and Crawler Swarm fell out of every cycle, because their identity
+   is *where they walk*. Reverted rather than shipped, then done per card.
+2. **"The column marches at the pace of its slowest" is a good sentence and was a bad
+   implementation.** The slowest line card is the artillery at 0.28 against a crawler's
+   2.1 — a 7.5× spread — so the whole line crawled for forty seconds while ranged cards
+   shot it and range decided every battle. `COLUMN_PACE` is one fixed number now, and the
+   consequence is worth stating: **`spd` means nothing for a card that marches in
+   formation.** It is a seeker's stat. Taking a phrase literally without checking what
+   number it produces is the same error as reading a threshold without checking what the
+   sample can see.
+3. **Line cards with nothing in reach fell through to `continue` and never advanced.**
+   Every line card stood on its start line for the entire battle while the seekers fought
+   alone. No numeric check said so — the counter graph merely sagged to 36% — and one
+   rendered frame showed it instantly: two untouched rows and a scuffle in the middle.
+4. **The pace change that changed nothing.** Swapping min-speed for a fixed pace produced
+   byte-identical claim output, which was the tell that it could not be the active
+   variable: `matchup.mjs` fights single-card-type armies, so both sides march at the same
+   rate whatever the rule. The damage had come from neutralising `spd`, not from the pace.
+
+**Rendering is now the cheapest instrument in this project.** Three of those four were
+invisible to every number being collected and obvious in one picture, and the pattern is
+the reverse of this file's usual entry: normally the code looks fine and the measurement
+catches it. Here the measurements looked plausible and the drawing caught it.
+
+### State of the work
+
+`main` carries `column-v1` with line/seek movement, `grandiose-v87`, and the operating
+document at 340/340.
+
+| | |
+|---|---|
+| unit graph | **3 of 3** — 73% decisive, 66 cycles, every unit inside one |
+| match claims | **3 of 5** |
+| one extra card | 59% (was 80%) |
+| mixed armies settled 95/5 | 29% (was 72%) |
+| losing on purpose | still does not pay |
+
+Open, in order:
+- **Upgrade and multiplier cards.** Specified by Sam, twice now confirmed as load-bearing
+  by his screenshots, and the only remaining answer to the 107 bodies on screen.
+- **Alternation sits at 65%**, exactly on the boundary. The loser's bonus is very slightly
+  light.
+- The ledger's arithmetic, in its eleventh session. **The 31st.**
