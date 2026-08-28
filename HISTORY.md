@@ -2552,3 +2552,45 @@ reported it as provisional. The full 6,000-match sweep says **+3.9pt overall** �
 and the other three did not. **Formation did not close the exploit.** The caveat was the right
 one and the headline would have been wrong without it; the figure is now stale again anyway,
 because the market changes the economics of throwing a round entirely.
+
+### Part eleven — stage three, and a measurement that refuted my own argument
+
+**His rule: lives carry between matches and only the market sells one.** It is the best thing
+in the loop so far, because it is the only rule that makes a purse a *decision* — a stronger
+column now, or being alive to draft another one. Measured, it costs about a quarter of a run
+(a board-reading policy 3.3 → 2.4 matches), which is a real cost rather than a flavour change.
+The opponent resets to full each match, because a wounded opponent carried forward would make
+every match after the first a formality.
+
+**Boosters shipped, and then the sweep refuted the argument I had made for them.** I told him
+the asymmetry that makes a run a run is that *you choose and they do not* — choice compounds,
+randomness does not. Taking the first, second or third of the three offered gives 2.37, 2.46
+and 2.39 matches over 300 runs. Indistinguishable.
+
+A fixed index is not a choice, so that is not quite the right measurement — but `prefer`,
+which takes a named booster whenever it is offered, gave the real answer:
+
+| always taking | matches | vs baseline |
+|---|---|---|
+| **A fourth pick** | 2.81 | **+0.46** |
+| Salvage rights | 2.35 | +0.00 |
+| Standing order | 2.33 | −0.02 |
+| War chest | 2.25 | −0.10 |
+| Wider muster | 2.21 | −0.15 |
+
+**One prize and four fillers.** Only one is outside the noise. And its shape is the finding
+this project keeps producing: **the booster that matters is the one that changes the draft**;
+the four that move the economy do not move the run, because income is not what the ramp is
+beating you with.
+
+Two things to carry from this:
+
+- **An argument for a mechanism is not evidence that the mechanism works.** I made a good
+  case for choice-over-randomness, he agreed with it, it got built, and the sweep says the
+  pool is flat. The case was fine and the *contents* were not.
+- **Measure each option separately, not the pool.** The first measurement — take the first,
+  second, or third — averaged the pool and said nothing. `prefer` took one at a time and the
+  answer fell out immediately. **A lever measured alone tells you about the lever**, which is
+  already in the catalogue as a warning, and here it was the only thing that worked.
+
+Reported rather than fixed: which five boosters exist is design, and design is his.
