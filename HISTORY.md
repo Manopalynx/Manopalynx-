@@ -2594,3 +2594,24 @@ Two things to carry from this:
   already in the catalogue as a warning, and here it was the only thing that worked.
 
 Reported rather than fixed: which five boosters exist is design, and design is his.
+
+### Part twelve — an audit of the shop, before changing any of it
+
+He asked for a description of the shop and everything in it, to think about what to add or
+change. No code this turn; the value was in reading the economy off the source and the sweep
+rather than off memory.
+
+What it turned up, none of which was visible from the design:
+
+- **The flat purse is 72% of income** (₡73 of ₡102 a match). The survivor money he added
+  specifically to reward winning cleanly is 28% of what a player earns, so the rule he cared
+  about is the minority of the economy.
+- **The opponent buys almost nothing but upgrades.** Its shopper prefers the card it holds
+  most of, and upgrades are cheaper than cards and always available, so with ₡200 it took
+  eleven upgrades and zero cards. **And it never buys a wider offer at all** — `spend()` has no
+  branch for that item, so one of the four things in the shop is player-only.
+- **Credits have no sink.** Below ₡14 the market shows nothing, and above the top price they
+  simply pile up.
+
+**A shop is an economy, and an economy has to be read as one.** Every one of those is a fact
+about how the four items interact, and none of them is in any single item's definition.
