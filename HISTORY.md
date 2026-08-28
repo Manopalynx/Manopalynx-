@@ -2615,3 +2615,33 @@ What it turned up, none of which was visible from the design:
 
 **A shop is an economy, and an economy has to be read as one.** Every one of those is a fact
 about how the four items interact, and none of them is in any single item's definition.
+
+### Part thirteen — special units, and where the line is on spells
+
+He proposed a premium unit per weight class, one of each per player, and asked about equipment,
+spells and items that disadvantage the opponent, in both the shop and the boosters. Discussion
+only; nothing built.
+
+**The specials argument that matters is structural, not flavour.** Adding cards to the DRAFT
+pool would re-derive the whole counter graph — 86% of pairings decisive, 126 cycles, every unit
+the best answer to something. Adding **shop-only** cards would not touch it, because a
+single-type pairing never sees them. So the specials are the roster's growth path *and* the
+credit sink the economy is missing: income is ₡102 a match with nothing over ₡44 to spend it
+on, and a special priced above one market visit (~₡50) would be the first thing worth saving
+for.
+
+**Grounded in the manuscript rather than invented**, which is now a checked habit rather than
+an intention — the Kraken (24 mentions, its own chapter, limbs each longer than a cruiser,
+took a battleship and squeezed), the Purifiers (burned the orbitals, then the cities, then the
+croplands, then the forests), the Adarnas (Samuel's own dropship, came down through smoke with
+a platoon in the bay). One heavy, one medium, one light, all real. **Lancer was checked and is
+a person, not a machine** — the exact trap this record is full of.
+
+**The pushback: no in-battle spells.** The battle is a pure function of two armies and a seed
+and that is why every figure in this project exists. A spell cast during playback is either a
+timed input, which ends the purity, or it is pre-committed, in which case it is a card wearing
+a different name. Equipment and sabotage both survive that test; a cast does not.
+
+And the test any new item has to pass, from the booster sweep: **does it change how you draft
+or how the battle resolves?** The four boosters that moved the economy did not move the run.
+Only the one that changed the draft did.
