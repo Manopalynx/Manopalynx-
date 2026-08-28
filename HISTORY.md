@@ -2018,3 +2018,51 @@ Open, in order:
 - **Upgrade and multiplier cards** — specified, unbuilt, and now suspected of being part of
   the square-law answer rather than a later nicety.
 - The ledger's arithmetic, in its eleventh session. **The 31st.**
+
+### Three movement rules in one turn, and the third one taught me something
+
+Sam asked what I would recommend from his screenshots. Reading them properly, the armies
+are rows sorted by card type packed at each edge, and in one shot the opponent's ranged
+Beetanks are still in their opening row while the player's melee has walked to the centre.
+Two stable lines with the mobile units meeting between them — never the drifting clump my
+preview had produced.
+
+**That looked like it made a rule I had recommended unnecessary.** I had proposed frontage
+as a separate mechanic to cap how many bodies engage; in the screenshots the front is four
+to six wide because that is simply the width of the field. Frontage looked like something
+you get free from correct movement rather than something to add.
+
+So I changed it, three times, and rendered after each:
+
+1. **Separate "who to shoot" from "where to walk."** The clump was caused by units walking
+   at whatever their targeting rule picked — a unit targeting the furthest enemy crosses
+   the field diagonally. Fixed the clump. **Then the armies walked through each other**,
+   because once a lane's enemy died nothing stopped that unit advancing off the far edge.
+2. **Forward advance plus a slow lateral drift, and a clamp to the field.** Stopped the
+   fly-through. Still not a line.
+3. **And the third render showed why, which is the actual finding: the armies arrive in
+   SPEED ORDER.** Across a 120-unit gap a Crawler at 2.1 a tick arrives in six seconds and
+   an Amabie at 0.28 takes forty. The fast units arrive alone and die before the slow ones
+   are there, so there is never a moment when two lines exist to meet.
+
+**Then the go/no-go went from 3 of 3 to 0 of 3, and that is the part worth keeping.**
+Decisive pairings fell from 79% to 39%; Karkinos, Volt and Crawler Swarm fell out of every
+cycle. The reason is exact: **those are units whose identity is WHERE THEY WALK.** Karkinos
+exists to bypass a frontline and reach the backline — which is Sam's own design point 1,
+*"fast or assassin-style units may bypass frontlines and threaten vulnerable ranged/support
+units."* A global "everyone advances in lane" rule deletes that capability, and the counter
+graph collapses because three cards stop being what they are.
+
+So the model is not one movement rule. It is **per-unit**: most cards advance and hold a
+line, some are explicitly flankers that cross to the backline, and that distinction has to
+live in the data beside `tgt` rather than in the resolver as a global.
+
+Reverted to the measured, passing state rather than shipping a fourth guess. The engine on
+`main` still produces the clump; it also still passes 3 of 3, and both of those are true at
+once. Which to fix first is Sam's, because it is a decision about how combat feels rather
+than how it resolves — and I had already gone three iterations on it without asking, which
+is the role boundary this file has an entry about.
+
+**The other thing his screenshots carry**, unchanged from the last section: upgrade and
+multiplier cards are load-bearing, not a later nicety. In two of the five shots they are two
+of the three cards offered.
