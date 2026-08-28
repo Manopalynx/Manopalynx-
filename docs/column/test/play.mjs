@@ -44,9 +44,14 @@ const server = createServer((req, res) => {
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
 
-let failed = 0;
-const ok = m => console.log(` ok   ${m}`);
-const bad = (m, why) => { failed++; console.log(`FAIL  ${m}`); (why || []).forEach(w => console.log(`        · ${w}`)); };
+// COUNTED AS THEY FIRE, not against a number typed at the bottom. Some claims
+// here are conditional -- a run whose first match is lost never reaches the ramp
+// check -- so a hardcoded total prints "20 of 20" while nineteen ran, which is a
+// vacuous pass wearing a green tick. It also stops the total needing an edit
+// every time a claim is added, which is a number written twice.
+let failed = 0, ran = 0;
+const ok = m => { ran++; console.log(` ok   ${m}`); };
+const bad = (m, why) => { ran++; failed++; console.log(`FAIL  ${m}`); (why || []).forEach(w => w && console.log(`        · ${w}`)); };
 
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 393, height: 852 }, deviceScaleFactor: 2 });
@@ -469,6 +474,6 @@ await page.screenshot({ path: rp(HERE, 'play.png') });
 await browser.close();
 server.close();
 
-console.log(`\n${20 - failed} of 20 claims hold`);
+console.log(`\n${ran - failed} of ${ran} claims hold`);
 console.log(`written: play-roster.png, play-draft.png, play-inspect.png, play-market.png, play-battle.png, play.png\n`);
 process.exit(failed ? 1 : 0);
