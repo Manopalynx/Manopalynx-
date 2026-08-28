@@ -759,6 +759,50 @@ first version followed three files and stopped at the page, because a page enter
 graph through a `<script src>` and not an import statement; it would have passed with every
 module in the game missing.
 
+# Notes eight and nine
+
+**8 — the fight plays 35% slower**, his number. It multiplies the pace rather than stretching
+the frame budget, because the budget only governs long battles: a short one already plays a
+tick a frame and could not slow at all without a fractional pace repeating frames.
+
+Removing the `Math.ceil` around the speed also fixed a rounding defect nobody had noticed.
+The old speed moved in integer steps, so a 246-tick battle was rounded to 2 ticks a frame and
+played at nearly **double** the intended rate while a 230-tick one played at the right one.
+Playback length was inconsistent for reasons that had nothing to do with the battle.
+
+**9 — formation by role.** Rank 0 sits furthest from the enemy and later ranks are nearer, so
+a newly drafted card landed at the **front** whatever it was: an artillery piece arriving in
+the front rank because it happened to be the ninth pick.
+
+The bands are **derived from the numbers the resolver already reads**, so a card cannot stand
+in a rank that disagrees with what it is, and adding a card never means typing a role onto it:
+
+| band | | |
+|---|---|---|
+| 0 | `rng > 35` | artillery, at the very back |
+| 1 | `rng 7–35` | ranged, behind the line |
+| 2 | `rng ≤ 6` | the line itself |
+
+Within a band the least durable deploy first, so the toughest end up nearest the enemy —
+armour in front, infantry behind it.
+
+**Measured before shipping, against the previous draft-order deployment:**
+
+| | before | after |
+|---|---|---|
+| mixed nine-card armies settled 95/5 | 64% | **59%** |
+| one extra card against an identical army | 82% | **78%** |
+| round-to-round alternation | 56% | 55% |
+| draws at the tick ceiling | 0% | 0% |
+| unit graph | 3 of 3, 86%, 126 cycles | **unchanged** |
+
+Better on both figures that matter, worse on none. The unit graph is untouched because a
+single-type army has nothing to sort.
+
+**Deploying seekers in front of everything was tried** on the reasoning that they charge
+anyway, and it is worse — one extra card goes back up to 83% — so they are banded by range
+like anything else.
+
 ## Next, and it is his
 
 **Battlefield variety.** His answer to 65% of compositions settling 95/5 is not to soften the

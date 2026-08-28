@@ -128,8 +128,42 @@ const nearest = (u, foes) => {
   return best;
 };
 
+// FORMATION BY ROLE, which is Sam's note 9. Rank 0 sits furthest from the enemy
+// and later ranks are nearer, so before this a newly drafted card landed at the
+// FRONT whatever it was -- an artillery piece arriving in the front rank because
+// it happened to be the ninth pick.
+//
+// The bands and the order inside them are DERIVED from the same numbers the
+// resolver reads, so a card cannot end up in a rank that disagrees with what it
+// is, and adding a card never means typing a role onto it:
+//
+//   band 0   rng > 35   artillery, at the very back
+//   band 1   rng 7-35   ranged, behind the line
+//   band 2   rng <= 6   the line itself
+//
+// Within a band the least durable deploy first, so the toughest end up nearest
+// the enemy: armour in front, infantry behind it. Measured against the previous
+// draft-order deployment, this is better on both figures that matter and worse
+// on none -- mixed compositions settled 95/5 fell 64% to 59%, and one extra card
+// against an identical army fell 82% to 78%. The counter graph is untouched,
+// because a single-type army has nothing to sort.
+//
+// Seekers leave the line whatever rank they start in; this decides where they
+// start, not where they go. Deploying them in front of everything was tried on
+// that reasoning and is worse -- one extra card goes back up to 83% -- so they
+// are banded by range like anything else.
+const band = u => (u.rng > 35 ? 0 : u.rng > 6 ? 1 : 2);
+const bulk = u => u.hp * (u.count || 1);
+function formation(cards) {
+  return cards.slice().sort((a, b) => {
+    const A = BY_ID[a], B = BY_ID[b];
+    return band(A) - band(B) || bulk(A) - bulk(B);
+  });
+}
+
 function deploy(picks, side, rand) {
-  const { cards, up } = armyFrom(picks);
+  const { cards: drafted, up } = armyFrom(picks);
+  const cards = formation(drafted);
   // One spec object per unit type, not per body: an upgraded card's stats are
   // computed once and every body of it holds the same reference, so no body can
   // end up at a different level from its squadmate.

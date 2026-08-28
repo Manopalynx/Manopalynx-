@@ -28,6 +28,13 @@ const SAVE = 'column-save';
 // is not held still through a stalemate.
 const PLAYBACK_FRAMES = 230;
 
+// Sam's note 8, and it is his number: 35% slower. It multiplies the pace rather
+// than stretching the frame budget, because the budget only governs LONG
+// battles -- a short one already plays a tick a frame and could not slow down at
+// all without this. A fractional pace repeats frames instead, which is the only
+// way to slow a fixed-timestep replay that has no frames in between.
+const PACE = 0.65;
+
 // How many ticks of shots a single painted frame shows. Drawing only the ticks
 // just stepped over is exactly right and invisible: a short battle plays at one
 // tick a frame, so every shot would flash for a single 16ms frame and the field
@@ -189,7 +196,7 @@ function fight() {
 }
 
 function play() {
-  const speed = Math.max(1, Math.ceil(S.frames.length / PLAYBACK_FRAMES));
+  const speed = Math.max(1, S.frames.length / PLAYBACK_FRAMES) * PACE;
   const step = () => {
     if (S.phase !== 'battle' || !S.frames) return;
     S.f += speed;
