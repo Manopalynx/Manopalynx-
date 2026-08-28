@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v12';
+export const BUILD = 'column-v13';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -314,6 +314,48 @@ export const SHOP = {
   life: 44,
   offer: 14        // next round you are offered four cards instead of three
 };
+
+/* ------------------------------------------------- kit, sabotage and orders */
+// Three more things the market sells, and they are three different SHAPES of
+// decision rather than three more ways to be stronger:
+//
+//   EQUIPMENT is permanent and army-wide. It attaches to a ROLE rather than to a
+//   card, so it rewards a column that has leaned one way -- and every target is
+//   derived from stats the resolver already reads, so no card has to be told
+//   what it is.
+//
+//   SABOTAGE is the only thing you can buy that makes THEM weaker. Its value
+//   depends on their army rather than yours, which means it is the one purchase
+//   that makes you look at the other half of the field -- and you can, because
+//   every counter is named and drawn.
+//
+//   AN ORDER lasts one round. It is what a spell would have been: Sam asked
+//   about spells and the answer was no, because a cast during a battle is either
+//   a timed input -- which ends the battle being a pure function of two armies
+//   and a seed, and with it every figure in this project -- or it is
+//   pre-committed, in which case it is this.
+// PRICED ON WHAT THEY MEASURED AS WORTH, against the ordinary cards the same
+// credits buy, added to the same column. And with one asymmetry stated rather
+// than assumed: KIT CARRIES BETWEEN MATCHES AND CARDS DO NOT, because the army
+// is redrafted every match. A single-match measurement is therefore a floor for
+// a piece of kit and exact for an order, which lasts a round.
+export const KIT = [
+  { id: 'plate',  n: 'Ablative plate', cost: 30,
+    d: 'Every heavy of yours takes 10 less from each hit, for the rest of the run.' },
+  { id: 'sights', n: 'Range-finders',  cost: 30,
+    d: 'Everything of yours that shoots past 6 reaches 8 further, for the rest of the run.' },
+  { id: 'drill',  n: 'Field drill',    cost: 30,
+    d: 'Every light body of yours carries 70 more health, for the rest of the run.' }
+];
+export const SABOTAGE = { cost: 26, half: 0.4 };
+export const ORDERS = [
+  { id: 'march',  n: 'Forced march',  cost: 11,
+    d: 'Next round only: your column advances at double pace and your seekers run harder.' },
+  { id: 'volley', n: 'Sustained fire', cost: 20,
+    d: 'Next round only: everything of yours that shoots past 6 fires a quarter faster.' }
+];
+export const BY_KIT = Object.fromEntries(KIT.map(k => [k.id, k]));
+export const BY_ORDER = Object.fromEntries(ORDERS.map(k => [k.id, k]));
 
 /* ---------------------------------------------------------------------- a run */
 // Stage two. A run is match after match: the army is redrafted every time,

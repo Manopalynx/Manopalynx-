@@ -1079,6 +1079,81 @@ Unchanged, which is what shop-only was for.
 `match.mjs` and `matchup.mjs` now count their claims as they fire, like `play.mjs` — a total
 typed at the bottom is a number written twice, and it had already gone wrong once.
 
+# Kit, sabotage and orders
+
+Three more things the market sells, and they are three different *shapes* of decision rather
+than three more ways to be stronger.
+
+**Kit** is permanent and army-wide, and it attaches to a **role** rather than a card — every
+target derived from stats the resolver already reads, so a card added later is covered by what
+it *is* rather than by being remembered.
+
+| | | |
+|---|---|---|
+| **Ablative plate** | ₡30 | every heavy of yours takes 10 less from each hit |
+| **Range-finders** | ₡30 | everything that shoots past 6 reaches 8 further |
+| **Field drill** | ₡30 | every light body carries 70 more health |
+
+**Sabotage** — ₡26 — is the only thing you can buy that makes **them** weaker: one card of
+theirs deploys on 40% health next round, every copy of it. Its value sits on the other side of
+the board, which makes it the one purchase that requires you to look there — and you can,
+because every counter is named and drawn. The chooser shows **their** counters in **their**
+colour.
+
+**Orders** last one round. **Forced march** (₡11) doubles your column's pace and makes your
+seekers run harder; **Sustained fire** (₡20) makes everything that shoots past 6 fire a
+quarter faster.
+
+**An order is what a spell would have been.** Sam asked about spells; the answer was no,
+because a cast during a battle is either a timed input — which ends the battle being a pure
+function of two armies and a seed, and with it every figure in this project — or it is
+pre-committed, in which case it is this.
+
+## One function learned four token kinds
+
+A draft is now a list of four things: a bare id is a card, `up:` a level, `eq:` a piece of
+kit, `ord:` an order for the coming round, and `sab:` a card of theirs somebody paid to get
+at. **Sabotage travels in the target's list**, because that is where it takes effect.
+
+`armyFrom` reads all four so nothing downstream parses a prefix — and the one place that had
+restated the rule went wrong immediately. `play.mjs` counted cards as "tokens not starting with
+`up:`", so the first new token kind was counted as a card and the counter check went red. It
+reads *a card is a bare id* now.
+
+## The prices are measured, and one asymmetry had been missed
+
+Every item was tested the same way as the specials: **this, or the ordinary cards the same
+credits buy, added to the column I already have?** At the first guess all six lost — 25% to
+44% — so all six were traps, and the effects were scaled until they sat near an even choice.
+
+And a structural thing surfaced while pricing them: **kit carries between matches and cards do
+not**, because the army is redrafted every match. A single-match measurement is therefore a
+**floor** for a piece of kit and **exact** for an order, which lasts a round. Forced march
+measured at 34% of a card and is priced at ₡11 rather than inflated to hit a round number.
+
+## The opponent got worse, on purpose
+
+Its shopper reached three of five items before the specials and would have reached four of
+eight after. It now has **caps per visit** — one special, one piece of kit, two upgrades, one
+sabotage, one wider offer, one order — and with ₡300 it takes a Kraken, plate, two upgrades, a
+sabotage, five cards and an order, instead of eleven upgrades.
+
+**And it is measurably weaker for it**: the harness's floor human went from 27.5% to 41.7%
+against it. The old behaviour was crude *and* strong. The rewrite was for **reachability** — a
+shop with items nobody can buy is not a shop — not for strength, and it costs strength. That
+is a trade worth stating rather than burying, and the opponent's difficulty now has an obvious
+lever if it needs one.
+
+## What it did to the match
+
+| | before | after |
+|---|---|---|
+| alternation, worst table | 59% | 56% |
+| final bodies a side | 35–38 | 34–38 |
+| mixed compositions settled 95/5 | 59% | 59% |
+| unit graph | 4 of 4 | 4 of 4 |
+| page suite | 24 of 24 | 24 of 24 |
+
 ## Next, and it is his
 
 **Battlefield variety.** His answer to 65% of compositions settling 95/5 is not to soften the

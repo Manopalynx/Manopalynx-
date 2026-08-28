@@ -104,8 +104,11 @@ const state = () => page.evaluate(() => {
   const s = JSON.parse(localStorage.getItem('column-save') || 'null');
   return {
     phase: s && s.phase, lives: s && s.lives, round: s && s.round,
-    cards: s && [s.army[0].filter(t => !t.startsWith('up:')).length,
-                 s.army[1].filter(t => !t.startsWith('up:')).length],
+    // A CARD IS A BARE ID. Every other token carries a prefix and a colon --
+    // up:, eq:, ord:, sab: -- and this check restated that rule as "not up:",
+    // so the first token kind added after it was counted as a card.
+    cards: s && [s.army[0].filter(t => !t.includes(':')).length,
+                 s.army[1].filter(t => !t.includes(':')).length],
     markers: document.querySelectorAll('#field g[data-id]').length,
     // Mean vertical position of each side's counters, in field units. The field
     // is 140 deep and the viewBox is untransformed, so these are the engine's
@@ -125,7 +128,7 @@ const state = () => page.evaluate(() => {
     picks: s ? [s.army[0].length, s.army[1].length] : null,
     // What was just committed, and what the screen is ringing. Two answers to
     // the same question, from opposite ends: the draft, and the counters.
-    committed: s ? [s.mine, s.theirs].map(t => (t ? t.replace(/^up:/, '') : null)) : [null, null],
+    committed: s ? [s.mine, s.theirs].map(t => (t ? t.replace(/^[a-z]+:/, '') : null)) : [null, null],
     pops: [...document.querySelectorAll('#field .pop')].map(e => {
       const g = e.closest('g[data-id]');
       return g ? `${g.dataset.side}:${g.dataset.id}` : '?';

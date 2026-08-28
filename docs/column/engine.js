@@ -16,7 +16,7 @@
 // nothing about the game would look wrong.
 
 import { UNITS, DRAFT, SPECIALS, BY_ID, FIELD, TICK, MAX_TICKS, RULES, UPGRADE, SHOP, RUN,
-         BOOSTS } from './data.js';
+         BOOSTS, KIT, ORDERS, SABOTAGE, BY_KIT, BY_ORDER } from './data.js';
 
 /* ------------------------------------------------------------------------ rng */
 // mulberry32. Small, fast, and — the only property that matters here — the same
@@ -41,29 +41,66 @@ export function rng(seed) {
 // before upgrades existed, which is why every earlier test still means what it
 // meant.
 export const UP_TAG = 'up:';
+export const EQ_TAG = 'eq:';
+export const SAB_TAG = 'sab:';
+export const ORD_TAG = 'ord:';
 export const isUp = tok => tok.startsWith(UP_TAG);
 export const tokId = tok => (isUp(tok) ? tok.slice(UP_TAG.length) : tok);
 
+/**
+ * A draft, read. Four kinds of token and one function that knows all four, so
+ * nothing downstream has to parse a prefix: a bare id is a card, `up:` a level,
+ * `eq:` a piece of kit, `ord:` an order for the coming round, and `sab:` a card
+ * of THEIRS that this side has had got at -- sabotage travels in the target's
+ * list, because that is where it takes effect.
+ */
 export function armyFrom(picks) {
-  const cards = [], up = {};
+  const cards = [], up = {}, eq = new Set(), ord = new Set(), sab = new Set();
   for (const p of picks) {
-    if (isUp(p)) { const id = tokId(p); up[id] = Math.min(UPGRADE.max, (up[id] || 0) + 1); }
+    if (p.startsWith(UP_TAG)) { const id = p.slice(UP_TAG.length); up[id] = Math.min(UPGRADE.max, (up[id] || 0) + 1); }
+    else if (p.startsWith(EQ_TAG)) eq.add(p.slice(EQ_TAG.length));
+    else if (p.startsWith(ORD_TAG)) ord.add(p.slice(ORD_TAG.length));
+    else if (p.startsWith(SAB_TAG)) sab.add(p.slice(SAB_TAG.length));
     else cards.push(p);
   }
-  return { cards, up };
+  return { cards, up, eq, ord, sab };
 }
 
 // The effective stats of a card at a level, and the ONLY place the upgrade rule
 // exists. Health and every damage channel scale -- direct, splash, the burn, the
 // aura, the detonation -- while count, armour, range and speed do not.
-export function specFor(id, lvl) {
+// THE SIZE OF EACH EFFECT, in one place and measured rather than chosen. Every
+// one of them was under-valued at its price on the first guess -- an item that
+// loses to the cards it costs is a trap, which is the same fault the specials
+// had, found the same way.
+const KIT_N = { plate: 10, sights: 8, drill: 70 };
+const ORD_N = { march: 2, marchSeek: 1.4, volley: 0.75 };
+
+export function specFor(id, lvl, eq, ord, sab) {
   const u = BY_ID[id];
-  if (!lvl) return u;
-  const k = 1 + UPGRADE.step * Math.min(lvl, UPGRADE.max);
-  const s = { ...u, lvl, hp: u.hp * k, dmg: u.dmg * k };
+  const kit = eq && eq.size, orders = ord && ord.size, hit = sab && sab.has(id);
+  if (!lvl && !kit && !orders && !hit) return u;
+  const k = 1 + UPGRADE.step * Math.min(lvl || 0, UPGRADE.max);
+  const s = { ...u, lvl: lvl || 0, hp: u.hp * k, dmg: u.dmg * k };
   if (u.dot) s.dot = u.dot * k;
   if (u.aura) s.aura = u.aura * k;
   if (u.boom) s.boom = { r: u.boom.r, d: u.boom.d * k };
+
+  // EVERY TARGET IS DERIVED. Kit attaches to a role -- what a card weighs, how
+  // far it shoots -- rather than to a name, so a card added later is covered by
+  // whatever it is rather than by being remembered.
+  if (kit) {
+    if (eq.has('plate') && s.w === 'heavy') s.arm = (s.arm || 0) + KIT_N.plate;
+    if (eq.has('sights') && s.rng > 6) s.rng = s.rng + KIT_N.sights;
+    if (eq.has('drill') && s.w === 'light') s.hp = s.hp + KIT_N.drill;
+  }
+  if (orders) {
+    if (ord.has('march')) { s.pace = COLUMN_PACE * ORD_N.march; s.spd = s.spd * ORD_N.marchSeek; }
+    if (ord.has('volley') && s.rng > 6) s.rate = Math.max(1, Math.round(s.rate * ORD_N.volley));
+  }
+  // Sabotage lands on the deployment, not on the card: half the health it would
+  // have had, this round, with everything else intact.
+  if (hit) s.hp = s.hp * SABOTAGE.half;
   return s;
 }
 
@@ -118,9 +155,11 @@ const CONTACT = 8;
 function march(u, ref) {
   const dy = ref.y - u.y, dx = ref.x - u.x;
   const near = Math.abs(dy) <= CONTACT;
+  // A column marches at one pace, and an order can double it for a round.
+  const pace = u.s.pace || COLUMN_PACE;
   return [
-    near ? Math.sign(dx) * Math.min(COLUMN_PACE * DRIFT, Math.abs(dx)) : 0,
-    Math.sign(dy) * Math.min(COLUMN_PACE, Math.abs(dy))
+    near ? Math.sign(dx) * Math.min(pace * DRIFT, Math.abs(dx)) : 0,
+    Math.sign(dy) * Math.min(pace, Math.abs(dy))
   ];
 }
 const nearest = (u, foes) => {
@@ -177,7 +216,7 @@ export function formation(cards) {
 }
 
 function deploy(picks, side, rand) {
-  const { cards: drafted, up } = armyFrom(picks);
+  const { cards: drafted, up, eq, ord, sab } = armyFrom(picks);
   const cards = formation(drafted).map(i => drafted[i]);
   // A DROP LANDS AT THE LINE OF CONTACT rather than marching to it. The Adarnas
   // "dropped through smoke the whole way down"; the rest of the column walks.
@@ -188,7 +227,7 @@ function deploy(picks, side, rand) {
   const spec = {};
   const out = [];
   cards.forEach((id, ci) => {
-    const u = spec[id] || (spec[id] = specFor(id, up[id] || 0));
+    const u = spec[id] || (spec[id] = specFor(id, up[id] || 0, eq, ord, sab));
     const n = u.count || 1;
     const rank = Math.floor(ci / PER_RANK);
     const col = ci % PER_RANK;
@@ -557,13 +596,20 @@ export const chestFor = boosts => (has(boosts, 'chest') ? 30 : 0);
 // and a maxed card never appears twice.
 // The specials a side may still buy, with what each costs. One of each class a
 // side, so what you already hold is what decides the row.
+// The kit a side has not yet bought, with what each costs.
+export function kitFor(money, picks) {
+  const { eq } = armyFrom(picks);
+  return KIT.filter(x => !eq.has(x.id)).map(x => ({ id: x.id, cost: x.cost, afford: money >= x.cost }));
+}
+export const ordersFor = money => ORDERS.map(x => ({ id: x.id, cost: x.cost, afford: money >= x.cost }));
+
 export function specialsFor(money, picks) {
   const held = new Set(armyFrom(picks).cards);
   return SPECIALS.filter(u => !held.has(u.id))
     .map(u => ({ id: u.id, cost: u.cost, afford: money >= u.cost }));
 }
 
-export function stock(money, picks, lives) {
+export function stock(money, picks, lives, theirs) {
   const out = [];
   // THE SPECIALS FIRST, because they are what the credits are for. The row only
   // appears when there is one you can both afford and do not already hold.
@@ -575,6 +621,15 @@ export function stock(money, picks, lives) {
   // belongs on the screen that shows the cards.
   if (money >= SHOP.upgrade && upgradeable(picks).length)
     out.push({ k: 'upgrade', cost: SHOP.upgrade });
+  // KIT is permanent and each piece is bought once; an ORDER lasts a round and
+  // may be bought again; SABOTAGE needs something of theirs to aim at.
+  const { eq } = armyFrom(picks);
+  const kit = KIT.filter(x => !eq.has(x.id) && money >= x.cost);
+  if (kit.length) out.push({ k: 'kit', cost: Math.min(...kit.map(x => x.cost)) });
+  const ords = ORDERS.filter(x => money >= x.cost);
+  if (ords.length) out.push({ k: 'order', cost: Math.min(...ords.map(x => x.cost)) });
+  if (money >= SABOTAGE.cost && theirs && armyFrom(theirs).cards.length)
+    out.push({ k: 'sabotage', cost: SABOTAGE.cost });
   if (money >= SHOP.offer) out.push({ k: 'offer', cost: SHOP.offer });
   if (money >= SHOP.life && lives < RULES.lives) out.push({ k: 'life', cost: SHOP.life });
   return out;
@@ -592,27 +647,42 @@ export function upgradeable(picks) {
 // The opponent's spending. It exists so the market can be SWEPT -- a shop only
 // the interface knew about could not be -- and it is rewritten here because the
 // first version reached three of the shop's five items and spammed one of them.
-export function spend(money, picks, lives) {
+export function spend(money, picks, lives, theirs = []) {
   const buys = [];
-  let m = money, army = picks.slice(), got = lives, ups = 0, wide = false;
-  for (let guard = 0; guard < 12; guard++) {
-    // A life first, and only on the last one -- the opponent is not trying to
-    // survive a run, it is trying to win this match.
+  let m = money, army = picks.slice(), got = lives;
+  // CAPS PER VISIT, because without them it spends the whole purse on whatever
+  // is cheapest and always available. The first version bought eleven upgrades
+  // and zero cards with 200 credits; the second reached the specials and then
+  // could not afford anything else, which is the same fault one shelf along.
+  let ups = 0, specials = 0, kits = 0, wide = false, sabbed = false, ordered = false;
+
+  for (let guard = 0; guard < 14; guard++) {
+    // A life, and only on the last one: the opponent is trying to win this
+    // match, not to survive a run.
     if (got === 1 && m >= SHOP.life) { buys.push({ k: 'life' }); m -= SHOP.life; got++; continue; }
 
-    // A SPECIAL IT DOES NOT HOLD. The biggest single step available, and the
-    // reason this function was rewritten: the shop grew an item the opponent
-    // could not reach, which is the same fault the wider offer already had.
-    const canSpecial = specialsFor(m, army).filter(x => x.afford);
-    if (canSpecial.length) {
-      const pick = canSpecial.sort((a, b) => b.cost - a.cost)[0];
-      buys.push({ k: 'special', id: pick.id }); m -= pick.cost; army.push(pick.id); continue;
+    // One special a visit. The biggest single step on the shelf, and taking all
+    // three at once leaves nothing for anything else.
+    if (specials < 1) {
+      const can = specialsFor(m, army).filter(x => x.afford);
+      if (can.length) {
+        const pick = can.sort((a, b) => b.cost - a.cost)[0];
+        buys.push({ k: 'special', id: pick.id }); m -= pick.cost; army.push(pick.id); specials++; continue;
+      }
     }
 
-    // TWO UPGRADES A VISIT, then cards. Unbounded, it bought eleven upgrades and
-    // zero cards with 200 credits, because an upgrade is cheaper than a card and
-    // always available -- a column of one card type, three levels deep, and no
-    // answer to anything.
+    // One piece of kit a visit, and early, because kit carries between matches
+    // and a card does not.
+    if (kits < 1) {
+      const can = kitFor(m, army).filter(x => x.afford);
+      if (can.length) {
+        const pick = can.sort((a, b) => b.cost - a.cost)[0];
+        buys.push({ k: 'kit', id: pick.id }); m -= pick.cost; army.push(EQ_TAG + pick.id); kits++; continue;
+      }
+    }
+
+    // Two upgrades a visit, on whatever it holds most of, because an upgrade
+    // compounds with copies and a card does not.
     const { cards, up } = armyFrom(army);
     const count = {};
     for (const id of cards) count[id] = (count[id] || 0) + 1;
@@ -621,6 +691,16 @@ export function spend(money, picks, lives) {
       .sort((x, y) => count[y] - count[x] || power(y) - power(x))[0];
     if (ups < 2 && best && m >= SHOP.upgrade) {
       buys.push({ k: 'upgrade', id: best }); m -= SHOP.upgrade; army.push(UP_TAG + best); ups++; continue;
+    }
+
+    // SABOTAGE, aimed at the biggest thing they field. The only purchase whose
+    // value sits on the other side of the board, and so the only one that has to
+    // look at it.
+    const enemy = armyFrom(theirs).cards;
+    if (!sabbed && enemy.length && m >= SABOTAGE.cost) {
+      const target = enemy.slice()
+        .sort((x, y) => BY_ID[y].hp * BY_ID[y].count - BY_ID[x].hp * BY_ID[x].count)[0];
+      buys.push({ k: 'sabotage', id: target }); m -= SABOTAGE.cost; sabbed = true; continue;
     }
 
     if (m >= SHOP.card) {
@@ -632,8 +712,10 @@ export function spend(money, picks, lives) {
       buys.push({ k: 'card', id }); m -= SHOP.card; army.push(id); continue;
     }
 
-    // A wider offer with whatever is left, once.
+    // Then the small things, with whatever is left.
     if (!wide && m >= SHOP.offer) { buys.push({ k: 'offer' }); m -= SHOP.offer; wide = true; continue; }
+    const ord = ORDERS.filter(x => m >= x.cost).sort((a, b) => b.cost - a.cost)[0];
+    if (!ordered && ord) { buys.push({ k: 'order', id: ord.id }); m -= ord.cost; ordered = true; continue; }
     break;
   }
   return buys;
@@ -661,6 +743,9 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
   // Credits carried in from earlier matches, and any extra picks a side has
   // earned by being the thing you are running from.
   const money = [purse[0] + chestFor(boosts[0]), purse[1] + chestFor(boosts[1])];
+  // Bought for the coming round and spent by fighting it: orders a side gave
+  // itself, and sabotage the other side paid to put on it.
+  const pending = [[], []];
   const perRound = [0, 1].map(s => picksFor(boosts[s], picks[s]));
   const wide = [0, 0];                   // a wider offer, bought, for one round
   const rounds = [];
@@ -693,7 +778,9 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
       }
     }
 
-    const out = resolve(army[0], army[1], (seed * 7919 + r) >>> 0, false);
+    const out = resolve([...army[0], ...pending[0]], [...army[1], ...pending[1]],
+                        (seed * 7919 + r) >>> 0, false);
+    pending[0] = []; pending[1] = [];
     // A draw costs the side with fewer survivors, so a stalled field still moves
     // the match on rather than burning a round to no effect.
     const lost = out.winner === null
@@ -711,11 +798,14 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
     if (lives[0] > 0 && lives[1] > 0) {
       for (const s of [0, 1]) {
         if ((r + 1) % marketEvery(boosts[s]) !== 0) continue;
-        for (const buy of spend(money[s], army[s], lives[s])) {
+        for (const buy of spend(money[s], army[s], lives[s], army[1 - s])) {
           if (buy.k === 'life') { lives[s]++; money[s] -= SHOP.life; }
           else if (buy.k === 'upgrade') { army[s].push(UP_TAG + buy.id); money[s] -= SHOP.upgrade; }
           else if (buy.k === 'card') { army[s].push(buy.id); money[s] -= SHOP.card; }
           else if (buy.k === 'special') { army[s].push(buy.id); money[s] -= BY_ID[buy.id].cost; }
+          else if (buy.k === 'kit') { army[s].push(EQ_TAG + buy.id); money[s] -= BY_KIT[buy.id].cost; }
+          else if (buy.k === 'order') { pending[s].push(ORD_TAG + buy.id); money[s] -= BY_ORDER[buy.id].cost; }
+          else if (buy.k === 'sabotage') { pending[1 - s].push(SAB_TAG + buy.id); money[s] -= SABOTAGE.cost; }
           else if (buy.k === 'offer') { wide[s] = 1; money[s] -= SHOP.offer; }
         }
       }

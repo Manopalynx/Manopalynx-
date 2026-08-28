@@ -12,9 +12,9 @@
 // drift from.
 
 import { BY_ID, RULES, PERSONAS, UPGRADE, WEIGHT, UNITS, DRAFT, SPECIALS, SHOP, RUN,
-         BOOSTS, BY_BOOST, COIN, BUILD } from './data.js';
+         BOOSTS, BY_BOOST, KIT, BY_KIT, ORDERS, BY_ORDER, SABOTAGE, COIN, BUILD } from './data.js';
 import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId,
-         earn, stock, spend, upgradeable, specialsFor, boosterOffer,
+         earn, stock, spend, upgradeable, specialsFor, kitFor, ordersFor, boosterOffer,
          offerSize, picksFor, marketEvery, chestFor } from './engine.js';
 import { draw, effects, auras, GROUND, SIDE, shape } from './render.js';
 import { glyph } from './glyphs.js';
@@ -85,6 +85,9 @@ function newMatch(opp, run) {
     perRound: [picksFor(boosts[0], 0), picksFor(boosts[1], Math.floor(n / RUN.pickEvery))],
     boosts,
     run: run ? { n, seed: run.seed } : null,
+    // Bought for the coming round and spent by fighting it: orders a side gave
+    // itself, and sabotage the other side paid to put on it.
+    pending: [[], []],
     wide: [0, 0],
     phase: 'pick', pickNo: 0, bonus: null,
     offer: [], mine: null, theirs: null, inspect: null
@@ -119,6 +122,7 @@ function load() {
     S.wide = S.wide || [0, 0];
     S.perRound = S.perRound || [RULES.picksPerRound, RULES.picksPerRound];
     S.boosts = S.boosts || [[], []];
+    S.pending = S.pending || [[], []];
     // A battle is not saved mid-playback; a reload lands on the fight instead.
     if (S.phase === 'battle') S.phase = 'ready';
     return true;
@@ -231,7 +235,8 @@ function fight() {
   // had ever read it, so a battle was a crowd of markers thinning out for no
   // visible reason: no projectile, no blast, no flinch. Sam's first two notes
   // are both answered by drawing what the resolver already recorded.
-  const out = resolve(S.army[0], S.army[1], seed, true, (t, live) => S.frames.push(live));
+  const out = resolve([...S.army[0], ...S.pending[0]], [...S.army[1], ...S.pending[1]],
+                      seed, true, (t, live) => S.frames.push(live));
   // Indexed by tick, so a playback step can ask for the ticks it just skipped
   // rather than for "the last thing that happened".
   S.ev = [];
@@ -268,8 +273,10 @@ function endRound() {
   S.lives[S.result]--;
   S.loser = S.result;
   S.round++;
-  // A wider offer is bought for one round and is spent by having played it.
+  // A wider offer, an order and a sabotage are all bought for one round and are
+  // spent by having played it.
   S.wide = [0, 0];
+  S.pending = [[], []];
   // What the round paid, through the ENGINE's rule and off the resolver's own
   // survivor count. The screen does not get to decide what a body is worth.
   S.paid = earn(S.left || [0, 0], 1 - S.result, S.boosts);
@@ -297,16 +304,24 @@ function buy(item) {
   if (item.k === 'life') S.lives[0]++;
   else if (item.k === 'upgrade') S.army[0].push('up:' + item.id);
   else if (item.k === 'card' || item.k === 'special') S.army[0].push(item.id);
+  else if (item.k === 'kit') S.army[0].push('eq:' + item.id);
+  else if (item.k === 'order') S.pending[0].push('ord:' + item.id);
+  // Sabotage travels in THEIR list, because that is where it takes effect.
+  else if (item.k === 'sabotage') S.pending[1].push('sab:' + item.id);
   else if (item.k === 'offer') S.wide[0] = 1;
   save();
   return true;
 }
 
 function opponentShops() {
-  for (const b of spend(S.money[1], S.army[1], S.lives[1])) {
+  for (const b of spend(S.money[1], S.army[1], S.lives[1], S.army[0])) {
     if (b.k === 'life') { S.lives[1]++; S.money[1] -= SHOP.life; }
     else if (b.k === 'upgrade') { S.army[1].push('up:' + b.id); S.money[1] -= SHOP.upgrade; }
     else if (b.k === 'card') { S.army[1].push(b.id); S.money[1] -= SHOP.card; }
+    else if (b.k === 'special') { S.army[1].push(b.id); S.money[1] -= BY_ID[b.id].cost; }
+    else if (b.k === 'kit') { S.army[1].push('eq:' + b.id); S.money[1] -= BY_KIT[b.id].cost; }
+    else if (b.k === 'order') { S.pending[1].push('ord:' + b.id); S.money[1] -= BY_ORDER[b.id].cost; }
+    else if (b.k === 'sabotage') { S.pending[0].push('sab:' + b.id); S.money[1] -= SABOTAGE.cost; }
     else if (b.k === 'offer') { S.wide[1] = 1; S.money[1] -= SHOP.offer; }
   }
 }
@@ -337,7 +352,8 @@ function board() {
   if (S.phase === 'battle' && S.frames) return S.frames[Math.min(S.f | 0, S.frames.length - 1)];
   if (S.phase === 'round' && S.lastFrame) return S.lastFrame;
   if (!S.army[0].length && !S.army[1].length) return [];
-  return deployment(S.army[0], S.army[1], (S.seed * 7919 + S.round) >>> 0);
+  return deployment([...S.army[0], ...S.pending[0]], [...S.army[1], ...S.pending[1]],
+                    (S.seed * 7919 + S.round) >>> 0);
 }
 
 const hearts = n => '&#9829;'.repeat(Math.max(0, n)) +
@@ -615,7 +631,7 @@ function roster() {
 // round. Money buying certainty is what makes a drafting game feel like it is
 // going somewhere; a shop selling a damage multiplier sells nothing.
 function market() {
-  const items = stock(S.money[0], S.army[0], S.lives[0]);
+  const items = stock(S.money[0], S.army[0], S.lives[0], S.army[1]);
   const up = upgradeable(S.army[0]);
 
   const spec = specialsFor(S.money[0], S.army[0]);
@@ -631,6 +647,17 @@ function market() {
     if (it.k === 'upgrade') return `<button class="pick" data-i="${i}"><b>An upgrade — ${coin(it.cost)}</b>
       <i>+${(UPGRADE.step * 100) | 0}% health and damage on every copy of a card you name.
       ${up.length} to choose from.</i></button>`;
+    if (it.k === 'kit') {
+      const can = kitFor(S.money[0], S.army[0]).filter(x => x.afford);
+      return `<button class="pick" data-i="${i}"><b>Kit — from ${coin(it.cost)}</b>
+        <i>Fitted to a role rather than a card, and it stays with you for the rest of the run.
+        ${can.length} within reach.</i></button>`;
+    }
+    if (it.k === 'order') return `<button class="pick" data-i="${i}"><b>An order — from ${coin(it.cost)}</b>
+      <i>Next round only. Given before the fight, because nothing is commanded during one.</i></button>`;
+    if (it.k === 'sabotage') return `<button class="pick" data-i="${i}"><b>Sabotage — ${coin(it.cost)}</b>
+      <i>One card of theirs deploys on ${(SABOTAGE.half * 100) | 0}% health next round. The only
+      thing here that makes them weaker rather than you stronger.</i></button>`;
     if (it.k === 'offer') return `<button class="pick" data-i="${i}"><b>A wider offer — ${coin(it.cost)}</b>
       <i>Four cards instead of three, next round only.</i></button>`;
     return `<button class="pick" data-i="${i}"><b>A life — ${coin(it.cost)}</b>
@@ -648,6 +675,9 @@ function market() {
     if (it.k === 'card') { d.remove(); return chooser('card'); }
     if (it.k === 'upgrade') { d.remove(); return chooser('upgrade'); }
     if (it.k === 'special') { d.remove(); return chooser('special'); }
+    if (it.k === 'kit') { d.remove(); return plainChooser('kit'); }
+    if (it.k === 'order') { d.remove(); return plainChooser('order'); }
+    if (it.k === 'sabotage') { d.remove(); return chooser('sabotage'); }
     if (buy(it)) { d.remove(); market(); }
   });
   d.querySelector('#leave').onclick = () => { d.remove(); startRound(); save(); };
@@ -656,28 +686,56 @@ function market() {
 // CHOOSING WHICH is the whole reason either item is worth buying, so both open
 // the same screen: the cards, drawn as they will stand on the field.
 const MARK = { heavy: 3.7, medium: 3.2, light: 2.9 };
+// Kit and orders are not cards, so they get a plain list rather than the field's
+// counters. Two screens rather than one because they are two kinds of thing, and
+// a chooser that draws a Kraken beside "Ablative plate" teaches the wrong shape.
+function plainChooser(kind) {
+  const list = kind === 'kit' ? kitFor(S.money[0], S.army[0]) : ordersFor(S.money[0]);
+  const by = kind === 'kit' ? BY_KIT : BY_ORDER;
+  const d = sheet(`<h1>${kind === 'kit' ? 'Choose your kit' : 'Give an order'}</h1>
+    <p>${kind === 'kit'
+      ? 'Fitted to a role rather than a card, and it stays with you for the rest of the run.'
+      : 'It holds for the next round only, and it is given now because nothing is commanded during a battle.'}</p>
+    ${list.map(it => `<button class="pick" ${it.afford ? `data-id="${it.id}" data-cost="${it.cost}"` : 'disabled'}
+        style="${it.afford ? '' : 'opacity:.45'}">
+      <b>${by[it.id].n} — ${coin(it.cost)}</b><i>${by[it.id].d}</i></button>`).join('')}
+    <button class="pick" id="never"><b>Change your mind</b></button>`, list.length < 3);
+  d.querySelectorAll('[data-id]').forEach(b => b.onclick = () => {
+    buy({ k: kind, id: b.dataset.id, cost: +b.dataset.cost });
+    d.remove(); market();
+  });
+  d.querySelector('#never').onclick = () => { d.remove(); market(); };
+}
+
 function chooser(kind) {
   const list = kind === 'card' ? DRAFT.map(u => ({ id: u.id }))
              : kind === 'special' ? specialsFor(S.money[0], S.army[0])
+             : kind === 'sabotage' ? [...new Set(armyFrom(S.army[1]).cards)].map(id => ({ id, cost: SABOTAGE.cost, afford: true }))
              : upgradeable(S.army[0]);
   const flat = kind === 'card' ? SHOP.card : kind === 'upgrade' ? SHOP.upgrade : null;
-  const title = { card: 'Choose a card', upgrade: 'Choose an upgrade', special: 'Choose a special' }[kind];
+  const title = { card: 'Choose a card', upgrade: 'Choose an upgrade', special: 'Choose a special',
+                  sabotage: 'Choose a target' }[kind];
   const intro = {
     card: `${coin(SHOP.card)} spent. It joins your column where its role puts it, like any other.`,
     upgrade: `${coin(SHOP.upgrade)} spent. +${(UPGRADE.step * 100) | 0}% health and damage on every copy you hold.`,
-    special: 'One of each weight class, once each. The draft never offers these — they are bought or they are not had.'
+    special: 'One of each weight class, once each. The draft never offers these — they are bought or they are not had.',
+    sabotage: `${coin(SABOTAGE.cost)} spent. Their card deploys on ${(SABOTAGE.half * 100) | 0}% health next round — every copy of it.`
   }[kind];
 
+  // A sabotage chooser shows THEIR counters, in their colour, because that is
+  // what you are picking off the other half of the field.
+  const side = kind === 'sabotage' ? 1 : 0;
   const row = it => {
     const u = BY_ID[it.id];
     const cost = flat === null ? it.cost : flat;
     const can = flat !== null || it.afford;
     const note = kind === 'upgrade' ? `${it.held} on the field · ${traits(u).join(' · ')}`
+      : kind === 'sabotage' ? `${armyFrom(S.army[1]).cards.filter(x => x === it.id).length} of them · ${traits(u).join(' · ')}`
       : `${u.w} · ${u.count} ${u.count === 1 ? 'body' : 'bodies'} · ${traits(u).join(' · ')}`;
     return `<button class="pick shopRow" ${can ? `data-id="${u.id}" data-cost="${cost}"` : 'disabled'}
         style="${can ? '' : 'opacity:.45'}">
-      <svg width="34" height="34" viewBox="-5 -5 10 10">${shape(u.w, 0, 0, MARK[u.w], SIDE[0].fill, SIDE[0].line)}
-        ${glyph(u.id, 0, 0, MARK[u.w] * 0.62, SIDE[0].ink, 1.15)}</svg>
+      <svg width="34" height="34" viewBox="-5 -5 10 10">${shape(u.w, 0, 0, MARK[u.w], SIDE[side].fill, SIDE[side].line)}
+        ${glyph(u.id, 0, 0, MARK[u.w] * 0.62, SIDE[side].ink, 1.15)}</svg>
       <span><b>${u.n}${kind === 'upgrade' ? ` to level ${it.lvl}` : ''}${
         kind === 'special' ? ` — ${coin(cost)}` : ''}</b><i>${note}</i></span>
     </button>`;
