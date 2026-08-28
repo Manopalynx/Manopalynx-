@@ -2645,3 +2645,39 @@ a different name. Equipment and sabotage both survive that test; a cast does not
 And the test any new item has to pass, from the booster sweep: **does it change how you draft
 or how the battle resolves?** The four boosters that moved the economy did not move the run.
 Only the one that changed the draft did.
+
+### Part fourteen — the specials, and a first guess that was a trap
+
+Built the three shop-only cards from the manuscript: the Kraken, a Purifier and the Adarnas.
+**Lancer was checked too and is a person**, which is the check this record exists for.
+
+**The structural argument is the one to keep.** Adding cards to the DRAFT pool re-derives the
+whole counter graph; shop-only cards touch none of it, because a single-type pairing never
+sees one. `matchup.mjs` measures `DRAFT` rather than `UNITS` now — and it would have measured
+the wrong thing silently, because `UNITS` still resolves and the graph would simply have been
+about a game that cannot happen.
+
+**The first numbers were a trap and only the right comparison found it.** Asking "can four
+ordinary cards beat one special" said the specials were feeble. Asking the question a *player*
+faces — this, or the cards the same credits buy, added to the column I already have — said all
+three **lost at 19–28% while still beating the column without them**. Worth having, strictly
+worse value. **A prize you would be wrong to buy is worse than no prize**, and the first
+measurement could not see it because it was not the decision anyone makes.
+
+Scaled to 48–51%. **More bodies could not fix the Adarnas** — twenty-four of them still lost
+against three cards, because that is the square law, and the answer was to make each body
+worth more rather than to add more.
+
+**The designed answers turned out to be the measured answers** — the Kraken falls to melee and
+numbers because its shield refuses ranged fire and nothing else; the Adarnas to splash, because
+six bodies standing together is what area damage is for. That is the first time in this project
+that a prediction about the counter graph has held without correction.
+
+### The shop grew an item the opponent could not buy — for the second time
+
+Its shopper reached three of five items and spammed one: **eleven upgrades and zero cards with
+₡200**, and it had never been able to buy a wider offer at all. Adding specials would have made
+that three of six.
+
+**When a menu grows, the thing choosing from it has to grow too**, and nothing in the suite was
+watching: every claim about the market was about the player's screen.
