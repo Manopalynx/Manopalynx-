@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v11';
+export const BUILD = 'column-v12';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -180,8 +180,72 @@ export const UNITS = [
     q: 'Set autopilot, best speed, into the swarm’s central mass.', qv: 1 }
 ];
 
-// Derived, so a card cannot disagree with its own class.
-UNITS.forEach(u => { u.count = WEIGHT[u.w]; });
+/* ------------------------------------------------------------ the specials */
+// THREE CARDS THE DRAFT NEVER OFFERS. One a weight class, bought at the market
+// and one of each a side, and they are the answer to two problems at once:
+//
+//   · the economy had no sink. Income is about 102 credits a match with nothing
+//     over 44 to spend it on, so credits piled up. A special costs more than one
+//     market visit, which makes saving across visits a decision for the first time.
+//   · the roster had no growth path that did not cost the counter graph. Adding
+//     cards to the DRAFT pool would re-derive all of it -- 86% of pairings
+//     decisive, 126 cycles, every unit the best answer to something. Shop-only
+//     cards touch none of it, because a single-type pairing never sees them.
+//
+// `sp` marks a card as special: `offer()` refuses to deal it, the market sells
+// it, and `count` is its own rather than its class's, because a special is
+// allowed to break the rule that keeps the DRAFT honest.
+//
+// EACH ONE MUST STILL LOSE TO SOMETHING. A special that answers everything is
+// not a prize, it is the end of the game.
+//
+// THE NUMBERS ARE MEASURED, not chosen. The question a special has to pass is
+// the one a player actually faces at the market: this, or the ordinary cards the
+// same credits would buy, added to the column I already have? At the first guess
+// all three LOST that comparison -- 19-28% -- so they were worth having and
+// strictly worse value, which is a trap rather than a prize. Scaled until each
+// sits near an even choice: the Kraken and the Purifier needed half again, and
+// the Adarnas needed three times, because six light bodies against three cards
+// is the square law and more bodies could not fix it -- twenty-four of them
+// still lost.
+//
+// All three are the author's, checked against the manuscript by name and by
+// description. "Lancer" was checked too and is a person.
+export const SPECIALS = [
+  // "limbs, each one longer than a cruiser, moving with a fluid, boneless
+  // wrongness" -- it took a battleship "and squeezed". Its shields are the
+  // Deflector's rule, so the real thing outranking the copy is right. Answered
+  // by acid, because damage over time ignores armour and a shield tuned for
+  // weapons fire does not stop it.
+  { id: 'kraken', n: 'Kraken', w: 'heavy', sp: 'heavy', cost: 90, count: 1,
+    hp: 2400, dmg: 285, rate: 22, rng: 5, spd: 0.5, arm: 6, defl: 0.6, tgt: 'near',
+    q: 'The volleys broke against its shields and armor like weather.', qv: 1 },
+
+  // "They burned the orbitals, then the cities, then the croplands, and then
+  // they stayed in orbit an extra day to burn the forests." Area denial as a
+  // doctrine: long reach, a wide blast, and ground that keeps burning. Answered
+  // by anything that crosses the field, because it is slow and thin.
+  { id: 'purifier', n: 'Purifier', w: 'medium', sp: 'medium', cost: 75, count: 1,
+    hp: 510, dmg: 135, rate: 30, rng: 48, spd: 0.3, splash: 20, dot: 4, dotT: 40, tgt: 'big',
+    q: 'Their doctrine held that the life itself was the contamination.', qv: 1 },
+
+  // "The Adarnas dropped through smoke the whole way down ... a platoon at his
+  // back." A platoon delivered at the line of contact rather than marched to it,
+  // which is what `drop` means. Answered by splash: six bodies standing together
+  // is exactly what area damage is for.
+  { id: 'adarnas', n: 'Adarnas', w: 'light', sp: 'light', cost: 70, count: 6, drop: 1,
+    hp: 570, dmg: 90, rate: 7, rng: 3, spd: 1.2, tgt: 'near',
+    q: 'The Adarnas dropped through smoke the whole way down.', qv: 1 }
+];
+
+UNITS.push(...SPECIALS);
+
+// Derived for a draft card, its own for a special.
+UNITS.forEach(u => { if (!u.sp) u.count = WEIGHT[u.w]; });
+
+// The draft pool: everything the offer may deal. One place, so a special can
+// never arrive as a free pick.
+export const DRAFT = UNITS.filter(u => !u.sp);
 
 export const BY_ID = Object.fromEntries(UNITS.map(u => [u.id, u]));
 

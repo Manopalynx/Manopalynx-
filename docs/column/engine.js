@@ -15,7 +15,8 @@
 // would give whichever side was iterated first a systematic opening strike, and
 // nothing about the game would look wrong.
 
-import { UNITS, BY_ID, FIELD, TICK, MAX_TICKS, RULES, UPGRADE, SHOP, RUN, BOOSTS } from './data.js';
+import { UNITS, DRAFT, SPECIALS, BY_ID, FIELD, TICK, MAX_TICKS, RULES, UPGRADE, SHOP, RUN,
+         BOOSTS } from './data.js';
 
 /* ------------------------------------------------------------------------ rng */
 // mulberry32. Small, fast, and — the only property that matters here — the same
@@ -178,6 +179,9 @@ export function formation(cards) {
 function deploy(picks, side, rand) {
   const { cards: drafted, up } = armyFrom(picks);
   const cards = formation(drafted).map(i => drafted[i]);
+  // A DROP LANDS AT THE LINE OF CONTACT rather than marching to it. The Adarnas
+  // "dropped through smoke the whole way down"; the rest of the column walks.
+  const CONTACT_ROW = FIELD.d / 2 - 12;
   // One spec object per unit type, not per body: an upgraded card's stats are
   // computed once and every body of it holds the same reference, so no body can
   // end up at a different level from its squadmate.
@@ -193,6 +197,7 @@ function deploy(picks, side, rand) {
     const cx = FIELD.w / 2 + (col - (wide - 1) / 2) * (FIELD.w / (PER_RANK + 1));
     const cy = 10 + rank * 9;
     for (let k = 0; k < n; k++) {
+      const dropped = u.drop;
       out.push({
         // `s` is this body's OWN spec, upgrades applied. Everything in the
         // resolver reads it instead of BY_ID, because BY_ID is the card as
@@ -203,7 +208,9 @@ function deploy(picks, side, rand) {
         id, s: u, side, i: out.length, c: ci,
         // Where this BODY stands within its own squad.
         x: cx + (k - (n - 1) / 2) * SQUAD_SPREAD + (rand() - 0.5) * 1.2,
-        y: (side === 0 ? cy : FIELD.d - cy) + (rand() - 0.5) * 1.2,
+        y: (dropped
+              ? (side === 0 ? CONTACT_ROW : FIELD.d - CONTACT_ROW)
+              : (side === 0 ? cy : FIELD.d - cy)) + (rand() - 0.5) * 1.2,
         hp: u.hp, max: u.hp,
         cd: 0,               // ticks until this unit may attack again
         dot: 0, dotT: 0,     // damage-over-time in progress
@@ -406,7 +413,10 @@ function hurtInto(target, amount, from, add, dealt) {
 // is why matchup.mjs and preview.mjs still measure what they measured.
 export function offer(rand, n = RULES.offer, picks = []) {
   const { cards, up } = armyFrom(picks);
-  const pool = UNITS.map(u => u.id);
+  // DRAFT, not UNITS. A special is bought or it is not had -- dealing one as a
+  // free pick would put the roster's three biggest cards into a hand that was
+  // never paid for, and into the counter graph with them.
+  const pool = DRAFT.map(u => u.id);
   const out = [];
   for (let i = 0; i < n && pool.length; i++) {
     const id = pool.splice(Math.floor(rand() * pool.length), 1)[0];
@@ -545,8 +555,20 @@ export const chestFor = boosts => (has(boosts, 'chest') ? 30 : 0);
 // What the market has in it for a given side, and what it costs. Derived from
 // the army rather than listed, so an upgrade that cannot apply is never offered
 // and a maxed card never appears twice.
+// The specials a side may still buy, with what each costs. One of each class a
+// side, so what you already hold is what decides the row.
+export function specialsFor(money, picks) {
+  const held = new Set(armyFrom(picks).cards);
+  return SPECIALS.filter(u => !held.has(u.id))
+    .map(u => ({ id: u.id, cost: u.cost, afford: money >= u.cost }));
+}
+
 export function stock(money, picks, lives) {
   const out = [];
+  // THE SPECIALS FIRST, because they are what the credits are for. The row only
+  // appears when there is one you can both afford and do not already hold.
+  const buyable = specialsFor(money, picks).filter(x => x.afford);
+  if (buyable.length) out.push({ k: 'special', cost: Math.min(...buyable.map(x => x.cost)) });
   if (money >= SHOP.card) out.push({ k: 'card', cost: SHOP.card });
   // ONE upgrade row, not one a card. Nine rows at round three and twelve by
   // round nine is a wall rather than a market, and the choice of WHICH card
@@ -567,30 +589,51 @@ export function upgradeable(picks) {
     .map(id => ({ id, lvl: (up[id] || 0) + 1, held: cards.filter(x => x === id).length }));
 }
 
-// The opponent's spending, and it is deliberately simple: upgrade the card it
-// holds most of, because an upgrade compounds with copies and a card does not;
-// otherwise buy the strongest card on paper; buy a life only on the last one.
-// It exists so the market can be SWEPT -- a shop only the interface knew about
-// could not be, and the first question this economy has to answer is whether
-// paying the winner turns the match into a snowball.
+// The opponent's spending. It exists so the market can be SWEPT -- a shop only
+// the interface knew about could not be -- and it is rewritten here because the
+// first version reached three of the shop's five items and spammed one of them.
 export function spend(money, picks, lives) {
   const buys = [];
-  let m = money, army = picks.slice();
+  let m = money, army = picks.slice(), got = lives, ups = 0, wide = false;
   for (let guard = 0; guard < 12; guard++) {
-    if (lives === 1 && m >= SHOP.life) { buys.push({ k: 'life' }); m -= SHOP.life; lives++; continue; }
+    // A life first, and only on the last one -- the opponent is not trying to
+    // survive a run, it is trying to win this match.
+    if (got === 1 && m >= SHOP.life) { buys.push({ k: 'life' }); m -= SHOP.life; got++; continue; }
+
+    // A SPECIAL IT DOES NOT HOLD. The biggest single step available, and the
+    // reason this function was rewritten: the shop grew an item the opponent
+    // could not reach, which is the same fault the wider offer already had.
+    const canSpecial = specialsFor(m, army).filter(x => x.afford);
+    if (canSpecial.length) {
+      const pick = canSpecial.sort((a, b) => b.cost - a.cost)[0];
+      buys.push({ k: 'special', id: pick.id }); m -= pick.cost; army.push(pick.id); continue;
+    }
+
+    // TWO UPGRADES A VISIT, then cards. Unbounded, it bought eleven upgrades and
+    // zero cards with 200 credits, because an upgrade is cheaper than a card and
+    // always available -- a column of one card type, three levels deep, and no
+    // answer to anything.
     const { cards, up } = armyFrom(army);
     const count = {};
     for (const id of cards) count[id] = (count[id] || 0) + 1;
     const best = Object.keys(count)
       .filter(id => (up[id] || 0) < UPGRADE.max)
       .sort((x, y) => count[y] - count[x] || power(y) - power(x))[0];
-    if (best && m >= SHOP.upgrade) {
-      buys.push({ k: 'upgrade', id: best }); m -= SHOP.upgrade; army.push(UP_TAG + best); continue;
+    if (ups < 2 && best && m >= SHOP.upgrade) {
+      buys.push({ k: 'upgrade', id: best }); m -= SHOP.upgrade; army.push(UP_TAG + best); ups++; continue;
     }
+
     if (m >= SHOP.card) {
-      const id = UNITS.map(u => u.id).sort((x, y) => power(y) - power(x))[0];
+      // The card that best answers what it is up against would be better, and
+      // the opponent does not know the enemy army here. Strongest on paper, of
+      // the ones it holds fewest of, so it spreads rather than stacks.
+      const id = DRAFT.map(u => u.id)
+        .sort((x, y) => (count[x] || 0) - (count[y] || 0) || power(y) - power(x))[0];
       buys.push({ k: 'card', id }); m -= SHOP.card; army.push(id); continue;
     }
+
+    // A wider offer with whatever is left, once.
+    if (!wide && m >= SHOP.offer) { buys.push({ k: 'offer' }); m -= SHOP.offer; wide = true; continue; }
     break;
   }
   return buys;
@@ -672,6 +715,7 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
           if (buy.k === 'life') { lives[s]++; money[s] -= SHOP.life; }
           else if (buy.k === 'upgrade') { army[s].push(UP_TAG + buy.id); money[s] -= SHOP.upgrade; }
           else if (buy.k === 'card') { army[s].push(buy.id); money[s] -= SHOP.card; }
+          else if (buy.k === 'special') { army[s].push(buy.id); money[s] -= BY_ID[buy.id].cost; }
           else if (buy.k === 'offer') { wide[s] = 1; money[s] -= SHOP.offer; }
         }
       }

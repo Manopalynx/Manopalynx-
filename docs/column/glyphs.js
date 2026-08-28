@@ -105,6 +105,31 @@ export const GLYPH = {
   fireship: {
     d: ['M-3.6 0.8 L3.6 0.8 L2.2 3 L-2.2 3 z', 'M0 -3.4 q1.8 1.6 0 3.2 q-1.8 -1.6 0 -3.2 z'],
     detail: ['M-2 0.8 v-1.4', 'M2 0.8 v-1.4', 'M-3.6 0.8 l-1 -0.6', 'M3.6 0.8 l1 -0.6']
+  },
+
+  /* ---- the specials, bought rather than drafted ------------------------- */
+  // "limbs, each one longer than a cruiser, moving with a fluid, boneless
+  // wrongness" — it took a battleship and squeezed.
+  kraken: {
+    d: ['M-1.8 -1.4 a2 2.2 0 1 1 3.6 0 v1.6 h-3.6 z',
+        'M-1.8 0.4 q-2.6 0.6 -2.4 3.6', 'M-0.6 1.8 q-1.4 1.4 -1 3.2',
+        'M0.6 1.8 q1.4 1.4 1 3.2', 'M1.8 0.4 q2.6 0.6 2.4 3.6'],
+    detail: ['M-0.9 -1.5 a0.5 0.5 0 1 1 0.01 0', 'M0.9 -1.5 a0.5 0.5 0 1 1 0.01 0',
+             'M-4.2 4 l-0.7 0.8', 'M4.2 4 l0.7 0.8']
+  },
+  // "They burned the orbitals, then the cities, then the croplands, and then
+  // they stayed in orbit an extra day to burn the forests."
+  purifier: {
+    d: ['M0 -4.2 q2.4 2.4 1.4 4.4 q-0.7 1.4 -1.4 1.4 q-0.7 0 -1.4 -1.4 q-1 -2 1.4 -4.4 z',
+        'M-3.8 2.4 h7.6', 'M-3 4.2 h6'],
+    detail: ['M-2.6 0.8 q0.8 -1.4 0 -2.6', 'M2.6 0.8 q-0.8 -1.4 0 -2.6', 'M0 1.4 v1']
+  },
+  // "The Adarnas dropped through smoke the whole way down ... a platoon at his
+  // back." The hull, and the drop beneath it.
+  adarnas: {
+    d: ['M-4 -2.4 L4 -2.4 L2.4 0.4 L-2.4 0.4 z', 'M-2.6 -2.4 v-1.4', 'M2.6 -2.4 v-1.4',
+        'M-1.6 1.4 v3', 'M0 1.4 v3.4', 'M1.6 1.4 v3'],
+    detail: ['M-4 -2.4 l-1 -1', 'M4 -2.4 l1 -1', 'M-0.9 -1.4 h1.8']
   }
 };
 

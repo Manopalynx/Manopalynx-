@@ -77,16 +77,21 @@ else bad('five opponents offered', [`found ${personas}`]);
 await page.click('#roster');
 const rosterRows = await page.locator('.rosterRow').count();
 const written = await page.locator('.src').allTextContents();
-if (rosterRows === 12) ok('the roster shows all twelve cards');
-else bad('the roster shows all twelve cards', [`found ${rosterRows}`]);
+// Twelve drafted and three bought. The specials belong on this page: a card you
+// might spend most of a match's income on is one you have to be able to read
+// before the market opens.
+const marketOnly = await page.locator('.rosterRow em:has-text("at the market")').count();
+if (rosterRows === 15 && marketOnly === 3)
+  ok('the roster shows all fifteen cards and marks the three the market sells');
+else bad('the roster shows all fifteen cards', [`found ${rosterRows} rows, ${marketOnly} marked as market-only`]);
 // TWO QUESTIONS, NOT ONE. Whether the LINE is the author's, and whether the
 // UNIT is. The Deflector's line is his and the unit is mine, and that is the one
 // thing in this game Sam cannot check for himself without opening a file.
 const invented = written.filter(t => /invented/i.test(t)).length;
-if (written.length === 12 && written.every(t => /author|invented|written for the game/i.test(t)) && invented === 1)
+if (written.length === 15 && written.every(t => /author|invented|written for the game/i.test(t)) && invented === 1)
   ok(`every card says whose line it carries, and the one invented unit says so`);
 else bad('every card says whose line it carries', [
-  `${written.length} provenance marks, ${invented} marked invented (expected 12 and 1)`]);
+  `${written.length} provenance marks, ${invented} marked invented (expected 15 and 1)`]);
 // The roster is a page Sam reads rather than plays; worth a look without him
 // having to find it.
 await page.screenshot({ path: rp(HERE, 'play-roster.png') });
@@ -206,7 +211,7 @@ for (let guard = 0; guard < 400; guard++) {
       // card. A crash three steps downstream is not this check doing its job.
       const gone = await page.evaluate(() => !document.querySelector('.sheet'));
       const after = await state();
-      pause = has.every(Boolean) && rows === 12 && gone && after.phase === 'pick' &&
+      pause = has.every(Boolean) && rows === 15 && gone && after.phase === 'pick' &&
               after.offer === 3 && after.cards[0] === s.cards[0]
         ? true
         : `buttons ${has.join('/')}, roster rows ${rows}, ` +

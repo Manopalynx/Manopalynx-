@@ -189,9 +189,11 @@ const edge = {};
 }
 
 /* --------------------------------------------------------------------- claims */
-let failed = 0;
-const ok = m => console.log(` ok   ${m}`);
-const bad = (m, why) => { failed++; console.log(`FAIL  ${m}`); (why || []).forEach(w => console.log(`        · ${w}`)); };
+// Counted as they fire. A total typed at the bottom is a number written twice,
+// and it had already gone wrong once in play.mjs.
+let failed = 0, ran = 0;
+const ok = m => { ran++; console.log(` ok   ${m}`); };
+const bad = (m, why) => { ran++; failed++; console.log(`FAIL  ${m}`); (why || []).forEach(w => w && console.log(`        · ${w}`)); };
 
 // THE FIGURE CARRIES ITS OWN ERROR. At 60 matches a table this read 62% and at
 // 400 it reads 58.7% -- the same build, and the small sample was noise that
@@ -265,5 +267,5 @@ else bad('upgrades are a real pick and not the only pick', [
                 : 'everybody takes them: reinforcement is dead and the army never grows'
 ]);
 
-console.log(`\n${7 - failed} of 7 claims hold\n`);
+console.log(`\n${ran - failed} of ${ran} claims hold\n`);
 process.exit(failed ? 1 : 0);

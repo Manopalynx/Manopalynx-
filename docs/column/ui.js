@@ -11,10 +11,10 @@
 // watch IS what was resolved. It cannot drift, because there is nothing to
 // drift from.
 
-import { BY_ID, RULES, PERSONAS, UPGRADE, WEIGHT, UNITS, SHOP, RUN, BOOSTS, BY_BOOST,
-         COIN, BUILD } from './data.js';
+import { BY_ID, RULES, PERSONAS, UPGRADE, WEIGHT, UNITS, DRAFT, SPECIALS, SHOP, RUN,
+         BOOSTS, BY_BOOST, COIN, BUILD } from './data.js';
 import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId,
-         earn, stock, spend, upgradeable, boosterOffer,
+         earn, stock, spend, upgradeable, specialsFor, boosterOffer,
          offerSize, picksFor, marketEvery, chestFor } from './engine.js';
 import { draw, effects, auras, GROUND, SIDE, shape } from './render.js';
 import { glyph } from './glyphs.js';
@@ -289,12 +289,14 @@ function endRound() {
 const marketDue = () => S.round % marketEvery(S.boosts[0]) === 0 && S.lives[0] > 0 && S.lives[1] > 0;
 
 function buy(item) {
-  const cost = item.cost;
+  // A special is priced on the card, not in SHOP -- three prices, three cards,
+  // and one place each of them lives.
+  const cost = item.k === 'special' ? BY_ID[item.id].cost : item.cost;
   if (S.money[0] < cost) return false;
   S.money[0] -= cost;
   if (item.k === 'life') S.lives[0]++;
   else if (item.k === 'upgrade') S.army[0].push('up:' + item.id);
-  else if (item.k === 'card') S.army[0].push(item.id);
+  else if (item.k === 'card' || item.k === 'special') S.army[0].push(item.id);
   else if (item.k === 'offer') S.wide[0] = 1;
   save();
   return true;
@@ -584,7 +586,8 @@ function roster() {
     return `<div class="rosterRow">
       <svg width="38" height="38" viewBox="-5 -5 10 10">${shape(u.w, 0, 0, s, SIDE[0].fill, SIDE[0].line)}
         ${glyph(u.id, 0, 0, s * 0.62, SIDE[0].ink, 1.15)}</svg>
-      <div><b>${u.n}</b> <em>${u.w} · ${u.count} ${u.count === 1 ? 'body' : 'bodies'}</em>
+      <div><b>${u.n}</b> <em>${u.w} · ${u.count} ${u.count === 1 ? 'body' : 'bodies'}${
+        u.sp ? ` · ${COIN}${u.cost} at the market` : ''}</em>
         <em style="display:block">${traits(u).join(' · ')}</em>
         <q>${u.q}</q><span class="src">${provenance(u)}</span></div>
     </div>`;
@@ -594,7 +597,12 @@ function roster() {
     bodies, one job each. <b>Circle</b> is light — three bodies, strong in numbers and soft
     to anything that hits an area. The drawing inside a marker is the card; its colour is
     the side. A mark only has to be told from the three others in its own shape.</p>
-    ${UNITS.map(row).join('')}
+    ${DRAFT.map(row).join('')}
+    <h2>Bought, never dealt</h2>
+    <p>One of each weight class, once each. The draft never offers them; the market sells
+    them, and they cost more than a market's takings — which is what makes saving a
+    decision.</p>
+    ${SPECIALS.map(row).join('')}
     <p style="margin-top:18px">Every unit is from <i>Grandiose: The Rise to Power</i>, and
     every line on this page is checked word by word against the manuscript. Anything marked
     <b>invented for the game</b> is mine and is the first thing to strike.</p>
@@ -610,7 +618,14 @@ function market() {
   const items = stock(S.money[0], S.army[0], S.lives[0]);
   const up = upgradeable(S.army[0]);
 
+  const spec = specialsFor(S.money[0], S.army[0]);
   const line = (it, i) => {
+    if (it.k === 'special') {
+      const can = spec.filter(x => x.afford);
+      return `<button class="pick" data-i="${i}"><b>A special — from ${coin(it.cost)}</b>
+        <i>One of each weight class, once each, and the draft never offers them.
+        ${can.length} within reach: ${can.map(x => BY_ID[x.id].n).join(', ')}.</i></button>`;
+    }
     if (it.k === 'card') return `<button class="pick" data-i="${i}"><b>A card of your choosing — ${coin(it.cost)}</b>
       <i>Any one of the twelve, named rather than offered.</i></button>`;
     if (it.k === 'upgrade') return `<button class="pick" data-i="${i}"><b>An upgrade — ${coin(it.cost)}</b>
@@ -632,6 +647,7 @@ function market() {
     const it = items[+b.dataset.i];
     if (it.k === 'card') { d.remove(); return chooser('card'); }
     if (it.k === 'upgrade') { d.remove(); return chooser('upgrade'); }
+    if (it.k === 'special') { d.remove(); return chooser('special'); }
     if (buy(it)) { d.remove(); market(); }
   });
   d.querySelector('#leave').onclick = () => { d.remove(); startRound(); save(); };
@@ -641,24 +657,37 @@ function market() {
 // the same screen: the cards, drawn as they will stand on the field.
 const MARK = { heavy: 3.7, medium: 3.2, light: 2.9 };
 function chooser(kind) {
-  const list = kind === 'card'
-    ? UNITS.map(u => ({ id: u.id }))
-    : upgradeable(S.army[0]);
-  const cost = kind === 'card' ? SHOP.card : SHOP.upgrade;
-  const d = sheet(`<h1>${kind === 'card' ? 'Choose a card' : 'Choose an upgrade'}</h1>
-    <p>${coin(cost)} spent. ${kind === 'card'
-        ? 'It joins your column where its role puts it, like any other.'
-        : `+${(UPGRADE.step * 100) | 0}% health and damage on every copy you hold.`}</p>
-    ${list.map(it => { const u = BY_ID[it.id]; return `<button class="pick shopRow" data-id="${u.id}">
+  const list = kind === 'card' ? DRAFT.map(u => ({ id: u.id }))
+             : kind === 'special' ? specialsFor(S.money[0], S.army[0])
+             : upgradeable(S.army[0]);
+  const flat = kind === 'card' ? SHOP.card : kind === 'upgrade' ? SHOP.upgrade : null;
+  const title = { card: 'Choose a card', upgrade: 'Choose an upgrade', special: 'Choose a special' }[kind];
+  const intro = {
+    card: `${coin(SHOP.card)} spent. It joins your column where its role puts it, like any other.`,
+    upgrade: `${coin(SHOP.upgrade)} spent. +${(UPGRADE.step * 100) | 0}% health and damage on every copy you hold.`,
+    special: 'One of each weight class, once each. The draft never offers these — they are bought or they are not had.'
+  }[kind];
+
+  const row = it => {
+    const u = BY_ID[it.id];
+    const cost = flat === null ? it.cost : flat;
+    const can = flat !== null || it.afford;
+    const note = kind === 'upgrade' ? `${it.held} on the field · ${traits(u).join(' · ')}`
+      : `${u.w} · ${u.count} ${u.count === 1 ? 'body' : 'bodies'} · ${traits(u).join(' · ')}`;
+    return `<button class="pick shopRow" ${can ? `data-id="${u.id}" data-cost="${cost}"` : 'disabled'}
+        style="${can ? '' : 'opacity:.45'}">
       <svg width="34" height="34" viewBox="-5 -5 10 10">${shape(u.w, 0, 0, MARK[u.w], SIDE[0].fill, SIDE[0].line)}
         ${glyph(u.id, 0, 0, MARK[u.w] * 0.62, SIDE[0].ink, 1.15)}</svg>
-      <span><b>${u.n}${kind === 'upgrade' ? ` to level ${it.lvl}` : ''}</b><i>${kind === 'upgrade'
-        ? `${it.held} on the field · ${traits(u).join(' · ')}`
-        : `${u.w} · ${u.count} ${u.count === 1 ? 'body' : 'bodies'} · ${traits(u).join(' · ')}`}</i></span>
-    </button>`; }).join('')}
+      <span><b>${u.n}${kind === 'upgrade' ? ` to level ${it.lvl}` : ''}${
+        kind === 'special' ? ` — ${coin(cost)}` : ''}</b><i>${note}</i></span>
+    </button>`;
+  };
+
+  const d = sheet(`<h1>${title}</h1><p>${intro}</p>
+    ${list.map(row).join('')}
     <button class="pick" id="never"><b>Change your mind</b></button>`);
   d.querySelectorAll('[data-id]').forEach(b => b.onclick = () => {
-    buy({ k: kind, id: b.dataset.id, cost });
+    buy({ k: kind, id: b.dataset.id, cost: +b.dataset.cost });
     d.remove(); market();
   });
   d.querySelector('#never').onclick = () => { d.remove(); market(); };

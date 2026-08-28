@@ -25,13 +25,18 @@
 //
 // Run:  node docs/column/test/matchup.mjs [seeds]
 
-import { UNITS, BY_ID } from '../data.js';
+import { UNITS, DRAFT, SPECIALS, BY_ID } from '../data.js';
 import { resolve } from '../engine.js';
 
 const SEEDS = +process.argv[2] || 12;
 const SQUAD = 3;              // equal CARDS a side. A pick is a pick, so this is the fair comparison
 
-const ids = UNITS.map(u => u.id);
+// THE DRAFT POOL, NOT THE ROSTER. The specials are bought and never dealt, so a
+// single-type pairing never contains one -- putting them in this graph would
+// measure a matchup the game cannot produce, and would let three shop cards
+// rewrite the finding that the twelve drafted ones are decisive against each
+// other. They get their own claim at the bottom instead.
+const ids = DRAFT.map(u => u.id);
 const win = {};               // win[a][b] = fraction of seeds a beats b
 ids.forEach(a => { win[a] = {}; });
 
@@ -86,9 +91,11 @@ console.log(`\nof ${pairs.length} pairings, ${decisive} (${(decisive / pairs.len
             `are decided 95/5 or harder — the model's room to express a close matchup`);
 
 /* ------------------------------------------------------------------ the claims */
-let failed = 0;
-const ok = m => console.log(` ok   ${m}`);
-const bad = (m, why) => { failed++; console.log(`FAIL  ${m}`); (why || []).forEach(w => console.log(`        · ${w}`)); };
+// Counted as they fire rather than against a number typed at the bottom, which
+// is a number written twice and was wrong in play.mjs for two sessions.
+let failed = 0, ran = 0;
+const ok = m => { ran++; console.log(` ok   ${m}`); };
+const bad = (m, why) => { ran++; failed++; console.log(`FAIL  ${m}`); (why || []).forEach(w => w && console.log(`        · ${w}`)); };
 
 console.log('');
 
@@ -128,5 +135,30 @@ else bad('every unit is the best answer to something', [
   `nothing is best answered by: ${noAnswer.join(', ')}`
 ]);
 
-console.log(`\n${3 - failed} of 3 claims hold\n`);
+// 4 -----------------------------------------------------------------------
+// EVERY SPECIAL MUST STILL LOSE TO SOMETHING. A special that answers everything
+// is not a prize, it is the end of the game. Four of an ordinary card is roughly
+// what the same credits buy, so that is the comparison.
+{
+  const beaten = [];
+  for (const sp of SPECIALS) {
+    const answers = [];
+    for (const id of ids) {
+      let w = 0;
+      for (let s = 0; s < 8; s++) if (resolve([id, id, id, id], [sp.id], s * 37 + 3).winner === 0) w++;
+      if (w >= 6) answers.push(BY_ID[id].n);
+    }
+    beaten.push({ sp, answers });
+  }
+  const none = beaten.filter(b => !b.answers.length);
+  if (!none.length) {
+    ok('every special has an answer in the ordinary roster');
+    for (const b of beaten) console.log(`        ${b.sp.n}: ${b.answers.join(', ')}`);
+  } else bad('every special has an answer in the ordinary roster', [
+    `nothing in the twelve beats: ${none.map(b => b.sp.n).join(', ')}`,
+    'a card the drafted roster cannot answer ends the game rather than deepening it'
+  ]);
+}
+
+console.log(`\n${ran - failed} of ${ran} claims hold\n`);
 process.exit(failed ? 1 : 0);

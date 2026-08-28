@@ -1002,6 +1002,83 @@ is Sam's, not a number to nudge. The direction the measurement points is draft-s
 boosters: an offer that never repeats a maxed card, a unit type you name always being offered,
 upgrades arriving a level higher. Nothing has been changed on the strength of this yet.
 
+# The specials
+
+Three cards the draft never offers — one a weight class, one of each a side, bought at the
+market. They answer two problems at once.
+
+**The economy had no sink.** Income is ~₡102 a match with nothing over ₡44 to spend it on, so
+credits piled up. A special costs more than one market visit (~₡50), which makes **saving
+across visits a decision for the first time**.
+
+**The roster had no growth path that did not cost the counter graph.** Adding cards to the
+*draft* pool would re-derive all of it — 86% of pairings decisive, 126 cycles, every unit the
+best answer to something. Shop-only cards touch none of it, because a single-type pairing
+never sees one. `matchup.mjs` now measures the **draft pool** rather than the roster, for
+exactly that reason, and gives the specials their own claim.
+
+All three are the author's, checked by name *and* by description. **Lancer was checked too and
+is a person**, not a machine.
+
+| | | |
+|---|---|---|
+| **Kraken** · heavy · ₡90 | *"The volleys broke against its shields and armor like weather."* | One body, 2400 health, and a shield that refuses ranged fire — the Deflector's rule on the thing the Deflector was copied from. |
+| **Purifier** · medium · ₡75 | *"Their doctrine held that the life itself was the contamination."* | Reach 48, a 20-wide blast, and ground that keeps burning. Slow and thin. |
+| **Adarnas** · light · ₡70 | *"The Adarnas dropped through smoke the whole way down."* | A platoon of six, landed **at the line of contact** rather than marched to it. |
+
+## The numbers are measured, and the first guess was a trap
+
+The question a special has to pass is the one a player faces at the market: **this, or the
+ordinary cards the same credits would buy, added to the column I already have?**
+
+At the first guess all three **lost** that comparison — 19–28% — while still beating the
+column without them (81–94%). That is the worst possible shape: worth having, and strictly
+worse value. A trap, not a prize.
+
+| | first guess | shipped |
+|---|---|---|
+| Kraken vs the 4 cards ₡90 buys | 28% | **48%** |
+| Purifier vs the 4 cards ₡75 buys | 25% | **51%** |
+| Adarnas vs the 3 cards ₡70 buys | 19% | **51%** |
+
+The Kraken and the Purifier needed half again. **The Adarnas needed three times, and more
+bodies could not do it** — scaling the platoon to twenty-four still lost, because six light
+bodies against three cards is the square law and the answer was to make each body worth more,
+not to add more of them.
+
+**And the designed answers are the measured answers**, which is the part worth keeping:
+
+- **Kraken** → Brute, Deflector, Line Infantry, Crawler Swarm. Melee and numbers, because its
+  shield refuses *ranged* fire and nothing else.
+- **Purifier** → almost everything that crosses the field. It is artillery; it is fragile.
+- **Adarnas** → Amabie, Acid Thrower, Fireship. Splash and burn: six bodies standing together
+  is exactly what area damage is for.
+
+## The opponent's shopper, rewritten
+
+It had to be. The first version reached three of the shop's five items and spammed one of
+them — with ₡200 it took **eleven upgrades and zero cards**, because an upgrade is cheaper than
+a card and nearly always available. It never bought a wider offer at all.
+
+It now buys a special it does not hold before anything else, takes **at most two upgrades a
+visit**, then buys the card it holds *fewest* of so it spreads rather than stacks, and spends
+the remainder on a wider offer. With ₡260 it takes all three specials and an upgrade; with ₡140,
+a Kraken, two upgrades and a wider offer.
+
+## What it did to the match
+
+| | before | after |
+|---|---|---|
+| alternation, worst table | 58.7% | 59% |
+| final bodies a side | 35–40 | 35–38 |
+| mixed compositions settled 95/5 | 59% | 59% |
+| unit graph | 3 of 3 | **4 of 4**, the new claim being that every special has an answer |
+
+Unchanged, which is what shop-only was for.
+
+`match.mjs` and `matchup.mjs` now count their claims as they fire, like `play.mjs` — a total
+typed at the bottom is a number written twice, and it had already gone wrong once.
+
 ## Next, and it is his
 
 **Battlefield variety.** His answer to 65% of compositions settling 95/5 is not to soften the
