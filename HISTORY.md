@@ -2317,3 +2317,41 @@ The new check is a **differential** — zero effects on a drawn-up field, more t
 mid-battle — and it caught its own first version in one run: aura circles carried the same
 class as event effects, so a still field reported four "shots". An absolute count would have
 passed on a renderer that draws rings whether or not anything fired.
+
+### Part five — notes four to six, and a layout fault with four causes
+
+His next three: **the screen jumps after picking a card** (with a suggestion — cards as an
+overlay), **pressing Continue after every selection is tedious**, and **the win screen is
+jammed at the top of the phone**.
+
+**Note 4 was not about the cards.** The deck is a flex sibling of the field, so every pixel
+it gains or loses comes out of the battlefield and the whole board slides. His proposed fix —
+an overlay — would have worked by taking the cards out of the flex flow, but the cause is
+that the deck's height is content-dependent, and the cards were only one of **four** things
+changing it:
+
+1. the card row emptying when a pick was committed
+2. cards with a four-line hint standing next to cards with two
+3. *"Your extra pick — you lost the round"* wrapping to two lines
+4. **an empty button being 22px shorter than one with a word in it**
+
+The fourth is the one to keep. `visibility: hidden` keeps a button's **box** and not its
+**content**, so hiding it the careful way still resized the deck. And `min-height` was not
+enough anywhere: a taller card still grows the row. **The container has to decide, not the
+content.**
+
+**The instrument found this, not reading.** A set of every field height seen at every draft
+phase, which must have exactly one member. It reported six, then two, then one — and each
+time it named which phase disagreed, which is what turned three guesses into three fixes.
+**Print what a check saw, not only that it failed.**
+
+**Note 5** is the same shape as his ledger notes: a tap that carries no decision, three times
+a round, nine rounds a match. The reveal is still needed — you have to see what you both took
+— so it stayed and stopped asking permission. 750ms, and the committed counters land with a
+ring; an upgrade lights *every copy* of the card it improved, which is the honest picture of
+what that pick did rather than a message saying so.
+
+**Read the noun again:** he said "the screen jumps", not "the cards are wrong". The overlay
+was his proposed remedy, not his complaint, and fixing the complaint was better than
+implementing the remedy — while his remedy is exactly what the inspect panel became, because
+there the content genuinely cannot be bounded.
