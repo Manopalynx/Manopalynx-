@@ -106,7 +106,7 @@ function choose(unit, enemies) {
  * @returns {{winner:number|null, ticks:number, left:number[], log:object[]}}
  *          winner 0, 1, or null for a draw at MAX_TICKS.
  */
-export function resolve(a, b, seed, keepLog = false) {
+export function resolve(a, b, seed, keepLog = false, onTick = null) {
   const rand = rng(seed);
   const units = [...deploy(a, 0, rand), ...deploy(b, 1, rand)];
   const log = [];
@@ -186,6 +186,13 @@ export function resolve(a, b, seed, keepLog = false) {
     }
 
     if (keepLog && events.length) log.push({ t, ev: events });
+
+    // Position sampler, for anything that needs to SEE the battle rather than
+    // its outcome — the preview renderer, and eventually the screen. Handed a
+    // copy, never the live array, because a caller that keeps a live reference
+    // reads a state that later ticks have already changed. That exact mistake
+    // is in the Ledger's record twice.
+    if (onTick) onTick(t, live.map(u => ({ id: u.id, side: u.side, x: u.x, y: u.y, hp: u.hp, max: u.max })));
   }
 
   const left = [0, 1].map(s => units.filter(u => u.alive && u.side === s).length);
