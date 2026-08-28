@@ -1896,3 +1896,62 @@ on. That is the first thing to settle.
 Two fields changed on the roster because the first sweep said so: `cost` was deleted for
 having no reader (a pick is a pick, so balance comes entirely from counters), and `count`
 was added because a one-body Crawler Swarm contradicted its own fiction.
+
+### Sam's design direction, and the square law underneath it
+
+Sam came back with a structured design brief — he had an AI write it up and said to ignore
+the lore mismatches because the mechanisms were the point. Seven decisions: decisive
+counters with no combat randomness, three weight classes, upgrade cards as well as
+reinforcement cards, optional merging, keep the extra pick, make numerical advantage
+non-linear, and preserve readability.
+
+**One line in it retired a claim I had been tuning against for a whole session.**
+*"Decisive local counters, but rarely a single decisive counter to an entire composition."*
+My first go/no-go claim fought single-card-type armies — three of one unit against three of
+another — which is exactly the local case his direction says is ALLOWED to be lopsided. It
+was measuring the thing that is meant to be decisive and failing it for being decisive. Its
+band was also finer than the model can resolve. Deleted rather than tuned, and replaced by
+*local counters are decisive* plus composition claims that live where mixed armies do.
+
+**Weight classes bounded the crowd by construction** — heavy 1 body, medium 2, light 3,
+with `count` derived from the class so a card cannot disagree with itself. The ceiling on
+bodies from twenty-six cards went from 260 to 78.
+
+**He asked for one thing by name: test whether deliberately losing pays, rather than
+guarding against it pre-emptively.** It does not. Throwing the opening round to bank the
+extra pick wins 34.3% against 51.0% playing straight, over 300 matches each. No
+anti-exploit system needed, which is the answer he wanted before anyone built one.
+
+### The bug, and the thing that is not a bug
+
+**A card's bodies deployed 14.3 field units apart while splash radii are 8 to 16.** A
+three-body light squad was spread wider than any blast could reach, so AOE hit exactly one
+of them — and "AOE punishes numbers, durability absorbs AOE", the mechanism his point 6
+depends on to stop card count being the whole game, could not fire at all. Bodies of one
+card stand together now.
+
+Fixing it took the unit graph to 3 of 3 and **did not touch the count problem**, which is
+how the two were shown to be separate. One extra card on eight wins **80%**, two 88%, three
+89% — saturating after the first, which is the signature of **Lanchester's square law**: in
+a fight to annihilation N bodies have N times the health and N times the output, so an edge
+of one compounds. That is arithmetic, not balance. No stat tuning moves it, and it is why
+the alternation figure would not come down either.
+
+Written up for Sam with three structural options and a recommendation — frontage, so extra
+cards buy depth instead of multiplied firepower. His decision; it is the kind that costs
+something, which makes it his by the division of labour rather than mine.
+
+### State of the work
+
+`main` carries `column-v1` alongside `grandiose-v87`. Unit graph 3 of 3; match structure
+1 of 5, with four of the five failures traced to one structural cause and the fifth
+(legibility, 108 bodies on screen) improved from 171 and still open.
+
+Open, in order:
+- **The square law.** Everything else waits on it: frontage, density-scaled AOE, or an
+  honest change to the comeback rule.
+- **Upgrade cards and merging** — specified by Sam, unbuilt, and deliberately so; both
+  change how numbers convert into strength, so they need the question above settled first.
+- `workingwithsam.md` needs its fourth row in "Where things are" now the Column has code.
+  340/340, so it must buy the line back.
+- The ledger's arithmetic, in its eleventh session. **The 31st.**

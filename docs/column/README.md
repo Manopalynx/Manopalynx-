@@ -5,9 +5,10 @@ Two commanders draft armies from what the war makes available, surrender control
 watch the consequences. Portrait, phone, one hand.
 
 **The engine and both instruments are built. There is no interface yet, deliberately.**
-Everything down to *What the first sweeps found* is the design as proposed; that last
-section is what measuring it actually returned, and the two disagree in places. Sam owns
-every decision here; where a choice is still open it says so rather than guessing.
+Everything down to *What the sweeps found* is the design as proposed; that last section is
+what measuring it actually returned, and **where the two disagree the measurement wins** —
+read the proposal for intent and the findings for what is true. Sam owns every decision
+here; where a choice is still open it says so rather than guessing.
 
 ## Why "The Column"
 
@@ -73,7 +74,8 @@ that stops being true in play, it is the first thing to revisit.
 
 ## The roster: shape, not contents
 
-**Working assumption, to be corrected: twelve units at launch.** Enough for a counter-graph
+**Twelve cards, confirmed by Sam, in three weight classes — heavy 1 body, medium 2,
+light 3.** Room to add more later if twelve stops feeling like enough. Enough for a counter-graph
 with real cycles; small enough that every pairing can be swept exhaustively (12 × 12 = 144)
 and that the first playable build is one session's work rather than five. Say a number and
 this changes.
@@ -123,8 +125,11 @@ swarm's convergence rule, so the two together are a small system rather than two
 **This is the go/no-go, and it is written to be failed.** `test/matchup.mjs` runs every
 unit against every other over many seeds and prints the win matrix. Three claims:
 
-1. **No dominant unit, no dead unit.** Across the whole pool, no unit's overall win rate
-   exceeds **65%** and none falls below **35%**.
+1. ~~**No dominant unit, no dead unit.** Across the whole pool, no unit's overall win rate
+   exceeds **65%** and none falls below **35%**.~~ **Deleted — see the findings.** It
+   measured single-card-type armies, which is the case Sam's direction says is allowed to
+   be lopsided, and its band was finer than the model can resolve. Replaced by *local
+   counters are decisive*, and by the composition claims in `test/match.mjs`.
 2. **Real cycles.** The matrix contains at least one three-cycle — A beats B beats C beats
    A — with every edge at **60/40 or wider**, and **every unit appears in at least one
    such cycle**.
