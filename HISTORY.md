@@ -2681,3 +2681,40 @@ that three of six.
 
 **When a menu grows, the thing choosing from it has to grow too**, and nothing in the suite was
 watching: every claim about the market was about the player's screen.
+
+### Part fifteen — kit, sabotage and orders, and a fix that cost strength
+
+Built the three he approved. The one worth keeping is the shape of the argument about spells:
+**a cast during a battle is either a timed input, which ends the battle being a pure function
+of two armies and a seed and takes every figure in this project with it, or it is
+pre-committed, in which case it is an order.** He accepted that immediately; the alternative
+was offered in the same breath as the refusal, which is why.
+
+**A rule written once, and the one restatement went wrong the same hour.** `armyFrom` learned
+four token kinds so nothing downstream parses a prefix. `play.mjs` had restated it as "a card
+is a token not starting with `up:`" — so the first new kind was counted as a card and the
+counter check went red immediately. **A restatement of a parsing rule is a copy of it**, and
+it fails the moment the rule grows.
+
+**Every one of the six was a trap at its first price** — 25% to 44% against the cards the same
+credits buy. Same fault as the specials, found the same way, one session apart. That is now
+three times in a row that a first guess at a price has been wrong in the same direction, and
+the measurement takes ten minutes.
+
+**And an asymmetry that had been sitting in plain sight**: kit carries between matches and
+cards do not, because the army is redrafted every match. So a single-match comparison is a
+FLOOR for anything permanent and EXACT for anything that lasts a round — and I had been
+pricing everything against the same yardstick without noticing they were different lengths.
+
+### The fix that made the opponent worse
+
+Its shopper had caps added so it could reach every shelf. The floor human's win rate against
+it went **27.5% → 41.7%**.
+
+**The crude behaviour was strong.** Eleven upgrades on one card type beat a spread of
+purchases, because upgrades compound with copies and a spread does not. The rewrite was for
+**reachability** — a shop with items nobody can buy is not a shop — and it cost real strength.
+
+Worth stating rather than burying: **not every defect is a weakness, and fixing one can cost
+you something.** The right move was still to fix it, and the right move after that is to say
+what it cost.
