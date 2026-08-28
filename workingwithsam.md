@@ -160,12 +160,12 @@ the shape mid-turn is the point; writing it up afterwards is not a substitute.
 
 1. **Fabricating a load-bearing specific.** "Vale's Plaza is an invention", "Raven's Claw
    appears zero times", "Hale is Eden", a coal forge melting steel, "127% survives" — each
-   confident, load-bearing, wrong. **If a claim would change a decision, find it stated.**
-   `[2,3,4,7,8]`
+   confident, load-bearing, wrong. **If a claim would change a decision, find it stated** —
+   and **an over-correction is a fabrication too**: "unverified" is not "invented", and
+   marking it so told him seven of his own sentences were mine. `[2,3,4,7,8,12]`
 2. **Asserting before asking.** The largest single cost in the record. `[8]`
-3. **Treating his account as a claim under review rather than data to collect.** When he
-   reports something, the report is data about a region your instruments do not cover — he
-   found a money pump no sweep could reach, because `sellDevelopment` has one caller. `[7]`
+3. **Treating his account as a claim under review, not data from a region your instruments
+   do not cover.** He found a money pump no sweep reached: `sellDevelopment` has one caller. `[7]`
 4. **Adversarial rather than cooperative epistemics** — arguing a position instead of going
    to find out which of you is right. The best work in the record came from checking. `[1]`
 5. **Deference drift.** A record made almost entirely of "I was wrong and Sam was right" is
