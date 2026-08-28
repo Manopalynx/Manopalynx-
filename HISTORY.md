@@ -2514,3 +2514,41 @@ by round nine. It passed every check and read as a wall. Collapsed to one row an
 And the battle-wait in `play.mjs` only knew how to end a round into the next round, not into
 the market, so it waited out its timeout and reported the battle as hanging. **A predicate
 that knows one of two exits fails on the other**, and it fails as the wrong symptom.
+
+### Part ten — stage two, and two numbers that were not what they looked like
+
+He took the balancing call himself: **both sides take the purse, only the winner is paid for
+survivors.** It is the fix I had named in advance for the snowball, and it worked —
+alternation on the worst table 62% → 58.7%.
+
+**But the 62% was partly noise, and I nearly acted on it.** At 60 matches a table it read 62%;
+at 400 it reads 58.7% ±1.0 on the *same* build. `match.mjs` now prints the error bar and the
+round count beside the figure, and says so when the bar is too wide to act on. **A number
+without its error is a number you cannot decide anything with** — and the temptation to tune
+against it is strongest exactly when the sample is smallest.
+
+**Prices had to be re-set and it was my miss, not his.** Paying both sides took payout across
+a match from ~125 to ~218, so the same prices were suddenly half price: army sizes went 38 →
+44 bodies a side, and density is the one thing the counters cannot afford. Multiplied by the
+change in income rather than guessed. **A rule change that moves an economy invalidates every
+price in it**, and nothing in the suite was watching for that — the body-count claim caught it
+only because it happened to be near its threshold.
+
+### The suite had been counting itself wrong
+
+`play.mjs` printed a hardcoded total. Some claims are conditional — a run whose first match is
+lost never reaches the ramp check — so it could print **"20 of 20" while nineteen ran**, a
+vacuous pass wearing a green tick. It had also silently drifted: 21 claims were firing against
+a total of 20, because adding a claim and bumping a number are two edits and I had made one.
+
+Claims are counted as they fire now. **A total typed at the bottom of a file is a number
+written twice**, which is the catalogue's own entry, and it had been wrong for two sessions
+without anything noticing.
+
+### And the throw sweep finished, contradicting what I had reported
+
+Last session's single table said throwing the opening round had stopped paying (−2.5pt) and I
+reported it as provisional. The full 6,000-match sweep says **+3.9pt overall** — Varan flipped
+and the other three did not. **Formation did not close the exploit.** The caveat was the right
+one and the headline would have been wrong without it; the figure is now stale again anyway,
+because the market changes the economics of throwing a round entirely.
