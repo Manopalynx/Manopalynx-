@@ -226,10 +226,19 @@ else bad('battles resolve', [
   'every "contested" figure above counts a draw as half a win, so this inflates all of them'
 ]);
 
-if (thrownWin <= straightWin + 0.03) ok(`losing on purpose does not pay (${(thrownWin * 100).toFixed(1)}% against ${(straightWin * 100).toFixed(1)}%)`);
-else bad('losing on purpose does not pay', [
-  `throwing the opening round wins ${(thrownWin * 100).toFixed(1)}% against ${(straightWin * 100).toFixed(1)}% playing straight`,
-  'the extra pick is worth more than the round it costs'
+// SAM'S RULING, not a target this file invented. Throwing the opening round DOES
+// pay once upgrades exist -- +4.3 points across 6,000 paired matches, positive
+// against all four opponents -- and he has decided to leave it legitimate until
+// he has played the game himself rather than guard it on a sweep's say-so. So
+// the claim is no longer "it must not pay". It is "it must not be the only way
+// to play": an edge a good player can take is a line, a 15-point edge is a
+// dominant strategy and the first three rounds stop mattering.
+const gap = thrownWin - straightWin;
+if (gap <= 0.15) ok(`throwing the opening round is a line, not the only line ` +
+  `(${(thrownWin * 100).toFixed(1)}% against ${(straightWin * 100).toFixed(1)}%, ${gap >= 0 ? '+' : ''}${(gap * 100).toFixed(1)}pt)`);
+else bad('throwing the opening round is a line, not the only line', [
+  `throwing wins ${(thrownWin * 100).toFixed(1)}% against ${(straightWin * 100).toFixed(1)}% playing straight`,
+  'an edge that large is not a strategy a player chooses, it is the strategy'
 ]);
 
 const upRate = ups / upsN;

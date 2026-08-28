@@ -53,7 +53,8 @@ const DOCS = resolve(ROOT, 'docs');
 // A new app adds a row here and is covered by everything below.
 const APPS = [
   { name: 'Grandiose', url: '/index.html',    title: 'Grandiose — The Ledger' },
-  { name: 'Matchbox',  url: '/matchbox.html', title: 'Matchbox' }
+  { name: 'Matchbox',  url: '/matchbox.html', title: 'Matchbox' },
+  { name: 'The Column', url: '/column/index.html', title: 'Grandiose — The Column' }
 ];
 
 const TYPES = {
@@ -139,7 +140,13 @@ function currentCacheName() {
 }
 // Every './…' path the worker names, which is what it is promising to hold offline.
 function promisedFiles() {
-  return [...new Set([...swSource().matchAll(/'\.\/([^']+)'/g)].map(m => m[1]))];
+  // COMMENTS STRIPPED FIRST. This reads every './…' string in the file as a
+  // promise, so a comment that names a path — one explaining why a path is NOT
+  // in the list, for instance — was read as a promise and failed the check on a
+  // file the worker had never claimed. A check that goes red for a comment
+  // teaches you to read red as noise.
+  const src = swSource().replace(/\/\/[^\n]*/g, '');
+  return [...new Set([...src.matchAll(/'\.\/([^']+)'/g)].map(m => m[1]))];
 }
 
 const run = async () => {

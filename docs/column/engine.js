@@ -166,6 +166,16 @@ function deploy(picks, side, rand) {
   return out;
 }
 
+// BOTH ARMIES OFF ONE `rand`, in this order. The interface shows the deployment
+// between picks -- Sam's structure has both sides appear on the field after every
+// commitment -- and if it laid them out itself, its jitter would come off a
+// different stream and the battle would start from positions the player was not
+// shown. One function, so it cannot.
+export function deployment(a, b, seed) {
+  const rand = rng(seed);
+  return [...deploy(a, 0, rand), ...deploy(b, 1, rand)];
+}
+
 /* -------------------------------------------------------------------- targeting */
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -199,8 +209,7 @@ function choose(unit, enemies) {
  *          winner 0, 1, or null for a draw at MAX_TICKS.
  */
 export function resolve(a, b, seed, keepLog = false, onTick = null) {
-  const rand = rng(seed);
-  const units = [...deploy(a, 0, rand), ...deploy(b, 1, rand)];
+  const units = deployment(a, b, seed);
   const log = [];
   let t = 0;
 

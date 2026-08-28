@@ -16,7 +16,7 @@
 // the Ledger. Nothing here is attributed to the author unless it has been
 // checked against the manuscript, which is why most of these carry no `qv`.
 
-export const BUILD = 'column-v1';
+export const BUILD = 'column-v2';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,

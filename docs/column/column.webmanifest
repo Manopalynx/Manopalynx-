@@ -1,0 +1,13 @@
+{
+  "name": "Grandiose — The Column",
+  "short_name": "The Column",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1017",
+  "theme_color": "#0f141b",
+  "icons": [
+    { "src": "./column-icon-180.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ]
+}

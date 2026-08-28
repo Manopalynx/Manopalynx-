@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0f141b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="./column.webmanifest">
+<link rel="apple-touch-icon" href="./column-icon-180.png">
+<title>Grandiose — The Column</title>
+<style>
+:root{
+  --bg:#0b1017; --panel:#0f141b; --edge:#222c38; --ink:#e7eef7; --dim:#7f8fa2;
+  --blue:#6fc6f5; --blueFill:#1b3a52; --blueInk:#dff1ff;
+  --amber:#f2955c; --amberFill:#4a2418; --amberInk:#ffe6d6;
+  --card:#f2e2c4; --cardIn:#dcc9a6; --cardInk:#3a2f1e;
+  --up:#cde9c2; --upIn:#b3d6a4; --heart:#e05a6a; --heartOff:#3a2630;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);
+  font:15px/1.45 -apple-system,BlinkMacSystemFont,system-ui,"Segoe UI",sans-serif;
+  -webkit-user-select:none;user-select:none;overscroll-behavior:none}
+#app{position:fixed;inset:0;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* ---------------------------------------------------------------- the bar */
+#bar{flex:0 0 auto;height:52px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px;background:linear-gradient(#171f29,#0f141b);border-bottom:1px solid var(--edge)}
+.hearts{font-size:17px;letter-spacing:2px;color:var(--heart);min-width:76px}
+.hearts.r{text-align:right}
+.hearts .off{color:var(--heartOff)}
+#who{font-size:10.5px;letter-spacing:1.4px;color:var(--dim);text-align:center;text-transform:uppercase}
+
+/* -------------------------------------------------------------- the field */
+#fieldWrap{flex:1 1 auto;position:relative;min-height:0;background:#0e1620}
+#field{position:absolute;inset:0;width:100%;height:100%;display:block}
+#toast{position:absolute;left:0;right:0;top:8px;text-align:center;pointer-events:none;
+  font-size:12.5px;letter-spacing:.6px;color:var(--ink);text-shadow:0 1px 3px #000;
+  opacity:0;transition:opacity .25s}
+#toast.on{opacity:1}
+
+/* --------------------------------------------------------------- the deck */
+#deck{flex:0 0 auto;background:linear-gradient(#0f141b,#171f29);border-top:1px solid var(--edge);
+  padding:9px 12px calc(9px + env(safe-area-inset-bottom))}
+#prompt{font-size:12px;color:var(--ink);font-weight:600;margin-bottom:2px}
+#sub{font-size:11px;color:var(--dim);margin-bottom:8px;min-height:15px}
+#cards{display:flex;gap:8px}
+.card{flex:1 1 0;min-width:0;border:0;border-radius:12px;background:var(--card);color:var(--cardInk);
+  box-shadow:inset 0 -13px 0 var(--cardIn);padding:9px 6px 18px;text-align:center;font:inherit;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:96px}
+.card:active{transform:translateY(1px)}
+.card.up{background:var(--up);box-shadow:inset 0 -13px 0 var(--upIn)}
+.card b{font-size:13.5px;line-height:1.15}
+.card .cls{font-size:9px;letter-spacing:.8px;text-transform:uppercase;opacity:.6}
+.card .hint{font-size:9.5px;opacity:.75;line-height:1.25}
+#go{width:100%;margin-top:9px;border:0;border-radius:11px;padding:13px;font:inherit;font-weight:700;
+  letter-spacing:1.2px;text-transform:uppercase;background:#2f5e7d;color:#eaf6ff}
+#go:active{background:#26506c}
+#go.ghost{background:#1b232e;color:var(--dim)}
+
+/* --------------------------------------------------------------- overlays */
+.sheet{position:absolute;inset:0;background:rgba(8,12,17,.94);z-index:9;overflow-y:auto;
+  -webkit-overflow-scrolling:touch;padding:22px 18px calc(22px + env(safe-area-inset-bottom))}
+.sheet h1{font-size:21px;letter-spacing:2px;text-transform:uppercase;margin:6px 0 2px}
+.sheet h2{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);
+  margin:22px 0 8px;font-weight:600}
+.sheet p{font-size:13px;color:#b8c6d6;margin:0 0 12px}
+.pick{display:block;width:100%;text-align:left;border:1px solid var(--edge);border-radius:12px;
+  background:#131b25;color:var(--ink);padding:11px 13px;margin-bottom:8px;font:inherit}
+.pick:active{background:#1a2431}
+.pick b{display:block;font-size:14px;margin-bottom:2px}
+.pick i{font-style:normal;font-size:12px;color:var(--dim);line-height:1.4}
+.rosterRow{display:flex;gap:11px;align-items:flex-start;padding:9px 0;border-bottom:1px solid #1a222c}
+.rosterRow svg{flex:0 0 34px}
+.rosterRow div{min-width:0}
+.rosterRow b{font-size:13.5px}
+.rosterRow em{font-style:normal;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--dim)}
+.rosterRow q{display:block;font-size:11.5px;color:#93a3b5;margin-top:3px;quotes:'"' '"'}
+.src{font-size:9.5px;letter-spacing:.6px;text-transform:uppercase;color:#5d6b7c;margin-top:2px;display:block}
+.foot{font-size:10.5px;color:#4e5b6b;text-align:center;margin-top:26px;letter-spacing:1px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="bar">
+    <div class="hearts" id="livesA"></div>
+    <div id="who">The Column</div>
+    <div class="hearts r" id="livesB"></div>
+  </div>
+  <div id="fieldWrap">
+    <svg id="field" viewBox="0 0 100 140" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="toast"></div>
+  </div>
+  <div id="deck">
+    <div id="prompt"></div>
+    <div id="sub"></div>
+    <div id="cards"></div>
+    <button id="go" hidden></button>
+  </div>
+</div>
+<script type="module" src="./ui.js"></script>
+</body>
+</html>

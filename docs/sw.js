@@ -32,7 +32,7 @@
 // Must match BUILD in data.js exactly -- test/build.test.mjs asserts it, because
 // the menu shows BUILD and it would be worse than useless if it named a build
 // the cache was not actually serving.
-const CACHE = 'grandiose-v87';
+const CACHE = 'grandiose-v88';
 
 // Previous builds of THIS app and nothing else on the origin. Derived from CACHE
 // so the two cannot drift, which is the fault the name was written to avoid.
@@ -67,6 +67,27 @@ const APPS = [
       './matchbox.html',
       './matchbox.webmanifest',
       './matchbox-icon-180.png'
+    ]
+  },
+  {
+    // The Column lives in its own folder and is four ES modules deep: the page
+    // alone is a blank screen offline, because a module that fails to load throws
+    // no dialogue and paints nothing.
+    page: './column/index.html',
+    files: [
+      // No bare directory entry here, unlike the site root above. addAll is ATOMIC --
+      // one 404 rejects the whole precache and every app loses its files, which
+      // is what happened: adding the directory form took all twenty entries down
+      // together and test/offline.mjs went red on Grandiose's files, not on this
+      // app's. The Column's start_url is index.html, so the directory form is not
+      // needed for a Home Screen launch.
+      './column/index.html',
+      './column/ui.js',
+      './column/render.js',
+      './column/engine.js',
+      './column/data.js',
+      './column/column.webmanifest',
+      './column/column-icon-180.png'
     ]
   }
 ];

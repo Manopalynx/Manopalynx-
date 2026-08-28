@@ -508,3 +508,97 @@ and 6 cards a rank and narrower ranks were *worse*, not better.
 - **Merging** — design point 4 — is specified and unbuilt.
 - **`docs/column/test/look.mjs`** draws the same real tick three ways at 393×852 to answer
   Sam's question about a tactical map. Nothing is chosen yet.
+
+---
+
+# It is playable
+
+`docs/column/index.html` is the game on a phone. Portrait, one page, four ES modules, no
+build step; it registers the site's service worker so it opens on a train.
+
+**Sam chose treatment C from `test/look.mjs`: one counter per card.** Bodies still live and
+die one at a time in the engine — the renderer aggregates them, and that halves the marks on
+screen for the same battle. Shape is the weight class (**square** heavy, **diamond** medium,
+**circle** light), the letter is the card, and colour is the side. Twelve hues are not
+tellable apart on a phone; twelve letters are.
+
+**Cosmetics are later. Readability is not** — design point 7 is a rule about whether the
+counters are learnable at all, so it was settled with the renderer rather than after it.
+Every counter carries a strength bar, a survivor count if the card deploys more than one
+body, and a chevron per upgrade level. Tapping one names the unit, its traits and its line
+from the book — **and whether that line is the author's or was written for the game**, so
+Sam can strike mine without opening a file.
+
+## What the interface is not allowed to do
+
+**Every rule lives in `engine.js` and `data.js`.** The page draws, listens and animates. It
+never decides who won, never scores a card, never lays a body out: the deployment shown
+between picks is `deployment()`, the battle played back is the resolver's own tick sampler,
+and the loser of a round is the resolver's answer. There is nothing for the screen to
+disagree with, which is the only defence against the Ledger's oldest defect — a sentence
+that was numerically correct and false.
+
+The card faces are derived too. `traits()` reads the same numbers the resolver reads, so
+changing a range in `data.js` changes what the card says about itself.
+
+## `test/play.mjs` — nine claims against the real page
+
+It serves `docs/`, opens the real URL and plays a whole match through, tapping. Three of the
+nine matter:
+
+- **Counters drawn equal cards drafted, every round, both sides.** Mutation-tested: grouping
+  by unit type instead of by card draws 22 counters for 38 and the check goes red.
+- **The arithmetic closes** — hearts left on screen against rounds played. The first version
+  compared the round count on screen with the round count the harness had just counted
+  itself, and **stayed green through a mutation that spent a life on every other round**.
+  It now reads the hearts, which is what the player reads.
+- **Nothing threw, start to finish.** A module that fails to load paints an empty screen and
+  says nothing, which on a phone is indistinguishable from a slow page.
+
+Two defects it found on the first run, neither visible in the source: bodies killed during a
+tick are still in that tick's frame with negative health, so the strength bar was drawing at
+width −2.1 and erroring every frame; and the playback ran at a fixed speed, so a long round
+took twenty seconds. The speed is now chosen per battle to land near four seconds.
+
+`test/offline.mjs` gained The Column's row and immediately caught a third: `addAll` is
+atomic, so the bare `./column/` directory entry — which the test server 404s — took the whole
+precache down with it, and **every app lost its offline files**, not just this one.
+
+## Running it
+
+```
+node docs/column/test/matchup.mjs                       # the unit graph
+node docs/column/test/match.mjs [matches]               # the match structure
+PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node docs/column/test/play.mjs    # the page
+PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node docs/column/test/look.mjs    # the three looks
+PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node test/offline.mjs             # all three apps offline
+```
+
+Never two Chromium suites at once, and never into one log: both give false reds and
+interleaved output that reads as a pass.
+
+## Throwing the opening round pays, and stays legal
+
+Sam asked for this to be tested rather than guarded, and the answer has **flipped** now that
+upgrades exist: an extra pick banked early buys an upgrade, and upgrades compound with how
+many copies of a card you hold.
+
+| opponent | play straight | throw round one | |
+|---|---|---|---|
+| Varan | 48.6% | 51.7% | +3.1pt |
+| Harlow | 60.7% | 69.5% | +8.9pt |
+| Hale | 91.7% | 93.1% | +1.3pt |
+| The Leader | 81.7% | 85.6% | +3.9pt |
+| **all** | **70.7%** | **75.0%** | **+4.3pt** |
+
+6,000 paired matches, same seeds both sides. **His decision: leave it legitimate until he has
+played the game.** So `match.mjs` no longer asserts that it does not pay — it asserts the
+edge stays under 15 points, which is the difference between a line a good player can take and
+the only way to play.
+
+## Next, and it is his
+
+**Battlefield variety.** His answer to 65% of compositions settling 95/5 is not to soften the
+counters but to stop every battle being fought on the same empty rectangle — the same two
+armies currently have one fixed answer because they always meet on identical ground. The
+mechanism is unspecified and deliberately not guessed at here.

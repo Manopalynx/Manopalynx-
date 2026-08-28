@@ -1,0 +1,371 @@
+// GRANDIOSE — THE COLUMN. The interface, and nothing else.
+//
+// EVERY RULE IS IN engine.js AND data.js. This file draws, listens and animates.
+// It never decides who won, never scores a card, never lays a body out: it asks
+// the engine and shows the answer. The Ledger's record is unambiguous about what
+// happens otherwise -- a sentence quoting a whole upkeep bill as the cost of one
+// vassal was numerically correct and false, and a screen that does its own
+// arithmetic is one edit away from disagreeing with the game.
+//
+// The battle is played back from the resolver's own tick sampler, so what you
+// watch IS what was resolved. It cannot drift, because there is nothing to
+// drift from.
+
+import { BY_ID, RULES, PERSONAS, UPGRADE, WEIGHT, UNITS, BUILD } from './data.js';
+import { rng, offer, resolve, deployment, POLICIES, armyFrom, isUp, tokId } from './engine.js';
+import { draw, GROUND, CODE, SIDE, shape } from './render.js';
+
+const $ = id => document.getElementById(id);
+const el = { bar: $('bar'), la: $('livesA'), lb: $('livesB'), who: $('who'),
+             field: $('field'), toast: $('toast'), prompt: $('prompt'),
+             sub: $('sub'), cards: $('cards'), go: $('go') };
+
+const SAVE = 'column-save';
+// A battle takes as long as it takes -- 90 ticks or 800 -- and the playback must
+// not. The speed is chosen per battle so every round runs for about the same
+// four seconds: long enough to watch the lines meet, short enough that a phone
+// is not held still through a stalemate.
+const PLAYBACK_FRAMES = 230;
+
+/* ------------------------------------------------------------------- state */
+let S = null;
+
+// One seeded stream for the whole match, and a COUNT of how many numbers have
+// come off it. That count is the whole of the save format for randomness: on
+// resume the stream is rebuilt and spun forward, so a match reloaded on the
+// train continues into exactly the draft it would have had.
+let stream = null;
+const rand = () => { S.draw++; return stream(); };
+function rebuild() { stream = rng(S.seed); for (let i = 0; i < S.draw; i++) stream(); }
+
+function newMatch(opp) {
+  S = {
+    v: 1, opp, seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0, draw: 0,
+    army: [[], []], lives: [RULES.lives, RULES.lives], round: 0, loser: null,
+    phase: 'pick', pickNo: 0, bonus: null,
+    offer: [], mine: null, theirs: null, inspect: null
+  };
+  rebuild();
+  startRound();
+}
+
+function save() {
+  // Frames are the battle replayed body by body -- tens of thousands of objects,
+  // and derivable from the seed in a millisecond. Storing them would put a
+  // quota failure between the player and their match, which is the Ledger's
+  // oldest defect wearing a different hat.
+  try { localStorage.setItem(SAVE, JSON.stringify({ ...S, frames: undefined, lastFrame: undefined })); }
+  catch (e) {}
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(SAVE);
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    if (!s || s.v !== 1 || s.phase === 'over' || !PERSONAS[s.opp]) return false;
+    S = s; rebuild();
+    // A battle is not saved mid-playback; a reload lands on the fight instead.
+    if (S.phase === 'battle') S.phase = 'ready';
+    return true;
+  } catch (e) { return false; }
+}
+
+/* ----------------------------------------------------------- the round loop */
+function startRound() {
+  S.pickNo = 0;
+  S.bonus = S.loser;            // only the loser of the last round gets one
+  S.mine = S.theirs = null;
+  next();
+}
+
+// Drives the round forward one commitment at a time. Each pick is a blind
+// simultaneous commitment: the opponent's answer is computed from the board as
+// it stood BEFORE this pick, then both are revealed, which is Sam's structure
+// and the reason a persona that reads the board is worth having.
+function next() {
+  S.inspect = null;
+  if (S.bonus === 1) {                       // the opponent's extra pick, in the open
+    const cards = offer(rand, RULES.offer, S.army[1]);
+    const tok = cards[POLICIES[S.opp](cards, S.army[1].slice(), S.army[0].slice())];
+    S.army[1].push(tok);
+    S.bonus = null; S.mine = null; S.theirs = tok; S.phase = 'revealed';
+    return render();
+  }
+  if (S.bonus === 0) {                       // your extra pick, taken alone
+    S.offer = offer(rand, RULES.offer, S.army[0]);
+    S.solo = true; S.phase = 'pick';
+    return render();
+  }
+  if (S.pickNo < RULES.picksPerRound) {
+    S.offer = offer(rand, RULES.offer, S.army[0]);
+    S.oppOffer = offer(rand, RULES.offer, S.army[1]);
+    S.solo = false; S.phase = 'pick';
+    return render();
+  }
+  S.phase = 'ready';
+  render();
+}
+
+function commit(i) {
+  S.inspect = null;
+  const seen = [S.army[0].slice(), S.army[1].slice()];
+  const tok = S.offer[i];
+  S.army[0].push(tok);
+  S.mine = tok; S.theirs = null;
+  if (S.solo) { S.bonus = null; }
+  else {
+    const t = S.oppOffer[POLICIES[S.opp](S.oppOffer, seen[1], seen[0])];
+    S.army[1].push(t);
+    S.theirs = t;
+    S.pickNo++;
+  }
+  S.phase = 'revealed';
+  save(); render();
+}
+
+function fight() {
+  const seed = (S.seed * 7919 + S.round) >>> 0;
+  S.frames = [];
+  const out = resolve(S.army[0], S.army[1], seed, false, (t, live) => S.frames.push(live));
+  // The loser is the engine's, not the screen's. A draw costs whoever has fewer
+  // left standing, so a stalled field still moves the match on.
+  S.result = out.winner === null
+    ? (out.left[0] <= out.left[1] ? 0 : 1)
+    : 1 - out.winner;
+  S.phase = 'battle'; S.f = 0;
+  render();
+  play();
+}
+
+function play() {
+  const speed = Math.max(1, Math.ceil(S.frames.length / PLAYBACK_FRAMES));
+  const step = () => {
+    if (S.phase !== 'battle' || !S.frames) return;
+    S.f += speed;
+    if (S.f >= S.frames.length) { endRound(); return; }
+    paint(S.frames[S.f | 0]);
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function endRound() {
+  // Keep the last frame. What is left standing when a round ends is the only
+  // feedback the player gets on what their draft actually did, and clearing it
+  // to a fresh deployment throws that away at the exact moment it is useful.
+  S.lastFrame = S.frames[S.frames.length - 1] || [];
+  S.lives[S.result]--;
+  S.loser = S.result;
+  S.round++;
+  S.phase = S.lives[0] <= 0 || S.lives[1] <= 0 ? 'over' : 'round';
+  S.frames = null;
+  save(); render();
+}
+
+/* ---------------------------------------------------------------- painting */
+function paint(live) {
+  el.field.innerHTML = GROUND + draw(live || [], { pick: S && S.inspect });
+}
+
+// What is on the field right now: mid-battle it is the frame being played, and
+// between picks it is the deployment the next battle will actually start from --
+// asked of the engine rather than laid out here, so the preview cannot show a
+// formation the fight does not use.
+function board() {
+  if (S.phase === 'battle' && S.frames) return S.frames[Math.min(S.f | 0, S.frames.length - 1)];
+  if (S.phase === 'round' && S.lastFrame) return S.lastFrame;
+  if (!S.army[0].length && !S.army[1].length) return [];
+  return deployment(S.army[0], S.army[1], (S.seed * 7919 + S.round) >>> 0);
+}
+
+const hearts = n => '&#9829;'.repeat(Math.max(0, n)) +
+  `<span class="off">${'&#9829;'.repeat(Math.max(0, RULES.lives - n))}</span>`;
+
+// Short, DERIVED tags. Nothing here is typed into the roster twice: change a
+// number in data.js and the card face changes with it.
+function traits(u) {
+  const t = [];
+  if (u.rng > 4) t.push(`range ${Math.round(u.rng)}`); else t.push('melee');
+  if (u.move === 'seek') t.push('seeks');
+  if (u.splash) t.push('splash');
+  if (u.dot) t.push('burns');
+  if (u.aura) t.push('aura');
+  if (u.defl) t.push('shielded');
+  if (u.boom) t.push('detonates');
+  if (u.arm >= 8) t.push('armoured');
+  return t;
+}
+
+function cardFace(tok, i) {
+  const up = isUp(tok), id = tokId(tok), u = BY_ID[id];
+  const lvl = (armyFrom(S.army[0]).up[id] || 0) + 1;
+  const copies = armyFrom(S.army[0]).cards.filter(x => x === id).length;
+  const b = document.createElement('button');
+  b.className = 'card' + (up ? ' up' : '');
+  b.onclick = () => commit(i);
+  b.innerHTML = up
+    ? `<b>${u.n}<br>UP!</b><span class="cls">upgrade</span>` +
+      `<span class="hint">+${(UPGRADE.step * 100) | 0}% health &amp; damage<br>` +
+      `level ${lvl} of ${UPGRADE.max} &middot; ${copies} on the field</span>`
+    : `<b>${u.n}</b><span class="cls">${u.w} &middot; ${u.count} ${u.count === 1 ? 'body' : 'bodies'}</span>` +
+      `<span class="hint">${traits(u).join('<br>')}</span>`;
+  return b;
+}
+
+function render() {
+  el.la.innerHTML = hearts(S.lives[0]);
+  el.lb.innerHTML = hearts(S.lives[1]);
+  el.who.textContent = `Round ${S.round + 1} · ${PERSONAS[S.opp].n}`;
+  paint(board());
+  el.cards.innerHTML = '';
+  el.go.hidden = true;
+  el.go.className = '';
+
+  const size = armyFrom(S.army[0]).cards.length;
+  const theirs = armyFrom(S.army[1]).cards.length;
+
+  if (S.phase === 'pick') {
+    el.prompt.textContent = S.solo
+      ? 'Your extra pick — you lost the round'
+      : `Pick ${S.pickNo + 1} of ${RULES.picksPerRound}`;
+    el.sub.innerHTML = `${size} cards to ${theirs} &middot; they are choosing at the same time`;
+    S.offer.forEach((tok, i) => el.cards.appendChild(cardFace(tok, i)));
+  }
+
+  if (S.phase === 'revealed') {
+    el.prompt.textContent = 'Committed';
+    el.sub.innerHTML = [
+      S.mine ? `<b style="color:var(--blue)">You: ${label(S.mine)}</b>` : '',
+      S.theirs ? `<b style="color:var(--amber)">${PERSONAS[S.opp].n}: ${label(S.theirs)}</b>` : ''
+    ].filter(Boolean).join(' &nbsp;·&nbsp; ');
+    button('Continue', () => { S.phase = 'pick'; save(); next(); });
+  }
+
+  if (S.phase === 'ready') {
+    el.prompt.textContent = 'The column is drawn up';
+    el.sub.textContent = `${size} cards against ${theirs}. Tap a marker to read it.`;
+    button('Fight', fight);
+  }
+
+  if (S.phase === 'battle') {
+    el.prompt.textContent = 'Engaged';
+    el.sub.textContent = 'Tap to skip to the result.';
+    button('Skip', () => { S.f = S.frames.length; });
+    el.go.className = 'ghost';
+  }
+
+  if (S.phase === 'round') {
+    const won = S.result === 1;
+    el.prompt.textContent = won ? 'You hold the field' : 'Your column breaks';
+    el.sub.textContent = won
+      ? `${PERSONAS[S.opp].n} drops a life. You have ${S.lives[0]}.`
+      : `You drop a life — and open the next round with an extra pick.`;
+    button('Next round', () => { startRound(); save(); });
+  }
+
+  if (S.phase === 'over') return over();
+  save();
+}
+
+const label = tok => isUp(tok)
+  ? `${BY_ID[tokId(tok)].n} UP!`
+  : `${BY_ID[tok].n} ×${BY_ID[tok].count}`;
+
+function button(text, fn) {
+  el.go.hidden = false;
+  el.go.textContent = text;
+  el.go.onclick = fn;
+}
+
+/* --------------------------------------------------------------- inspecting */
+// A marker answers when you tap it. The quote and, more importantly, WHOSE it
+// is: Sam wrote the novel, so a line he did not write must never sit on a card
+// looking as though he did.
+el.field.addEventListener('click', e => {
+  if (!S) return;
+  const g = e.target.closest && e.target.closest('g[data-id]');
+  if (!g) { S.inspect = null; paint(board()); return; }
+  const u = BY_ID[g.dataset.id];
+  S.inspect = g.dataset.key;
+  el.sub.innerHTML = `<b>${u.n}</b> — ${u.w}, ${u.count} ${u.count === 1 ? 'body' : 'bodies'} ` +
+    `&middot; ${traits(u).join(' &middot; ')}<br><q style="color:#93a3b5">${u.q}</q>` +
+    `<span class="src">${u.qv ? 'from the novel' : 'written for the game'}</span>`;
+  paint(board());
+});
+
+/* ------------------------------------------------------------- the overlays */
+function sheet(html) {
+  const d = document.createElement('div');
+  d.className = 'sheet';
+  d.innerHTML = html;
+  document.getElementById('app').appendChild(d);
+  return d;
+}
+
+function menu() {
+  const saved = localStorage.getItem(SAVE) && load();
+  const d = sheet(`
+    <h1>The Column</h1>
+    <p>Five lives. Three picks a round, committed blind and revealed together. The round
+    ends when one column is gone; the loser drops a life and opens the next one with an
+    extra pick. Nothing in a battle is random — the same two armies always fight the same
+    fight, so the whole game is what you drafted.</p>
+    ${saved ? `<h2>In progress</h2><button class="pick" id="resume"><b>Resume — round ${S.round + 1}
+       against ${PERSONAS[S.opp].n}</b><i>${S.lives[0]} lives to ${S.lives[1]}</i></button>` : ''}
+    <h2>Choose your opponent</h2>
+    ${Object.entries(PERSONAS).filter(([k]) => POLICIES[k]).map(([k, p]) =>
+      `<button class="pick" data-opp="${k}"><b>${p.n}</b><i>${p.d}</i></button>`).join('')}
+    <h2>Reference</h2>
+    <button class="pick" id="roster"><b>The roster</b><i>All twelve cards, what they do,
+      and which lines are the author's.</i></button>
+    <div class="foot">${BUILD}</div>`);
+
+  d.querySelectorAll('[data-opp]').forEach(b =>
+    b.onclick = () => { d.remove(); newMatch(b.dataset.opp); });
+  const r = d.querySelector('#resume');
+  if (r) r.onclick = () => { d.remove(); render(); };
+  d.querySelector('#roster').onclick = () => roster();
+}
+
+function roster() {
+  const row = u => {
+    const s = { heavy: 3.7, medium: 3.2, light: 2.9 }[u.w];
+    return `<div class="rosterRow">
+      <svg width="34" height="34" viewBox="-5 -5 10 10">${shape(u.w, 0, 0, s, SIDE[0].fill, SIDE[0].line)}
+        <text x="0" y="1.3" text-anchor="middle" font-size="3.6" font-weight="700"
+          fill="${SIDE[0].ink}" font-family="system-ui,sans-serif">${CODE[u.id]}</text></svg>
+      <div><b>${u.n}</b> <em>${u.w} · ${u.count} ${u.count === 1 ? 'body' : 'bodies'}</em>
+        <em style="display:block">${traits(u).join(' · ')}</em>
+        <q>${u.q}</q><span class="src">${u.qv ? "the author's line" : 'written for the game'}</span></div>
+    </div>`;
+  };
+  const d = sheet(`<h1>The roster</h1>
+    <p><b>Square</b> is heavy — one body, hard to shift. <b>Diamond</b> is medium — two
+    bodies, one job each. <b>Circle</b> is light — three bodies, strong in numbers and soft
+    to anything that hits an area. A marker's letter is the card; its colour is the side.</p>
+    ${UNITS.map(row).join('')}
+    <p style="margin-top:18px">Every unit is from <i>Grandiose: The Rise to Power</i>. Lines
+    marked <b>the author's</b> are lifted from the manuscript; the rest were written for the
+    game and are the first thing to strike if they do not sound like the book.</p>
+    <button class="pick" id="back"><b>Back</b></button>`);
+  d.querySelector('#back').onclick = () => d.remove();
+}
+
+function over() {
+  const won = S.lives[1] <= 0;
+  const opp = PERSONAS[S.opp].n;
+  try { localStorage.removeItem(SAVE); } catch (e) {}
+  const d = sheet(`<h1>${won ? 'The field is yours' : 'The column is broken'}</h1>
+    <p>${won ? `${opp} is out of lives after ${S.round} rounds.`
+             : `${opp} takes it after ${S.round} rounds. You finished with ${armyFrom(S.army[0]).cards.length} cards.`}</p>
+    <button class="pick" id="again"><b>Again</b></button>`);
+  d.querySelector('#again').onclick = () => { d.remove(); document.querySelectorAll('.sheet').forEach(x => x.remove()); menu(); };
+}
+
+/* -------------------------------------------------------------------- start */
+paint([]);
+menu();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('../sw.js', { scope: '../' }).catch(() => {});
+}
