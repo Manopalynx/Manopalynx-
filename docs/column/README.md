@@ -978,14 +978,29 @@ the first, second or third of the three offered gives 2.37, 2.46 and 2.39 matche
 — indistinguishable.
 
 That measurement is not quite the right one: a fixed index is not a *choice*, it is a sample
-of the pool. But it does say something real — **the boosters are close enough in average value
-that the pool is flat**, and a flat pool makes choosing decoration. `playRun({ prefer })` takes
-a named booster whenever it is offered, which is how to ask what each is worth on its own; the
-first result is that always taking **Wider muster** is *worse* than taking whatever comes
-first (−0.16 matches), so at least one of them is a trap rather than a prize.
+of the pool. So `playRun({ prefer })` was added — take a named booster whenever it is offered —
+which asks what each is worth on its own. 200 runs each, standard error about ±0.11:
 
-That is the next thing to tune, and it is tuning rather than design: the boosters need to
-differ, and they need to differ *situationally*, or the choice is not a choice.
+| always taking, when offered | matches survived | against taking whatever came first |
+|---|---|---|
+| **A fourth pick** | **2.81** | **+0.46** |
+| Salvage rights | 2.35 | +0.00 |
+| Standing order | 2.33 | −0.02 |
+| War chest | 2.25 | −0.10 |
+| Wider muster | 2.21 | −0.15 |
+
+**One prize and four fillers.** Only the fourth pick is outside the noise, at about four
+standard errors; the rest are indistinguishable from taking whatever came first, and two are
+slightly *worse* than it.
+
+And the shape of that result is the same finding this project keeps producing: **the one
+booster that matters is the one that changes the draft.** The four that move the economy do
+not move the run, because income is not what the ramp is beating you with.
+
+So the pool needs re-cutting, and that is design rather than tuning — which of the five exist
+is Sam's, not a number to nudge. The direction the measurement points is draft-shaped
+boosters: an offer that never repeats a maxed card, a unit type you name always being offered,
+upgrades arriving a level higher. Nothing has been changed on the strength of this yet.
 
 ## Next, and it is his
 
