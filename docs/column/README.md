@@ -58,7 +58,7 @@ says so on its own card.
 | what | measured | by |
 |---|---|---|
 | single-type pairings settled 95/5 | 86% — counters are decisive, as intended | `test/matchup.mjs` |
-| mixed nine-card armies settled 95/5 | **59%** — open, and his call | `test/match.mjs` |
+| mixed nine-card armies settled 95/5 | **59%** — but only 12% are formalities | `test/match.mjs`, `test/settled.mjs` |
 | alternation, worst persona table | 49–59%, neither snowball nor oscillator | `test/match.mjs` |
 | bodies a side at the end | 34–38, legible on a portrait phone | `test/match.mjs` |
 | battles unresolved at the tick ceiling | 0% | `test/match.mjs` |
@@ -66,9 +66,18 @@ says so on its own card.
 | throwing the opening round | **+4.3pt** over 15,000 paired matches, worst +10.9pt vs Harlow | `test/match.mjs` |
 | boosters worth more than taking none | **all three**, isolated | `test/match.mjs` |
 
-**One of those is red, and it is a decision rather than a tuning miss.** 59% of mixed
-compositions are settled 95/5; his answer is battlefield variety rather than softer
+**One of those is red, and it is now measured rather than merely counted.** 59% of mixed
+compositions are settled 95/5; his answer has been battlefield variety rather than softer
 counters, and the mechanism is unspecified and deliberately not guessed at.
+
+**But the 59% is not what it has been read as.** `test/settled.mjs` reproduces the exact
+fixture — the same 234 of 400 pairings — and finds that the eight seeds vary nothing but a
+sub-1% positional jitter, so "decided 95/5" measures whether a result is *repeatable*, not
+whether it is *one-sided*. By the survivor margin, **49 of 400 (12%) are formalities and
+the median winner keeps 46% of its army.** No rule of the resolver causes it: armour off
+moves the figure 0.5pt, and nothing makes these battles closer. **What the game should be
+held to is his call**, and the check has deliberately not been re-aimed. See *The 59% is
+measuring repeatability, not one-sidedness* below.
 
 **Boosters.** Three, and for the first time they are the same size as each other:
 the Compact **+0.30**, Field surgeons **+0.32**, the Vanguard **+0.32**, all clear of a
@@ -2195,3 +2204,118 @@ A pool of three is what Sam said he did not want. The honest reason it is three 
 between matches — and the axis that would open the rest is the one the other red names.
 Until compositions stop being settled 95/5, anything that happens inside a battle cannot
 matter enough to be worth choosing.
+
+
+---
+
+# The 59% is measuring repeatability, not one-sidedness
+
+`test/settled.mjs` was built to answer *why* 59% of mixed nine-card armies are settled
+95/5, because the figure has been red in every session that measured it and nothing had
+ever asked what caused it. The answer is that the question contained a wrong assumption,
+and the instrument found it by failing to find anything else.
+
+**Its control reproduces the exact fixture it explains** — 234 of 400 pairings, the same
+count `match.mjs` prints. That took a correction: drawing all of army A and then all of
+army B is the same distribution and a *different sample*, and it landed 1.5pt off. Close
+enough to look like agreement and not close enough to be it. It interleaves the draw now,
+as `match.mjs` does.
+
+## Nothing on the card explains it, and mass explains it backwards
+
+Every candidate scored the same way: of the decided pairings, how often the side the
+number favours is the side that won. **50% is knowing nothing.** The two controls bracket
+the column — a coin that knows nothing landed on 53.8%, an oracle told the answer on 100%.
+
+| pre-battle number | agrees with the winner |
+|---|---|
+| total bodies | **34.4%** |
+| total health | **36.5%** |
+| total damage output | **29.1%** |
+| `paper` — the engine's own strength score, which every policy reads | **28.2%** |
+| mean armour | 46.8% |
+| how much of a hit survives the armour it lands on | 43.6% |
+| the counter matrix — every card fought against every other | **79.0%** |
+
+**Below 50% is not noise. It is the same knowledge with the sign reversed.** The side with
+more bodies, more health and more output loses about seven times in ten, and `paper` — the
+function every drafting policy in the game consults — is the most reliably *wrong* number
+on the card. That is the counter graph working exactly as designed: mass is not strength
+here, answers are, and the only feature that predicts anything is the one built out of
+fought battles rather than stat blocks.
+
+## And no rule causes it — including the one I was sure of
+
+`d = Math.max(1, d - arm)` is a flat per-hit subtraction, so armour is a threshold rather
+than a percentage: a 15-damage hit into 12 armour delivers 3, and a 130-damage hit into the
+same armour delivers 118. That is a clean mechanism for "quantity is worth nothing", it
+predicted the inverted table above, and **it is not the cause.** Switching each rule off and
+re-fighting the same 400 pairings:
+
+| rule switched off | decided | vs control | battles changed |
+|---|---|---|---|
+| *no-op — the control that changes nothing* | 58.5% | *+0.0pt* | *0 of 400* |
+| armour — no flat per-hit subtraction | 59.0% | +0.5pt | 118 of 400 |
+| deflection — the Kraken shield rule | 61.8% | +3.3pt | 124 of 400 |
+| splash — no area damage at all | 56.8% | −1.7pt | 215 of 400 |
+| armour and deflection together | 65.8% | +7.3pt | 163 of 400 |
+| *loud — every card hits for 400* | *68.3%* | *+9.8pt* | *248 of 400* |
+
+Armour changes 118 of 400 battles and moves the figure by half a point. **Nothing makes
+these battles closer, and two things make them more decided** — take away the rules that
+let a weak-looking army beat a strong-looking one and the stronger-looking one simply wins.
+
+The no-op arm is an assertion rather than a courtesy: it must reproduce the control
+*exactly*, and if it ever does not, no other row means anything. So is the loud arm, at the
+other end — an arm that reaches nothing prints +0.0pt and reads identically to a rule that
+does not matter, which is precisely how an unimplemented booster once measured +0.58.
+
+## What the metric actually measures
+
+**The only thing the eight seeds vary is a positional jitter of ±0.6 field units per body,
+under 1% of the field's width.** There is no to-hit roll, no damage spread, no initiative —
+Sam's decision, and the reason every figure in this folder is reproducible. So "the same
+side wins 95% of 8 seeds" means *the result survives a sub-1% wobble*, which for a
+deterministic resolver is nearly a tautology: two armies that are not near-identical give
+the same winner every time.
+
+That is a measure of **repeatability**, and it has been read for five sessions as a measure
+of **one-sidedness**. The survivor margin tells them apart and the win share cannot:
+
+| of the 234 decided pairings, the winner kept | |
+|---|---|
+| under 15% of its army — won on its last bodies | 1 (0%) |
+| 15–35% | 68 (29%) |
+| 35–60% | 116 (50%) |
+| **over 60% — a formality** | **49 (21%)** |
+
+Median winner keeps **46%**. It wins every seed and it loses over half its army doing it.
+Checked against known extremes before it was believed: nine Amabie against nine Line
+Infantry keeps 100%, and nine Brutes against nine Acid Throwers wins 8–0 and keeps 38%.
+
+**So the two numbers, side by side, out of the same 400 pairings:**
+
+- **234 (59%) are decided** — the same side wins a sub-1% wobble.
+- **49 (12%) are formalities** — decided *and* the winner walked away with its army.
+
+## What this does and does not settle
+
+It does not make the game good, and it changes no rule. What it changes is which sentence
+is true. *"59% of mixed compositions are settled before a shot is fired"* has been the
+project's headline problem and the stated reason its booster pool is three; the measured
+statement is that **12% are settled and the rest are repeatable, costly fights.**
+
+Two things follow, and both are Sam's:
+
+1. **`match.mjs`'s claim may be aimed at the wrong quantity.** A `compositions are
+   contested` check that reads the survivor margin would measure the thing its own failure
+   text describes — *"a formality"* — rather than the determinism of the resolver. It has
+   deliberately not been changed: a red check quietly re-aimed until it passes is worse
+   than a red one, and which quantity the game should be held to is a design decision.
+2. **The explanation given for the dead battle-side boosters is now in question, and their
+   deadness is not.** The revive measured +0.13 and +0.10 against a control and that stands
+   — it was measured directly. But the *reason* offered for it, that a battle-side effect
+   cannot matter because the round was already decided, rests on the conflation above. If
+   the median winner is down to 46% of its army, there is room in there for something to
+   matter, and why the revive did not find it is now an open question rather than an
+   answered one.
