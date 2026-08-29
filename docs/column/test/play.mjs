@@ -100,7 +100,13 @@ const engineSrc = SRC('engine.js'), uiSrc = SRC('ui.js');
 // 1. Every booster in the data is read by the engine. A booster nothing compares
 //    is a rule that never fires -- and it is offered to the player regardless,
 //    because the offer is built from BOOSTS.
-const unread = BOOSTS.map(b => b.id).filter(id => !engineSrc.includes(`has(boosts, '${id}')`));
+// MATCHED ON THE COMPARISON, not on a variable name. The first version looked
+// for the literal `has(boosts, 'x')`, which quietly made the guard a style rule:
+// `earn` indexes a side's list, so it reads `has(mine, 'salvage')` and the check
+// called a live booster dead. What matters is that the id is compared somewhere,
+// whatever the list is called.
+const compares = id => new RegExp(`\\bhas\\([^,()]+,\\s*'${id}'\\)`).test(engineSrc);
+const unread = BOOSTS.map(b => b.id).filter(id => !compares(id));
 if (!unread.length) ok(`every booster in the pool is read by the engine (${BOOSTS.length})`);
 else bad('every booster in the pool is read by the engine', [
   `nothing compares: ${unread.join(', ')}`]);
@@ -109,7 +115,7 @@ else bad('every booster in the pool is read by the engine', [
 //    Sliced on top-level exports rather than by line, because `pickTokens`
 //    wraps and a line-based test would miss it.
 const readers = engineSrc.split(/\nexport /).slice(1)
-  .filter(chunk => chunk.includes('has(boosts,'))
+  .filter(chunk => /\bhas\([^,()]+,\s*'/.test(chunk))
   .map(chunk => (chunk.match(/^(?:const|function|let)\s+(\w+)/) || [])[1])
   .filter(Boolean);
 const unused = readers.filter(n => !new RegExp(`\\b${n}\\s*\\(`).test(uiSrc));

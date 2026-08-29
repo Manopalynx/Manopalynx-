@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v19';
+export const BUILD = 'column-v20';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -452,10 +452,28 @@ export const RUN = {
 // thousand crew to take the Dominion's undefended core and tells the council the
 // sacrifice purchased the war; the extra pick for losing a round already says
 // that, and this says it twice.
+// SAM'S NOTE 17. `A fourth pick` is OUT and `Wider muster` is back in its place,
+// which is his call and his reasoning: four different cards a round is decisive
+// against somebody who does not have it, while choosing better out of five is
+// tactical rather than simply more.
+//
+// AND THE POOL IS BIGGER, because three offered out of three is not a decision.
+// Everything below is measured on the `ace` seat rather than on the floor player
+// every earlier booster table used -- which matters more than it sounds. The
+// finding that killed five of them was "a run survives 1.44 matches, so a booster
+// gets one or two matches to matter, and anything that scales with run length is
+// worth nothing because there is no run length". A competent seat survives 3.55.
+// The premise of that finding is gone, so the boosters it killed are worth asking
+// about again rather than assumed dead.
 export const BOOSTS = [
-  { id: 'extra',    n: 'A fourth pick', d: 'Four picks a round instead of three.' },
-  { id: 'veteran',  n: 'Veterans',      d: 'Every card you draft arrives already upgraded once.' },
-  { id: 'vanguard', n: 'The Vanguard',  d: 'A round you lose buys two picks, not one.' }
+  { id: 'wider',    n: 'Wider muster',   d: 'Five cards offered each round instead of three.' },
+  { id: 'veteran',  n: 'Veterans',       d: 'Every card you draft arrives already upgraded once.' },
+  { id: 'vanguard', n: 'The Vanguard',   d: 'A round you lose buys two picks, not one.' },
+  { id: 'attrition', n: 'Attrition',     d: 'Every opponent after this one begins on half their credits.' },
+  { id: 'surgeons', n: 'Field surgeons', d: 'The first life you lose in each match is given back.' },
+  { id: 'quarter',  n: 'Quartermaster',  d: 'Your market opens every second round, not every third.' },
+  { id: 'salvage',  n: 'Salvage rights', d: 'Two credits for every body you have left standing, not one.' },
+  { id: 'compact',  n: 'The Compact',    d: 'One card of your column marches into the next match, at the level it reached.' }
 ];
 export const BY_BOOST = Object.fromEntries(BOOSTS.map(b => [b.id, b]));
 

@@ -25,8 +25,8 @@ Sam owns every decision here. Where a choice is still open it says so rather tha
 
 ## Where it stands
 
-`BUILD` is `column-v19` in `data.js`. The service worker that carries it is
-`grandiose-v93` in `docs/sw.js` — one cache for all three published apps, so **shipping a
+`BUILD` is `column-v20` in `data.js`. The service worker that carries it is
+`grandiose-v94` in `docs/sw.js` — one cache for all three published apps, so **shipping a
 change here bumps Grandiose's version too**, and `test/offline.mjs` fails if the two ever
 disagree.
 
@@ -70,7 +70,8 @@ says so on its own card.
 compositions are settled 95/5; his answer is battlefield variety rather than softer
 counters, and the mechanism is unspecified and deliberately not guessed at.
 
-**Boosters.** Three, after eight were measured. A fourth pick, Veterans, The Vanguard —
+**Boosters.** Eight, and only one of them measures as anything. See *Note 17* below —
+the pool is Sam's to cut. Historically: three, after eight were measured. A fourth pick, Veterans, The Vanguard —
 isolated against a run that takes none, +0.44 (9.2σ), +0.85 (15.8σ) and +0.20 (4.2σ). Five
 others measured between +0.05 and +0.09, inside noise, and were cut. See *The pool is three
 because a run is 1.4 matches* below: the finding is not about which boosters, it is that a
@@ -1931,3 +1932,106 @@ So the guard is the general one and it sweeps **both** shoppers: apply a policy'
 order and every one must move the state `armyFrom` reports — cards, levels, kit, orders,
 sabotage, lives, the wider offer. 2,289 purchases applied. Mutation-tested by putting the
 defect back: *"the player bought sabotage swarm with 260 and nothing changed"*, red.
+
+
+---
+
+# Note 17 — the swap, a bigger pool, and one booster that dwarfs the rest
+
+## The swap is his, and it costs strength
+
+*A fourth pick* is out and **Wider muster** is back in its place. His reasoning, and it is
+a fairness argument rather than a strength one: four different cards a round is decisive
+against somebody who does not have it, while choosing better out of five is tactical.
+
+**Both boosters he named in the note were already gone** — *Standing muster* and *Wider
+muster* were cut in the re-cut two sessions before it, for exactly his reason. What was
+still live was *A fourth pick*, and that is what came out.
+
+## The pool went to eight, and it was re-measured on a seat that can play
+
+Every earlier booster table was taken on a floor player. The finding that killed five of
+them was: *"a run survives 1.44 matches, so a booster gets one or two matches to matter, and
+anything that scales with run length is worth nothing because there is no run length."*
+**A competent seat survives 3.55.** The premise of that finding is gone, so the boosters it
+killed were worth asking about again rather than assumed dead.
+
+Isolated on the `ace` seat, control takes nothing at all, 30 runs an arm:
+
+| booster | matches | against the control |
+|---|---|---|
+| **Veterans** | 4.13 ±0.28 | **+1.60 (5.1σ)** |
+| The Vanguard | 2.87 ±0.16 | +0.33 (1.5σ) |
+| Field surgeons | 2.83 ±0.18 | +0.30 (1.3σ) |
+| The Compact | 2.80 ±0.18 | +0.27 (1.2σ) |
+| Quartermaster | 2.73 ±0.16 | +0.20 (0.9σ) |
+| Salvage rights | 2.73 ±0.14 | +0.20 (1.0σ) |
+| Attrition | 2.67 ±0.15 | +0.13 (0.6σ) |
+| **Wider muster** | 2.57 ±0.13 | **+0.03 (0.2σ)** |
+| *taking nothing* | *2.53 ±0.15* | *— the control* |
+
+**Three things this says, and none of them is comfortable.**
+
+**Veterans is not a booster, it is the booster.** +1.60 matches at five standard errors,
+against a pool where nothing else clears two. Every other option is a rounding error beside
+it, so "which booster" is not a decision while it exists.
+
+**Wider muster measures as nothing, on the seat built to make it matter.** It was +0.05 on
+the floor player, and the obvious explanation was that a weak seat cannot tell which of five
+cards is the better one. `ace` can — it resolves the board with each — and it is **+0.03**.
+The offer axis has now measured dead three times, on two different players. Sam's swap is a
+fairness call and stands as one; it is not a strength one, and it takes out something that
+measured +0.44 on the old seat.
+
+**And the longer run did not rescue the scaling designs.** Attrition halves every later
+opponent's credits and was built for exactly this premise: +0.13. Quartermaster and Salvage
+rights, both re-measured now that a *player* shops rather than the AI: +0.20 each.
+
+**At 30 runs an arm the standard error is about ±0.16, so anything under about +0.4 is not
+separated from noise.** Vanguard, Surgeons and Compact sit in that band — suggestive, not
+established. Separating them needs roughly 150 runs an arm, which is half an hour of
+wall time each on this seat.
+
+## The new ones, and what each is for
+
+Three take an axis nothing had taken before.
+
+| | |
+|---|---|
+| **Field surgeons** | the first life you lose each match is given back — lives are what a run actually spends |
+| **Quartermaster** | your market opens every second round, not every third |
+| **Salvage rights** | two credits a surviving body rather than one |
+| **The Compact** | one card of your column marches into the next match, at the level it reached |
+
+**The Compact is the only one that makes matches connect.** A run redrafts from nothing
+every time; credits, lives and boosters are all that carry. It is the novel's own founding
+method — you fight somebody else's war and take payment in hulls, yards and veterans — and
+it is the first thing in the game that carries a *unit* forward.
+
+**Its first version carried the wrong card.** It kept the strongest on paper, and `power()`
+reads the card as *printed* — so a Walker upgraded three times scored exactly the same as a
+fresh one, and the Compact walked off with a Line Infantry every time, because three light
+bodies is the square law. The whole point of carrying one card is carrying the one you spent
+picks on. `carried()` reads the level now, and the arm went +0.17 → **+0.27**.
+
+## Both guards fired, and one of them was too literal
+
+Adding five boosters at once ran straight into the machinery built for The Vanguard, which
+is what it is for: *"nothing compares: salvage"* and *"the page never calls: keeps"*.
+
+The first was the guard being wrong rather than the code. It matched the literal string
+`has(boosts, 'x')`, which quietly made it a **style rule** — `earn` indexes a side's list,
+so it reads `has(mine, 'salvage')`, and the check called a live booster dead. It matches the
+comparison now, whatever the list is called. The second was real: `keeps()` read a booster
+and the interface called `carried()` instead, so the rule was folded into one function.
+
+Every one of the eight is read by the engine and every rule that reads one is called by the
+page — `earn, offerSize, marketEvery, rampFor, mends, carried, bonusPicks, pickTokens`.
+
+## Which to cut is his
+
+A pool of eight where one is worth +1.60 and the rest are worth a fifth of a match is worse
+than the "one prize and four fillers" the re-cut existed to fix — it is one prize and seven.
+The honest options are to cut the tail, to bring Veterans down until the others are
+comparable, or to keep them as texture and accept that the decision is *"take Veterans
+first"*. Nothing has been changed on the strength of this.

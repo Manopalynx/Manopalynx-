@@ -627,8 +627,12 @@ function counterScore(tok, theirs, picks = []) {
 // WHAT A ROUND PAYS. A purse to both sides, and one a body still standing to the
 // winner. The survivor count is the resolver's own `left`, so the game cannot
 // pay out a number the battle did not produce.
-export const earn = (left, winner) =>
-  [0, 1].map(s => SHOP.purse + (s === winner ? left[s] : 0));
+export const earn = (left, winner, boosts = [[], []]) =>
+  [0, 1].map(s => {
+    const mine = boosts[s] || [];
+    // Salvage rights: two credits a surviving body rather than one.
+    return SHOP.purse + (s === winner ? left[s] * (has(mine, 'salvage') ? 2 : 1) : 0);
+  });
 
 // What a booster changes, each read where it is used rather than baked into a
 // copy of the rule. `has` is the only place an id is compared. It still matches
@@ -640,8 +644,47 @@ const has = (boosts, id) => boosts.some(b => b === id || b.startsWith(id + ':'))
 // No booster widens the offer any more: being shown five cards instead of three
 // measured at +0.05 matches, which is the offer axis saying it is not the
 // constraint.
-export const offerSize = (boosts, wide) => RULES.offer + wide;
-export const picksFor = (boosts, extra) => RULES.picksPerRound + extra + (has(boosts, 'extra') ? 1 : 0);
+// WIDER MUSTER IS BACK, and it is Sam's note 17: he took a fourth PICK out because
+// four different cards a round is decisive against somebody who does not have it,
+// and put a wider OFFER in because choosing better from more is tactical rather
+// than simply more. Worth re-measuring rather than assuming -- it scored +0.05
+// last time, on a seat too weak to tell which of five cards was the better one.
+export const offerSize = (boosts, wide) => RULES.offer + wide + (has(boosts, 'wider') ? 2 : 0);
+export const picksFor = (boosts, extra) => RULES.picksPerRound + extra;
+// How often the market opens for a side. One place, because the interface and
+// the sweep both need it and a cadence written twice is a cadence that disagrees.
+export const marketEvery = boosts => has(boosts, 'quarter') ? 2 : SHOP.every;
+// What the opponent starts a run's match on. Attrition halves it, and it is the
+// only booster whose value GROWS with the run -- which is why it measured as
+// nothing when a run was 1.4 matches long.
+export const rampFor = (boosts, n) => Math.round(n * RUN.ramp * (has(boosts, 'attrition') ? 0.5 : 1));
+// The first life a side loses in a match, given back. Lives are what a run really
+// spends, so this is the booster aimed at the run rather than at the match.
+export const mends = boosts => has(boosts, 'surgeons');
+// THE COMPACT. One card of the column you finished with marches into the next
+// match at the level it reached; everything else is redrafted from nothing. One
+// exported rule rather than two, because the interface has to carry the same card
+// the sweep carries and a second function is a second place for that to drift.
+/** The card a side carries forward, as pick tokens. Empty when it carries none. */
+export function carried(boosts, picks) {
+  if (!has(boosts, 'compact')) return [];
+  const { cards, up } = armyFrom(picks);
+  if (!cards.length) return [];
+  // THE MOST VALUABLE SINGLE COPY, LEVEL INCLUDED. `power()` reads the card as
+  // PRINTED, so a Walker upgraded three times scored exactly the same as a fresh
+  // one and the Compact carried off whatever was biggest on paper instead --
+  // which for a light card is the square law, not the investment. The whole point
+  // of carrying one card is carrying the one you spent picks on.
+  let best = null, bs = -Infinity;
+  for (const id of new Set(cards)) {
+    const u = specFor(id, up[id] || 0);
+    const v = paper(u, u.count || 1);
+    if (v > bs) { bs = v; best = id; }
+  }
+  const out = [best];
+  for (let k = 0; k < (up[best] || 0); k++) out.push(UP_TAG + best);
+  return out;
+}
 // A round you lose buys two picks instead of one. The loser's bonus is already
 // the Leader's doctrine as a rule; this is the same argument, doubled.
 export const bonusPicks = boosts => RULES.loserBonusPicks + (has(boosts, 'vanguard') ? 1 : 0);
@@ -909,10 +952,14 @@ export function buyFor(money, picks, lives, theirs = [], boosts = []) {
 export function playMatch({ a = 'house', b = 'varan', seed = 1,
                             money: purse = [0, 0], picks = [0, 0],
                             lives: start = [RULES.lives, RULES.lives],
-                            boosts = [[], []], shop = ['ai', 'ai'] } = {}) {
+                            boosts = [[], []], shop = ['ai', 'ai'],
+                            held = [[], []] } = {}) {
   const rand = rng(seed);
   const policy = [POLICIES[a], POLICIES[b]];
-  const army = [[], []];
+  // THE COLUMN IS REDRAFTED FROM NOTHING every match -- unless something carried.
+  // The Compact is the only thing that does, and it is the novel's own founding
+  // method: you fight somebody else's war and take payment in hulls and veterans.
+  const army = [held[0].slice(), held[1].slice()];
   const lives = [start[0], start[1]];
   // Credits carried in from earlier matches, and any extra picks a side has
   // earned by being the thing you are running from.
@@ -922,6 +969,7 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
   const pending = [[], []];
   const perRound = [0, 1].map(s => picksFor(boosts[s], picks[s]));
   const wide = [0, 0];                   // a wider offer, bought, for one round
+  const mended = [0, 0];                 // whether Field surgeons has been spent
   const rounds = [];
   let loser = null;                      // who opens with the bonus pick
 
@@ -961,18 +1009,20 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
     const lost = out.winner === null
       ? (out.left[0] <= out.left[1] ? 0 : 1)
       : 1 - out.winner;
-    lives[lost]--;
+    // FIELD SURGEONS. The first life a side loses in a match is given back, once.
+    if (mends(boosts[lost]) && !mended[lost]) mended[lost] = 1;
+    else lives[lost]--;
     loser = lost;
     // A wider offer is bought for ONE round and is spent by getting here.
     wide[0] = wide[1] = 0;
 
-    const paid = earn(out.left, 1 - lost);
+    const paid = earn(out.left, 1 - lost, boosts);
     money[0] += paid[0]; money[1] += paid[1];
 
     // Every third round the market opens for both sides.
     if (lives[0] > 0 && lives[1] > 0) {
       for (const s of [0, 1]) {
-        if ((r + 1) % SHOP.every !== 0) continue;
+        if ((r + 1) % marketEvery(boosts[s]) !== 0) continue;
         // WHICH SHOPPER, per side. `ai` is `spend()`, the opponent's, which was
         // both sides' for the whole life of the economy; `ace` is the player's;
         // `none` is the arm Sam described -- a run that buys nothing at all.
@@ -1006,27 +1056,31 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
  * Sweepable, which is the point of putting it here: "how far does the floor
  * get" is the only number that says whether a run is a run or a treadmill.
  */
-// Which booster the `ace` takes, in the order the isolated measurement put them:
-// Veterans +0.85, a fourth pick +0.44, the Vanguard +0.20. A person who has read
-// the game takes the best one offered, and anything this list does not name goes
-// last rather than being unreachable -- the pool has been re-cut three times.
-const ACE_BOOSTS = ['veteran', 'extra', 'vanguard'];
+// Which booster the `ace` takes, in the order the isolated measurement on THIS
+// seat put them: Veterans +1.60, the Vanguard +0.33, Field surgeons +0.30, the
+// Compact +0.27, Quartermaster +0.20, Salvage rights +0.20, Attrition +0.13,
+// Wider muster +0.03. A person who has read the game takes the best one offered,
+// and anything this list does not name goes last rather than being unreachable --
+// the pool has been re-cut four times now.
+const ACE_BOOSTS = ['veteran', 'vanguard', 'surgeons', 'compact',
+                    'quarter', 'salvage', 'attrition', 'wider'];
 
 export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = null,
-                          shop = ['ai', 'ai'], boost = null } = {}) {
+                          shop = ['ai', 'ai'], boost = null, force = null } = {}) {
   const rand = rng((seed * 7717 + 3) >>> 0);
   const matches = [];
   const boosts = [[], []];
-  let money = 0, lives = RULES.lives;
+  let money = 0, lives = RULES.lives, kept = [];
   for (let n = 0; n < max; n++) {
     const opp = RUN.order[n % RUN.order.length];
     const r = playMatch({
       a, b: opp, seed: (seed * 131 + n) >>> 0,
-      money: [money, n * RUN.ramp],
+      money: [money, rampFor(boosts[0], n)],
       picks: [0, Math.floor(n / RUN.pickEvery)],
       // LIVES CARRY FOR YOU AND NOT FOR THEM. Only the market restores one.
       lives: [RUN.carryLives ? lives : RULES.lives, RULES.lives],
-      boosts: [boosts[0].slice(), boosts[1].slice()], shop
+      boosts: [boosts[0].slice(), boosts[1].slice()], shop,
+      held: [kept.slice(), []]
     });
     const won = r.winner === 0;
     matches.push({ n, opp, won, rounds: r.rounds.length, cards: r.army[0].length,
@@ -1034,6 +1088,10 @@ export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = nu
     if (!won) break;
     money = r.money[0];
     lives = r.lives[0];
+    // THE COMPACT: one card of the column you finished with marches into the next
+    // match, at the level it reached. Everything else is redrafted from nothing,
+    // which is what makes the draft the game -- this is one exception, earned.
+    kept = carried(boosts[0], r.army[0]);
     // A booster each, and the asymmetry is the choice: three offered to you, one
     // at random to them. THREE ARMS, and the difference between the last two is
     // the whole reason a dead booster can hide:
@@ -1051,6 +1109,17 @@ export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = nu
     // standard errors, because the arm is still taking real boosters on every
     // match its dead one is not offered. A check built on it passes the defect it
     // exists to catch, which is how this was found -- by breaking it on purpose.
+    // FORCED, which is the arm that values a booster rather than a preference.
+    // `prefer` only lands when the booster is among the three drawn, so with a
+    // pool of eight it fires three times in eight -- and every effect would come
+    // out smaller for no reason but the size of the pool it was measured in. The
+    // question a pool needs answered is "what is this worth if you have it".
+    if (force) {
+      if (!boosts[0].some(x => x === force)) boosts[0].push(force);
+      const t = boosterOffer(rand, boosts[1]);
+      if (t.length) boosts[1].push(t[0]);
+      continue;
+    }
     const mine = (take < 0 && !prefer) ? [] : boosterOffer(rand, boosts[0]);
     // `boost: 'ace'` takes the best of what is offered rather than an index --
     // a fixed index is a sample of the pool, which is not a choice at all.

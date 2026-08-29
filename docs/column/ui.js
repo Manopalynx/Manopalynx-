@@ -15,7 +15,8 @@ import { BY_ID, RULES, PERSONAS, UPGRADE, DRAFT, SPECIALS, SHOP, RUN,
          BY_BOOST, BY_KIT, BY_ORDER, SABOTAGE, COIN, BUILD, TICK } from './data.js';
 import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId,
          earn, stock, spend, upgradeable, specialsFor, kitFor, ordersFor, boosterOffer,
-         offerSize, picksFor, pickTokens, bonusPicks } from './engine.js';
+         offerSize, picksFor, pickTokens, bonusPicks,
+         marketEvery, rampFor, mends, carried } from './engine.js';
 import { draw, effects, auras, GROUND, SIDE, shape } from './render.js';
 import { glyph } from './glyphs.js';
 
@@ -114,13 +115,15 @@ function newMatch(opp, run) {
   const boosts = run ? [run.boosts[0].slice(), run.boosts[1].slice()] : [[], []];
   S = {
     v: 1, opp, seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0, draw: 0,
-    army: [[], []], round: 0, loser: null,
+    // THE COMPACT is the only thing that carries a card between matches, and the
+    // card is the engine's answer rather than this file's.
+    army: [(run && run.keep) || [], []], round: 0, loser: null,
     // LIVES CARRY. Only the market restores one, so every purse is a choice
     // between a stronger column now and being alive to draft another.
     lives: [run && RUN.carryLives ? run.lives : RULES.lives, RULES.lives],
     // The opponent's head start and its extra picks are the whole of the ramp,
     // and both are stated on the screen before the match rather than hidden.
-    money: [run ? run.credits : 0, n * RUN.ramp],
+    money: [run ? run.credits : 0, rampFor(boosts[0], n)],
     perRound: [picksFor(boosts[0], 0), picksFor(boosts[1], Math.floor(n / RUN.pickEvery))],
     boosts,
     run: run ? { n, seed: run.seed } : null,
@@ -332,7 +335,11 @@ function endRound() {
   // feedback the player gets on what their draft actually did, and clearing it
   // to a fresh deployment throws that away at the exact moment it is useful.
   S.lastFrame = S.frames[S.frames.length - 1] || [];
-  S.lives[S.result]--;
+  // FIELD SURGEONS. The first life a side loses in a match is given back, once,
+  // and `mends()` is the engine's answer to whether it holds -- not a flag here.
+  S.mended = S.mended || [0, 0];
+  if (mends(S.boosts[S.result]) && !S.mended[S.result]) S.mended[S.result] = 1;
+  else S.lives[S.result]--;
   S.loser = S.result;
   S.round++;
   // A wider offer, an order and a sabotage are all bought for one round and are
@@ -341,13 +348,13 @@ function endRound() {
   S.pending = [[], []];
   // What the round paid, through the ENGINE's rule and off the resolver's own
   // survivor count. The screen does not get to decide what a body is worth.
-  S.paid = earn(S.left || [0, 0], 1 - S.result);
+  S.paid = earn(S.left || [0, 0], 1 - S.result, S.boosts);
   S.money[0] += S.paid[0];
   S.money[1] += S.paid[1];
   S.phase = S.lives[0] <= 0 || S.lives[1] <= 0 ? 'over' : 'round';
   // Their market is on their cadence, not yours -- a booster can move it -- and
   // it is not gated on you opening yours.
-  if (S.phase !== 'over' && S.round % SHOP.every === 0) opponentShops();
+  if (S.phase !== 'over' && S.round % marketEvery(S.boosts[1]) === 0) opponentShops();
   S.frames = null;
   save(); render();
 }
@@ -355,7 +362,7 @@ function endRound() {
 // Every third round. The opponent spends at the same moment and by the same
 // rules -- its ramp is why a run gets harder, and a market only you could use
 // would be a difficulty setting rather than an economy.
-const marketDue = () => S.round % SHOP.every === 0 && S.lives[0] > 0 && S.lives[1] > 0;
+const marketDue = () => S.round % marketEvery(S.boosts[0]) === 0 && S.lives[0] > 0 && S.lives[1] > 0;
 
 function buy(item) {
   // A special is priced on the card, not in SHOP -- three prices, three cards,
@@ -940,6 +947,12 @@ function over() {
     const nextN = run.n + 1;
     setBest(nextN);
     const lives = S.lives[0];
+    // CAPTURED HERE, off the boosters this match was actually played with, which
+    // is what `playRun` does -- a booster taken on this screen shapes the matches
+    // ahead rather than the one just finished. Read now rather than at the tap,
+    // because `carryOn` fires later and a live reference read after a later step
+    // is a defect this record already carries twice.
+    const keepCards = carried(S.boosts[0], S.army[0]);
     const boosts = [S.boosts[0].slice(), S.boosts[1].slice()];
     // Three to you, one at random to them, off the run's own seed so the same
     // run offers the same choices however many times it is reloaded.
@@ -951,7 +964,7 @@ function over() {
     const carryOn = () => {
       document.querySelectorAll('.sheet').forEach(x => x.remove());
       newMatch(RUN.order[nextN % RUN.order.length],
-               { n: nextN, credits, lives, boosts, seed: run.seed });
+               { n: nextN, credits, lives, boosts, seed: run.seed, keep: keepCards });
     };
 
     const onward = () => {
@@ -1030,7 +1043,7 @@ function nextMatchNote(n, lives, boosts) {
   const opp = PERSONAS[RUN.order[n % RUN.order.length]];
   const picks = picksFor(boosts[1], Math.floor(n / RUN.pickEvery));
   return `<h2>Next: ${opp.n}</h2><p>${opp.d}</p>
-    <p>They begin with <b>${coin(n * RUN.ramp)}</b>${picks > RULES.picksPerRound
+    <p>They begin with <b>${coin(rampFor(boosts[0], n))}</b>${picks > RULES.picksPerRound
       ? ` and draft <b>${picks}</b> cards a round` : ''}, at
       full strength. You go in on <b>${lives} ${lives === 1 ? 'life' : 'lives'}</b>.</p>`;
 }
