@@ -133,9 +133,11 @@ workingwithsam.md is the authority, this is only the reminder:
   2. Change workingwithsam.md only if something in it is now wrong or a new
      class appeared -- and if that breaks its 340-line ceiling, remove
      something in the same edit. Most sessions should change nothing there.
-  3. Merge to main, and send Sam the committed file unprompted. A push to a
-     working branch does not reach him: CLAUDE.md imports from main, so
-     nothing takes effect until it is there.
+  3. Merge to main, and send Sam BOTH committed files unprompted --
+     workingwithsam.md and HISTORY.md. A push to a working branch does not
+     reach him: CLAUDE.md imports from main, so nothing takes effect until it
+     is there, and a file sent before the push is a copy of something that may
+     still change.
 MSG
 
 exit 0

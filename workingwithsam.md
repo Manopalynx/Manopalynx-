@@ -38,7 +38,7 @@ more numbers is stronger, and a line with no bracket has no session behind it ye
    appeared.** A line, not a narrative; if that breaks the ceiling, remove something in the
    same edit. **Most sessions should change nothing here** — that is the file working, not
    you being lazy.
-3. **Then standing instructions 4 and 6** — on `main`, and the committed file sent to him.
+3. **Then standing instructions 4 and 6** — on `main`, and both committed files sent to him.
 
 ---
 
@@ -59,10 +59,10 @@ His, in his words, holding every turn until he changes them.
    main version so I can test each change as we go."* A `BUILD` bump per change. `[7]`
 5. **The ledger is on a monthly cycle.** He trials it at work and collects notes for a
    session at month end. Changing it mid-month changes the thing being measured. `[7]`
-6. **Send him the committed file at the end of the session, unprompted** — the committed
-   file itself, not an excerpt. He keeps copies for pasting into other chats. The repo is
-   public, so send the `raw.githubusercontent.com` URL on `main` too: no second copy to
-   drift. `[6]`
+6. **Send him both committed files at the end of the session, unprompted** — this one and
+   `HISTORY.md`, the files themselves, not excerpts. He keeps copies for pasting into other
+   chats. The repo is public, so send the `raw.githubusercontent.com` URLs on `main` too: no
+   second copy to drift. `[6,12]`
 
 ---
 

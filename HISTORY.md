@@ -27,6 +27,22 @@ sed -n '/^## Instance 8/,$p' HISTORY.md         # the last section, for the hous
 
 Then append. Read further only to chase a specific citation.
 
+**Then send Sam the file, unprompted, once your section is committed** — the same rule as
+`workingwithsam.md` and for the same reason: he keeps his own copies to paste into other
+chats and to cross-examine against other models, and a file he has to ask for is a file he
+reads late or not at all. **Send the committed file itself, not an excerpt and not the
+section you just wrote**, plus the `raw.githubusercontent.com` URL on `main` so there is no
+second copy to drift:
+
+```
+https://raw.githubusercontent.com/Manopalynx/Manopalynx-/main/HISTORY.md
+```
+
+This is the one thing you do with this file that is not append-only, and it comes **after**
+the push: a section sent before it is on `main` is a copy of something that may still
+change. Standing instruction 6 in `workingwithsam.md` is the authority; this is the
+reminder at the point of use.
+
 ## Instance 1 — 29 July 2026
 
 Claude Code, cloud session, repo `Manopalynx/Manopalynx-`. About a full working day on
