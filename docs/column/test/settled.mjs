@@ -461,6 +461,66 @@ for (const [tag, lv, many] of DOSES) {
 }
 console.log(`\n   scored over ${lose.length} decided pairings\n`);
 
+/* ============================================= 6. why the revive died */
+// Part 5 says there is room inside a battle. The revive was built twice and
+// measured dead twice, at +0.13 and +0.10 against a control. Both are true, so
+// something about that particular effect and not about battles in general is
+// what failed. This asks which.
+//
+// A REVIVE RETURNS AT MOST ONE BODY A ROUND. So measure what one body is worth —
+// and measure it in the form that is STRICTLY BETTER than a revive, because an
+// upper bound that comes back small settles the question and a like-for-like
+// simulation would not. A body present from the first tick:
+//
+//   · never died, so its damage output was never lost for the ticks it was down
+//   · is there for the whole battle rather than from some point in the middle
+//   · is a body of a card that is already pulling its weight
+//
+// A revive can only be worth less than that. If the upper bound does not reach
+// the threshold part 5 located, then no once-a-round single-body effect can, and
+// the revive was dead of SIZE rather than of shape — which is a fact about a
+// whole class of designs rather than about one booster.
+//
+// The extra bodies are copies of a card the loser already holds whose `count` is
+// 1, so the dose is exactly N bodies and not a squad. Pairings where the loser
+// holds no such card are skipped rather than fudged, and the number is printed.
+
+const singles = army => [...new Set(army)].filter(id => (BY_ID[id].count || 1) === 1);
+
+console.log('6. WHY THE REVIVE DIED — what is one body actually worth?');
+console.log('   A revive returns at most one body a round. These doses give the loser whole');
+console.log('   extra bodies FROM THE FIRST TICK, which is strictly better than reviving one');
+console.log('   later, so each row is an upper bound on a revive of that size.\n');
+console.log('   the loser gets           rescued        won outright   still decided against it');
+console.log('   ' + '-'.repeat(78));
+
+let skipped = 0;
+for (const extra of [0, 1, 2, 3]) {
+  let rescued = 0, won = 0, scored = 0;
+  skipped = 0;
+  for (const p of lose) {
+    const aLost = p.r.p <= 0.05;
+    const loserArmy = aLost ? p.a : p.b;
+    const one = singles(loserArmy)[0];
+    if (extra && !one) { skipped++; continue; }
+    const grown = extra ? [...loserArmy, ...Array(extra).fill(one)] : loserArmy;
+    const a = aLost ? grown : p.a;
+    const b = aLost ? p.b : grown;
+    const r = fight(a, b, [totals(a).bodies, totals(b).bodies]);
+    const loserShare = aLost ? r.p : 1 - r.p;
+    if (loserShare >= 0.95) won++;
+    else if (loserShare > 0.05) rescued++;
+    scored++;
+  }
+  const still = scored - rescued - won;
+  const pc = n => `${String(n).padStart(4)} (${(n / scored * 100).toFixed(0)}%)`;
+  const tag = extra === 0 ? 'nothing (no-op)' : `+${extra} bod${extra === 1 ? 'y' : 'ies'} from tick 0`;
+  console.log(`   ${tag.padEnd(25)}${pc(rescued)}${' '.repeat(7)}${pc(won)}${' '.repeat(8)}${pc(still)}`);
+  if (extra === 0 && (rescued || won)) { console.log('   FAIL the no-op dose changed a pairing.'); bad++; }
+}
+console.log(`\n   ${skipped} of ${lose.length} pairings skipped — the loser held no single-body card`);
+console.log('   for scale, from part 5: one card of nine at +35% rescues about a third\n');
+
 // WHAT THIS RUN COVERED, not merely that it finished.
 console.log(`\n   covered: ${pairs.length} pairings x ${SEEDS} seeds x ${ARMS.length} arms = ${pairs.length * SEEDS * ARMS.length} battles`);
 console.log(`   plus the counter matrix: ${IDS.length} x ${IDS.length} cards over 4 seeds\n`);

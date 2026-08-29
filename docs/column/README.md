@@ -2359,3 +2359,55 @@ random place and time, and everything above acts everywhere for the whole battle
 line is unchanged and still red; the formality count sits beneath it. Re-aiming a red check
 at the number that happens to pass would settle a design question by stealth, and this one
 is Sam's.
+
+## The revive post-mortem: it died of neither of the obvious things
+
+Part 5 says there is room inside a battle. The revive was built twice and measured dead
+twice, at +0.13 and +0.10 against a control. Both stand, so something about *that effect*
+failed rather than something about battles. Two explanations were available and the
+instrument was pointed at the cheaper one first.
+
+**It is not that a round was already decided.** That was the standing explanation and part 5
+falsified it.
+
+**And it is not that one body is too small.** A revive returns at most one body a round, so
+part 6 measures what one body is worth — in the form that is *strictly better* than a
+revive, because an upper bound that comes back small settles the question and a
+like-for-like simulation would not. A body present from the first tick never died, never
+lost its output while it was down, and is a body of a card already pulling its weight:
+
+| the loser gets | rescued | won outright | still decided against it |
+|---|---|---|---|
+| *nothing — the no-op* | *0 (0%)* | *0 (0%)* | *234 (100%)* |
+| **+1 body from tick 0** | **98 (44%)** | 12 (5%) | 115 (51%) |
+| +2 bodies from tick 0 | 110 (49%) | 52 (23%) | 63 (28%) |
+| +3 bodies from tick 0 | 95 (42%) | 98 (44%) | 32 (14%) |
+
+*9 of 234 pairings skipped — the loser held no single-body card to copy.*
+
+**One body changes half of them.** It is the same order as upgrading a whole card by 35%.
+So the magnitude a revive delivers is nowhere near too small to matter, and my own first
+hypothesis — that it was dead of size, which would have been a fact about a whole class of
+designs — is wrong.
+
+### What is left, and the caveat that matters
+
+Two candidates survive, and they are **not** distinguishable by anything measured here:
+
+1. **The delivery destroys the value.** Every dose above arrives at tick 0, in the line, on
+   a card that is fighting. A revive arrives *after* the body has died — its output already
+   lost for the ticks it was down, the enemy already paid nothing for the kill — at a random
+   place, on a random card, possibly nowhere near the fighting.
+2. **It was a real but small effect that 120 runs could not resolve.** +0.13 at 0.9σ is not
+   a measurement of zero, it is a failure to distinguish from zero. The bar it failed was a
+   significance bar, not a value bar.
+
+**And the two metrics here are not the same scale, which is the honest limit of this
+section.** "Rescued from decided" is a battle-level count; "+0.13" is matches survived
+across a run. A pairing that stops being a formality has not necessarily changed who wins
+the run. Nothing above converts one into the other, and no figure here should be read as
+saying the revive is worth 44% of anything.
+
+**Separating the two needs the revive rebuilt and measured at a sample that can resolve
+0.2σ** — which is Sam's call on whether it is worth the runs, and it is a different
+question from whether it is worth building.
