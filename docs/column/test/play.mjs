@@ -26,7 +26,7 @@ import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve as rp, extname, join } from 'path';
 import { chromium } from 'playwright';
-import { BOOSTS, RULES, PERSONAS, MAPS } from '../data.js';
+import { BOOSTS, RULES, PERSONAS, MAPS, BY_MAP, TERRAIN } from '../data.js';
 import { bonusPicks, POLICIES } from '../engine.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -229,6 +229,30 @@ const playable = Object.keys(PERSONAS).length;
 if (personas === playable) ok(`every opponent is offered (${personas}, ${
   new Set(Object.values(PERSONAS).map(p => p.f)).size} factions)`);
 else bad('every opponent is offered', [`found ${personas} of ${playable}`]);
+
+// HIS NOTE 20, AND IT IS THE WHOLE DECISION RATHER THAN A LABEL. Terrain is
+// fixed per map and must be READABLE BEFORE THE FIRST PICK: a board you cannot
+// see until after you have committed a draft is a coin flip, and one you can see
+// turns the draft into "answer this ground". The chooser is the last screen
+// before a card is taken, so the guard is that the ground is named there --
+// derived from the data, so adding terrain to a second map cannot quietly ship
+// without the sentence that makes it fair.
+const withGround = Object.values(PERSONAS)
+  .filter(p => BY_MAP[p.map] && BY_MAP[p.map].terrain);
+const named = [];
+for (const p of withGround) {
+  const t = TERRAIN[BY_MAP[p.map].terrain];
+  const row = page.locator(`[data-opp]:has-text("${p.n}")`).first();
+  const txt = (await row.count()) ? await row.textContent() : '';
+  if (t && txt.includes(t.n) && txt.includes(t.says.slice(0, 24))) named.push(p.n);
+}
+if (withGround.length && named.length === withGround.length)
+  ok(`every map with terrain says so before the draft (${named.join(', ')})`);
+else if (!withGround.length)
+  bad('every map with terrain says so before the draft', ['no map carries terrain at all']);
+else bad('every map with terrain says so before the draft', [
+  `${named.length} of ${withGround.length} named it: ${withGround.map(p => p.n).join(', ')}`,
+  'terrain you cannot read before committing a draft is a coin flip, not a decision']);
 
 // The roster is where a player learns the counters, and where the author's lines
 // are separated from the ones written for the game. If that separation is not on

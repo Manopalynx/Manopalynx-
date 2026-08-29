@@ -12,7 +12,8 @@
 // drift from.
 
 import { BY_ID, RULES, PERSONAS, UPGRADE, DRAFT, SPECIALS, SHOP, RUN,
-         BY_BOOST, BY_KIT, BY_ORDER, SABOTAGE, COIN, BUILD, TICK, BY_MAP } from './data.js';
+         BY_BOOST, BY_KIT, BY_ORDER, SABOTAGE, COIN, BUILD, TICK, BY_MAP,
+         TERRAIN } from './data.js';
 import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId,
          earn, stock, spend, upgradeable, specialsFor, kitFor, ordersFor, boosterOffer,
          offerSize, picksFor, pickTokens, bonusPicks,
@@ -94,6 +95,12 @@ const LINGER = 4;
 // asking permission to end.
 const REVEAL_MS = 750;
 let revealTimer = null;
+
+/** The terrain of the map this match is fought on, or null for a flat field.
+ *  His note 20: terrain is FIXED PER MAP, so it is a property of the opponent
+ *  you are facing rather than a roll, and it is knowable before the first pick.
+ *  One derivation, read by the resolver, the renderer and the text. */
+export const terrainOf = opp => (PERSONAS[opp] && BY_MAP[PERSONAS[opp].map] || {}).terrain || null;
 
 /* ------------------------------------------------------------------- state */
 let S = null;
@@ -297,8 +304,11 @@ function fight() {
   // had ever read it, so a battle was a crowd of markers thinning out for no
   // visible reason: no projectile, no blast, no flinch. Sam's first two notes
   // are both answered by drawing what the resolver already recorded.
+  // THE GROUND IS DERIVED IN ONE PLACE and read by both the resolver and the
+  // renderer, so the field cannot draw a band the battle did not fight on --
+  // which is the same rule the replay log exists to enforce for everything else.
   const out = resolve([...S.army[0], ...S.pending[0]], [...S.army[1], ...S.pending[1]],
-                      seed, true, (t, live) => S.frames.push(live));
+                      seed, true, (t, live) => S.frames.push(live), terrainOf(S && S.opp));
   // Indexed by tick, so a playback step can ask for the ticks it just skipped
   // rather than for "the last thing that happened".
   S.ev = [];
@@ -411,7 +421,7 @@ function paint(live, from, to) {
   }
   // THE GROUND IS THE OPPONENT'S. Cosmetic, so nothing downstream of this knows
   // which map it is -- the resolver is not told and does not ask.
-  el.field.innerHTML = ground(S && PERSONAS[S.opp] && PERSONAS[S.opp].map) +
+  el.field.innerHTML = ground(S && PERSONAS[S.opp] && PERSONAS[S.opp].map, terrainOf(S && S.opp)) +
     (bodies.length ? auras(bodies) : '') + fx +
     draw(bodies, { pick: S && S.inspect, flash, pop: S && S.pop && new Set(S.pop) });
 }
@@ -690,6 +700,8 @@ el.who.addEventListener('click', () => {
   const here = BY_MAP[PERSONAS[S.opp].map];
   const d = sheet(`<h1>${PERSONAS[S.opp].n}</h1>
     <p class="where"><b>${PERSONAS[S.opp].f}</b> &middot; ${here ? here.n : ''}</p>
+    ${here && here.terrain && TERRAIN[here.terrain]
+      ? `<p class="ground"><b>${TERRAIN[here.terrain].n}</b> &middot; ${TERRAIN[here.terrain].says}</p>` : ''}
     ${here ? `<q class="mapq">${here.q}</q>` : ''}
     <p>Round ${S.round + 1}. ${S.lives[0]} ${S.lives[0] === 1 ? 'life' : 'lives'} to
        ${S.lives[1]}, ${armyFrom(S.army[0]).cards.length} cards to
@@ -733,7 +745,15 @@ function menu() {
     <h2>Or a single match</h2>
     ${Object.entries(PERSONAS).filter(([k]) => POLICIES[k]).map(([k, p]) =>
       `<button class="pick" data-opp="${k}"><b>${p.n}</b><i>${p.f} &middot; ${
-        BY_MAP[p.map] ? BY_MAP[p.map].n : ''}<br>${p.d}</i></button>`).join('')}
+        BY_MAP[p.map] ? BY_MAP[p.map].n : ''}<br>${p.d}${
+        // BEFORE THE FIRST PICK, and that is Sam's decision rather than a
+        // convenience: a board you cannot see until after you have committed a
+        // draft is a coin flip, and a board you can see turns the draft into
+        // "answer this ground" instead of "answer these three cards". It is on
+        // the chooser because that is the last screen before a card is taken.
+        BY_MAP[p.map] && BY_MAP[p.map].terrain && TERRAIN[BY_MAP[p.map].terrain]
+          ? `<br><b class="ground">${TERRAIN[BY_MAP[p.map].terrain].n}: ${
+             TERRAIN[BY_MAP[p.map].terrain].says}</b>` : ''}</i></button>`).join('')}
     <h2>Reference</h2>
     <button class="pick" id="roster"><b>The roster</b><i>All twelve cards, what they do,
       and which lines are the author's.</i></button>

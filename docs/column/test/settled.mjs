@@ -45,41 +45,19 @@
 // No browser, no DOM, no clock. Pure engine, seeded, reproducible.
 
 import { DRAFT, BY_ID } from '../data.js';
-import { resolve, rng, offer } from '../engine.js';
+import { resolve, rng } from '../engine.js';
+// THE FIXTURE IS SHARED, not copied. terrain.mjs measures against the same 400
+// pairings, and two copies of a generator drift -- the second copy always being
+// the one inside the check.
+import { samplePairs, measure, fight, bodies, bodyCount, SEEDS, SIZE } from './pairings.mjs';
+import * as FIXTURE from './pairings.mjs';
 
 const PAIRS = Number(process.env.PAIRS || 400);
-const SEEDS = 8;                 // battles per pairing, as match.mjs
-const SIZE = 9;                  // cards a side, as match.mjs
-
-/* ------------------------------------------------------------------ the pairing */
-// Straight out of match.mjs, deliberately: an explanation of a number has to be
-// an explanation of THAT number, so the generator, the size, the seed arithmetic
-// and the 95/5 line are copied rather than re-chosen.
-//
-// A DRAW IS HALF A WIN HERE TOO, and counted, for the reason match.mjs gives: a
-// battle that never finishes reads as a close one, and 28% of them once did.
-function fight(a, b, start) {
-  let wins = 0, drawn = 0, keptT = 0, keptN = 0;
-  for (let s = 0; s < SEEDS; s++) {
-    const r = resolve(a, b, s * 37 + 3);
-    if (r.winner === 0) wins++;
-    else if (r.winner === null) { wins += 0.5; drawn++; }
-    // HOW MUCH OF ITSELF THE WINNER HAD LEFT. `left` is the resolver's own
-    // survivor count, so this cannot report a margin the battle did not produce.
-    if (r.winner !== null && start) {
-      keptT += r.left[r.winner] / start[r.winner];
-      keptN++;
-    }
-  }
-  const p = wins / SEEDS;
-  return { p, drawn, decisive: p <= 0.05 || p >= 0.95, kept: keptN ? keptT / keptN : null };
-}
 
 /* ----------------------------------------------------------------- the features */
 // Each is signed: positive favours side A. Only the SIGN is read in part 1, so
 // none of them needs scaling against the others.
 
-const bodies = id => BY_ID[id].count || 1;
 const dpsOf  = u => u.dmg * 10 / u.rate;
 const sum = (army, f) => army.reduce((t, id) => t + f(id), 0);
 
@@ -147,53 +125,6 @@ function counterEdge(a, b) {
   return n ? t / n : 0;
 }
 
-/* ------------------------------------------------------------------ the sampling */
-// `offer` can return an upgrade token for a card already held. match.mjs's
-// generator keeps them and so does this, because the thing being explained
-// included them -- but every feature above indexes BY_ID with a bare id, so an
-// upgrade token would read `undefined` and take the arithmetic to NaN in
-// silence. Strip them at the door and print how many, rather than assuming the
-// count is zero.
-let stripped = 0;
-const bare = army => army.filter(t => {
-  const ok = !t.includes(':');
-  if (!ok) stripped++;
-  return ok;
-});
-
-function samplePairs(n, seed) {
-  const rand = rng(seed);
-  const out = [];
-  for (let i = 0; i < n; i++) {
-    // THE DRAW ORDER IS PART OF THE FIXTURE. match.mjs takes one card for A and
-    // then one for B, alternating, off a single stream. Drawing all of A and
-    // then all of B is the same distribution and a DIFFERENT SAMPLE, and it
-    // landed 1.5pt off the figure this file exists to explain -- close enough to
-    // look like agreement and not close enough to be it. Interleave, as it does.
-    const a = [], b = [];
-    for (let k = 0; k < SIZE; k++) {
-      a.push(offer(rand, 1)[0]);
-      b.push(offer(rand, 1)[0]);
-    }
-    const A = bare(a), B = bare(b);
-    if (A.length && B.length) out.push({ a: A, b: B });
-  }
-  return out;
-}
-
-function measure(pairs) {
-  let decisive = 0, drawn = 0, fought = 0;
-  const results = [];
-  for (const p of pairs) {
-    const r = fight(p.a, p.b, [totals(p.a).bodies, totals(p.b).bodies]);
-    results.push(r);
-    if (r.decisive) decisive++;
-    drawn += r.drawn;
-    fought += SEEDS;
-  }
-  return { n: pairs.length, decisive, rate: decisive / pairs.length, draws: drawn / fought, results };
-}
-
 /* =========================================================== 0. the control arm */
 // If this does not come back at match.mjs's figure, this file is explaining a
 // different number and nothing after it means anything.
@@ -206,7 +137,7 @@ pairs.forEach((p, i) => { p.r = control.results[i]; });
 
 console.log(`control: ${control.decisive} of ${control.n} (${(control.rate * 100).toFixed(1)}%) decided 95/5 or harder`);
 console.log(`         ${(control.draws * 100).toFixed(0)}% of battles drew at the tick ceiling`);
-console.log(`         ${stripped} upgrade token(s) stripped before feature arithmetic\n`);
+console.log(`         ${FIXTURE.stripped} upgrade token(s) stripped before feature arithmetic\n`);
 
 /* ================================================ 1. which number knows the winner */
 
@@ -449,7 +380,7 @@ for (const [tag, lv, many] of DOSES) {
     const aLost = p.r.p <= 0.05;
     const a = aLost ? upSome(p.a, lv, many) : p.a;
     const b = aLost ? p.b : upSome(p.b, lv, many);
-    const r = fight(a, b, [totals(p.a).bodies, totals(p.b).bodies]);
+    const r = fight(a, b, [bodyCount(p.a), bodyCount(p.b)]);
     const loserShare = aLost ? r.p : 1 - r.p;
     if (loserShare >= 0.95) won++;
     else if (loserShare > 0.05) rescued++;
@@ -506,7 +437,7 @@ for (const extra of [0, 1, 2, 3]) {
     const grown = extra ? [...loserArmy, ...Array(extra).fill(one)] : loserArmy;
     const a = aLost ? grown : p.a;
     const b = aLost ? p.b : grown;
-    const r = fight(a, b, [totals(a).bodies, totals(b).bodies]);
+    const r = fight(a, b, [bodyCount(a), bodyCount(b)]);
     const loserShare = aLost ? r.p : 1 - r.p;
     if (loserShare >= 0.95) won++;
     else if (loserShare > 0.05) rescued++;

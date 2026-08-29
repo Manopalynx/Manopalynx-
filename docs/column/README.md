@@ -2469,3 +2469,92 @@ directions, and puts everything back inside one `evaluate` so no later tap can l
 clone. It prints how many distinct cards it saw at width — 21 on the run that shipped —
 because the worst case is never the obvious card. Mutation-tested by neutering the fix: it
 fails with the original symptom, *'stat' is cut down by 11px*.
+
+---
+
+# Note 20, round one: cover, and what it did
+
+The maps have been cosmetic and that was the point. This is the first thing that makes one
+mean something, and it is the answer Sam has held for the composition red since it first
+went red — **battlefield variety rather than softer counters**.
+
+**It was worth building now because of what `settled.mjs` measured.** A battle-side effect
+the size of one card of nine changes a third of the pairings that were decided. Before that,
+this project's own standing reasoning predicted terrain to be dead along with everything else
+that happens inside a battle, and it would have been built on a false expectation either way.
+
+## The rules, and the two decisions that are Sam's
+
+**Cover protects whoever is standing in it** rather than blocking a line between two points.
+Both readings of *"cover that blocks range"* are buildable; this one is positional — it
+rewards a composition for being somewhere, instead of penalising every ranged card
+everywhere, which is what fog would do and is nearer a nerf than a change of play style.
+
+> A body inside the middle band refuses **55%** of the damage from any attacker further away
+> than 12. Melee is untouched by construction: closing with something in cover is how you
+> answer it.
+
+- **Fixed per map** — a map is a place and a place does not rearrange itself between rounds.
+- **Shown before the draft** — a board you cannot see until after you have committed is a
+  coin flip; one you can see turns the draft into *answer this ground*.
+
+It sits on **Hale's terrace cuts**, and the manuscript picked that rather than a coin: the
+terrace cuts are the one grade the walkers can climb, so an armoured line has to come up them
+under fire.
+
+## What it did, over the same 400 pairings fought on both grounds
+
+| | flat | cover | change |
+|---|---|---|---|
+| decided 95/5 or harder | 58.5% | 53.3% | −5.2pt |
+| **FORMALITIES** | **12.3%** | **6.8%** | **−5.5pt** |
+| median winner kept | 45.5% | 41.5% | −4.1pt |
+| drew at the tick ceiling | 0.2% | 0.2% | +0.0pt |
+
+**Formalities nearly halve.** 193 of 400 pairings came out differently.
+
+And on the counter graph it does the job it was chosen for:
+
+| card | flat | cover | |
+|---|---|---|---|
+| **amabie** | **81.8%** | **63.6%** | **−18.2pt** |
+| ultra | 77.3% | 81.8% | +4.5pt |
+| volt | 39.8% | 55.7% | +15.9pt |
+| karkinos | 47.7% | 59.1% | +11.4pt |
+| neurite | 45.5% | 29.5% | −15.9pt |
+
+## The finding that is not the headline, and it is the important one
+
+**The spread does not move. It is 54.5% top-to-bottom on both grounds.** Cover does not
+flatten the pool — it *changes who is at the top of it*. Amabie falls 18 points and Ultra
+Armor takes its place; the Volt Battery and the Karkinos come up from the bottom third.
+
+That is worth stating plainly because it is a different claim from the one terrain was
+reached for. **One map with cover is not a fix for the pool being uneven.** What it is, is a
+second pool — a ground where a different draft is right. Whether that is what Sam wants is
+the decision the next round rests on: if every map ends up with its own terrain, the *run*
+has variety even though each individual board still has a best answer. That is arguably
+exactly right for a game whose whole frame is *you fight where the war puts you*, but it is
+his call and it is not what a flatter graph would have looked like.
+
+## What it cost, and what it did not
+
+**`resolve()` takes terrain as an optional last argument defaulting to none**, so a battle
+with no terrain is byte-for-byte the battle every existing figure was measured on. That makes
+the flat field the control for free, and it is asserted rather than assumed: `terrain.mjs`
+spot-checks that `resolve(a, b, s, false, null, null)` matches `resolve(a, b, s)`. Re-run
+after the change, unchanged: `matchup.mjs` 6 of 6, `match.mjs` still **234 of 400** and 49
+formalities, `settled.mjs` still 234.
+
+**The fixture moved into `test/pairings.mjs`** so `settled.mjs` and `terrain.mjs` measure
+against the same 400 pairings rather than two copies of a generator that would drift.
+
+**The band is drawn from the same constant the resolver reads**, so the field cannot show a
+band the battle did not fight on — the same rule the replay log exists to enforce everywhere
+else.
+
+**Two guards, both mutation-tested.** `terrain.mjs` fails if the flat arm stops reproducing
+itself or if cover reaches nothing. `play.mjs` asserts that every map carrying terrain
+**names it on the chooser** — derived from the data, so adding terrain to a second map cannot
+quietly ship without the sentence that makes it fair. Breaking the sentence turns it red:
+*0 of 1 named it: Hale*.

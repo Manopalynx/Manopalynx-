@@ -16,7 +16,7 @@
 // nothing about the game would look wrong.
 
 import { UNITS, DRAFT, SPECIALS, BY_ID, FIELD, MAX_TICKS, RULES, UPGRADE, SHOP, RUN,
-         BOOSTS, KIT, ORDERS, SABOTAGE, BY_KIT, BY_ORDER } from './data.js';
+         BOOSTS, KIT, ORDERS, SABOTAGE, BY_KIT, BY_ORDER, TERRAIN } from './data.js';
 
 /* ------------------------------------------------------------------------ rng */
 // mulberry32. Small, fast, and — the only property that matters here — the same
@@ -302,7 +302,13 @@ function choose(unit, enemies) {
  * @returns {{winner:number|null, ticks:number, left:number[], log:object[]}}
  *          winner 0, 1, or null for a draw at MAX_TICKS.
  */
-export function resolve(a, b, seed, keepLog = false, onTick = null) {
+export function resolve(a, b, seed, keepLog = false, onTick = null, terrain = null) {
+  // TERRAIN DEFAULTS TO NONE, and that is deliberate rather than lazy: every
+  // figure this project has ever printed was measured on a flat field, so a
+  // resolve() with no terrain has to stay byte-for-byte the battle it was. That
+  // makes the flat field the control for free, and it means nothing already
+  // measured silently changes underneath a map that has none.
+  const ground = terrain ? TERRAIN[terrain] || null : null;
   const units = deployment(a, b, seed);
   const log = [];
   let t = 0;
@@ -365,10 +371,10 @@ export function resolve(a, b, seed, keepLog = false, onTick = null) {
 
       if (d <= spec.rng && u.cd <= 0) {
         const dealt = [];
-        hurtInto(tgt, spec.dmg, u, add, dealt);
+        hurtInto(tgt, spec.dmg, u, add, dealt, ground);
         if (spec.splash) {
           for (const e of foes) {
-            if (e !== tgt && dist(e, tgt) <= spec.splash) hurtInto(e, spec.dmg / 2, u, add, dealt);
+            if (e !== tgt && dist(e, tgt) <= spec.splash) hurtInto(e, spec.dmg / 2, u, add, dealt, ground);
           }
         }
         if (spec.dot) { tgt.dot = spec.dot; tgt.dotT = spec.dotT; }
@@ -434,10 +440,17 @@ export function resolve(a, b, seed, keepLog = false, onTick = null) {
 
 // Split out so splash and primary damage go through one place. Derived, never
 // restated: the deflection and armour rules live here and nowhere else.
-function hurtInto(target, amount, from, add, dealt) {
+function hurtInto(target, amount, from, add, dealt, ground) {
   const spec = target.s;
   let d = amount;
   if (spec.defl && from.s.rng > 4) d *= (1 - spec.defl);
+  // COVER, and it lives here with deflection and armour because this is the one
+  // place a hit is reduced. It reads the TARGET's position, not the shooter's:
+  // cover protects whoever is standing in it. Applied before armour for the same
+  // reason deflection is -- armour is the last word and its floor of 1 is what
+  // stops any stack of reductions taking a hit to nothing.
+  if (ground && from.s.rng > 4 && target.y >= ground.from && target.y <= ground.to
+      && dist(from, target) > ground.beyond) d *= (1 - ground.cut);
   d = Math.max(1, d - (spec.arm || 0));
   add(target, d);
   dealt.push(d);

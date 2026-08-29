@@ -15,7 +15,7 @@
 // only copy: a letter or a shape written twice will disagree, and the second
 // copy is usually the one nobody is looking at.
 
-import { BY_ID, FIELD } from './data.js';
+import { BY_ID, FIELD, TERRAIN } from './data.js';
 import { glyph } from './glyphs.js';
 
 // YOU ARE AT THE BOTTOM. Sam's note: the cards are down there, so after every
@@ -257,8 +257,30 @@ const OVERLAY =
   `<rect x="0" y="118" width="100" height="22" fill="#6fc6f5" fill-opacity="0.05"/>` +
   `<line x1="0" y1="70" x2="100" y2="70" stroke="#2c3f54" stroke-width="0.3" stroke-dasharray="1.5 1.5"/>`;
 
+// TERRAIN IS DRAWN FROM THE SAME CONSTANT THE RESOLVER READS, so the band on
+// screen cannot be in a different place from the band the battle was fought on.
+// A second copy of `from`/`to` here is exactly the defect this project has
+// already had six times over one price.
+//
+// It is drawn UNDER the markers and over the scene, at an opacity in the same
+// range as the deployment tints above -- the rule for this file is that nothing
+// decorative may compete with a counter, because the counters are what a player
+// reads. The dashed edges are what makes it legible as an EDGE rather than as a
+// wash: the whole decision is whether a body is inside it or outside it.
+const band = t => {
+  const g = TERRAIN[t];
+  if (!g) return '';
+  return `<rect x="0" y="${g.from}" width="100" height="${g.to - g.from}" ` +
+           `fill="#7fd6a0" fill-opacity="0.07"/>` +
+         `<line x1="0" y1="${g.from}" x2="100" y2="${g.from}" stroke="#7fd6a0" ` +
+           `stroke-opacity="0.35" stroke-width="0.35" stroke-dasharray="2 2"/>` +
+         `<line x1="0" y1="${g.to}" x2="100" y2="${g.to}" stroke="#7fd6a0" ` +
+           `stroke-opacity="0.35" stroke-width="0.35" stroke-dasharray="2 2"/>`;
+};
+
 /** The ground for a map id. Unknown ids fall back to Eden rather than to nothing. */
-export const ground = (map) => (SCENES[map] || SCENES.eden) + OVERLAY;
+export const ground = (map, terrain = null) =>
+  (SCENES[map] || SCENES.eden) + band(terrain) + OVERLAY;
 
 // Kept so nothing that imported the old constant breaks; it is Eden's ground.
 export const GROUND = ground('eden');

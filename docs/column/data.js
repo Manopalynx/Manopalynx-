@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v23';
+export const BUILD = 'column-v24';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -496,10 +496,43 @@ export const BY_BOOST = Object.fromEntries(BOOSTS.map(b => [b.id, b]));
 // EVERY ONE IS A PLACE IN THE BOOK, and `q` is the sentence it is drawn from,
 // marked `qv` like a unit's line. The roster already separates the author's words
 // from mine on every card; a map is no different, and there are nine of them.
+/* ------------------------------------------------------------------ terrain */
+// HIS NOTE 20. The maps were cosmetic and that was the point; this is the first
+// thing that makes one mean something, and it is the answer he has been holding
+// for the composition red since it first went red.
+//
+// It is worth building now because of what settled.mjs measured: a battle-side
+// effect the size of one card of nine changes a third of the pairings that were
+// "decided". Before that measurement the project's own reasoning predicted
+// terrain to be dead along with everything else that happens inside a battle.
+//
+// COVER PROTECTS WHOEVER IS STANDING IN IT, rather than blocking a line between
+// two points. Both readings of "cover that blocks range" are buildable; this one
+// is chosen because it is POSITIONAL -- it rewards a composition for being
+// somewhere, instead of penalising every ranged card everywhere, which is what
+// fog would do and is nearer a nerf than a change of play style.
+//
+// The band sits across the middle of the field, which is where the two lines
+// meet: side 0 deploys from y=10 and side 1 from y=130, so both advance into it.
+// A body inside it refuses `cut` of the damage from any attacker further away
+// than `beyond`. Melee is untouched by construction -- the whole point is that
+// closing with something in cover is how you answer it.
+//
+// Terrain is FIXED PER MAP and SHOWN BEFORE THE DRAFT, both Sam's decisions. A
+// map is a place and a place does not rearrange itself between rounds; and a
+// board you cannot see before you commit is a coin flip rather than a decision.
+export const TERRAIN = {
+  cover: { n: 'Cover', from: 58, to: 82, beyond: 12, cut: 0.55,
+           says: 'Bodies in the middle band refuse 55% of fire from beyond 12.' }
+};
+
 export const MAPS = [
   { id: 'eden', n: 'Eden — the crossroads',
     q: 'Eden had been the heart of the Union\u2019s trade network in the days when we were a syndicate worth fearing: the great crossroads, the market of markets.', qv: 1 },
-  { id: 'terraces', n: 'Horizon — the terrace cuts',
+  // THE FIRST MAP WITH TERRAIN, and the manuscript picked it rather than a
+  // coin: the terrace cuts are the one grade the walkers can climb, so an
+  // armoured line has to come up them under fire. Cover is what that is.
+  { id: 'terraces', n: 'Horizon — the terrace cuts', terrain: 'cover',
     q: 'Their whole armored line has to come up the terrace cuts, here \u2014 it\u2019s the only grade the walkers can climb.', qv: 1 },
   { id: 'tribute', n: 'The tribute ship',
     q: 'I signed the instrument of vassalage in a room aboard one of their tribute ships. They kept me waiting four hours.', qv: 1 },
