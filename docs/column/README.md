@@ -1840,7 +1840,7 @@ stylesheet at equal specificity, so the later rule has always won: the counter h
 under it have been inert with it. Nothing threw, nothing looked obviously broken, and no
 check could see it. It took putting the abilities in the row and then **looking at the
 screenshot** — which is the same instrument, and the same lesson, as every screenshot Sam
-has ever sent. It is `.pick.shopRow` now, and `play-chooser.png` is written every run so
+has ever sent. It is `.pick.shopRow` now, and `test/shots/play-chooser.png` is written every run so
 the next one is visible without asking.
 
 `play.mjs` is at **30 claims**.
@@ -2071,7 +2071,7 @@ draft at all: whatever you field most of is what comes back.
 Ground only. **The resolver is not told which map it is and does not ask**, so not one
 figure in this folder is re-derived by any of it. That is exactly why it is the right thing
 to do first — nine of them can be looked at on a phone before anyone decides which want
-teeth. `test/play-maps.png` is written every run: all nine at the real size with a real
+teeth. `test/shots/play-maps.png` is written every run: all nine at the real size with a real
 deployment on top, because whether a scene competes with the counters is a thing you look
 at rather than assert.
 

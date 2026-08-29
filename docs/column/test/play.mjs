@@ -22,7 +22,7 @@
 // Run:  PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node docs/column/test/play.mjs
 
 import { createServer } from 'http';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve as rp, extname, join } from 'path';
 import { chromium } from 'playwright';
@@ -31,6 +31,27 @@ import { bonusPicks, POLICIES } from '../engine.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DOCS = rp(HERE, '..', '..');
+
+// SCREENSHOTS GO TO AN IGNORED FOLDER, and that is not tidiness.
+//
+// Nine are written every run. Six of them -- play, battle, draft, inspect,
+// market, run -- differ on every single run, because the page seeds each match
+// from the clock, so the match they photograph is a different match each time.
+// Measured twice on 29 August 2026: the same six moved both times and the same
+// three (maps, roster, chooser, all static screens) were byte-identical.
+//
+// Committed, that means any session which merely RUNS this suite leaves six
+// modified binaries in the tree, and a session that changed nothing at all
+// still has to explain them. Nothing asserts on these files -- they exist so
+// Sam, who is phone-only, can see the interface from a machine he cannot see.
+// They do that job just as well sent to him directly.
+//
+// The real fix is to seed the page deterministically for the suite, which
+// would also close the claim this suite reports as not-run on every pass.
+// That is a piece of work, not a path change. This is the path change.
+const SHOTS = rp(HERE, 'shots');
+mkdirSync(SHOTS, { recursive: true });
+const png = n => rp(SHOTS, n);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
                 '.json': 'application/json', '.webmanifest': 'application/manifest+json',
                 '.png': 'image/png', '.css': 'text/css; charset=utf-8' };
@@ -189,7 +210,7 @@ await page.goto(base + '/column/index.html', { waitUntil: 'load' });
   });
   await page.setViewportSize({ width: 1200, height: 1000 });
   await page.waitForTimeout(250);
-  await page.screenshot({ path: rp(HERE, 'play-maps.png'), fullPage: true });
+  await page.screenshot({ path: png('play-maps.png'), fullPage: true });
   await page.evaluate(() => document.getElementById('mapsheet').remove());
   await page.setViewportSize({ width: 393, height: 852 });
   if (process.env.TRACE) console.log(`   drew ${shot} grounds`);
@@ -232,7 +253,7 @@ else bad('every card says whose line it carries', [
   `${written.length} provenance marks, ${invented} marked invented (expected 15 and 1)`]);
 // The roster is a page Sam reads rather than plays; worth a look without him
 // having to find it.
-await page.screenshot({ path: rp(HERE, 'play-roster.png') });
+await page.screenshot({ path: png('play-roster.png') });
 await page.click('#back');
 
 /* ------------------------------------------------------------- play a match */
@@ -377,11 +398,11 @@ for (let guard = 0; guard < 400; guard++) {
     if (s.offer !== 3) { deadEnd = `offered ${s.offer} cards at ${s.prompt}`; break; }
     if (s.round === 3 && !shot.draft) {
       shot.draft = 1;
-      await page.screenshot({ path: rp(HERE, 'play-draft.png') });
+      await page.screenshot({ path: png('play-draft.png') });
       // And the same screen with a counter tapped, which is where a unit says
       // what it is and whose line it carries.
       await page.locator('#field g[data-side="0"]').first().click();
-      await page.screenshot({ path: rp(HERE, 'play-inspect.png') });
+      await page.screenshot({ path: png('play-inspect.png') });
       await page.locator('#field').click({ position: { x: 30, y: 30 } });
     }
     // THE WAY OUT, exercised mid-match and then backed out of. A pause that
@@ -454,7 +475,7 @@ for (let guard = 0; guard < 400; guard++) {
       // Screenshot a frame where something is actually being fired. Sampling on
       // a timer caught the advance instead, and a picture of two lines walking
       // is not evidence that the shots are drawn.
-      if (now > 3 && s.round >= 4 && !shot.battle) { shot.battle = 1; await page.screenshot({ path: rp(HERE, 'play-battle.png') }); }
+      if (now > 3 && s.round >= 4 && !shot.battle) { shot.battle = 1; await page.screenshot({ path: png('play-battle.png') }); }
       if (process.env.TRACE && w > 2) console.log('   waiting', w, JSON.stringify(await page.evaluate(() => ({
         prompt: document.getElementById('prompt').textContent,
         go: document.getElementById('go').textContent,
@@ -470,7 +491,7 @@ for (let guard = 0; guard < 400; guard++) {
     marketsSeen++;
     const before = { money: s.money[0], picks: s.picks[0], lives: s.lives[0] };
     await page.click('#go');
-    if (!shot.market) { shot.market = 1; await page.screenshot({ path: rp(HERE, 'play-market.png') }); }
+    if (!shot.market) { shot.market = 1; await page.screenshot({ path: png('play-market.png') }); }
     const offered = await page.evaluate(() =>
       [...document.querySelectorAll('.sheet [data-i]')].map(b => b.querySelector('b').textContent));
     if (offered.length) {
@@ -491,7 +512,7 @@ for (let guard = 0; guard < 400; guard++) {
       if (await chooser.count()) {
         // The chooser is where notes 14 and 16 land: what is on the shelf, and
         // what the thing actually does before you spend a market's takings on it.
-        if (!shot.chooser) { shot.chooser = 1; await page.screenshot({ path: rp(HERE, 'play-chooser.png') }); }
+        if (!shot.chooser) { shot.chooser = 1; await page.screenshot({ path: png('play-chooser.png') }); }
         // THE FIRST `b`, explicitly. Note 16 put the abilities on this row and each
         // one leads with its name in bold, so a bare `locator('b')` matches five
         // and Playwright's strict mode kills the RUN -- no FAIL line, just a
@@ -650,7 +671,7 @@ else bad('the round can be paused for the roster and backed out of', [
 if (!errors.length) ok('nothing threw, start to finish');
 else bad('nothing threw, start to finish', errors.slice(0, 4));
 
-await page.screenshot({ path: rp(HERE, 'play.png') });
+await page.screenshot({ path: png('play.png') });
 
 /* ------------------------------------------------------------------- a run */
 // A run is the loop now, and none of the above touches it: everything so far is
@@ -691,7 +712,7 @@ await page.screenshot({ path: rp(HERE, 'play.png') });
     break;
   }
 
-  await page.screenshot({ path: rp(HERE, 'play-run.png') });
+  await page.screenshot({ path: png('play-run.png') });
   const end = await page.evaluate(() => ({
     head: (document.querySelector('.sheet h1') || {}).textContent || null,
     boosts: [...document.querySelectorAll('.sheet [data-b]')].map(b => b.dataset.b),
@@ -854,5 +875,5 @@ if (skipped.length) {
   console.log(`so which branch is taken is not this suite's to choose. Re-run to exercise them:`);
   skipped.forEach(m => console.log(`        · ${m}`));
 }
-console.log(`written: play-maps.png, play-roster.png, play-draft.png, play-inspect.png, play-market.png, play-chooser.png, play-battle.png, play-run.png, play.png\n`);
+console.log(`written to docs/column/test/shots/ (git-ignored): play-maps.png, play-roster.png, play-draft.png, play-inspect.png, play-market.png, play-chooser.png, play-battle.png, play-run.png, play.png\n`);
 process.exit(failed ? 1 : 0);
