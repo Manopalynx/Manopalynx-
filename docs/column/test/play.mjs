@@ -26,6 +26,8 @@ import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve as rp, extname, join } from 'path';
 import { chromium } from 'playwright';
+import { BOOSTS, RULES } from '../data.js';
+import { bonusPicks } from '../engine.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DOCS = rp(HERE, '..', '..');
@@ -61,6 +63,60 @@ let failed = 0, ran = 0;
 const skipped = [];
 const ok = m => { ran++; console.log(` ok   ${m}`); };
 const bad = (m, why) => { ran++; failed++; console.log(`FAIL  ${m}`); (why || []).forEach(w => w && console.log(`        · ${w}`)); };
+
+/* ------------------------------------- does a booster reach the player at all */
+// TWO HALVES OF ONE QUESTION, and the second half is how The Vanguard shipped
+// doing nothing. `bonusPicks()` -- the only function that reads that booster --
+// had exactly one caller in the repository: `playMatch`, which is the sweep. So
+// `match.mjs` priced it at +0.18 matches and printed "the pool has no dead
+// option", green, while the interface's round loop cleared its bonus after one
+// pick whatever you held. A sweep cannot see this: it never loads `ui.js`.
+//
+// `has(boosts, ...)` is the engine's own stated rule -- the only place a booster
+// id is compared -- so both halves are exact string tests rather than a parse.
+// The Set method `eq.has(...)` is elsewhere in the file and does not match.
+//
+// AND IT READS CODE, NOT PROSE. The first version of the second check matched
+// the raw file, and both files carry comments naming `bonusPicks()` -- written
+// to explain why it must be called. So the check passed on a mutation that
+// removed every real call and left the comment standing, which is the exact
+// shape of defect it exists to catch. Found by breaking it on purpose; nothing
+// about reading it said so.
+const strip = src => src
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .split('\n')
+  .map(l => {
+    const i = l.indexOf('//');
+    if (i < 0) return l;
+    const before = l.slice(0, i);
+    // Only a `//` outside a string literal starts a comment.
+    for (const q of ['"', "'", '`']) if ((before.split(q).length - 1) % 2) return l;
+    return before;
+  })
+  .join('\n');
+const SRC = f => strip(readFileSync(rp(HERE, '..', f), 'utf8'));
+const engineSrc = SRC('engine.js'), uiSrc = SRC('ui.js');
+
+// 1. Every booster in the data is read by the engine. A booster nothing compares
+//    is a rule that never fires -- and it is offered to the player regardless,
+//    because the offer is built from BOOSTS.
+const unread = BOOSTS.map(b => b.id).filter(id => !engineSrc.includes(`has(boosts, '${id}')`));
+if (!unread.length) ok(`every booster in the pool is read by the engine (${BOOSTS.length})`);
+else bad('every booster in the pool is read by the engine', [
+  `nothing compares: ${unread.join(', ')}`]);
+
+// 2. Every engine function that reads a booster is CALLED BY THE INTERFACE.
+//    Sliced on top-level exports rather than by line, because `pickTokens`
+//    wraps and a line-based test would miss it.
+const readers = engineSrc.split(/\nexport /).slice(1)
+  .filter(chunk => chunk.includes('has(boosts,'))
+  .map(chunk => (chunk.match(/^(?:const|function|let)\s+(\w+)/) || [])[1])
+  .filter(Boolean);
+const unused = readers.filter(n => !new RegExp(`\\b${n}\\s*\\(`).test(uiSrc));
+if (readers.length && !unused.length)
+  ok(`every rule that reads a booster is called by the interface — ${readers.join(', ')}`);
+else bad('every rule that reads a booster is called by the interface', [
+  readers.length ? `the page never calls: ${unused.join(', ')}` : 'found no booster readers to check']);
 
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 393, height: 852 }, deviceScaleFactor: 2 });
@@ -156,6 +212,9 @@ let rounds = 0, mismatch = null, deadEnd = null;
 let sides = null, fxStill = null, fxFiring = 0;
 let popWrong = null, popsSeen = 0;
 let marketsSeen = 0, bought = 0, buyWrong = null, marketRounds = [];
+// Every life either side has BOUGHT, counted as it appears. Nothing but a
+// purchase raises a life total, so the increases are the purchases.
+let livesBought = 0, livesSeen = null;
 // Every field height seen during the draft, and whether a reveal ever needed a
 // tap. Both of these are measurements of Sam's notes 4 and 5.
 const heights = new Set();
@@ -168,6 +227,8 @@ let pause = null;
 for (let guard = 0; guard < 400; guard++) {
   const s = await state();
   if (!s.phase) break;
+  if (livesSeen) for (const i of [0, 1]) if (s.lives[i] > livesSeen[i]) livesBought += s.lives[i] - livesSeen[i];
+  livesSeen = s.lives;
   if (process.env.TRACE) console.log('   trace', guard, JSON.stringify(s));
 
   // Draft phases only: the battle and the result legitimately show a different
@@ -292,10 +353,25 @@ for (let guard = 0; guard < 400; guard++) {
       [...document.querySelectorAll('.sheet [data-i]')].map(b => b.querySelector('b').textContent));
     if (offered.length) {
       await page.locator('.sheet [data-i]').first().click();
-      // A card or an upgrade opens a chooser: take the first.
-      if (await page.locator('.sheet [data-id]').count()) await page.locator('.sheet [data-id]').first().click();
+      // THE PRICE THE PLAYER IS LOOKING AT WHEN THEY COMMIT, which is not always
+      // the one on the shelf. A special and a piece of kit are "from" rows --
+      // the row states the cheapest the shelf holds and the chooser button
+      // states what that one costs -- so reading the row and clicking the
+      // chooser compared two different purchases. It reported "paid 75 for
+      // something priced 70" against a game doing exactly what it said, and it
+      // only ever fired on a match rich enough to afford more than the cheapest
+      // special, which is why it read green for as long as it did.
+      //
+      // Matched on the coin rather than a trailing digit: an upgrade's button
+      // reads "Walker to level 2" and a bare `(\d+)$` prices it at ₡2.
+      let cost = +(offered[0].match(/₡\s*(\d+)\s*$/) || [0, 0])[1];
+      const chooser = page.locator('.sheet [data-id]').first();
+      if (await chooser.count()) {
+        const own = (await chooser.locator('b').textContent()).match(/₡\s*(\d+)\s*$/);
+        if (own) cost = +own[1];
+        await chooser.click();
+      }
       const after = await state();
-      const cost = +(offered[0].match(/(\d+)\s*$/) || [0, 0])[1];
       const spent = before.money - after.money[0];
       const grew = after.picks[0] > before.picks || after.lives[0] > before.lives ||
                    await page.evaluate(() => !!(JSON.parse(localStorage.getItem('column-save')).wide || [0])[0]);
@@ -345,10 +421,21 @@ else bad('the match ends and says so', ['never reached the result screen']);
 if (mismatch === null) ok('counters drawn equal cards drafted, every round');
 else bad('counters drawn equal cards drafted', [mismatch, 'the renderer groups bodies by card — this is that grouping']);
 
-// Rounds played must equal lives spent. Five each, one lost a round, so a match
-// that ends has spent exactly five on one side and fewer on the other.
+// Rounds played must equal lives spent. One life a round, to one side.
+//
+// AND A BOUGHT LIFE IS SPENT TWICE. This read `(5 - hearts) + (5 - hearts)`,
+// which was lives spent until the day the market started selling one -- to you
+// at the shop, and to the opponent by `spend()` whenever it is down to its last.
+// A match in which either side bought one shows nine lives against ten rounds
+// and the check calls the game wrong. It had been green because the harness
+// plays the floor and rarely reaches 44 credits; it is a coin toss on any match
+// that does, which is worse than no check at all.
+//
+// `livesBought` is every INCREASE observed in the saved state, and nothing but a
+// purchase raises a life total. The final round cannot hide one: neither market
+// opens when the match is ending.
 const m = end.body && end.body.match(/after (\d+) rounds/);
-const spent = (5 - end.lit[0]) + (5 - end.lit[1]);
+const spent = (RULES.lives - end.lit[0]) + (RULES.lives - end.lit[1]) + livesBought;
 if (m && +m[1] === rounds && spent === rounds && Math.min(...end.lit) === 0)
   ok(`the arithmetic closes — ${rounds} rounds, ${spent} lives spent, hearts ${end.lit.join('–')}`);
 else bad('the arithmetic closes', [
@@ -515,6 +602,55 @@ await page.screenshot({ path: rp(HERE, 'play.png') });
       `you ${two && two.boosts[0]}, them ${two && two.boosts[1]}`]);
   }
 }
+
+/* ------------------------ the loser's bonus, with the booster and without it */
+// A DIFFERENTIAL, because the absolute is not the claim. "The page offers a
+// bonus pick" passes on the build that ignored The Vanguard entirely; what has
+// to be true is that holding it changes the round. Two arms identical but for
+// one token in `boosts[0]`, resumed from the same seeded save at the moment the
+// bonus pick is offered, reading the prompt the player reads.
+//
+// Seeded rather than played to, because reaching a lost round while holding a
+// named booster is not something a suite that plays real matches can arrange --
+// the page seeds every match from the clock. This is the one place here that
+// constructs a save, and it constructs the save format the page itself writes.
+async function bonusRun(boosts) {
+  const c = await browser.newContext({ viewport: { width: 393, height: 852 } });
+  const p = await c.newPage();
+  const errs = [];
+  p.on('pageerror', e => errs.push(e.message.split('\n')[0]));
+  await p.goto(base + '/column/index.html', { waitUntil: 'load' });
+  await p.evaluate(s => localStorage.setItem('column-save', s), JSON.stringify({
+    v: 1, opp: 'harlow', seed: 424242, draw: 0,
+    army: [['walker', 'line', 'acid'], ['brute', 'ultra', 'swarm']],
+    round: 3, loser: 0, lives: [3, 4], money: [0, 0],
+    perRound: [3, 3], boosts: [boosts, []], run: null,
+    pending: [[], []], wide: [0, 0],
+    phase: 'pick', pickNo: 0, bonus: 0, solo: true, bonusDone: 0,
+    offer: ['walker', 'line', 'acid'], mine: null, theirs: null, inspect: null
+  }));
+  await p.reload({ waitUntil: 'load' });
+  await p.click('#resume');
+  const prompts = [];
+  for (let i = 0; i < 4; i++) {
+    await p.waitForSelector('.card', { timeout: 5000 });
+    prompts.push((await p.textContent('#prompt')).trim());
+    await p.click('.card');
+    await p.waitForTimeout(1100);              // the 750ms reveal, with room
+  }
+  await c.close();
+  return { solos: prompts.filter(t => /extra pick/i.test(t)).length, prompts, errs };
+}
+const plain = await bonusRun([]);
+const vanguard = await bonusRun(['vanguard']);
+const wantPlain = bonusPicks([]), wantVan = bonusPicks(['vanguard']);
+if (plain.solos === wantPlain && vanguard.solos === wantVan && wantVan > wantPlain
+    && !plain.errs.length && !vanguard.errs.length)
+  ok(`the loser's bonus is the engine's number — ${plain.solos} pick, ${vanguard.solos} with The Vanguard`);
+else bad("the loser's bonus is the engine's number", [
+  `no booster: ${plain.solos} bonus picks, expected ${wantPlain} — ${plain.prompts.join(' | ')}`,
+  `The Vanguard: ${vanguard.solos}, expected ${wantVan} — ${vanguard.prompts.join(' | ')}`,
+  [...plain.errs, ...vanguard.errs].join('; ') || null]);
 
 await browser.close();
 server.close();
