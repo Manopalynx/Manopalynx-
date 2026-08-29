@@ -184,6 +184,29 @@ const state = () => page.evaluate(() => {
       return t.length ? t.reduce((a, b) => a + b, 0) / t.length : null;
     }),
     fx: document.querySelectorAll('#field .fx').length,
+    // Each card's own content height against the box that clips it. Measured on
+    // the real face at the real width, because 9px of text wrapping to a second
+    // line is the difference between fitting and being cut in half.
+    // THE CARD AND EVERY LINE IN IT. Giving each line a fixed height is what
+    // stops a tall card growing the deck -- and it also means the card can never
+    // overflow, so a card-level check alone goes vacuous the moment it works.
+    // The clipping just moves inside a child, where it is still silent. Found by
+    // extending the probe to the upgrade face, not by reading this.
+    cardFit: [...document.querySelectorAll('#cards .card')].map(c => {
+      // ONLY WHAT ACTUALLY CLIPS. `scrollHeight > clientHeight` on an element
+      // that is not hiding its overflow is a measurement artefact, not a defect
+      // -- the upgrade chevron is absolutely positioned with no height and
+      // reported 6px every time. An element silently loses content only if it
+      // is hiding the overflow, so that is the test.
+      const parts = [c, ...c.querySelectorAll('*')]
+        .filter(e => /hidden|clip/.test(getComputedStyle(e).overflowY))
+        .map(e => ({ tag: e.className || e.tagName, over: e.scrollHeight - e.clientHeight }))
+        .filter(e => e.over > 1)
+        .sort((a, b) => b.over - a.over);
+      return { name: (c.querySelector('b') || {}).textContent || '?',
+               over: parts.length ? parts[0].over : 0,
+               where: parts.length ? parts[0].tag : '' };
+    }),
     hearts: [document.getElementById('livesA').textContent.replace(/\s/g, '').length,
              document.getElementById('livesB').textContent.replace(/\s/g, '').length],
     lit: [...document.querySelectorAll('#livesA')].map(e => e.innerHTML.split('<span')[0].length),
@@ -215,6 +238,8 @@ let marketsSeen = 0, bought = 0, buyWrong = null, marketRounds = [];
 // Every life either side has BOUGHT, counted as it appears. Nothing but a
 // purchase raises a life total, so the increases are the purchases.
 let livesBought = 0, livesSeen = null;
+// The first card face whose content is taller than the box that hides it.
+let clipped = null;
 // Every field height seen during the draft, and whether a reveal ever needed a
 // tap. Both of these are measurements of Sam's notes 4 and 5.
 const heights = new Set();
@@ -235,6 +260,14 @@ for (let guard = 0; guard < 400; guard++) {
   // button, and the field is not being tapped through then.
   if (s.phase === 'pick' || s.phase === 'revealed' || s.phase === 'ready')
     heights.add(`${s.fieldH}px at ${s.phase}${s.solo && s.phase === 'pick' ? ' (extra pick)' : ''}`);
+
+  // NOTHING ON A CARD IS CLIPPED. The card row is a fixed 132px box with
+  // `overflow:hidden`, which is what stops a tall card growing the deck and
+  // moving the battlefield -- and it means content that does not fit is cut off
+  // in SILENCE. The field-height check above cannot see it, because the whole
+  // point of the fixed box is that the field does not move. Notes 12 and 13 put
+  // two more lines on every face, so this is the failure they can cause.
+  if (s.phase === 'pick') for (const c of s.cardFit) if (c.over > 1) clipped = clipped || c;
 
   if (s.phase === 'round' && s.go === 'The market') marketRounds.push(s.round);
 
@@ -446,6 +479,11 @@ else bad('the arithmetic closes', [
 
 if (end.saveGone) ok('a finished match does not come back as a resume');
 else bad('a finished match does not come back as a resume', ['the save survived the result screen']);
+
+if (!clipped) ok('no card face is clipped by the row that hides its overflow');
+else bad('no card face is clipped', [
+  `${clipped.name}: '${clipped.where}' overflows its box by ${clipped.over}px`,
+  'the row is overflow:hidden so this is cut off in silence — the field never moves']);
 
 const px = new Set([...heights].map(h => h.split('px')[0]));
 if (px.size === 1) ok(`the battlefield never moves during a draft (${[...px][0]}px throughout)`);

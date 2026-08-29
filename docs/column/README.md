@@ -25,8 +25,8 @@ Sam owns every decision here. Where a choice is still open it says so rather tha
 
 ## Where it stands
 
-`BUILD` is `column-v16` in `data.js`. The service worker that carries it is
-`grandiose-v90` in `docs/sw.js` — one cache for all three published apps, so **shipping a
+`BUILD` is `column-v17` in `data.js`. The service worker that carries it is
+`grandiose-v91` in `docs/sw.js` — one cache for all three published apps, so **shipping a
 change here bumps Grandiose's version too**, and `test/offline.mjs` fails if the two ever
 disagree.
 
@@ -1664,3 +1664,90 @@ watched that column be wiped out, on a screen headed **The column is broken** �
 claimed 34 bodies where there were none. The digit was right and the sentence was false,
 which is the worse of the two and the catalogue's own entry. It reads *"34 bodies on the
 field in the last round"* now.
+
+
+---
+
+# Notes 11 to 13 — the cards say what they do
+
+Three of Sam's notes, and they are one change: until now the counter graph could
+only be learned by watching a battle and guessing at it. `matchup.mjs` says 86% of
+pairings are decided, so what beats what *is* the game — and the interface named the
+mechanics without ever saying what they were. A card said `splash`; nothing said it
+catches everything within 8 of the target for half. It said `shielded`; nothing said
+that refuses **ranged** fire and only ranged fire, which is the whole Kraken idea out
+of the book and the reason a Brute walks through it.
+
+**Mechanism only, which is his ruling** — what a card does, not what beats it.
+
+**And every number in every sentence is read, not typed.** `abilities()` takes each
+figure from the same field the resolver takes it from, so a wrong radius on screen, a
+wrong sentence and a wrong fight are one defect rather than three. That is the only
+reason this can be put on fifteen cards without becoming fifteen places to go stale.
+Times are derived through `TICK` — which `engine.js` imports and has never read.
+
+| where | what it now carries |
+|---|---|
+| the roster | every ability, named and explained, under the card's stat line |
+| tapping a counter | the same, over the field |
+| a card face | one stat line, one tag line, and how many you hold |
+
+## `spd` is not on the card, and that is measured
+
+His note 13 asked for movement speed. **A marching card's `spd` is never read.** The
+column advances at one fixed `COLUMN_PACE`; `spd` belongs to seekers. Doubling it:
+
+| | outcomes changed |
+|---|---|
+| each of the nine line cards | **0 of 23 battles** |
+| Karkinos, Crawler Swarm, Fireship | 23, 23, 22 of 23 |
+
+So a Walker card saying "speed 0.35" would print a number the game does not read. It
+says **`marches`**; a seeker says **`seeks at 2.1`**. Both are stated, because
+"marches" is not the absence of "seeks" and a card silent about moving teaches nothing.
+
+## The card row is a fixed box, and it clips in silence
+
+Notes 12 and 13 put two more lines on every face. The row is a fixed 132px box with
+`overflow:hidden` — that is note 4, and it is what stops a tall card growing the deck
+and sliding the battlefield. **It also means anything that does not fit is cut off
+with nothing on screen saying so, and the field-height check cannot see it**, because
+the whole point of the fixed box is that the field does not move.
+
+So every line inside a card is a fixed box too — the deck's own doctrine, one level
+down: *the container decides, not the content*. And a new claim in `play.mjs`
+measures it.
+
+**That claim took three versions, and each failure was the check rather than the code.**
+
+1. It measured the **card**. Giving the lines fixed heights made the card never
+   overflow, so the check went vacuous the moment it worked — the clipping just moved
+   inside a child, where it was still silent.
+2. It then measured **every descendant**, and flagged the upgrade chevron every run:
+   an absolutely positioned decoration with no height reports 6px and clips nothing.
+   An element loses content only if it is *hiding* its overflow, so that is the test.
+3. Mutation-tested by restoring the stat line that had wrapped — `Crawler Swarm:
+   'stat' overflows its box by 11px`, red.
+
+It caught four real overflows on the way in, none of which was visible on screen:
+`Ultra Armor` by 10px, then `Neurite`'s stat line, then `Neurite UP!`'s, then the
+upgrade face's three-line hint. The upgrade face uses the same four slots as a
+reinforcement now, because a second layout is a second thing to overflow.
+
+## The purse had two currency marks
+
+`#cash` carried `content:'\00A4 '` in the stylesheet — a generic currency sign, added
+when the market shipped and the element held a bare number. `COIN` arrived a session
+later and `coin()` has prepended a real credit sign ever since. **The deck has read
+`¤ ₡13` ever since**, and it is in a screenshot from the session before this one,
+where it was written off as a font-fallback artefact of the test browser. It was not.
+A symbol written twice, with the second copy in the stylesheet, where nobody reading
+the interface would look for it.
+
+## What a one-line stat cannot say
+
+Worth stating rather than discovering later. **The Fireship reads `6 dps`** and the
+**Volt Battery reads `no attack`**, and both are true: the Fireship's damage is its
+detonation, and the Battery's is an aura that needs no attack at all. The tag line
+says `detonates` and `aura`, and the ability text gives the real figures — but the
+headline number undersells exactly the two cards whose damage is not an attack.

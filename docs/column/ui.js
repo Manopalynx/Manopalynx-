@@ -12,7 +12,7 @@
 // drift from.
 
 import { BY_ID, RULES, PERSONAS, UPGRADE, DRAFT, SPECIALS, SHOP, RUN,
-         BY_BOOST, BY_KIT, BY_ORDER, SABOTAGE, COIN, BUILD } from './data.js';
+         BY_BOOST, BY_KIT, BY_ORDER, SABOTAGE, COIN, BUILD, TICK } from './data.js';
 import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId,
          earn, stock, spend, upgradeable, specialsFor, kitFor, ordersFor, boosterOffer,
          offerSize, picksFor, pickTokens, bonusPicks } from './engine.js';
@@ -408,6 +408,69 @@ function traits(u) {
   return t;
 }
 
+// WHAT A TAG MEANS, and it is his note 11. `splash` on a card said nothing about
+// hitting everything within 8 for half damage; `shielded` said nothing about
+// refusing ranged fire and only ranged fire, which is the whole Kraken idea out
+// of the book. The counter graph IS the game -- 86% of pairings are decided --
+// and until this it could only be learned by watching a battle and guessing.
+//
+// MECHANISM ONLY, which is Sam's ruling: what the card does, not what beats it.
+//
+// AND EVERY NUMBER IS READ, NOT TYPED. Each figure below comes from the same
+// field the resolver reads, so a wrong radius on screen, a wrong sentence and a
+// wrong fight are one defect rather than three. That is the only reason this can
+// be added to fifteen cards without becoming fifteen places to go stale.
+const secs = ticks => `${+(ticks * TICK).toFixed(1)}s`;
+const AIM = { big: 'the biggest thing it can reach', back: 'whatever stands furthest back',
+              near: 'whatever is nearest' };
+function abilities(u) {
+  const a = [];
+  if (u.dmg) a.push([`${u.rng > 4 ? `Shoots ${Math.round(u.rng)} away` : 'Fights in reach'}`,
+    `${u.dmg} damage every ${secs(u.rate)}, at ${AIM[u.tgt] || AIM.near}.`]);
+  else a.push(['Never attacks', 'It carries no weapon at all — it is simply expensive to stand near.']);
+  if (u.move === 'seek') a.push(['Seeks',
+    `Leaves the line and crosses the field for ${AIM[u.tgt] || AIM.near}, at ${u.spd} a tick.`]);
+  else a.push(['Marches', 'Holds formation and advances with the column, at the column\'s pace.']);
+  if (u.drop) a.push(['Drops in', 'Lands at the line of contact rather than marching to it.']);
+  if (u.splash) a.push(['Splash',
+    `Every hit also catches anything within ${u.splash} of the target, for half.`]);
+  if (u.dot) a.push(['Burns',
+    `A hit leaves ${u.dot} a tick for ${secs(u.dotT)}, and burning is not reduced by armour.`]);
+  if (u.aura) a.push(['Aura',
+    `Everything within ${u.auraR} takes ${u.aura} a tick. No attack, no target, nothing to block.`]);
+  if (u.defl) a.push(['Shielded',
+    `Refuses ${Math.round(u.defl * 100)}% of damage from anything shooting past 4 — and only that. Slow things pass straight through.`]);
+  if (u.boom) a.push(['Detonates',
+    `When it dies it takes ${u.boom.d} off everything within ${u.boom.r}.`]);
+  if (u.arm) a.push(['Armour',
+    `${u.arm} off every hit that lands, to a floor of 1. Burning ignores it.`]);
+  return a;
+}
+const abilityList = u => abilities(u)
+  .map(([n, d]) => `<span class="ab"><b>${n}</b> ${d}</span>`).join('');
+
+// THE CARD AS PRINTED, in one line. Damage as a rate rather than a number and a
+// cooldown, because that is the figure `paper()` already uses to compare cards
+// and two numbers do not fit; per CARD rather than per body, because a pick buys
+// a card. `spd` is deliberately NOT here for a marching card: doubling it
+// changes 0 of 23 battles for each of the nine line cards and ~100% for each of
+// the three seekers, so printing it on a Walker would print a number the game
+// does not read.
+const dps = u => Math.round(u.dmg * 10 / u.rate) * (u.count || 1);
+// PER CARD, both of them, because a pick buys a card rather than a body. The
+// figures fit one fixed line together and `3 x 180 hp . 103 dps` does not -- it
+// wrapped, and the box that stops a tall card moving the battlefield would have
+// eaten the second line without a word. The body count is on the tag line below,
+// where the weight class already is, so nothing is lost by shortening this.
+const statLine = u => `${u.hp * (u.count || 1)} hp &middot; ` +
+  (u.dmg ? `${dps(u)} dps` : 'no attack');
+// The card's tag line: what it is, how many, how it moves, and the two traits
+// that make it itself. Movement is stated for BOTH kinds -- "marches" is not the
+// absence of "seeks", and a card silent about moving teaches nothing.
+const cardTags = u => [`${u.w}${u.count > 1 ? ` &times;${u.count}` : ''}`,
+  u.move === 'seek' ? `seeks at ${u.spd}` : 'marches',
+  ...traits(u).filter(t => t !== 'seeks').slice(0, 2)].join(' &middot; ');
+
 // The unit drawn at size, on ink rather than on the field's palette. The card
 // is 117x118pt -- sixteen times a counter -- so the detail strokes are on.
 const art = (id, px, colour = '#3a2f1e', w = 0.62) =>
@@ -421,15 +484,33 @@ function cardFace(tok, i) {
   b.className = 'card' + (up ? ' up' : '');
   b.onclick = () => commit(i);
   b.innerHTML = up
-    ? `<span class="art up">${art(id, 34)}<span class="chev">&#9650;</span></span>` +
-      `<b>${u.n} UP!</b><span class="cls">upgrade</span>` +
-      `<span class="hint">+${(UPGRADE.step * 100) | 0}% health &amp; damage<br>` +
-      `level ${lvl} of ${UPGRADE.max} &middot; ${copies} on the field</span>`
-    : `<span class="art">${art(id, 40)}</span>` +
+    // THE SAME FIXED SLOTS as a reinforcement, because they are the same box and
+    // a second layout is a second thing to overflow. The old face put the effect,
+    // the level and the copies in one `hint` -- three lines of content in a box
+    // that holds two, clipped in silence the moment the lines got fixed heights.
+    ? `<span class="art up">${art(id, 32)}<span class="chev">&#9650;</span></span>` +
+      `<b>${u.n} UP!</b>` +
+      `<span class="stat">+${(UPGRADE.step * 100) | 0}% hp &amp; damage</span>` +
+      `<span class="hint">level ${lvl} of ${UPGRADE.max}</span>` +
+      `<span class="held">${copies} on the field</span>`
+    : `<span class="art">${art(id, 32)}</span>` +
       `<b>${u.n}</b><span class="cls">${u.w} &middot; ${u.count} ${u.count === 1 ? 'body' : 'bodies'}</span>` +
-      // Two at most on a card face now that the drawing has the top of it. The
-      // roster and the inspect panel carry all of them.
-      `<span class="hint">${traits(u).slice(0, 2).join(' &middot; ')}</span>`;
+      // HIS NOTE 13, in one line. The card row is a fixed 132px box with
+      // `overflow:hidden` -- that is note 4, and the deck is a flex sibling of
+      // the field, so a deck that grows moves the battlefield. Three stat lines
+      // do not fit and would be clipped SILENTLY; one does.
+      `<span class="stat">${statLine(u)}</span>` +
+      // Two traits at most on a card face now that the drawing has the top of it.
+      // The roster and the inspect panel carry all of them, with what each means.
+      `<span class="hint">${cardTags(u)}</span>` +
+      // HIS NOTE 12. Cards, not bodies -- one counter on the field is one card,
+      // and a pick buys a card. It was already shown on an UPGRADE face, where
+      // it is the number that decides whether the upgrade is worth taking, and
+      // nowhere on a reinforcement, where it is the number that decides whether
+      // you are stacking or spreading. Always shown, including "none", because a
+      // count present on some cards and absent on others reads as an omission
+      // rather than as a zero.
+      `<span class="held">${copies ? `${copies} on the field` : 'none yet'}</span>`;
   return b;
 }
 
@@ -540,8 +621,9 @@ el.field.addEventListener('click', e => {
   el.info.className = 'on';
   el.info.innerHTML = `<span class="ill">${art(u.id, 46, SIDE[+g.dataset.side].line, 0.7)}</span>` +
     `<b>${u.n}</b> — ${u.w}, ${u.count} ${u.count === 1 ? 'body' : 'bodies'} ` +
-    `&middot; ${traits(u).join(' &middot; ')}<q>${u.q}</q>` +
-    `<span class="src">${provenance(u)}</span>`;
+    `&middot; ${statLine(u)}` +
+    `<div class="abs">${abilityList(u)}</div>` +
+    `<q>${u.q}</q><span class="src">${provenance(u)}</span>`;
   paint(board());
 });
 
@@ -639,7 +721,8 @@ function roster() {
         ${glyph(u.id, 0, 0, s * 0.62, SIDE[0].ink, 1.15)}</svg>
       <div><b>${u.n}</b> <em>${u.w} · ${u.count} ${u.count === 1 ? 'body' : 'bodies'}${
         u.sp ? ` · ${COIN}${u.cost} at the market` : ''}</em>
-        <em style="display:block">${traits(u).join(' · ')}</em>
+        <em style="display:block">${statLine(u)}</em>
+        <div class="abs">${abilityList(u)}</div>
         <q>${u.q}</q><span class="src">${provenance(u)}</span></div>
     </div>`;
   };
