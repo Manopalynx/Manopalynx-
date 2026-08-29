@@ -25,9 +25,10 @@ Sam owns every decision here. Where a choice is still open it says so rather tha
 
 ## Where it stands
 
-`BUILD` is `column-v14` in `data.js`; the service worker that carries it is
-`grandiose-v88` in `docs/sw.js`, and those two move together or the phone gets a stale
-build.
+`BUILD` is `column-v15` in `data.js`. The service worker that carries it is
+`grandiose-v89` in `docs/sw.js` — one cache for all three published apps, so **shipping a
+change here bumps Grandiose's version too**, and `test/offline.mjs` fails if the two ever
+disagree.
 
 **A match.** Five lives. Three picks a round, each a blind simultaneous commitment
 revealed before the next; three cards offered a pick. A round ends when one army is wiped
