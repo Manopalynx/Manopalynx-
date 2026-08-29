@@ -25,8 +25,8 @@ Sam owns every decision here. Where a choice is still open it says so rather tha
 
 ## Where it stands
 
-`BUILD` is `column-v17` in `data.js`. The service worker that carries it is
-`grandiose-v91` in `docs/sw.js` — one cache for all three published apps, so **shipping a
+`BUILD` is `column-v18` in `data.js`. The service worker that carries it is
+`grandiose-v92` in `docs/sw.js` — one cache for all three published apps, so **shipping a
 change here bumps Grandiose's version too**, and `test/offline.mjs` fails if the two ever
 disagree.
 
@@ -1751,3 +1751,93 @@ Worth stating rather than discovering later. **The Fireship reads `6 dps`** and 
 detonation, and the Battery's is an aura that needs no attack at all. The tag line
 says `detonates` and `aura`, and the ability text gives the real figures — but the
 headline number undersells exactly the two cards whose damage is not an attack.
+
+
+---
+
+# Notes 14 to 16 — the shelf, the pace, and what a special actually does
+
+## 14 — what is for sale, not what you can afford
+
+`stock()` filtered every row on money, so the market showed only what you could pay for
+that minute. That quietly undid the specials' whole reason for existing: they cost more
+than a market's takings **"which is what makes saving across visits a decision"** — and a
+sink nobody can see is not a sink.
+
+It returns the whole shelf now, each row with `afford`. The screen greys what is out of
+reach, keeps the price lit, and says the shortfall — *A special — from ₡70 · **₡38
+more***, with all three named and priced beneath it, so the row is a plan rather than an
+absence.
+
+**Two different reasons a row can be missing, and only one is money.** Sam's ruling: a row
+still does not appear when the thing is not for sale to you *at all* — a life at full
+lives, an upgrade with nothing upgradeable, sabotage against an empty board, kit you own,
+a special you hold. *"An upgrade — ₡18"* against an army holding nothing is noise, not a
+plan.
+
+`match.mjs`'s both-directions shelf check still holds: it sweeps eight purse sizes, so
+`shelved` and `bought` still come out equal at **card, kit, life, offer, order, sabotage,
+special, upgrade** — and it still catches the thing it exists for, a kind `spend()` buys
+that `stock()` never lists.
+
+## 15 — 0.5× · 1× · 2×
+
+A multiplier on top of `PACE`, so **1× is the pace of his note 8** and anyone who never
+touches it sees no change. Persisted in `localStorage`, because a speed you re-set every
+round is worse than no speed. It appears in the action row **only during a battle**,
+beside a narrower Skip, because that is the only place it does anything and that is where
+the thumb already is.
+
+**It cannot move an outcome** — `fight()` resolves the whole battle and keeps every frame
+before one is painted, so the multiplier only decides how fast an already-decided battle
+is read out. That is the argument; the check is the measurement. The same seeded save,
+fought twice:
+
+| | |
+|---|---|
+| 0.5× | **9015ms** |
+| 2× | **2282ms** |
+| result, survivors, lives, purse | **identical** |
+
+Mutation-tested by making the multiplier inert: *"0.5x took 4532ms and 2x took 4599ms —
+the control did nothing"*, red.
+
+**And the deck must not grow when it appears.** The action row owns its 44px whatever is
+in it, and a new claim measures the field during a battle against the field during a
+draft — note 4 arriving by a third route. Its own first version collected on
+`phase === 'battle'` in the outer loop and reported *"no battle was ever observed"* against
+a suite that had just fought eight of them; the loop clicks Fight and then waits, so the
+measurement had to go where the waiting is. Mutation-tested by taking the height off the
+row: *"drafting: 579, 557px; fighting: 541px"*, red.
+
+## 16 — a special is the biggest purchase in the game
+
+₡70–90, more than a whole market's takings, and the row said its traits and no more. It
+now carries the stat line and every ability, from `statLine()` and `abilityList()` — the
+same derived functions notes 11 and 13 built, so there is still exactly one place each
+figure comes from. **The card chooser too**, at Sam's direction: same screen, same code
+path, same problem at ₡21.
+
+The upgrade and sabotage rows keep the compact note. Both name a card already on the
+field, which the player has been looking at all match, and both need the **count** more
+than the mechanism.
+
+## Two things it broke on the way in, neither of them the game
+
+**A strict-mode crash with no FAIL line.** The abilities put four more `<b>` in a chooser
+row, and `play.mjs`'s purchase check read the price with `locator('b')` — which now
+matched five elements and killed the run with a stack trace instead of a finding. That is
+the shape of failure the audit session named, arriving from the other direction: the code
+changed under a check that had assumed one bold thing in a row. It reads the *first* now.
+
+**And a CSS rule that has never applied since the day the market shipped.**
+`.shopRow{display:flex}` sits forty lines above `.pick{display:block}` in the same
+stylesheet at equal specificity, so the later rule has always won: the counter has been
+*above* the name rather than beside it, and `svg{flex:0 0 34px}` and `span{min-width:0}`
+under it have been inert with it. Nothing threw, nothing looked obviously broken, and no
+check could see it. It took putting the abilities in the row and then **looking at the
+screenshot** — which is the same instrument, and the same lesson, as every screenshot Sam
+has ever sent. It is `.pick.shopRow` now, and `play-chooser.png` is written every run so
+the next one is visible without asking.
+
+`play.mjs` is at **30 claims**.

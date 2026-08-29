@@ -22,10 +22,12 @@ import { glyph } from './glyphs.js';
 const $ = id => document.getElementById(id);
 const el = { bar: $('bar'), la: $('livesA'), lb: $('livesB'), who: $('who'),
              field: $('field'), toast: $('toast'), info: $('info'), prompt: $('prompt'),
-             sub: $('sub'), cards: $('cards'), go: $('go'), cash: $('cash') };
+             sub: $('sub'), cards: $('cards'), go: $('go'), cash: $('cash'),
+             speed: $('speed') };
 
 const SAVE = 'column-save';
 const BEST = 'column-best';
+const SPEED = 'column-speed';
 const coin = n => `${COIN}${n}`;
 // Defensively split on `:`, for the same reason `has()` in the engine still
 // matches on a prefix: no booster carries an argument now that Standing muster
@@ -48,6 +50,34 @@ const PLAYBACK_FRAMES = 230;
 // all without this. A fractional pace repeats frames instead, which is the only
 // way to slow a fixed-timestep replay that has no frames in between.
 const PACE = 0.65;
+
+// HIS NOTE 15. A multiplier ON TOP of that, so 1x is the pace he asked for in
+// note 8 and somebody who never touches this sees no change at all.
+//
+// IT CANNOT MOVE AN OUTCOME. `fight()` resolves the whole battle and keeps the
+// frames before a single one is painted, so this only decides how fast an
+// already-decided battle is read out -- there is nothing downstream of it but
+// the screen. A seeded match plays the same match at every speed.
+//
+// Persisted, because a speed you re-set every round is worse than no speed.
+const SPEEDS = [0.5, 1, 2];
+let mult = 1;
+try { const v = +localStorage.getItem(SPEED); if (SPEEDS.includes(v)) mult = v; } catch (e) {}
+function setSpeed(v) {
+  mult = v;
+  try { localStorage.setItem(SPEED, String(v)); } catch (e) {}
+  speedRow();
+}
+// Drawn only during a battle, because that is the only place it does anything.
+function speedRow(on) {
+  if (on === false) { el.speed.className = 'off'; el.speed.innerHTML = ''; return; }
+  if (on === true) el.speed.className = '';
+  if (el.speed.className === 'off') return;
+  el.speed.innerHTML = SPEEDS.map(v =>
+    `<button data-v="${v}" class="${v === mult ? 'on' : ''}">${v}&times;</button>`).join('');
+  el.speed.querySelectorAll('[data-v]').forEach(b =>
+    b.onclick = () => setSpeed(+b.dataset.v));
+}
 
 // How many ticks of shots a single painted frame shows. Drawing only the ticks
 // just stepped over is exactly right and invisible: a short battle plays at one
@@ -282,13 +312,16 @@ function fight() {
 }
 
 function play() {
-  const speed = Math.max(1, S.frames.length / PLAYBACK_FRAMES) * PACE;
+  // Read every step rather than captured once, so changing it mid-battle takes
+  // effect on the next frame instead of the next round.
+  const speed = () => Math.max(1, S.frames.length / PLAYBACK_FRAMES) * PACE * mult;
   const step = () => {
     if (S.phase !== 'battle' || !S.frames) return;
-    S.f += speed;
+    const v = speed();
+    S.f += v;
     if (S.f >= S.frames.length) { endRound(); return; }
     const now = S.f | 0;
-    paint(S.frames[now], now - Math.max(speed, LINGER) + 1, now);
+    paint(S.frames[now], now - Math.max(v, LINGER) + 1, now);
     requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
@@ -515,6 +548,7 @@ function cardFace(tok, i) {
 }
 
 function render() {
+  speedRow(false);
   el.la.innerHTML = hearts(S.lives[0]);
   el.lb.innerHTML = hearts(S.lives[1]);
   el.cash.textContent = S.money[0] ? coin(S.money[0]) : '';
@@ -553,9 +587,10 @@ function render() {
 
   if (S.phase === 'battle') {
     el.prompt.textContent = 'Engaged';
-    el.sub.textContent = 'Tap to skip to the result.';
+    el.sub.textContent = 'Set the pace, or tap to skip to the result.';
     button('Skip', () => { S.f = S.frames.length; });
     el.go.className = 'ghost';
+    speedRow(true);
   }
 
   if (S.phase === 'round') {
@@ -753,38 +788,46 @@ function market() {
   const up = upgradeable(S.army[0]);
 
   const spec = specialsFor(S.money[0], S.army[0], S.boosts[0]);
+  const kit = kitFor(S.money[0], S.army[0], S.boosts[0]);
+  // HOW FAR OFF, derived rather than left to be worked out. A row you cannot
+  // buy is only a plan if it says what the plan costs.
+  const short = it => it.afford ? '' :
+    ` <span class="far">${coin(it.cost - S.money[0])} more</span>`;
+  // A "from" shelf names everything on it with its price, because the point of
+  // showing what you cannot afford is knowing which one to save for.
+  const priced = list => list.map(x => `${BY_ID[x.id] ? BY_ID[x.id].n : BY_KIT[x.id].n} ${coin(x.cost)}`).join(', ');
+  const body = it => {
+    if (it.k === 'special') return [`A special — from ${coin(it.cost)}`,
+      `One of each weight class, once each, and the draft never offers them. ${priced(spec)}.`];
+    if (it.k === 'card') return [`A card of your choosing — ${coin(it.cost)}`,
+      `Any one of the ${DRAFT.length}, named rather than offered.`];
+    if (it.k === 'upgrade') return [`An upgrade — ${coin(it.cost)}`,
+      `+${(UPGRADE.step * 100) | 0}% health and damage on every copy of a card you name. ${up.length} to choose from.`];
+    if (it.k === 'kit') return [`Kit — from ${coin(it.cost)}`,
+      `Fitted to a role rather than a card, and it stays with you for the rest of this match. ${priced(kit)}.`];
+    if (it.k === 'order') return [`An order — from ${coin(it.cost)}`,
+      'Next round only. Given before the fight, because nothing is commanded during one.'];
+    if (it.k === 'sabotage') return [`Sabotage — ${coin(it.cost)}`,
+      `One card of theirs deploys on ${(SABOTAGE.left * 100) | 0}% health next round. The only thing here that makes them weaker rather than you stronger.`];
+    if (it.k === 'offer') return [`A wider offer — ${coin(it.cost)}`,
+      'Four cards instead of three, next round only.'];
+    return [`A life — ${coin(it.cost)}`, `Back to ${S.lives[0] + 1} of ${RULES.lives}.`];
+  };
+  // OUT OF REACH IS STILL ON THE SHELF, and it is not a button. `disabled` keeps
+  // it out of the tab order and off the tap target, so the row reads as a price
+  // rather than as something that failed to respond.
   const line = (it, i) => {
-    if (it.k === 'special') {
-      const can = spec.filter(x => x.afford);
-      return `<button class="pick" data-i="${i}"><b>A special — from ${coin(it.cost)}</b>
-        <i>One of each weight class, once each, and the draft never offers them.
-        ${can.length} within reach: ${can.map(x => BY_ID[x.id].n).join(', ')}.</i></button>`;
-    }
-    if (it.k === 'card') return `<button class="pick" data-i="${i}"><b>A card of your choosing — ${coin(it.cost)}</b>
-      <i>Any one of the twelve, named rather than offered.</i></button>`;
-    if (it.k === 'upgrade') return `<button class="pick" data-i="${i}"><b>An upgrade — ${coin(it.cost)}</b>
-      <i>+${(UPGRADE.step * 100) | 0}% health and damage on every copy of a card you name.
-      ${up.length} to choose from.</i></button>`;
-    if (it.k === 'kit') {
-      const can = kitFor(S.money[0], S.army[0], S.boosts[0]).filter(x => x.afford);
-      return `<button class="pick" data-i="${i}"><b>Kit — from ${coin(it.cost)}</b>
-        <i>Fitted to a role rather than a card, and it stays with you for the rest of this match.
-        ${can.length} within reach.</i></button>`;
-    }
-    if (it.k === 'order') return `<button class="pick" data-i="${i}"><b>An order — from ${coin(it.cost)}</b>
-      <i>Next round only. Given before the fight, because nothing is commanded during one.</i></button>`;
-    if (it.k === 'sabotage') return `<button class="pick" data-i="${i}"><b>Sabotage — ${coin(it.cost)}</b>
-      <i>One card of theirs deploys on ${(SABOTAGE.left * 100) | 0}% health next round. The only
-      thing here that makes them weaker rather than you stronger.</i></button>`;
-    if (it.k === 'offer') return `<button class="pick" data-i="${i}"><b>A wider offer — ${coin(it.cost)}</b>
-      <i>Four cards instead of three, next round only.</i></button>`;
-    return `<button class="pick" data-i="${i}"><b>A life — ${coin(it.cost)}</b>
-      <i>Back to ${S.lives[0] + 1} of ${RULES.lives}.</i></button>`;
+    const [head, note] = body(it);
+    return `<button class="pick${it.afford ? '' : ' cant'}" ${it.afford ? `data-i="${i}"` : 'disabled'}>
+      <b>${head}${short(it)}</b><i>${note}</i></button>`;
   };
 
+  const afford = items.filter(x => x.afford).length;
   const d = sheet(`<h1>The market</h1>
-    <p>Round ${S.round}. You have <b>${coin(S.money[0])}</b>${S.money[1] ? `; ${PERSONAS[S.opp].n} spent theirs already` : ''}.</p>
-    ${items.length ? items.map(line).join('') : '<p>Nothing here you can afford yet.</p>'}
+    <p>Round ${S.round}. You have <b>${coin(S.money[0])}</b>${
+      afford ? '' : ' — not enough for anything yet, so this is what to save for'}${
+      S.money[1] ? `; ${PERSONAS[S.opp].n} spent theirs already` : ''}.</p>
+    ${items.map(line).join('')}
     <button class="pick" id="leave"><b>Leave the market</b><i>What you keep carries to the next
       market.</i></button>`, items.length < 3);
 
@@ -845,19 +888,29 @@ function chooser(kind) {
   // A sabotage chooser shows THEIR counters, in their colour, because that is
   // what you are picking off the other half of the field.
   const side = kind === 'sabotage' ? 1 : 0;
+  // HIS NOTE 16. A special costs 70 to 90 -- more than a whole market's takings --
+  // and until now the row said its traits and no more, so the biggest purchase in
+  // the game was the one made with the least to go on. The card chooser is the
+  // same screen and the same code path, and Sam asked for it there too.
+  //
+  // The upgrade and sabotage rows keep the compact note: both name a card already
+  // on the field, which the player has been looking at all match, and both need
+  // the COUNT more than the mechanism.
+  const full = kind === 'card' || kind === 'special';
   const row = it => {
     const u = BY_ID[it.id];
     const cost = flat === null ? it.cost : flat;
     const can = flat !== null || it.afford;
     const note = kind === 'upgrade' ? `${it.held} on the field · ${traits(u).join(' · ')}`
       : kind === 'sabotage' ? `${armyFrom(S.army[1]).cards.filter(x => x === it.id).length} of them · ${traits(u).join(' · ')}`
-      : `${u.w} · ${u.count} ${u.count === 1 ? 'body' : 'bodies'} · ${traits(u).join(' · ')}`;
-    return `<button class="pick shopRow" ${can ? `data-id="${u.id}" data-cost="${cost}"` : 'disabled'}
+      : `${u.w} · ${u.count} ${u.count === 1 ? 'body' : 'bodies'} · ${statLine(u)}`;
+    return `<button class="pick shopRow${full ? ' tall' : ''}" ${can ? `data-id="${u.id}" data-cost="${cost}"` : 'disabled'}
         style="${can ? '' : 'opacity:.45'}">
       <svg width="34" height="34" viewBox="-5 -5 10 10">${shape(u.w, 0, 0, MARK[u.w], SIDE[side].fill, SIDE[side].line)}
         ${glyph(u.id, 0, 0, MARK[u.w] * 0.62, SIDE[side].ink, 1.15)}</svg>
       <span><b>${u.n}${kind === 'upgrade' ? ` to level ${it.lvl}` : ''}${
-        kind === 'special' ? ` — ${coin(cost)}` : ''}</b><i>${note}</i></span>
+        kind === 'special' ? ` — ${coin(cost)}` : ''}</b><i>${note}</i>${
+        full ? `<div class="abs">${abilityList(u)}</div>` : ''}</span>
     </button>`;
   };
 

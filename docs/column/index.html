@@ -81,9 +81,24 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
    twice, and the second copy was in the stylesheet where nobody reading the
    interface would look for it. */
 #cash{font-size:12px;color:#e8c877;font-weight:600}
-.shopRow{display:flex;align-items:center;gap:11px}
-.shopRow svg{flex:0 0 34px}
-.shopRow span{min-width:0}
+/* `.pick.shopRow`, not `.shopRow`. This was one class against `.pick`'s
+   `display:block` FORTY LINES LATER in the same stylesheet -- equal specificity,
+   so the later rule won and this one has never applied since the day the market
+   shipped. The counter has been sitting above the name rather than beside it,
+   and `svg{flex:0 0 34px}` and `span{min-width:0}` below have been inert with
+   it. Nothing threw and nothing looked obviously wrong; it took putting the
+   abilities in the row and then looking at the screenshot. */
+.pick.shopRow{display:flex;align-items:center;gap:11px}
+/* A row carrying its abilities is several lines tall, so the counter sits at the
+   top of it rather than floating in the middle of the text. */
+.pick.shopRow.tall{align-items:flex-start}
+.pick.shopRow.tall svg{margin-top:3px}
+/* Out of reach, and still on the shelf -- Sam's note 14. The price is the point,
+   so it is the price that stays lit while the row goes quiet. */
+.pick.cant{opacity:.5}
+.pick.cant .far{color:#e8c877;opacity:.9;font-weight:600}
+.pick.shopRow svg{flex:0 0 34px}
+.pick.shopRow span{min-width:0}
 #prompt{font-size:12px;color:var(--ink);font-weight:600;margin-bottom:2px}
 /* FIXED HEIGHTS, ALL THREE. The deck is a flex sibling of the field, so every
    pixel it gains or loses moves the battlefield -- which is exactly what Sam
@@ -121,9 +136,18 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
    pixels shorter than one with a word in it, and hiding it with visibility keeps
    its box but not its content -- so the deck still changed size between a pick
    and the fight, and the battlefield still moved. */
-#go{width:100%;height:44px;margin-top:9px;border:0;border-radius:11px;padding:0;font:inherit;
+#act{display:flex;gap:8px;height:44px;margin-top:9px}
+#go{flex:1 1 auto;min-width:0;height:100%;border:0;border-radius:11px;padding:0;font:inherit;
   font-weight:700;display:flex;align-items:center;justify-content:center;
   letter-spacing:1.2px;text-transform:uppercase;background:#2f5e7d;color:#eaf6ff}
+/* His note 15. A battle is the only place it appears, because it is the only
+   place it does anything -- and it is beside Skip because that is where the thumb
+   already is. The row's height is the row's, so showing it moves nothing. */
+#speed{flex:0 0 auto;display:flex;height:100%;border-radius:11px;overflow:hidden;background:#1b232e}
+#speed.off{display:none}
+#speed button{border:0;padding:0 11px;font:inherit;font-size:11px;font-weight:700;
+  letter-spacing:.5px;background:transparent;color:var(--dim);font-variant-numeric:tabular-nums}
+#speed button.on{background:#2f5e7d;color:#eaf6ff}
 #go:active{background:#26506c}
 #go.ghost{background:#1b232e;color:var(--dim)}
 #go.off{visibility:hidden;pointer-events:none}
@@ -171,7 +195,15 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
       <div class="right"><span id="cash"></span><span class="hearts" id="livesA"></span></div></div>
     <div id="sub"></div>
     <div id="cards"></div>
-    <button id="go" class="off"></button>
+    <!-- THE ACTION ROW. Fixed 44px whatever is in it: during a battle it holds the
+         speed selector and a narrower Skip, everywhere else just the button. The
+         deck is a flex sibling of the field, so this row changing height would
+         move the battlefield -- note 4, which is why the row owns the height and
+         its contents do not. -->
+    <div id="act">
+      <div id="speed" class="off"></div>
+      <button id="go" class="off"></button>
+    </div>
   </div>
 </div>
 <script type="module" src="./ui.js"></script>

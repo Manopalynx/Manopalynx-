@@ -238,6 +238,8 @@ let marketsSeen = 0, bought = 0, buyWrong = null, marketRounds = [];
 // Every life either side has BOUGHT, counted as it appears. Nothing but a
 // purchase raises a life total, so the increases are the purchases.
 let livesBought = 0, livesSeen = null;
+// Field heights seen while a battle plays, against those seen while drafting.
+const battleH = new Set();
 // The first card face whose content is taller than the box that hides it.
 let clipped = null;
 // Every field height seen during the draft, and whether a reveal ever needed a
@@ -260,6 +262,14 @@ for (let guard = 0; guard < 400; guard++) {
   // button, and the field is not being tapped through then.
   if (s.phase === 'pick' || s.phase === 'revealed' || s.phase === 'ready')
     heights.add(`${s.fieldH}px at ${s.phase}${s.solo && s.phase === 'pick' ? ' (extra pick)' : ''}`);
+
+  // AND DURING THE BATTLE. Kept apart from the set above, because that claim is
+  // about a draft and this is a different question: note 15 puts a speed
+  // selector into the deck's action row for the length of a battle, and the deck
+  // is a flex sibling of the field. If the row does not own its height, the
+  // battlefield changes size the moment the fight starts and back again when it
+  // ends -- note 4 arriving by a third route.
+  if (s.phase === 'battle') battleH.add(s.fieldH);   // rarely reached; see the fight loop
 
   // NOTHING ON A CARD IS CLIPPED. The card row is a fixed 132px box with
   // `overflow:hidden`, which is what stops a tall card growing the deck and
@@ -362,6 +372,12 @@ for (let guard = 0; guard < 400; guard++) {
       // not anything fired; the pair cannot.
       const now = await page.evaluate(() => document.querySelectorAll('#field .fx').length);
       fxFiring = Math.max(fxFiring, now);
+      // MEASURED HERE, because the outer loop never samples mid-battle -- it
+      // clicks Fight and waits. The first version of this claim collected on
+      // `phase === 'battle'` in that outer loop and reported "no battle was ever
+      // observed" against a suite that had just fought eight of them.
+      battleH.add(await page.evaluate(() =>
+        Math.round(document.getElementById('fieldWrap').getBoundingClientRect().height)));
       // Screenshot a frame where something is actually being fired. Sampling on
       // a timer caught the advance instead, and a picture of two lines walking
       // is not evidence that the shots are drawn.
@@ -400,7 +416,15 @@ for (let guard = 0; guard < 400; guard++) {
       let cost = +(offered[0].match(/₡\s*(\d+)\s*$/) || [0, 0])[1];
       const chooser = page.locator('.sheet [data-id]').first();
       if (await chooser.count()) {
-        const own = (await chooser.locator('b').textContent()).match(/₡\s*(\d+)\s*$/);
+        // The chooser is where notes 14 and 16 land: what is on the shelf, and
+        // what the thing actually does before you spend a market's takings on it.
+        if (!shot.chooser) { shot.chooser = 1; await page.screenshot({ path: rp(HERE, 'play-chooser.png') }); }
+        // THE FIRST `b`, explicitly. Note 16 put the abilities on this row and each
+        // one leads with its name in bold, so a bare `locator('b')` matches five
+        // and Playwright's strict mode kills the RUN -- no FAIL line, just a
+        // stack trace, which is the shape of failure this suite has been bitten
+        // by before. The name and price are the first bold thing in the row.
+        const own = (await chooser.locator('b').first().textContent()).match(/₡\s*(\d+)\s*$/);
         if (own) cost = +own[1];
         await chooser.click();
       }
@@ -479,6 +503,15 @@ else bad('the arithmetic closes', [
 
 if (end.saveGone) ok('a finished match does not come back as a resume');
 else bad('a finished match does not come back as a resume', ['the save survived the result screen']);
+
+const draftPx = new Set([...heights].map(h => +h.split('px')[0]));
+const allPx = new Set([...draftPx, ...battleH]);
+if (battleH.size && allPx.size === 1)
+  ok(`the battlefield is the same size in a battle as in a draft (${[...allPx][0]}px)`);
+else bad('the battlefield is the same size in a battle as in a draft', [
+  `drafting: ${[...draftPx].join(', ')}px; fighting: ${[...battleH].join(', ')}px`,
+  battleH.size ? 'the speed selector is in the deck, and the deck is a flex sibling of the field'
+               : 'no battle was ever observed']);
 
 if (!clipped) ok('no card face is clipped by the row that hides its overflow');
 else bad('no card face is clipped', [
@@ -679,6 +712,55 @@ async function bonusRun(boosts) {
   await c.close();
   return { solos: prompts.filter(t => /extra pick/i.test(t)).length, prompts, errs };
 }
+/* --------------------- the speed control cannot change what happened ---------- */
+// HIS NOTE 15, and the only property of it worth a check. `fight()` resolves the
+// whole battle and keeps every frame before one is painted, so the multiplier
+// only decides how fast an already-decided battle is read out. That is an
+// argument; this is the measurement. The SAME seeded save, fought at 0.5x and at
+// 2x, must produce the same result, the same survivors and the same lives.
+async function fightAt(v) {
+  const c = await browser.newContext({ viewport: { width: 393, height: 852 } });
+  const p = await c.newPage();
+  const errs = [];
+  p.on('pageerror', e => errs.push(e.message.split('\n')[0]));
+  await p.goto(base + '/column/index.html', { waitUntil: 'load' });
+  await p.evaluate(([save, speed]) => {
+    localStorage.setItem('column-save', save);
+    localStorage.setItem('column-speed', speed);
+  }, [JSON.stringify({
+    v: 1, opp: 'harlow', seed: 987654, draw: 0,
+    army: [['walker', 'line', 'acid', 'ultra'], ['brute', 'swarm', 'neurite', 'amabie']],
+    round: 2, loser: null, lives: [4, 4], money: [0, 0],
+    perRound: [3, 3], boosts: [[], []], run: null, bonusDone: 0,
+    pending: [[], []], wide: [0, 0],
+    phase: 'ready', pickNo: 3, bonus: null,
+    offer: [], mine: null, theirs: null, inspect: null
+  }), String(v)]);
+  await p.reload({ waitUntil: 'load' });
+  await p.click('#resume');
+  const t0 = Date.now();
+  await p.click('#go');                                   // Fight
+  await p.waitForFunction(() => {
+    const s = JSON.parse(localStorage.getItem('column-save') || 'null');
+    return s && s.phase !== 'battle' && s.phase !== 'ready';
+  }, { timeout: 40000 });
+  const ms = Date.now() - t0;
+  const out = await p.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('column-save'));
+    return { result: s.result, left: s.left, lives: s.lives, round: s.round, paid: s.paid };
+  });
+  await c.close();
+  return { ms, out, errs };
+}
+const slow = await fightAt(0.5), fast = await fightAt(2);
+const same = JSON.stringify(slow.out) === JSON.stringify(fast.out);
+if (same && !slow.errs.length && !fast.errs.length && slow.ms > fast.ms)
+  ok(`playback speed changes the pace and not the battle (0.5x ${slow.ms}ms, 2x ${fast.ms}ms, same result)`);
+else bad('playback speed changes the pace and not the battle', [
+  same ? null : `0.5x ${JSON.stringify(slow.out)} vs 2x ${JSON.stringify(fast.out)}`,
+  slow.ms > fast.ms ? null : `0.5x took ${slow.ms}ms and 2x took ${fast.ms}ms — the control did nothing`,
+  [...slow.errs, ...fast.errs].join('; ') || null]);
+
 const plain = await bonusRun([]);
 const vanguard = await bonusRun(['vanguard']);
 const wantPlain = bonusPicks([]), wantVan = bonusPicks(['vanguard']);
@@ -699,5 +781,5 @@ if (skipped.length) {
   console.log(`so which branch is taken is not this suite's to choose. Re-run to exercise them:`);
   skipped.forEach(m => console.log(`        · ${m}`));
 }
-console.log(`written: play-roster.png, play-draft.png, play-inspect.png, play-market.png, play-battle.png, play-run.png, play.png\n`);
+console.log(`written: play-roster.png, play-draft.png, play-inspect.png, play-market.png, play-chooser.png, play-battle.png, play-run.png, play.png\n`);
 process.exit(failed ? 1 : 0);

@@ -626,27 +626,39 @@ export function specialsFor(money, picks, boosts = []) {
 
 export function stock(money, picks, lives, theirs, boosts = []) {
   const out = [];
-  // THE SPECIALS FIRST, because they are what the credits are for. The row only
-  // appears when there is one you can both afford and do not already hold.
-  const buyable = specialsFor(money, picks, boosts).filter(x => x.afford);
-  if (buyable.length) out.push({ k: 'special', cost: Math.min(...buyable.map(x => x.cost)) });
-  if (money >= SHOP.card) out.push({ k: 'card', cost: SHOP.card });
+  // WHAT IS FOR SALE, NOT WHAT YOU CAN AFFORD. Sam's note 14, and it is what
+  // makes an existing design work: the whole argument for the specials is that
+  // one costs more than a market's takings, "which is what makes saving across
+  // visits a decision" -- and a sink nobody can see is not a sink. Every row is
+  // returned with what it costs and whether it is within reach; the screen greys
+  // the rest and says how far off it is.
+  //
+  // TWO DIFFERENT REASONS A ROW CAN BE MISSING, and only one of them is money.
+  // A row still does not appear when the thing is not for sale to you AT ALL --
+  // a life at full lives, an upgrade with nothing upgradeable, sabotage against
+  // an empty board, kit you already own, a special you already hold. That is
+  // Sam's ruling: "an upgrade -- 18" against an army holding nothing is noise
+  // rather than a plan.
+  const add = (k, cost) => out.push({ k, cost, afford: money >= cost });
+  // THE SPECIALS FIRST, because they are what the credits are for -- and now
+  // they are visible from the visit you start saving rather than the one you
+  // can already pay on.
+  const spec = specialsFor(money, picks, boosts);
+  if (spec.length) add('special', Math.min(...spec.map(x => x.cost)));
+  add('card', SHOP.card);
   // ONE upgrade row, not one a card. Nine rows at round three and twelve by
   // round nine is a wall rather than a market, and the choice of WHICH card
   // belongs on the screen that shows the cards.
-  if (money >= SHOP.upgrade && upgradeable(picks).length)
-    out.push({ k: 'upgrade', cost: SHOP.upgrade });
+  if (upgradeable(picks).length) add('upgrade', SHOP.upgrade);
   // KIT is permanent and each piece is bought once; an ORDER lasts a round and
   // may be bought again; SABOTAGE needs something of theirs to aim at.
   const { eq } = armyFrom(picks);
-  const kit = KIT.filter(x => !eq.has(x.id) && money >= x.cost);
-  if (kit.length) out.push({ k: 'kit', cost: Math.min(...kit.map(x => x.cost)) });
-  const ords = ORDERS.filter(x => money >= x.cost);
-  if (ords.length) out.push({ k: 'order', cost: Math.min(...ords.map(x => x.cost)) });
-  if (money >= SABOTAGE.cost && theirs && armyFrom(theirs).cards.length)
-    out.push({ k: 'sabotage', cost: SABOTAGE.cost });
-  if (money >= SHOP.offer) out.push({ k: 'offer', cost: SHOP.offer });
-  if (money >= SHOP.life && lives < RULES.lives) out.push({ k: 'life', cost: SHOP.life });
+  const kit = KIT.filter(x => !eq.has(x.id));
+  if (kit.length) add('kit', Math.min(...kit.map(x => x.cost)));
+  if (ORDERS.length) add('order', Math.min(...ORDERS.map(x => x.cost)));
+  if (theirs && armyFrom(theirs).cards.length) add('sabotage', SABOTAGE.cost);
+  add('offer', SHOP.offer);
+  if (lives < RULES.lives) add('life', SHOP.life);
   return out;
 }
 
