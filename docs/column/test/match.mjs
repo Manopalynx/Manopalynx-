@@ -118,7 +118,7 @@ console.log(`rounds and both sides spend.\n`);
 // each other. Compared against the 95/5 figure for single-card-type pairings.
 const rand = rng(99);
 const SIZE = 9;
-let decisive = 0, total = 0, drawn = 0, fought = 0;
+let decisive = 0, total = 0, drawn = 0, fought = 0, formality = 0;
 for (let i = 0; i < 400; i++) {
   const a = [], b = [];
   for (let k = 0; k < SIZE; k++) {
@@ -127,19 +127,41 @@ for (let i = 0; i < 400; i++) {
   }
   // Same pair of armies over several seeds: a pairing is "decisive" if the same
   // side wins nearly every time. One battle can only ever return 0 or 1.
-  let wins = 0;
+  let wins = 0, keptT = 0, keptN = 0;
   const seeds = 8;
+  const start = [bodies(a), bodies(b)];
   for (let s = 0; s < seeds; s++) {
     const r = resolve(a, b, s * 37 + 3);
     if (r.winner === 0) wins++; else if (r.winner === null) { wins += 0.5; drawn++; }
+    // HOW MUCH OF ITSELF THE WINNER HAD LEFT, from the resolver's own survivor
+    // count, so this cannot report a margin the battle did not produce.
+    if (r.winner !== null) { keptT += r.left[r.winner] / start[r.winner]; keptN++; }
     fought++;
   }
   const p = wins / seeds;
-  if (p <= 0.05 || p >= 0.95) decisive++;
+  if (p <= 0.05 || p >= 0.95) {
+    decisive++;
+    if (keptN && keptT / keptN > 0.60) formality++;
+  }
   total++;
 }
 console.log(`mixed armies of ${SIZE} cards, 400 pairs over 8 seeds each:`);
 console.log(`  ${decisive} of ${total} (${(decisive / total * 100).toFixed(0)}%) decided 95/5 or harder`);
+// DECIDED IS NOT THE SAME THING AS ONE-SIDED, and the line above has been read
+// as the second for five sessions. The eight seeds vary nothing but a +/-0.6
+// field-unit deployment jitter -- under 1% of the field -- and there is no
+// combat randomness anywhere, so "the same side wins 95% of 8 seeds" says the
+// result survives a sub-1% wobble. That is REPEATABILITY. One-sidedness is
+// whether the winner still had an army afterwards, and it is a different number:
+// the median winner here keeps under half of its own. `test/settled.mjs` carries
+// the whole finding, including that no rule of the resolver causes the figure
+// above and that upgrading ONE card of the loser's nine rescues nearly half of
+// these pairings.
+//
+// BOTH NUMBERS ARE PRINTED AND ONLY THE FIRST IS CLAIMED AGAINST. Which of them
+// the game should be held to is a design decision and it is Sam's; re-aiming a
+// red check at the number that passes would settle it by stealth.
+console.log(`  ${formality} of ${total} (${(formality / total * 100).toFixed(0)}%) were FORMALITIES — decided and the winner kept over 60% of its army`);
 // A BATTLE THAT NEVER FINISHES READS AS A CLOSE ONE. Every "contested" figure in
 // this file counts a draw as half a win, so unresolved battles quietly improve
 // every number here. They did: the movement rule marched both armies straight

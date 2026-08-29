@@ -75,9 +75,13 @@ fixture — the same 234 of 400 pairings — and finds that the eight seeds vary
 sub-1% positional jitter, so "decided 95/5" measures whether a result is *repeatable*, not
 whether it is *one-sided*. By the survivor margin, **49 of 400 (12%) are formalities and
 the median winner keeps 46% of its army.** No rule of the resolver causes it: armour off
-moves the figure 0.5pt, and nothing makes these battles closer. **What the game should be
-held to is his call**, and the check has deliberately not been re-aimed. See *The 59% is
-measuring repeatability, not one-sidedness* below.
+moves the figure 0.5pt, and nothing makes these battles closer. **And there is room inside
+a battle** — upgrading **one card of the loser's nine** takes a third of the decided
+pairings out of decided, which falsifies the standing reason for the dead battle-side
+boosters without touching the measurements behind them. `match.mjs` prints both numbers and
+claims against only the 95/5 one; **what the game should be held to is his call**, and the
+check has deliberately not been re-aimed. See *The 59% is measuring repeatability, not
+one-sidedness* below.
 
 **Boosters.** Three, and for the first time they are the same size as each other:
 the Compact **+0.30**, Field surgeons **+0.32**, the Vanguard **+0.32**, all clear of a
@@ -2318,4 +2322,40 @@ Two things follow, and both are Sam's:
    cannot matter because the round was already decided, rests on the conflation above. If
    the median winner is down to 46% of its army, there is room in there for something to
    matter, and why the revive did not find it is now an open question rather than an
-   answered one.
+   answered one. **Answered in the section below**, which measured it: there is room, and
+   a great deal of it.
+
+## And there is room inside a battle after all
+
+The question part 4 opened, asked in the general form rather than by rebuilding one
+booster: **how big does an advantage inside a battle have to be before a decided pairing
+stops being decided?** The dose is the upgrade rule, because it already exists, it is
+already per-side, and it is the only per-side strength dial in the engine that does not
+change the number of bodies. It is applied to the side that **lost**, over all 234 decided
+pairings.
+
+| the loser gets | rescued — no longer decided against it | won outright | still decided against it |
+|---|---|---|---|
+| *nothing — the no-op dose* | *0 (0%)* | *0 (0%)* | *234 (100%)* |
+| one card of nine, +35% | **76 (32%)** | 2 (1%) | 156 (67%) |
+| three cards, +35% | 119 (51%) | 45 (19%) | 70 (30%) |
+| every card, +35% | 80 (34%) | 133 (57%) | 21 (9%) |
+| every card, +70% | 13 (6%) | 221 (94%) | 0 (0%) |
+
+**Upgrading one card of the loser's nine takes a third of these pairings out of "decided"
+entirely.** That is roughly a ninth of an army moved by 35%, and it is already larger than
+most of what the market sells — so the effects that have measured dead are not being
+crushed by a structural wall. **There is a great deal of room inside these battles.**
+
+That is the standing explanation falsified rather than confirmed. It said a battle-side
+effect could not matter because the round was already decided; the round is not already
+decided, and an effect of quite modest size moves a third of them. **The measurements it
+was explaining still stand** — the revive scored +0.13 and +0.10 against a control and
+nothing here touches that. What has gone is the reason given for them, which means *why*
+the revive failed is now a live question with an obvious first suspect: it acts at a
+random place and time, and everything above acts everywhere for the whole battle.
+
+**Both numbers now print in `match.mjs` and only the first is claimed against.** The 95/5
+line is unchanged and still red; the formality count sits beneath it. Re-aiming a red check
+at the number that happens to pass would settle a design question by stealth, and this one
+is Sam's.

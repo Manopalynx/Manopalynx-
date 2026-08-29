@@ -389,6 +389,78 @@ console.log(`     ${control.decisive} (${(control.rate * 100).toFixed(0)}%) are 
 console.log(`     ${formalities} (${(formalities / pairs.length * 100).toFixed(0)}%) are FORMALITIES — decided AND the winner kept most of its army`);
 console.log('');
 
+/* ================== 5. how much help does the losing side actually need? */
+// The question part 4 opened. The project's standing explanation for its dead
+// battle-side boosters is that a round was already decided before it started,
+// so nothing happening inside it could matter. Part 4 says that is true of 12%
+// of pairings rather than 59%, which puts the explanation in question and NOT
+// the measurements -- the revive really did score +0.13 and +0.10.
+//
+// So ask the general question instead of rebuilding one booster: HOW BIG DOES AN
+// ADVANTAGE INSIDE A BATTLE HAVE TO BE BEFORE A DECIDED PAIRING STOPS BEING
+// DECIDED? If a large one barely moves anything, then every battle-side effect
+// is structurally dead and the revive was never going to work at any size, which
+// is an answer about the game. If a small one flips a third of them, there is
+// room in there and the revive died of its own design.
+//
+// The dose is the upgrade rule, because it already exists, it is already
+// per-side, and it is the only per-side strength dial in the engine that does
+// not change the number of bodies: +35% health AND damage per level, to three.
+// It is applied to the side that LOST -- the direct form of the question, rather
+// than buffing an arbitrary side and reading the average.
+//
+// LEVEL 0 IS THE NO-OP and must flip nothing at all.
+
+const lose = pairs.filter(p => p.r.decisive);
+
+// The ladder is in FRACTIONS OF AN ARMY, not in levels, because a level is a
+// large dose and the interesting question is where the threshold sits relative
+// to what a booster is actually worth. Upgrading one card of nine moves roughly
+// a ninth of the army by 35%; a revive that stands one body of thirty-odd back
+// up once a round is smaller than that, so the bottom of this ladder is still
+// generous to it. Which card is arbitrary and deterministic: the first distinct
+// id in the list, so the run reproduces.
+const upSome = (army, levels, howMany) => {
+  if (!levels || !howMany) return army;
+  const out = [...army];
+  const ids = [...new Set(army)].slice(0, howMany === Infinity ? undefined : howMany);
+  for (const id of ids) for (let i = 0; i < levels; i++) out.push('up:' + id);
+  return out;
+};
+
+const DOSES = [
+  ['nothing (no-op)',            0, 0],
+  ['one card, +35%',             1, 1],
+  ['three cards, +35%',          1, 3],
+  ['every card, +35%',           1, Infinity],
+  ['every card, +70%',           2, Infinity],
+];
+
+console.log('5. HOW MUCH HELP DOES THE LOSING SIDE NEED?');
+console.log('   The decided pairings re-fought with the LOSER upgraded: +35% health and');
+console.log('   damage a level, on some or all of its cards. "rescued" means no longer');
+console.log('   decided against it; "won" means decided the other way.\n');
+console.log('   the loser gets           rescued        won outright   still decided against it');
+console.log('   ' + '-'.repeat(78));
+
+for (const [tag, lv, many] of DOSES) {
+  let rescued = 0, won = 0;
+  for (const p of lose) {
+    const aLost = p.r.p <= 0.05;
+    const a = aLost ? upSome(p.a, lv, many) : p.a;
+    const b = aLost ? p.b : upSome(p.b, lv, many);
+    const r = fight(a, b, [totals(p.a).bodies, totals(p.b).bodies]);
+    const loserShare = aLost ? r.p : 1 - r.p;
+    if (loserShare >= 0.95) won++;
+    else if (loserShare > 0.05) rescued++;
+  }
+  const still = lose.length - rescued - won;
+  const pc = n => `${String(n).padStart(4)} (${(n / lose.length * 100).toFixed(0)}%)`;
+  console.log(`   ${tag.padEnd(25)}${pc(rescued)}${' '.repeat(7)}${pc(won)}${' '.repeat(8)}${pc(still)}`);
+  if (lv === 0 && (rescued || won)) { console.log('   FAIL the no-op dose changed a pairing, so this table is not measuring the dose.'); bad++; }
+}
+console.log(`\n   scored over ${lose.length} decided pairings\n`);
+
 // WHAT THIS RUN COVERED, not merely that it finished.
 console.log(`\n   covered: ${pairs.length} pairings x ${SEEDS} seeds x ${ARMS.length} arms = ${pairs.length * SEEDS * ARMS.length} battles`);
 console.log(`   plus the counter matrix: ${IDS.length} x ${IDS.length} cards over 4 seeds\n`);
