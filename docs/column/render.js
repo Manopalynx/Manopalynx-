@@ -270,12 +270,29 @@ const OVERLAY =
 const band = t => {
   const g = TERRAIN[t];
   if (!g) return '';
-  return `<rect x="0" y="${g.from}" width="100" height="${g.to - g.from}" ` +
-           `fill="#7fd6a0" fill-opacity="0.07"/>` +
-         `<line x1="0" y1="${g.from}" x2="100" y2="${g.from}" stroke="#7fd6a0" ` +
-           `stroke-opacity="0.35" stroke-width="0.35" stroke-dasharray="2 2"/>` +
-         `<line x1="0" y1="${g.to}" x2="100" y2="${g.to}" stroke="#7fd6a0" ` +
-           `stroke-opacity="0.35" stroke-width="0.35" stroke-dasharray="2 2"/>`;
+  // A CAP HAS NO PLACE ON THE FIELD, so it is not drawn as one. `hold` and
+  // `chamber` shorten every weapon everywhere; there is no band to shade, and
+  // shading the whole board would say "this region is different" about a rule
+  // that has no region. The chooser's sentence carries it instead.
+  if (g.from === undefined) return '';
+  // Each mechanism gets its own colour and its own edge, because the decision a
+  // player makes is different for each: green is protection, amber is a place
+  // that costs you, and the hatch is ground that is slow to cross. Opacities sit
+  // in the same range as the deployment tints -- the rule for this file is that
+  // nothing decorative may compete with a counter.
+  const hue = g.cut ? '#7fd6a0' : g.burn ? '#f2955c' : g.amp ? '#e05a6a' : '#8fa4bd';
+  const h = g.to - g.from;
+  const edge = y => `<line x1="0" y1="${y}" x2="100" y2="${y}" stroke="${hue}" ` +
+    `stroke-opacity="0.35" stroke-width="0.35" stroke-dasharray="2 2"/>`;
+  // Rough ground reads as texture rather than as a wash: a slow crossing is a
+  // property of the surface, and a flat tint said the same thing as cover.
+  const hatch = g.slow
+    ? Array.from({ length: Math.floor(h / 5) }, (_, i) =>
+        `<line x1="0" y1="${g.from + i * 5 + 2.5}" x2="100" y2="${g.from + i * 5 + 2.5}" ` +
+        `stroke="${hue}" stroke-opacity="0.13" stroke-width="0.8" stroke-dasharray="3 5"/>`).join('')
+    : '';
+  return `<rect x="0" y="${g.from}" width="100" height="${h}" fill="${hue}" ` +
+           `fill-opacity="${g.slow ? 0.03 : 0.07}"/>` + hatch + edge(g.from) + edge(g.to);
 };
 
 /** The ground for a map id. Unknown ids fall back to Eden rather than to nothing. */

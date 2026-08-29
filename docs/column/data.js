@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v24';
+export const BUILD = 'column-v25';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -522,31 +522,71 @@ export const BY_BOOST = Object.fromEntries(BOOSTS.map(b => [b.id, b]));
 // map is a place and a place does not rearrange itself between rounds; and a
 // board you cannot see before you commit is a coin flip rather than a decision.
 export const TERRAIN = {
-  cover: { n: 'Cover', from: 58, to: 82, beyond: 12, cut: 0.55,
-           says: 'Bodies in the middle band refuse 55% of fire from beyond 12.' }
+  // FIVE MECHANISMS, NINE GROUNDS. Sam's decision is that every map carries its
+  // own feature, so the variety lives across a run rather than inside one board
+  // -- which is what the round-one measurement said terrain actually does: cover
+  // did not flatten the pool, it changed who was at the top of it. Nine boards
+  // each with a different best answer is that finding used on purpose.
+  //
+  // Where two maps share a mechanism they do not share its numbers or its
+  // placement, and that is stated rather than hidden: a thin band across the
+  // middle and a band covering half the field are different battles.
+  //
+  // `says` is the sentence the chooser prints before the first pick. It is here,
+  // beside the numbers it describes, because interface copy that lives away from
+  // its figures goes stale in meaning while its digits stay right -- an upkeep
+  // bill in this repository once quoted one vassal's cost for the whole bench.
+
+  // --- cover: refuses fire from a distance. Closing with it is the answer. ---
+  cuts:    { n: 'Terrace cuts', from: 58, to: 82, beyond: 12, cut: 0.55,
+             says: 'Bodies in the middle band refuse 55% of fire from beyond 12.' },
+  stalls:  { n: 'Market stalls', from: 66, to: 74, beyond: 12, cut: 0.45,
+             says: 'A thin line of cover at the centre refuses 45% of distant fire.' },
+
+  // --- rough: slows whatever crosses it. Punishes anything that must arrive. ---
+  wreck:   { n: 'Wreckage', from: 55, to: 85, slow: 0.45,
+             says: 'Wreckage across the middle halves the pace of anything crossing it.' },
+  clutter: { n: 'Pod banks', from: 40, to: 100, slow: 0.60,
+             says: 'Pod banks over most of the floor slow everything that moves.' },
+
+  // --- fire: costs you for standing there at all, and ignores armour. ---
+  embers:  { n: 'Burning stubble', from: 46, to: 94, burn: 1.6,
+             says: 'The stubble is still burning: 1.6 damage a tick to anything standing in it.' },
+
+  // --- close: caps every weapon's reach. A room, not a field. ---
+  hold:    { n: 'Cargo hold', cap: 20,
+             says: 'Bulkheads everywhere: nothing shoots further than 20.' },
+  chamber: { n: 'The chamber', cap: 30,
+             says: 'A room rather than a field: nothing shoots further than 30.' },
+
+  // --- exposure: the inverse of cover. Nowhere to stand. ---
+  stand:   { n: 'The reviewing stand', from: 60, to: 80, amp: 0.40,
+             says: 'Open ground under the stand: everything there takes 40% more.' },
+  open:    { n: 'The open plaza', from: 40, to: 100, amp: 0.20,
+             says: 'The plaza is open ground: everything on it takes 20% more.' }
 };
 
 export const MAPS = [
-  { id: 'eden', n: 'Eden — the crossroads',
+  { id: 'eden', terrain: 'stalls', n: 'Eden — the crossroads',
     q: 'Eden had been the heart of the Union\u2019s trade network in the days when we were a syndicate worth fearing: the great crossroads, the market of markets.', qv: 1 },
   // THE FIRST MAP WITH TERRAIN, and the manuscript picked it rather than a
   // coin: the terrace cuts are the one grade the walkers can climb, so an
   // armoured line has to come up them under fire. Cover is what that is.
-  { id: 'terraces', n: 'Horizon — the terrace cuts', terrain: 'cover',
+  { id: 'terraces', terrain: 'cuts', n: 'Horizon — the terrace cuts',
     q: 'Their whole armored line has to come up the terrace cuts, here \u2014 it\u2019s the only grade the walkers can climb.', qv: 1 },
-  { id: 'tribute', n: 'The tribute ship',
+  { id: 'tribute', terrain: 'hold', n: 'The tribute ship',
     q: 'I signed the instrument of vassalage in a room aboard one of their tribute ships. They kept me waiting four hours.', qv: 1 },
-  { id: 'parade', n: 'The reviewing stand, Enigma',
+  { id: 'parade', terrain: 'stand', n: 'The reviewing stand, Enigma',
     q: 'It moved both flags with the same indifference \u2014 the Union\u2019s silver-on-blue, and above it, on the taller pole, the black insignia of the Onyx Dominion.', qv: 1 },
-  { id: 'raven', n: 'The Raven\u2019s Claw',
+  { id: 'raven', terrain: 'wreck', n: 'The Raven\u2019s Claw',
     q: 'A vessel assembled from the corpses of at least nine other vessels, in a stateroom decorated with trophies whose provenance I chose not to examine.', qv: 1 },
-  { id: 'warroom', n: 'The war room',
+  { id: 'warroom', terrain: 'chamber', n: 'The war room',
     q: 'The war room of the Union Palace held the whole galaxy in light above its table.', qv: 1 },
-  { id: 'plaza', n: 'The plaza',
+  { id: 'plaza', terrain: 'open', n: 'The plaza',
     q: 'At the plaza\u2019s center stood the stage, flanked by two towers of Vale\u2019s smiling face, and an empty podium with its small bouquet of microphones waiting like the future.', qv: 1 },
-  { id: 'croplands', n: 'The burned croplands',
+  { id: 'croplands', terrain: 'embers', n: 'The burned croplands',
     q: 'They burned the orbitals, then the cities, then the croplands, and then they stayed in orbit an extra day to burn the forests.', qv: 1 },
-  { id: 'pods', n: 'The Pod Room',
+  { id: 'pods', terrain: 'clutter', n: 'The Pod Room',
     q: 'It was circular and vast, and the walls were pods \u2014 and the occupied pods gave off a faint interior light, so that the great dark room glowed in patches, like votive candles in a drowned church.', qv: 1 }
 ];
 export const BY_MAP = Object.fromEntries(MAPS.map(m => [m.id, m]));

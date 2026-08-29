@@ -2558,3 +2558,78 @@ itself or if cover reaches nothing. `play.mjs` asserts that every map carrying t
 **names it on the chooser** — derived from the data, so adding terrain to a second map cannot
 quietly ship without the sentence that makes it fair. Breaking the sentence turns it red:
 *0 of 1 named it: Hale*.
+
+---
+
+# Nine grounds, one to a map — and four of them make it worse
+
+Sam's decision: **every map carries its own terrain feature**, so the variety lives across a
+run rather than inside one board. That is round one's finding used on purpose — cover did not
+flatten the pool, it changed who was at the top of it, so nine boards each with a different
+best answer is the shape that finding pointed at.
+
+**Five mechanisms, nine grounds**, every one of them measured against the flat control over
+the same 400 pairings. Where two maps share a mechanism they share neither its numbers nor
+its placement: a thin band at the centre and a band over half the field are different battles.
+
+| ground | map | mechanism | decided | formalities | median kept | battles changed |
+|---|---|---|---|---|---|---|
+| *FLAT — the control* | — | — | *58.5%* | *12.3%* | *45.5%* | — |
+| **Cargo hold** | tribute | range cap 20 | 49.5% | **4.0%** | 38.2% | 255 of 400 |
+| **The chamber** | war room | range cap 30 | 52.8% | **6.0%** | 41.4% | 207 |
+| **Burning stubble** | croplands | fire 1.6/tick | 69.5% | **6.3%** | 33.3% | 192 |
+| **Terrace cuts** | terraces | cover 55% | 53.3% | **6.8%** | 41.5% | 193 |
+| Market stalls | eden | cover 45%, thin | 58.3% | 11.0% | 43.4% | 120 |
+| The open plaza | plaza | exposure +20% | 62.7% | 12.8% | 45.0% | 155 |
+| The reviewing stand | parade | exposure +40% | 65.0% | **13.8%** | 42.6% | 149 |
+| Wreckage | raven | rough ×0.45 | 73.0% | **15.3%** | 43.3% | 191 |
+| Pod banks | pods | rough ×0.60 | 69.8% | **16.8%** | 43.8% | 175 |
+
+## The two findings, and neither is the one that was expected
+
+**Four of the nine make the core problem worse.** Both rough grounds and both exposure
+grounds *raise* formalities above the flat control and widen the pool's spread from 54.5% to
+between 68% and 82%. The reason is the same for both and it is obvious once measured:
+slowing everything hands the battle to whoever wins the shooting, and amplifying all damage
+hands it to whoever deals more. Neither creates a decision; both sharpen an advantage that
+already existed.
+
+**And a prediction of mine was wrong in both directions.** Before any of this was built I
+argued that cover was the better first mechanism and that fog — *"shortens range for
+everyone"* — was **"close to a straight nerf rather than a change of play style"**, because
+*"everyone loses reach, the relative order barely moves"*. The range cap is that idea, and it
+is **the best-performing mechanism of the five**: it cuts formalities from 12.3% to 4.0%,
+a two-thirds reduction and comfortably the largest effect here, and it *does* move the order
+— the best card changes from Amabie to Ultra Armor. Both halves of that call were wrong.
+
+## The variety goal is half met, and the half that is missing is the point
+
+| | |
+|---|---|
+| grounds built | 9 |
+| distinct best cards across them | **2** — Amabie or Ultra Armor |
+| best card on a flat field | Amabie |
+
+Nine features, two answers. **A ground that changes the numbers is not the same as a ground
+that changes the draft**, and only the mechanisms that shorten reach do the second — because
+reach is what separates Amabie from everything else, and nothing here touches the reasons
+Ultra Armor is good.
+
+That is not an argument against Sam's decision, which was about a run rather than a board.
+It is the measurement of how far this particular set gets: **a run across these nine maps
+alternates between two right answers rather than nine.**
+
+## What is recommended, and it is his to spend
+
+**Keep the four that work** — both range caps, cover, and the fire — and **replace the four
+that do not** rather than tune them. Rough ground and exposure fail structurally rather than
+numerically: they scale an existing advantage instead of asking a different question, and no
+setting of ×0.45 or +40% changes that shape.
+
+The mechanisms worth trying in their place are the ones that shorten or redirect **reach**,
+since that is the axis measurably capable of changing which card is best — a cap that applies
+only to one half of the field, cover that sits in front of one side's deployment rather than
+at the centre, or a rule that forces targeting to the nearest rather than the biggest.
+
+**Nothing here has been quietly tuned to look better.** All nine ship as measured, all nine
+say what they do before the first pick, and the table above is what the suite prints.

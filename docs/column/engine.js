@@ -273,6 +273,21 @@ export function deployment(a, b, seed) {
 /* -------------------------------------------------------------------- targeting */
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
+/* --------------------------------------------------------------------- ground */
+// TERRAIN, and every rule of it lives in exactly one place, because the whole
+// class of defect this project keeps finding is a rule written twice.
+//
+//   inBand   where a band effect applies -- read by cover, exposure, rough
+//            ground and fire, so a band cannot mean one thing to the damage
+//            rule and another to the movement rule
+//   rangeOf  the only place a weapon's reach is read once terrain can cap it.
+//            `spec.rng` is consulted twice in the tick loop -- once to decide
+//            what a unit can reach and once to decide whether it may fire -- and
+//            a cap applied to one of them and not the other is a unit that
+//            acquires a target it can never shoot.
+const inBand = (u, g) => !!g && g.from !== undefined && u.y >= g.from && u.y <= g.to;
+const rangeOf = (spec, g) => (g && g.cap ? Math.min(spec.rng, g.cap) : spec.rng);
+
 function choose(unit, enemies) {
   const spec = unit.s;
   let best = null, bestScore = Infinity;
@@ -341,7 +356,8 @@ export function resolve(a, b, seed, keepLog = false, onTick = null, terrain = nu
       // along the ceiling, into the centre. A LINE card fights what has come
       // within reach and otherwise advances with its army.
       const seeks = spec.move === 'seek';
-      const reach = seeks ? foes : foes.filter(e => e.alive && dist(u, e) <= spec.rng);
+      const rng = rangeOf(spec, ground);
+      const reach = seeks ? foes : foes.filter(e => e.alive && dist(u, e) <= rng);
       const tgt = choose(u, reach);
 
       // A line card with nothing in reach ADVANCES. The first version fell
@@ -369,7 +385,7 @@ export function resolve(a, b, seed, keepLog = false, onTick = null, terrain = nu
       }
       const d = dist(u, tgt);
 
-      if (d <= spec.rng && u.cd <= 0) {
+      if (d <= rng && u.cd <= 0) {
         const dealt = [];
         hurtInto(tgt, spec.dmg, u, add, dealt, ground);
         if (spec.splash) {
@@ -389,10 +405,21 @@ export function resolve(a, b, seed, keepLog = false, onTick = null, terrain = nu
 
     // ---- apply ----
     for (const [u, dx, dy] of moves) {
-      u.x = Math.max(2, Math.min(FIELD.w - 2, u.x + dx));
-      u.y = Math.max(2, Math.min(FIELD.d - 2, u.y + dy));
+      // ROUGH GROUND slows whatever is crossing it, and it is applied HERE --
+      // the one place a move becomes a position -- rather than at each of the
+      // two places a move is decided. A unit half in and half out is judged by
+      // where it is standing when it moves, which is the same rule the damage
+      // side uses.
+      const k = ground && ground.slow && inBand(u, ground) ? ground.slow : 1;
+      u.x = Math.max(2, Math.min(FIELD.w - 2, u.x + dx * k));
+      u.y = Math.max(2, Math.min(FIELD.d - 2, u.y + dy * k));
     }
     for (const [u, d] of damage) u.hp -= d;
+    // BURNING GROUND is environmental rather than an attack: it has no attacker,
+    // ignores armour, and is not in the replay log's event list because nothing
+    // fired. It is applied after movement so that a body which walked into the
+    // fire this tick burns this tick.
+    if (ground && ground.burn) for (const u of live) if (inBand(u, ground)) u.hp -= ground.burn;
     for (const u of live) if (u.dotT > 0) u.dotT--;
 
     // Deaths, and what they set off. A detonation is gathered and applied in the
@@ -449,8 +476,13 @@ function hurtInto(target, amount, from, add, dealt, ground) {
   // cover protects whoever is standing in it. Applied before armour for the same
   // reason deflection is -- armour is the last word and its floor of 1 is what
   // stops any stack of reductions taking a hit to nothing.
-  if (ground && from.s.rng > 4 && target.y >= ground.from && target.y <= ground.to
-      && dist(from, target) > ground.beyond) d *= (1 - ground.cut);
+  if (ground && inBand(target, ground)) {
+    // COVER refuses fire that comes from a distance, so closing with something
+    // in it is the answer. EXPOSURE is its inverse and applies to everything --
+    // there is nowhere to stand, so being there costs you whoever is shooting.
+    if (ground.cut && from.s.rng > 4 && dist(from, target) > ground.beyond) d *= (1 - ground.cut);
+    if (ground.amp) d *= (1 + ground.amp);
+  }
   d = Math.max(1, d - (spec.arm || 0));
   add(target, d);
   dealt.push(d);

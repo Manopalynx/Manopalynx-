@@ -38,34 +38,49 @@ import { samplePairs, measure, SEEDS } from './pairings.mjs';
 const PAIRS = Number(process.env.PAIRS || 400);
 const pairs = samplePairs(PAIRS);
 
-console.log(`\nWHAT DOES COVER DO? — ${PAIRS} pairings, ${SEEDS} seeds each, fought on both grounds\n`);
-console.log(`  ${TERRAIN.cover.says}`);
-console.log(`  band y ${TERRAIN.cover.from}–${TERRAIN.cover.to} of a field ${140} deep; both lines advance into it.`);
-const mapped = MAPS.filter(m => m.terrain);
-console.log(`  carried by ${mapped.length} of ${MAPS.length} maps: ${mapped.map(m => m.n).join(', ')}\n`);
+console.log(`\nWHAT DOES EACH GROUND DO? — ${PAIRS} pairings, ${SEEDS} seeds each, fought on every ground\n`);
 
-/* ------------------------------------------------------- 1 and 2: the pairings */
+// EVERY MAP CARRIES ONE, which is Sam's decision, so the sweep is derived from
+// the maps rather than from a list typed here. A ground added to a map and left
+// out of a hand-written list would ship unmeasured, and this project has already
+// spent a session on a persona table where two of five rows were the same policy.
+const GROUNDS = MAPS.map(m => ({ map: m, t: m.terrain, g: TERRAIN[m.terrain] }))
+                    .filter(x => x.g);
 
 const flat = measure(pairs, null);
-const cover = measure(pairs, 'cover');
-const moved = cover.results.filter((r, i) => r.p !== flat.results[i].p).length;
-
 const pc = v => `${(v * 100).toFixed(1)}%`;
 const delta = (a, b) => { const d = (b - a) * 100; return `${d >= 0 ? '+' : ''}${d.toFixed(1)}pt`; };
 
-console.log('                                   flat        cover       change');
-console.log('  ' + '-'.repeat(62));
-console.log(`  decided 95/5 or harder      ${pc(flat.rate).padStart(9)}${pc(cover.rate).padStart(12)}${delta(flat.rate, cover.rate).padStart(13)}`);
-console.log(`  FORMALITIES                 ${pc(flat.formalityRate).padStart(9)}${pc(cover.formalityRate).padStart(12)}${delta(flat.formalityRate, cover.formalityRate).padStart(13)}`);
-console.log(`  median winner kept          ${pc(flat.medianKept).padStart(9)}${pc(cover.medianKept).padStart(12)}${delta(flat.medianKept, cover.medianKept).padStart(13)}`);
-console.log(`  drew at the tick ceiling    ${pc(flat.draws).padStart(9)}${pc(cover.draws).padStart(12)}${delta(flat.draws, cover.draws).padStart(13)}`);
-console.log(`\n  battles the ground changed: ${moved} of ${pairs.length} pairings\n`);
+console.log('  ground              mechanism        decided    formalities   kept    battles changed');
+console.log('  ' + '-'.repeat(88));
+console.log(`  ${'FLAT (control)'.padEnd(20)}${'—'.padEnd(17)}${pc(flat.rate).padStart(7)}${pc(flat.formalityRate).padStart(13)}${pc(flat.medianKept).padStart(9)}${'—'.padStart(15)}`);
 
-/* ------------------------------------------------ 3: what it does to the graph */
-// Every card against every other, three of each, on both grounds. This is
-// matchup.mjs's matrix — rebuilt here at a smaller seed count because it is a
-// comparison rather than the published figure, and printed as a CHANGE, since
-// the absolute number is matchup.mjs's to state and would be a second copy of it.
+const arms = [];
+for (const { map, t, g } of GROUNDS) {
+  const m = measure(pairs, t);
+  const moved = m.results.filter((r, i) => r.p !== flat.results[i].p).length;
+  const kind = g.cut ? 'cover' : g.slow ? 'rough' : g.burn ? 'fire' : g.amp ? 'exposure' : 'range cap';
+  arms.push({ map, t, g, m, moved, kind });
+  console.log(`  ${g.n.padEnd(20)}${kind.padEnd(17)}${pc(m.rate).padStart(7)}${pc(m.formalityRate).padStart(13)}${pc(m.medianKept).padStart(9)}${String(moved).padStart(11)} of ${m.n}`);
+}
+
+const best = [...arms].sort((a, b) => a.m.formalityRate - b.m.formalityRate)[0];
+const worst = [...arms].sort((a, b) => b.m.formalityRate - a.m.formalityRate)[0];
+console.log(`\n  formalities: flat ${pc(flat.formalityRate)}; best ${best.g.n} ${pc(best.m.formalityRate)}; worst ${worst.g.n} ${pc(worst.m.formalityRate)}`);
+console.log('');
+/* --------------------------------------- what each ground does to the graph */
+// Every card against every other, three of each, on every ground. This is
+// matchup.mjs's matrix rebuilt at a smaller seed count -- a comparison rather
+// than the published figure, so it is printed as a CHANGE. The absolute number
+// is matchup.mjs's to state and a second copy of it here would be the defect
+// this project finds most often.
+//
+// THE SPREAD IS THE HEADLINE, not any one card. Round one found that cover did
+// not flatten the pool, it changed who was at the top of it -- and Sam's answer
+// was to give every map its own ground, so that the variety lives across a run.
+// The question this table now answers is whether the BEST CARD IS DIFFERENT ON
+// DIFFERENT GROUNDS. If every ground has the same top card, nine features are
+// nine decorations.
 
 const IDS = DRAFT.map(u => u.id);
 function overall(terrain) {
@@ -84,37 +99,41 @@ function overall(terrain) {
   }
   return rate;
 }
-const gFlat = overall(null), gCover = overall('cover');
-
-const rows = IDS.map(id => ({ id, flat: gFlat[id], cover: gCover[id], d: gCover[id] - gFlat[id] }))
-                .sort((a, b) => b.flat - a.flat);
-console.log('  single-type win rate against the whole pool, by ground:\n');
-console.log('    card             flat     cover    change');
-console.log('    ' + '-'.repeat(44));
-for (const r of rows) {
-  console.log(`    ${r.id.padEnd(14)}${pc(r.flat).padStart(8)}${pc(r.cover).padStart(9)}${delta(r.flat, r.cover).padStart(11)}`);
-}
-
-// THE SPREAD IS THE POINT, not any one card. A pool where the best card wins 80%
-// and the worst 26% is a pool with a right answer; closing that gap is what
-// "decisive local counters, rarely a decisive counter to a whole composition"
-// asks for.
 const spread = g => Math.max(...IDS.map(i => g[i])) - Math.min(...IDS.map(i => g[i]));
-console.log(`\n    top-to-bottom spread   ${pc(spread(gFlat)).padStart(8)}${pc(spread(gCover)).padStart(9)}${delta(spread(gFlat), spread(gCover)).padStart(11)}`);
+const top = g => IDS.reduce((a, b) => (g[b] > g[a] ? b : a));
+
+const gFlat = overall(null);
+console.log('  the best card on each ground, and how far apart the pool is:\n');
+console.log('    ground              best card      its rate    spread');
+console.log('    ' + '-'.repeat(54));
+console.log(`    ${'FLAT (control)'.padEnd(20)}${top(gFlat).padEnd(15)}${pc(gFlat[top(gFlat)]).padStart(8)}${pc(spread(gFlat)).padStart(10)}`);
+
+const tops = {};
+for (const { g, t } of GROUNDS) {
+  const r = overall(t);
+  tops[t] = top(r);
+  console.log(`    ${g.n.padEnd(20)}${top(r).padEnd(15)}${pc(r[top(r)]).padStart(8)}${pc(spread(r)).padStart(10)}`);
+}
+const distinct = new Set(Object.values(tops));
+console.log(`\n    ${distinct.size} different cards are best across the ${GROUNDS.length} grounds: ${[...distinct].join(', ')}`);
+console.log(`    flat: ${top(gFlat)}\n`);
 
 /* --------------------------------------------------------------- the guards */
-// Both are assertions rather than decoration, and both have caught something in
-// this project already.
+// All three are assertions rather than decoration, and each has already caught
+// something in this project.
 
 let bad = 0;
 const again = measure(pairs, null);
 if (again.results.every((r, i) => r.p === flat.results[i].p))
-  console.log('\n ok   the flat arm reproduces itself exactly — the run is deterministic');
-else { console.log('\nFAIL  the flat arm did not reproduce itself. Nothing above means anything.'); bad++; }
+  console.log(' ok   the flat arm reproduces itself exactly — the run is deterministic');
+else { console.log('FAIL  the flat arm did not reproduce itself. Nothing above means anything.'); bad++; }
 
-if (moved > 0)
-  console.log(` ok   cover reaches the resolver — ${moved} of ${pairs.length} pairings came out differently`);
-else { console.log(' FAIL cover changed nothing, so the rule never reached the resolver.'); bad++; }
+// A GROUND THAT REACHES NOTHING prints a tidy 0.0pt and reads exactly like a
+// rule that does not matter, which is how an unimplemented booster once measured
+// +0.58 here. Every one of the nine has to move something.
+const inert = arms.filter(a => a.moved === 0);
+if (!inert.length) console.log(` ok   every ground reaches the resolver — all ${arms.length} changed battles`);
+else { console.log(`FAIL  ${inert.length} ground(s) changed nothing: ${inert.map(a => a.g.n).join(', ')}`); bad++; }
 
 // A MAP WITH NO TERRAIN MUST BE THE OLD BATTLE, byte for byte. Every figure in
 // this folder was measured flat, so if a mapless resolve() has drifted then the
@@ -125,7 +144,14 @@ const spot = pairs.slice(0, 20).every(p => {
   return x.winner === y.winner && x.ticks === y.ticks && x.left[0] === y.left[0] && x.left[1] === y.left[1];
 });
 if (spot) console.log(' ok   resolve() with no terrain is unchanged — the flat field is still the old battle');
-else { console.log(' FAIL resolve() with no terrain has drifted from resolve() without the argument.'); bad++; }
+else { console.log('FAIL  resolve() with no terrain has drifted from resolve() without the argument.'); bad++; }
 
-console.log(`\n   covered: ${pairs.length} pairings x ${SEEDS} seeds x 3 arms, plus ${IDS.length}x${IDS.length} cards on two grounds\n`);
+// EVERY MAP CARRIES ONE, which is Sam's decision and is the thing a later
+// session would quietly break by adding a map.
+const bare = MAPS.filter(m => !m.terrain || !TERRAIN[m.terrain]);
+if (!bare.length) console.log(` ok   every one of the ${MAPS.length} maps carries a ground`);
+else { console.log(`FAIL  ${bare.length} map(s) carry none: ${bare.map(m => m.id).join(', ')}`); bad++; }
+
+console.log(`\n   covered: ${pairs.length} pairings x ${SEEDS} seeds x ${arms.length + 2} grounds,`);
+console.log(`   plus ${IDS.length}x${IDS.length} cards on ${GROUNDS.length + 1} grounds\n`);
 process.exit(bad ? 1 : 0);
