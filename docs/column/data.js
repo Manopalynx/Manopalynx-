@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v21';
+export const BUILD = 'column-v22';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -474,14 +474,9 @@ export const RUN = {
 // The premise of that finding is gone, so the boosters it killed are worth asking
 // about again rather than assumed dead.
 export const BOOSTS = [
-  { id: 'wider',    n: 'Wider muster',   d: 'Five cards offered each round instead of three.' },
-  { id: 'veteran',  n: 'Veterans',       d: 'Every card you draft arrives already upgraded once.' },
-  { id: 'vanguard', n: 'The Vanguard',   d: 'A round you lose buys two picks, not one.' },
-  { id: 'attrition', n: 'Attrition',     d: 'Every opponent after this one begins on half their credits.' },
+  { id: 'compact',  n: 'The Compact',    d: 'One card of your column marches into the next match, at the level it reached.' },
   { id: 'surgeons', n: 'Field surgeons', d: 'The first life you lose in each match is given back.' },
-  { id: 'quarter',  n: 'Quartermaster',  d: 'Your market opens every second round, not every third.' },
-  { id: 'salvage',  n: 'Salvage rights', d: 'Two credits for every body you have left standing, not one.' },
-  { id: 'compact',  n: 'The Compact',    d: 'One card of your column marches into the next match, at the level it reached.' }
+  { id: 'vanguard', n: 'The Vanguard',   d: 'A round you lose buys two picks, not one.' }
 ];
 export const BY_BOOST = Object.fromEntries(BOOSTS.map(b => [b.id, b]));
 

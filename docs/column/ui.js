@@ -16,7 +16,7 @@ import { BY_ID, RULES, PERSONAS, UPGRADE, DRAFT, SPECIALS, SHOP, RUN,
 import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId,
          earn, stock, spend, upgradeable, specialsFor, kitFor, ordersFor, boosterOffer,
          offerSize, picksFor, pickTokens, bonusPicks,
-         marketEvery, rampFor, mends, carried } from './engine.js';
+         rampFor, mends, carried } from './engine.js';
 import { draw, effects, auras, ground, SIDE, shape } from './render.js';
 import { glyph } from './glyphs.js';
 
@@ -348,13 +348,13 @@ function endRound() {
   S.pending = [[], []];
   // What the round paid, through the ENGINE's rule and off the resolver's own
   // survivor count. The screen does not get to decide what a body is worth.
-  S.paid = earn(S.left || [0, 0], 1 - S.result, S.boosts);
+  S.paid = earn(S.left || [0, 0], 1 - S.result);
   S.money[0] += S.paid[0];
   S.money[1] += S.paid[1];
   S.phase = S.lives[0] <= 0 || S.lives[1] <= 0 ? 'over' : 'round';
   // Their market is on their cadence, not yours -- a booster can move it -- and
   // it is not gated on you opening yours.
-  if (S.phase !== 'over' && S.round % marketEvery(S.boosts[1]) === 0) opponentShops();
+  if (S.phase !== 'over' && S.round % SHOP.every === 0) opponentShops();
   S.frames = null;
   save(); render();
 }
@@ -362,7 +362,7 @@ function endRound() {
 // Every third round. The opponent spends at the same moment and by the same
 // rules -- its ramp is why a run gets harder, and a market only you could use
 // would be a difficulty setting rather than an economy.
-const marketDue = () => S.round % marketEvery(S.boosts[0]) === 0 && S.lives[0] > 0 && S.lives[1] > 0;
+const marketDue = () => S.round % SHOP.every === 0 && S.lives[0] > 0 && S.lives[1] > 0;
 
 function buy(item) {
   // A special is priced on the card, not in SHOP -- three prices, three cards,

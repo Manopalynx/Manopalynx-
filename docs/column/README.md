@@ -25,8 +25,8 @@ Sam owns every decision here. Where a choice is still open it says so rather tha
 
 ## Where it stands
 
-`BUILD` is `column-v21` in `data.js`. The service worker that carries it is
-`grandiose-v95` in `docs/sw.js` — one cache for all three published apps, so **shipping a
+`BUILD` is `column-v22` in `data.js`. The service worker that carries it is
+`grandiose-v96` in `docs/sw.js` — one cache for all three published apps, so **shipping a
 change here bumps Grandiose's version too**, and `test/offline.mjs` fails if the two ever
 disagree.
 
@@ -70,8 +70,10 @@ says so on its own card.
 compositions are settled 95/5; his answer is battlefield variety rather than softer
 counters, and the mechanism is unspecified and deliberately not guessed at.
 
-**Boosters.** Eight, and only one of them measures as anything. See *Note 17* below —
-the pool is Sam's to cut. Historically: three, after eight were measured. A fourth pick, Veterans, The Vanguard —
+**Boosters.** Three, and for the first time they are the same size as each other:
+the Compact **+0.30**, Field surgeons **+0.32**, the Vanguard **+0.32**, all clear of a
+do-nothing control at better than 2σ and none clear of each other. See *The pool that
+finally has no prize and no filler* below. A fourth pick, Veterans, The Vanguard —
 isolated against a run that takes none, +0.44 (9.2σ), +0.85 (15.8σ) and +0.20 (4.2σ). Five
 others measured between +0.05 and +0.09, inside noise, and were cut. See *The pool is three
 because a run is 1.4 matches* below: the finding is not about which boosters, it is that a
@@ -2116,3 +2118,80 @@ Sam's, but it is the first opponent in this game that a good draft has to actual
 
 Nine tables instead of five, and a throw sweep across nine opponents instead of five, so
 `match.mjs` roughly doubled. `THROW=` and `RUN=` still cut it down for a smoke run.
+
+
+---
+
+# The pool that finally has no prize and no filler
+
+Sam handed over the decision and asked for Veterans to go, suggesting a revive in its
+place: *"once per round a random unit is selected on your side that revives if defeated."*
+
+**The pool is three now, and the three are the same size as each other** — measured on the
+`counter` seat the suite's own guard uses, 120 runs an arm:
+
+| | matches | against taking nothing |
+|---|---|---|
+| The Vanguard | 2.55 | **+0.32 (3.3σ)** |
+| Field surgeons | 2.54 | **+0.32 (3.2σ)** |
+| The Compact | 2.52 | **+0.30 (2.8σ)** |
+| *taking nothing* | *2.23* | *the control* |
+
+Every one clears the control and **not one clears the others**. That is the shape five
+re-cuts have been trying to reach: the question stops being *which is best* and becomes
+*which do I want*, which is the only version of a booster choice worth offering.
+
+## The revive was built twice and measured dead twice
+
+It is a good idea and it is not a tuning miss.
+
+| The Yards | against the control |
+|---|---|
+| one **body** stands again | +0.13 (0.9σ) |
+| one whole **card** stands again | +0.10 (0.7σ) |
+
+**The field resets every round.** Nothing is permanently lost inside a match, so a revive
+can only change a battle that was *close* — and 59% of mixed compositions are settled 95/5
+before a shot is fired. A booster that acts inside a battle is spending its effect on
+rounds whose answer was already fixed at the draft.
+
+That is the same structural fact as the red beside it, and it is worth stating as a rule
+rather than as one dead booster: **every battle-side booster this project has measured is
+dead, and both survivors carry something between matches.** The Compact carries a card,
+Field surgeons carries a life, and the Vanguard buys picks — nothing else has ever worked.
+
+## Five cut, and their machinery with them
+
+Wider muster (+0.08), The Yards (+0.10), Quartermaster (+0.10), Attrition (+0.06), Salvage
+rights (+0.13) — none within reach of the bar. **Quartermaster was re-purposed first**, from
+a market cadence to *kit carries between matches*, on the reasoning that the axis which
+works is the one that carries; it measured the same. That is three designs on that axis
+now, and only two of them landed.
+
+**The code went with them.** `offerSize`'s wider branch, `rampFor`'s attrition halving,
+`earn`'s salvage multiplier, `yardsFor` and the resolver's revive, `marketEvery` and
+`keepsKit` are all removed rather than left unreferenced — a rule nobody can reach that
+still reads like a live one is the trap the audit session cleaned out of `earn` once
+already.
+
+**`pickTokens` is kept and is now an identity.** It is the one place *what a pick turns
+into* is decided, so the interface and the sweep cannot disagree about it, and it is where
+the next booster of Veterans' shape would go. It says so rather than looking like an
+oversight.
+
+## This reverses Sam's note 17 swap, and he should know it did
+
+He took *A fourth pick* out and put *Wider muster* in, on a fairness argument: four
+different cards a round is decisive against somebody who does not have it. **That argument
+still stands and nothing here contradicts it.** But Wider muster measured +0.03 on the
+`ace` seat and +0.08 on the guard's, so the pool now contains neither — the offer axis has
+measured dead four separate times across two different players, and it is not a booster
+this game has a use for.
+
+## What is left, and it is not a booster problem
+
+A pool of three is what Sam said he did not want. The honest reason it is three is that
+**the two axes which work are nearly exhausted** — more picks, and something that carries
+between matches — and the axis that would open the rest is the one the other red names.
+Until compositions stop being settled 95/5, anything that happens inside a battle cannot
+matter enough to be worth choosing.

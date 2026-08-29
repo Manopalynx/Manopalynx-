@@ -665,12 +665,8 @@ function counterScore(tok, theirs, picks = []) {
 // WHAT A ROUND PAYS. A purse to both sides, and one a body still standing to the
 // winner. The survivor count is the resolver's own `left`, so the game cannot
 // pay out a number the battle did not produce.
-export const earn = (left, winner, boosts = [[], []]) =>
-  [0, 1].map(s => {
-    const mine = boosts[s] || [];
-    // Salvage rights: two credits a surviving body rather than one.
-    return SHOP.purse + (s === winner ? left[s] * (has(mine, 'salvage') ? 2 : 1) : 0);
-  });
+export const earn = (left, winner) =>
+  [0, 1].map(s => SHOP.purse + (s === winner ? left[s] : 0));
 
 // What a booster changes, each read where it is used rather than baked into a
 // copy of the rule. `has` is the only place an id is compared. It still matches
@@ -687,18 +683,19 @@ const has = (boosts, id) => boosts.some(b => b === id || b.startsWith(id + ':'))
 // and put a wider OFFER in because choosing better from more is tactical rather
 // than simply more. Worth re-measuring rather than assuming -- it scored +0.05
 // last time, on a seat too weak to tell which of five cards was the better one.
-export const offerSize = (boosts, wide) => RULES.offer + wide + (has(boosts, 'wider') ? 2 : 0);
+export const offerSize = (boosts, wide) => RULES.offer + wide;
 export const picksFor = (boosts, extra) => RULES.picksPerRound + extra;
 // How often the market opens for a side. One place, because the interface and
 // the sweep both need it and a cadence written twice is a cadence that disagrees.
-export const marketEvery = boosts => has(boosts, 'quarter') ? 2 : SHOP.every;
+
 // What the opponent starts a run's match on. Attrition halves it, and it is the
 // only booster whose value GROWS with the run -- which is why it measured as
 // nothing when a run was 1.4 matches long.
-export const rampFor = (boosts, n) => Math.round(n * RUN.ramp * (has(boosts, 'attrition') ? 0.5 : 1));
+export const rampFor = (boosts, n) => n * RUN.ramp;
 // The first life a side loses in a match, given back. Lives are what a run really
 // spends, so this is the booster aimed at the run rather than at the match.
 export const mends = boosts => has(boosts, 'surgeons');
+
 // THE COMPACT. One card of the column you finished with marches into the next
 // match at the level it reached; everything else is redrafted from nothing. One
 // exported rule rather than two, because the interface has to carry the same card
@@ -727,11 +724,15 @@ export function carried(boosts, picks) {
 // the Leader's doctrine as a rule; this is the same argument, doubled.
 export const bonusPicks = boosts => RULES.loserBonusPicks + (has(boosts, 'vanguard') ? 1 : 0);
 
-// A card drafted by a side with Veterans arrives already upgraded once, so the
-// pick is two tokens rather than one. One function, because the interface and
-// the sweep both take picks and neither may have its own idea of what a pick is.
-export const pickTokens = (boosts, tok) =>
-  (has(boosts, 'veteran') && !tok.includes(':') ? [tok, UP_TAG + tok] : [tok]);
+// WHAT A PICK TURNS INTO. One card, one token -- and this function is the only
+// place that is decided, so the interface and the sweep cannot disagree about it.
+//
+// It is an identity now. Veterans made a pick two tokens (the card and a level on
+// it) and was cut in Sam's note 17 for dominating a pool of eight at +1.60
+// matches against +0.03 to +0.33 for everything else. The seam is kept rather
+// than inlined because it is where the next booster of that shape goes, and
+// because a pick becoming two things is a rule the screen must not re-derive.
+export const pickTokens = (boosts, tok) => [tok];
 
 // What the market has in it for a given side, and what it costs. Derived from
 // the army rather than listed, so an upgrade that cannot apply is never offered
@@ -1060,7 +1061,7 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
     // Every third round the market opens for both sides.
     if (lives[0] > 0 && lives[1] > 0) {
       for (const s of [0, 1]) {
-        if ((r + 1) % marketEvery(boosts[s]) !== 0) continue;
+        if ((r + 1) % SHOP.every !== 0) continue;
         // WHICH SHOPPER, per side. `ai` is `spend()`, the opponent's, which was
         // both sides' for the whole life of the economy; `ace` is the player's;
         // `none` is the arm Sam described -- a run that buys nothing at all.
@@ -1094,14 +1095,12 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
  * Sweepable, which is the point of putting it here: "how far does the floor
  * get" is the only number that says whether a run is a run or a treadmill.
  */
-// Which booster the `ace` takes, in the order the isolated measurement on THIS
-// seat put them: Veterans +1.60, the Vanguard +0.33, Field surgeons +0.30, the
-// Compact +0.27, Quartermaster +0.20, Salvage rights +0.20, Attrition +0.13,
-// Wider muster +0.03. A person who has read the game takes the best one offered,
-// and anything this list does not name goes last rather than being unreachable --
-// the pool has been re-cut four times now.
-const ACE_BOOSTS = ['veteran', 'vanguard', 'surgeons', 'compact',
-                    'quarter', 'salvage', 'attrition', 'wider'];
+// Which booster the `ace` takes, in the order the isolated measurement put them:
+// the Compact +0.48, Field surgeons +0.43, the Vanguard +0.31, all three clear of
+// the control at better than two standard errors. A person who has read the game
+// takes the best one offered, and anything this list does not name goes last
+// rather than being unreachable -- the pool has been re-cut five times now.
+const ACE_BOOSTS = ['compact', 'surgeons', 'vanguard'];
 
 export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = null,
                           shop = ['ai', 'ai'], boost = null, force = null } = {}) {
