@@ -15,7 +15,7 @@ import { BY_ID, RULES, PERSONAS, UPGRADE, DRAFT, SPECIALS, SHOP, RUN,
          BY_BOOST, BY_KIT, BY_ORDER, SABOTAGE, COIN, BUILD } from './data.js';
 import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId,
          earn, stock, spend, upgradeable, specialsFor, kitFor, ordersFor, boosterOffer,
-         offerSize, picksFor, pickTokens } from './engine.js';
+         offerSize, picksFor, pickTokens, bonusPicks } from './engine.js';
 import { draw, effects, auras, GROUND, SIDE, shape } from './render.js';
 import { glyph } from './glyphs.js';
 
@@ -128,6 +128,8 @@ function load() {
     S.money = S.money || [0, 0];
     S.wide = S.wide || [0, 0];
     S.perRound = S.perRound || [RULES.picksPerRound, RULES.picksPerRound];
+    // A match saved before the loser's bonus was counted rather than cleared.
+    S.bonusDone = S.bonusDone || 0;
     S.boosts = S.boosts || [[], []];
     S.pending = S.pending || [[], []];
     // A battle is not saved mid-playback; a reload lands on the fight instead.
@@ -140,8 +142,25 @@ function load() {
 function startRound() {
   S.pickNo = 0;
   S.bonus = S.loser;            // only the loser of the last round gets one
+  // HOW MANY of them is the ENGINE's answer, not a shape in this file. It was
+  // one, hardcoded as a state machine that cleared `bonus` after a single pick,
+  // and `bonusPicks()` -- the function that reads The Vanguard -- had exactly one
+  // caller in the repository: `playMatch`, which is the sweep. So the booster
+  // measured +0.18 matches in `match.mjs` and did nothing whatever on the phone,
+  // for both sides, while the suite's claim "the pool has no dead option" stayed
+  // green because it never loads this file. Counted rather than stored as a
+  // remaining tally, so a match saved mid-bonus resumes with the right number.
+  S.bonusDone = 0;
   S.mine = S.theirs = null;
   next();
+}
+
+// A bonus pick has been taken. The loser opens with `bonusPicks()` of them --
+// one, or two with The Vanguard -- and only when they are all spent does the
+// round move on to the picks both sides make together.
+function bonusSpent(side) {
+  S.bonusDone = (S.bonusDone || 0) + 1;
+  if (S.bonusDone >= bonusPicks(S.boosts[side])) S.bonus = null;
 }
 
 // Drives the round forward one commitment at a time. Each pick is a blind
@@ -154,7 +173,8 @@ function next() {
     const cards = offer(rand, offerSize(S.boosts[1], S.wide[1]), S.army[1]);
     const tok = cards[POLICIES[S.opp](cards, S.army[1].slice(), S.army[0].slice())];
     S.army[1].push(...pickTokens(S.boosts[1], tok));
-    S.bonus = null; S.mine = null; S.theirs = tok;
+    bonusSpent(1);
+    S.mine = null; S.theirs = tok;
     return reveal(popKeys(1, tok));
   }
   if (S.bonus === 0) {                       // your extra pick, taken alone
@@ -191,7 +211,7 @@ function commit(i) {
   S.army[0].push(...pickTokens(S.boosts[0], tok));
   S.mine = tok; S.theirs = null;
   const keys = popKeys(0, tok);
-  if (S.solo) { S.bonus = null; }
+  if (S.solo) { bonusSpent(0); }
   else {
     if (S.withThem) {
       const t = S.oppOffer[POLICIES[S.opp](S.oppOffer, seen[1], seen[0])];
@@ -424,9 +444,12 @@ function render() {
   const theirs = armyFrom(S.army[1]).cards.length;
 
   if (S.phase === 'pick') {
-    el.prompt.textContent = S.solo ? 'Your extra pick' : `Pick ${S.pickNo + 1} of ${S.perRound[0]}`;
+    const bonus = bonusPicks(S.boosts[0]);
+    el.prompt.textContent = S.solo
+      ? (bonus > 1 ? `Your extra pick ${(S.bonusDone || 0) + 1} of ${bonus}` : 'Your extra pick')
+      : `Pick ${S.pickNo + 1} of ${S.perRound[0]}`;
     el.sub.innerHTML = S.solo
-      ? `You lost the round, so this one is yours alone &middot; ${size} cards to ${theirs}`
+      ? `You lost the round, so ${bonus > 1 ? 'these are' : 'this one is'} yours alone &middot; ${size} cards to ${theirs}`
       : `${size} cards to ${theirs} &middot; they are choosing at the same time`;
     S.offer.forEach((tok, i) => el.cards.appendChild(cardFace(tok, i)));
   }
@@ -457,7 +480,10 @@ function render() {
     el.prompt.textContent = won ? 'You hold the field' : 'Your column breaks';
     const pay = S.paid ? S.paid[0] : 0;
     el.sub.textContent = (won ? `${PERSONAS[S.opp].n} drops a life. `
-                              : 'You drop a life, and open the next round with an extra pick. ') +
+                              : `You drop a life, and open the next round with ${
+                                  bonusPicks(S.boosts[0]) > 1
+                                    ? `${bonusPicks(S.boosts[0])} extra picks`
+                                    : 'an extra pick'}. `) +
       `${coin(pay)} earned — a purse of ${coin(SHOP.purse)}` +
       (won ? ` and ${S.left[0]} still standing.` : '.');
     if (marketDue()) button('The market', () => market());
@@ -794,7 +820,7 @@ function over() {
       document.querySelectorAll('.sheet').forEach(x => x.remove());
       const d2 = sheet(`<h1>Match ${nextN}</h1>
         ${held(boosts[0], 'Yours')}${held(boosts[1], 'Theirs')}
-        ${nextMatchNote(nextN, lives)}
+        ${nextMatchNote(nextN, lives, boosts)}
         <button class="pick" id="on"><b>March on</b></button>
         <button class="pick" id="stop"><b>End the run here</b><i>Best so far: ${bestRun()} matches.</i></button>`);
       d2.querySelector('#on').onclick = carryOn;
@@ -847,15 +873,21 @@ function over() {
 // What the next opponent brings. Stated, so a loss is legible rather than
 // mysterious -- the ramp is the thing you are running from and hiding it turns
 // a run into a difficulty setting nobody chose.
-// Which unit Standing muster names. Drawn as they stand on the field, because
-// that is where you will be glad to see one.
-
-function nextMatchNote(n, lives) {
+//
+// AND THE FIGURE IS THE ONE THE MATCH WILL USE. It read
+// `RULES.picksPerRound + extra` -- the ramp alone -- while `newMatch` sets their
+// picks with `picksFor(boosts, extra)`, which also counts A fourth pick. So a
+// screen naming their booster four lines above ("Theirs: A fourth pick — four
+// picks a round instead of three") stated four in the paragraph below it when
+// the answer was five, and said nothing at all for the first two matches, where
+// the ramp is zero and the booster is not. One function decides how many picks a
+// side gets, and this asks it.
+function nextMatchNote(n, lives, boosts) {
   const opp = PERSONAS[RUN.order[n % RUN.order.length]];
-  const extra = Math.floor(n / RUN.pickEvery);
+  const picks = picksFor(boosts[1], Math.floor(n / RUN.pickEvery));
   return `<h2>Next: ${opp.n}</h2><p>${opp.d}</p>
-    <p>They begin with <b>${coin(n * RUN.ramp)}</b>${extra
-      ? ` and draft <b>${RULES.picksPerRound + extra}</b> cards a round` : ''}, at
+    <p>They begin with <b>${coin(n * RUN.ramp)}</b>${picks > RULES.picksPerRound
+      ? ` and draft <b>${picks}</b> cards a round` : ''}, at
       full strength. You go in on <b>${lives} ${lives === 1 ? 'life' : 'lives'}</b>.</p>`;
 }
 

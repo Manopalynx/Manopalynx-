@@ -25,8 +25,8 @@ Sam owns every decision here. Where a choice is still open it says so rather tha
 
 ## Where it stands
 
-`BUILD` is `column-v15` in `data.js`. The service worker that carries it is
-`grandiose-v89` in `docs/sw.js` — one cache for all three published apps, so **shipping a
+`BUILD` is `column-v16` in `data.js`. The service worker that carries it is
+`grandiose-v90` in `docs/sw.js` — one cache for all three published apps, so **shipping a
 change here bumps Grandiose's version too**, and `test/offline.mjs` fails if the two ever
 disagree.
 
@@ -75,6 +75,9 @@ isolated against a run that takes none, +0.44 (9.2σ), +0.85 (15.8σ) and +0.20 
 others measured between +0.05 and +0.09, inside noise, and were cut. See *The pool is three
 because a run is 1.4 matches* below: the finding is not about which boosters, it is that a
 run is too short for one to compound.
+
+**And all three now reach the phone**, which is new and was not true of The Vanguard for as
+long as it has existed — see *The booster that was only in the sweep* below.
 
 **Also open:** **merging** — design point 4, specified and never built — and whether the
 opponent gets back the strength its shopper rewrite cost it. Throwing the opening round
@@ -1561,3 +1564,94 @@ The copy now says *"for the rest of this match"*. The price is unaffected — it
 over a single match, which makes it exact here rather than the floor the pricing note called
 it. **Whether kit should carry is a live design question and Sam's; that it must not say it
 carries while it does not is neither.**
+
+
+---
+
+# The booster that was only in the sweep
+
+`bonusPicks()` reads The Vanguard — *a round you lose buys two picks, not one* — and it
+had **exactly one caller in the repository: `playMatch`, which is the sweep.** The
+interface's round loop set `S.bonus` to the loser and cleared it after a single pick,
+which is the rule as a state-machine shape rather than as a number, so it gave one
+whatever you held.
+
+So the booster measured **+0.18 matches (2.5σ)** in `match.mjs` and did nothing at all on
+the phone — for you and for the opponent, who draws it one match in three. The pool is
+three and all three are always on screen, so **one of the three choices offered after every
+match survived was a dud**, and taking it spent the choice on nothing.
+
+**And a green tick sat on top of it.** `match.mjs` prints *every booster beats taking none
+— the pool has no dead option*. That claim is true of `playRun`, which never loads
+`ui.js`. A sweep cannot see this class of defect at all.
+
+It was found by cross-referencing every engine export against its callers, and confirmed
+before it was believed — two arms of the real page, identical but for one token:
+
+| | bonus picks offered |
+|---|---|
+| no booster | 1 |
+| The Vanguard | **1** |
+
+With the fix, the same probe reads 1 and **2**.
+
+## What now makes it impossible
+
+Three checks, each broken on purpose and watched go red before it was kept.
+
+| check | the defect it makes impossible | how it was mutated |
+|---|---|---|
+| every booster in the pool is read by the engine | a booster in `BOOSTS` that nothing compares — offered to the player regardless, because the offer is built from `BOOSTS` | renamed `has(boosts, 'vanguard')` → red |
+| every rule that reads a booster is called by the interface | **this defect** — an engine rule the page never asks for | removed the calls from `ui.js` → red, naming `bonusPicks` |
+| the loser's bonus is the engine's number | the rule drifting from the number, in either direction | doubled the life cost per round → red |
+
+The second is a static test on `has(boosts, ...)`, which `engine.js` already declares is the
+only place a booster id is compared. **Its own first version was wrong in exactly the way it
+exists to catch**: it matched the raw file, and both files carry comments naming
+`bonusPicks()` — written to explain why it must be called — so it passed a mutation that
+removed every real call and left the prose standing. It strips comments before matching now.
+Nothing about reading it said so; breaking it did.
+
+The third is a differential rather than an absolute, because *"the page offers a bonus
+pick"* passes on the build that ignored the booster entirely.
+
+## The run screen was stating a pick count the match then contradicted
+
+`nextMatchNote` printed `RULES.picksPerRound + extra` — the ramp alone — while `newMatch`
+sets the opponent's picks with `picksFor(boosts, extra)`, which also counts *A fourth
+pick*. Four lines apart on one screen:
+
+> **Theirs** — A fourth pick — *Four picks a round instead of three*
+> They begin with ₡54 and draft **4** cards a round
+
+It was five. And for the first two matches the clause is omitted entirely — the ramp is
+zero there and the booster is not — so the screen said nothing at all about their picks
+while they drafted four. Derived from `picksFor` now, so there is nothing left to disagree.
+
+## Two checks in `play.mjs` that were wrong about the game
+
+Both surfaced by running the suite rather than by reading it, and **both were the
+assertion being stale rather than the code being wrong** — which is the first question to
+ask when a check goes red.
+
+**`the arithmetic closes` counted lives as `(5 − hearts) + (5 − hearts)`.** That was lives
+spent until the day the market started selling one — to you at the shop, and to the
+opponent by `spend()` whenever it is down to its last. A match in which either side buys a
+life shows nine lives against ten rounds, and the check calls the game wrong. It had read
+green because the harness plays the floor and rarely reaches ₡44; it is a coin toss on any
+match that does, and **a flaky check is worse than no check**. It counts every increase in
+a life total now, because nothing but a purchase raises one.
+
+**`buying takes the price` read the price off the wrong screen.** A special and a piece of
+kit are *"from ₡X"* rows — the row states the cheapest the shelf holds, the chooser button
+states what the one you clicked costs — so the check compared a row price against a
+different purchase and reported *"paid 75 for something priced 70"* against a game doing
+exactly what it said. It reads the price on the button the player actually commits on now,
+matched on the coin rather than a trailing digit: an upgrade's button reads *"Walker to
+level 2"* and a bare `(\d+)$` prices it at ₡2.
+
+Both were mutation-tested after repair — a round costing two lives, and a till
+overcharging by one — and both go red.
+
+`play.mjs` is at **27 claims**, green over three consecutive runs on three different
+random paths.
