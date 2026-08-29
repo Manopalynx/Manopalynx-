@@ -129,20 +129,139 @@ export function draw(live, opt = {}) {
   }).join('');
 }
 
-// The ground: a grid, the line of contact, and the two deployment bands. No
-// terrain, because the engine has none — a renderer that draws ground the rules
-// do not know about is the screen disagreeing with the game.
-export const GROUND =
-  `<rect x="0" y="0" width="100" height="140" fill="#0e1620"/>` +
-  Array.from({ length: 9 }, (_, i) =>
-    `<line x1="${(i + 1) * 10}" y1="0" x2="${(i + 1) * 10}" y2="140" stroke="#16222f" stroke-width="0.25"/>`).join('') +
-  Array.from({ length: 13 }, (_, i) =>
-    `<line x1="0" y1="${(i + 1) * 10}" x2="100" y2="${(i + 1) * 10}" stroke="#16222f" stroke-width="0.25"/>`).join('') +
-  // Bands follow the flip: yours at the bottom, theirs at the top.
+// THE GROUND — Sam's note 18. Nine maps, one a persona, and every one of them a
+// place in the book. COSMETIC, by his instruction: the resolver does not know a
+// map exists, so nothing here re-derives a single figure in this folder. That is
+// the whole reason to do it this way round — nine of them can be looked at on a
+// phone before anyone decides which ones want teeth.
+//
+// Drawn in FIELD UNITS on the 100x140 field, like everything else in this file,
+// and deliberately quiet: the counters are the thing being read, so no scene goes
+// above about 0.1 opacity on anything large. If a map ever competes with a
+// marker, the map is wrong.
+//
+// The functional overlay is drawn on TOP of every scene and is the same on all
+// nine -- the two deployment bands and the line of contact are rules the player
+// reads, not decoration, and a map that hid them would be a map that lied.
+
+const rows = (n, y0, dy, f) => Array.from({ length: n }, (_, i) => f(y0 + i * dy, i)).join('');
+const dots = (n, seed, f) => {
+  // A fixed pseudo-random scatter. Not `Math.random`: this module is imported by
+  // the page and by two suites, and a ground that differs between them is a
+  // ground that cannot be screenshotted twice.
+  let a = seed; const r = () => (a = (a * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  return Array.from({ length: n }, () => f(r(), r())).join('');
+};
+
+const SCENES = {
+  // "the great crossroads, the market of markets" — two avenues meeting, and the
+  // stalls of a market that has been a garrison since the Dominion took it.
+  eden: `<rect width="100" height="140" fill="#141519"/>
+    <rect x="38" y="0" width="24" height="140" fill="#20211f" fill-opacity="0.7"/>
+    <rect x="0" y="58" width="100" height="24" fill="#20211f" fill-opacity="0.7"/>
+    <circle cx="50" cy="70" r="15" fill="none" stroke="#3a3a30" stroke-width="0.5"/>
+    <circle cx="50" cy="70" r="9" fill="none" stroke="#3a3a30" stroke-width="0.35"/>
+    ${dots(46, 7, (x, y) => `<rect x="${(4 + x * 92).toFixed(1)}" y="${(4 + y * 132).toFixed(1)}" width="3.4" height="2.4" fill="#2c2d26" fill-opacity="0.75"/>`)}`,
+
+  // "their whole armored line has to come up the terrace cuts, here — it's the
+  // only grade the walkers can climb". Three rings, and one notch through each.
+  terraces: `<rect width="100" height="140" fill="#101a18"/>
+    ${rows(3, 34, 34, (y, i) => `<rect x="0" y="${y}" width="100" height="11" fill="#182724" fill-opacity="${0.85 - i * 0.15}"/>
+      <line x1="0" y1="${y}" x2="100" y2="${y}" stroke="#2c4640" stroke-width="0.5"/>
+      <rect x="${41 + i * 3}" y="${y}" width="${13 - i * 2}" height="11" fill="#101a18"/>`)}
+    ${rows(9, 8, 15, y => `<line x1="0" y1="${y}" x2="100" y2="${y}" stroke="#16241f" stroke-width="0.25"/>`)}`,
+
+  // "I signed the instrument of vassalage in a room aboard one of their tribute
+  // ships. They kept me waiting four hours." A long table, and one empty seat.
+  tribute: `<rect width="100" height="140" fill="#0d0f13"/>
+    <rect x="18" y="52" width="64" height="36" fill="none" stroke="#2a2f3a" stroke-width="0.6"/>
+    <rect x="24" y="58" width="52" height="24" fill="#141922" fill-opacity="0.8"/>
+    ${rows(6, 40, 12, y => `<rect x="6" y="${y}" width="4" height="7" fill="#1b2029"/><rect x="90" y="${y}" width="4" height="7" fill="#1b2029"/>`)}
+    <rect x="45" y="24" width="10" height="8" fill="none" stroke="#39404d" stroke-width="0.5"/>`,
+
+  // "the Union's silver-on-blue, and above it, on the taller pole, the black
+  // insignia of the Onyx Dominion" — and the ranks it was read out to.
+  parade: `<rect width="100" height="140" fill="#141a14"/>
+    <rect x="0" y="0" width="100" height="34" fill="#1b2419" fill-opacity="0.8"/>
+    <rect x="30" y="26" width="40" height="7" fill="#252c20"/>
+    <line x1="40" y1="4" x2="40" y2="27" stroke="#3b4433" stroke-width="0.5"/>
+    <rect x="40" y="4" width="8" height="5" fill="#0b0b0e"/>
+    <line x1="60" y1="10" x2="60" y2="27" stroke="#3b4433" stroke-width="0.5"/>
+    <rect x="60" y="10" width="7" height="4.5" fill="#20344a"/>
+    ${rows(7, 46, 12, y => rows(11, 8, 8.4, x => `<rect x="${x}" y="${y}" width="2" height="2.6" fill="#1e281c"/>`))}`,
+
+  // "a vessel assembled from the corpses of at least nine other vessels, in a
+  // stateroom decorated with trophies whose provenance I chose not to examine".
+  // Nine plates, nine tones, and the seams where they were welded together.
+  raven: `<rect width="100" height="140" fill="#151013"/>
+    ${['#221a1c','#1b1a20','#241d16','#1a2020','#26191a','#1d1b17','#221f22','#191d22','#241c1f']
+      .map((c, i) => `<rect x="${(i % 3) * 34}" y="${Math.floor(i / 3) * 47}" width="34" height="47" fill="${c}"/>`).join('')}
+    ${rows(2, 47, 47, y => `<line x1="0" y1="${y}" x2="100" y2="${y}" stroke="#3a2b2c" stroke-width="0.7" stroke-dasharray="2 1.2"/>`)}
+    ${rows(2, 34, 34, x => `<line x1="${x}" y1="0" x2="${x}" y2="140" stroke="#3a2b2c" stroke-width="0.7" stroke-dasharray="2 1.2"/>`)}
+    ${dots(11, 19, (x, y) => `<rect x="${(6 + x * 86).toFixed(1)}" y="${(6 + y * 126).toFixed(1)}" width="4" height="5" fill="none" stroke="#4a3a2c" stroke-width="0.4"/>`)}`,
+
+  // "The war room of the Union Palace held the whole galaxy in light above its
+  // table." The table is the dark ellipse; the galaxy is what is over it.
+  warroom: `<rect width="100" height="140" fill="#0b0f16"/>
+    <ellipse cx="50" cy="70" rx="34" ry="26" fill="#111823" stroke="#22303f" stroke-width="0.6"/>
+    <ellipse cx="50" cy="70" rx="26" ry="19" fill="none" stroke="#1b2836" stroke-width="0.35"/>
+    ${dots(70, 31, (x, y) => {
+      const a = x * Math.PI * 4, r = 4 + y * 24;
+      return `<circle cx="${(50 + Math.cos(a) * r * 1.25).toFixed(1)}" cy="${(70 + Math.sin(a) * r * 0.85).toFixed(1)}" r="${(0.3 + y * 0.5).toFixed(2)}" fill="#7fd4ff" fill-opacity="${(0.15 + y * 0.3).toFixed(2)}"/>`;
+    })}
+    ${rows(10, 12, 13, y => `<rect x="4" y="${y}" width="3" height="6" fill="#141c27"/><rect x="93" y="${y}" width="3" height="6" fill="#141c27"/>`)}`,
+
+  // "At the plaza's center stood the stage, flanked by two towers of Vale's
+  // smiling face, and an empty podium with its small bouquet of microphones
+  // waiting like the future." The banners are over the crowd on floating trestles.
+  plaza: `<rect width="100" height="140" fill="#131217"/>
+    ${dots(150, 53, (x, y) => `<circle cx="${(3 + x * 94).toFixed(1)}" cy="${(3 + y * 134).toFixed(1)}" r="0.7" fill="#2a2632" fill-opacity="0.9"/>`)}
+    <rect x="30" y="60" width="40" height="20" fill="#1d1a24" stroke="#332c3d" stroke-width="0.5"/>
+    <rect x="47" y="66" width="6" height="8" fill="#2b2536"/>
+    <rect x="16" y="44" width="12" height="34" fill="#1a1822" stroke="#39304a" stroke-width="0.5"/>
+    <rect x="72" y="44" width="12" height="34" fill="#1a1822" stroke="#39304a" stroke-width="0.5"/>
+    ${[[19,52],[75,52]].map(([x, y]) => `<circle cx="${x + 3}" cy="${y + 4}" r="3.4" fill="none" stroke="#4a3f5e" stroke-width="0.4"/>`).join('')}
+    ${rows(3, 14, 9, (y, i) => `<rect x="${20 + i * 14}" y="${y}" width="34" height="4" fill="#241f2e" fill-opacity="0.85"/>`)}`,
+
+  // "They burned the orbitals, then the cities, then the croplands, and then they
+  // stayed in orbit an extra day to burn the forests."
+  croplands: `<rect width="100" height="140" fill="#14100c"/>
+    ${rows(22, 4, 6.2, (y, i) => `<line x1="0" y1="${y}" x2="100" y2="${y}" stroke="${i % 3 ? '#1e1712' : '#241a12'}" stroke-width="${i % 3 ? 1.6 : 2.4}"/>`)}
+    ${dots(34, 11, (x, y) => `<circle cx="${(3 + x * 94).toFixed(1)}" cy="${(3 + y * 134).toFixed(1)}" r="${(1 + y * 2.5).toFixed(1)}" fill="#0d0a08" fill-opacity="0.85"/>`)}
+    ${dots(26, 71, (x, y) => `<circle cx="${(3 + x * 94).toFixed(1)}" cy="${(3 + y * 134).toFixed(1)}" r="0.5" fill="#e07a32" fill-opacity="0.45"/>`)}`,
+
+  // "It was circular and vast, and the walls were pods ... the occupied pods gave
+  // off a faint interior light, so that the great dark room glowed in patches,
+  // like votive candles in a drowned church."
+  // FIFTY-TWO PODS, THIRTY-SEVEN OCCUPIED. Samuel counts them; so does this.
+  pods: `<rect width="100" height="140" fill="#0a0d10"/>
+    <ellipse cx="50" cy="70" rx="46" ry="64" fill="#0c1116" stroke="#16232a" stroke-width="0.6"/>
+    <ellipse cx="50" cy="70" rx="34" ry="48" fill="none" stroke="#121c22" stroke-width="0.4"/>
+    ${Array.from({ length: 52 }, (_, i) => {
+      const a = (i / 52) * Math.PI * 2, tier = i % 2 ? 1 : 0;
+      const rx = (40 - tier * 8), ry = (57 - tier * 11);
+      const x = 50 + Math.cos(a) * rx, y = 70 + Math.sin(a) * ry;
+      const lit = i % 7 !== 3;                 // 37 of the 52 stand occupied
+      return `<rect x="${(x - 1.6).toFixed(1)}" y="${(y - 2.4).toFixed(1)}" width="3.2" height="4.8" rx="1.4"
+        fill="${lit ? '#2b4a52' : '#101a1e'}" fill-opacity="${lit ? 0.75 : 0.9}"
+        stroke="#1b2c33" stroke-width="0.3"/>` +
+        (lit ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="#5fd8c8" fill-opacity="0.10"/>` : '');
+    }).join('')}`
+};
+
+// The two deployment bands and the line of contact, drawn over every scene. These
+// are rules rather than decoration -- yours at the bottom, theirs at the top, and
+// where the lines meet -- so no map is allowed to hide them.
+const OVERLAY =
   `<rect x="0" y="0" width="100" height="22" fill="#f2955c" fill-opacity="0.05"/>` +
   `<rect x="0" y="118" width="100" height="22" fill="#6fc6f5" fill-opacity="0.05"/>` +
   `<line x1="0" y1="70" x2="100" y2="70" stroke="#2c3f54" stroke-width="0.3" stroke-dasharray="1.5 1.5"/>`;
 
+/** The ground for a map id. Unknown ids fall back to Eden rather than to nothing. */
+export const ground = (map) => (SCENES[map] || SCENES.eden) + OVERLAY;
+
+// Kept so nothing that imported the old constant breaks; it is Eden's ground.
+export const GROUND = ground('eden');
 
 /* ------------------------------------------------------------------ effects */
 // Sam's notes 1 and 2: projectiles, area damage and a flinch. All of it is read

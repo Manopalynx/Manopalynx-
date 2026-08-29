@@ -542,6 +542,44 @@ export const POLICIES = {
     mine.length < 3 ? best(cards, tok => worst(gain(tok, mine, paper)))
                     : POLICIES.varan(cards, mine, theirs),
 
+  // THE OVERSEER. It does not choose; it records. Whatever you took last is what
+  // it takes if the offer holds it, and otherwise the strongest thing there --
+  // "a mark on his record in a file the Overseers read". Nothing else in the
+  // roster copies you, which is what makes it a different problem rather than a
+  // differently-tuned one.
+  overseer: (cards, mine = [], theirs = []) => {
+    const last = armyFrom(theirs).cards.slice(-1)[0];
+    const at = cards.findIndex(t => tokId(t) === last);
+    return at >= 0 ? at : best(cards, tok => gain(tok, mine, paper));
+  },
+
+  // ADRAN VALE drafts the monument rather than the crowd: the biggest single
+  // body, count ignored. "His face is the single most reproduced image in
+  // Basileian space." It is the opposite of Harlow, who counts total health --
+  // Vale would rather have one thing worth putting on a banner.
+  vale: (cards, mine = []) =>
+    best(cards, tok => gain(tok, mine, (u, n) => u.hp * u.dmg * (n ? 1 : 0))),
+
+  // THE PURIFIERS take area and burn, and are the ONE persona that never reads
+  // the board: "The Purifiers wanted nothing the worlds had." Everything else in
+  // this list answers you somehow. This one does not know you are there.
+  purifier: cards =>
+    best(cards, tok => {
+      const u = BY_ID[tokId(tok)];
+      return (u.splash || 0) * 10 + (u.dot || 0) * 40 + (u.boom ? u.boom.r : 0) * 6 + u.dmg / 20;
+    }),
+
+  // THE NEUREX does not draft, it converts: whatever you field most of is what
+  // comes back at you. Chapter 57 as a rule, and the closest a policy gets to the
+  // swarm without the resolver learning a new trick.
+  neurex: (cards, mine = [], theirs = []) => {
+    const count = {};
+    for (const id of armyFrom(theirs).cards) count[id] = (count[id] || 0) + 1;
+    const want = Object.keys(count).sort((x, y) => count[y] - count[x])[0];
+    const at = cards.findIndex(t => tokId(t) === want);
+    return at >= 0 ? at : best(cards, tok => gain(tok, mine, paper));
+  },
+
   // The human seat in a sweep, and deliberately unsophisticated: it exists to
   // exercise every path, not to play well. Every "the player wins X%" figure
   // from this policy is a FLOOR, exactly as the Ledger's harness human is.

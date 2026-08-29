@@ -12,12 +12,12 @@
 // drift from.
 
 import { BY_ID, RULES, PERSONAS, UPGRADE, DRAFT, SPECIALS, SHOP, RUN,
-         BY_BOOST, BY_KIT, BY_ORDER, SABOTAGE, COIN, BUILD, TICK } from './data.js';
+         BY_BOOST, BY_KIT, BY_ORDER, SABOTAGE, COIN, BUILD, TICK, BY_MAP } from './data.js';
 import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId,
          earn, stock, spend, upgradeable, specialsFor, kitFor, ordersFor, boosterOffer,
          offerSize, picksFor, pickTokens, bonusPicks,
          marketEvery, rampFor, mends, carried } from './engine.js';
-import { draw, effects, auras, GROUND, SIDE, shape } from './render.js';
+import { draw, effects, auras, ground, SIDE, shape } from './render.js';
 import { glyph } from './glyphs.js';
 
 const $ = id => document.getElementById(id);
@@ -409,7 +409,10 @@ function paint(live, from, to) {
     const out = effects(evs, byKey);
     fx = out.svg; flash = out.flash;
   }
-  el.field.innerHTML = GROUND + (bodies.length ? auras(bodies) : '') + fx +
+  // THE GROUND IS THE OPPONENT'S. Cosmetic, so nothing downstream of this knows
+  // which map it is -- the resolver is not told and does not ask.
+  el.field.innerHTML = ground(S && PERSONAS[S.opp] && PERSONAS[S.opp].map) +
+    (bodies.length ? auras(bodies) : '') + fx +
     draw(bodies, { pick: S && S.inspect, flash, pop: S && S.pop && new Set(S.pop) });
 }
 
@@ -684,7 +687,10 @@ function sheet(html, centre) {
 // unreachable", and reads, correctly, as not shipped.
 el.who.addEventListener('click', () => {
   if (!S || document.querySelector('.sheet')) return;
+  const here = BY_MAP[PERSONAS[S.opp].map];
   const d = sheet(`<h1>${PERSONAS[S.opp].n}</h1>
+    <p class="where"><b>${PERSONAS[S.opp].f}</b> &middot; ${here ? here.n : ''}</p>
+    ${here ? `<q class="mapq">${here.q}</q>` : ''}
     <p>Round ${S.round + 1}. ${S.lives[0]} ${S.lives[0] === 1 ? 'life' : 'lives'} to
        ${S.lives[1]}, ${armyFrom(S.army[0]).cards.length} cards to
        ${armyFrom(S.army[1]).cards.length}.</p>
@@ -726,7 +732,8 @@ function menu() {
       one drawn for them.${bestRun() ? ` Best so far: ${bestRun()} matches.` : ''}</i></button>
     <h2>Or a single match</h2>
     ${Object.entries(PERSONAS).filter(([k]) => POLICIES[k]).map(([k, p]) =>
-      `<button class="pick" data-opp="${k}"><b>${p.n}</b><i>${p.d}</i></button>`).join('')}
+      `<button class="pick" data-opp="${k}"><b>${p.n}</b><i>${p.f} &middot; ${
+        BY_MAP[p.map] ? BY_MAP[p.map].n : ''}<br>${p.d}</i></button>`).join('')}
     <h2>Reference</h2>
     <button class="pick" id="roster"><b>The roster</b><i>All twelve cards, what they do,
       and which lines are the author's.</i></button>
@@ -1042,7 +1049,11 @@ function over() {
 function nextMatchNote(n, lives, boosts) {
   const opp = PERSONAS[RUN.order[n % RUN.order.length]];
   const picks = picksFor(boosts[1], Math.floor(n / RUN.pickEvery));
-  return `<h2>Next: ${opp.n}</h2><p>${opp.d}</p>
+  const here = BY_MAP[opp.map];
+  return `<h2>Next: ${opp.n}</h2>
+    <p class="where"><b>${opp.f}</b>${here ? ` &middot; ${here.n}` : ''}</p>
+    ${here ? `<q class="mapq">${here.q}</q>` : ''}
+    <p>${opp.d}</p>
     <p>They begin with <b>${coin(rampFor(boosts[0], n))}</b>${picks > RULES.picksPerRound
       ? ` and draft <b>${picks}</b> cards a round` : ''}, at
       full strength. You go in on <b>${lives} ${lives === 1 ? 'life' : 'lives'}</b>.</p>`;

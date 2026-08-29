@@ -26,8 +26,8 @@ import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve as rp, extname, join } from 'path';
 import { chromium } from 'playwright';
-import { BOOSTS, RULES } from '../data.js';
-import { bonusPicks } from '../engine.js';
+import { BOOSTS, RULES, PERSONAS, MAPS } from '../data.js';
+import { bonusPicks, POLICIES } from '../engine.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DOCS = rp(HERE, '..', '..');
@@ -124,6 +124,33 @@ if (readers.length && !unused.length)
 else bad('every rule that reads a booster is called by the interface', [
   readers.length ? `the page never calls: ${unused.join(', ')}` : 'found no booster readers to check']);
 
+/* ------------------------------- every opponent is playable, placed and quoted */
+// SAM'S NOTE 18 took the roster from five to nine and gave each one a map. Three
+// ways that can go wrong silently: a persona with no drafting policy is offered
+// and throws on the first pick; a persona whose `map` names nothing falls back to
+// Eden and nobody notices two opponents sharing a ground; and a map nobody uses
+// is a scene that was drawn and never seen. All three are data, so all three are
+// a static check rather than a browser one.
+{
+  const ids = Object.keys(PERSONAS);
+  // ASKED OF THE ENGINE, not of its source. The first version of this line tested
+  // a regex against an empty string and then matched POLICIES entries by their
+  // indentation -- it passed, for no reason connected to whether a policy exists.
+  const noPolicy = ids.filter(k => typeof POLICIES[k] !== 'function');
+  const noMap = ids.filter(k => !MAPS.some(m => m.id === PERSONAS[k].map));
+  const unused = MAPS.filter(m => !ids.some(k => PERSONAS[k].map === m.id)).map(m => m.id);
+  const shared = ids.length !== new Set(ids.map(k => PERSONAS[k].map)).size;
+  const unquoted = MAPS.filter(m => !m.q || !m.qv).map(m => m.id);
+  if (!noPolicy.length && !noMap.length && !unused.length && !shared && !unquoted.length)
+    ok(`every opponent has a policy, a map of its own and a line from the book (${ids.length} of them)`);
+  else bad('every opponent has a policy, a map of its own and a line from the book', [
+    noPolicy.length ? `no drafting policy: ${noPolicy.join(', ')}` : null,
+    noMap.length ? `map names nothing: ${noMap.join(', ')}` : null,
+    unused.length ? `map drawn and never used: ${unused.join(', ')}` : null,
+    shared ? 'two opponents share a ground' : null,
+    unquoted.length ? `map has no quoted line: ${unquoted.join(', ')}` : null]);
+}
+
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 393, height: 852 }, deviceScaleFactor: 2 });
 const page = await ctx.newPage();
@@ -133,14 +160,54 @@ page.on('console', m => { if (m.type() === 'error') { errors.push(m.text().slice
 
 await page.goto(base + '/column/index.html', { waitUntil: 'load' });
 
+// ALL NINE GROUNDS ON ONE SHEET, at the real size with a real deployment on top.
+// Sam is phone-only and a map is the one thing no assertion can judge: whether a
+// scene competes with the counters is a thing you look at. Written every run so
+// it cannot drift from what the page draws.
+{
+  const shot = await page.evaluate(async () => {
+    const { ground, draw } = await import('./render.js');
+    const { MAPS, PERSONAS } = await import('./data.js');
+    const { deployment } = await import('./engine.js');
+    const live = deployment(['walker', 'line', 'acid', 'ultra'],
+                            ['brute', 'swarm', 'neurite', 'amabie'], 42);
+    const wrap = document.createElement('div');
+    wrap.id = 'mapsheet';
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:99;overflow:auto;display:grid;' +
+      'grid-template-columns:repeat(5,1fr);gap:14px;padding:16px;background:#0b1017;' +
+      'font:12px system-ui;color:#e7eef7';
+    for (const m of MAPS) {
+      const who = Object.values(PERSONAS).find(x => x.map === m.id);
+      const cell = document.createElement('div');
+      cell.innerHTML = `<svg viewBox="0 0 100 140" style="width:100%;display:block;border-radius:8px">${
+        ground(m.id)}${draw(live, {})}</svg><div style="margin-top:6px"><b>${m.n}</b><br>` +
+        `<span style="color:#7f8fa2">${who ? who.n + ' \u00b7 ' + who.f : 'UNUSED'}</span></div>`;
+      wrap.appendChild(cell);
+    }
+    document.body.appendChild(wrap);
+    return MAPS.length;
+  });
+  await page.setViewportSize({ width: 1200, height: 1000 });
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: rp(HERE, 'play-maps.png'), fullPage: true });
+  await page.evaluate(() => document.getElementById('mapsheet').remove());
+  await page.setViewportSize({ width: 393, height: 852 });
+  if (process.env.TRACE) console.log(`   drew ${shot} grounds`);
+}
+
 /* ------------------------------------------------------- the opening screen */
 const title = await page.title();
 if (title === 'Grandiose — The Column') ok('the page opens and is itself');
 else bad('the page opens and is itself', [`titled ${JSON.stringify(title)}`]);
 
+// DERIVED, not five. Sam's note 18 took the roster from five to nine and this
+// check would have gone red for the right reason and the wrong number -- the
+// claim is that every persona with a policy is offered, not that there are five.
 const personas = await page.locator('[data-opp]').count();
-if (personas === 5) ok(`five opponents offered`);
-else bad('five opponents offered', [`found ${personas}`]);
+const playable = Object.keys(PERSONAS).length;
+if (personas === playable) ok(`every opponent is offered (${personas}, ${
+  new Set(Object.values(PERSONAS).map(p => p.f)).size} factions)`);
+else bad('every opponent is offered', [`found ${personas} of ${playable}`]);
 
 // The roster is where a player learns the counters, and where the author's lines
 // are separated from the ones written for the game. If that separation is not on
@@ -787,5 +854,5 @@ if (skipped.length) {
   console.log(`so which branch is taken is not this suite's to choose. Re-run to exercise them:`);
   skipped.forEach(m => console.log(`        · ${m}`));
 }
-console.log(`written: play-roster.png, play-draft.png, play-inspect.png, play-market.png, play-chooser.png, play-battle.png, play-run.png, play.png\n`);
+console.log(`written: play-maps.png, play-roster.png, play-draft.png, play-inspect.png, play-market.png, play-chooser.png, play-battle.png, play-run.png, play.png\n`);
 process.exit(failed ? 1 : 0);

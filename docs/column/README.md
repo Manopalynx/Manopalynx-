@@ -25,8 +25,8 @@ Sam owns every decision here. Where a choice is still open it says so rather tha
 
 ## Where it stands
 
-`BUILD` is `column-v20` in `data.js`. The service worker that carries it is
-`grandiose-v94` in `docs/sw.js` — one cache for all three published apps, so **shipping a
+`BUILD` is `column-v21` in `data.js`. The service worker that carries it is
+`grandiose-v95` in `docs/sw.js` — one cache for all three published apps, so **shipping a
 change here bumps Grandiose's version too**, and `test/offline.mjs` fails if the two ever
 disagree.
 
@@ -2035,3 +2035,84 @@ than the "one prize and four fillers" the re-cut existed to fix — it is one pr
 The honest options are to cut the tail, to bring Veterans down until the others are
 comparable, or to keep them as texture and accept that the decision is *"take Veterans
 first"*. Nothing has been changed on the strength of this.
+
+
+---
+
+# Note 18 — nine opponents, six factions, and a place for each
+
+The roster was five, of which **three were Union**. Sam's note: *"we need to make sure we
+have variety rather than almost everyone being from the Union."* The book carries six
+sides and every one of them is now somebody you play.
+
+| opponent | faction | drafts | map |
+|---|---|---|---|
+| Vex | The syndicates | to profit | **The Raven's Claw** |
+| The Neurex | The Neurex | it becomes what it consumes | **The Pod Room** |
+| The Overseer | Onyx Dominion | **what you drafted** | The reviewing stand, Enigma |
+| Hale | Union | to schedule | Horizon — the terrace cuts |
+| The Leader | Union | to spend | **The war room** |
+| Harlow | Union | to keep | **Eden — the crossroads** |
+| Varan | Onyx Dominion | to deny | The tribute ship |
+| Adran Vale | Basileia | **the monument over the crowd** | **The plaza** |
+| The Purifiers | The Purifiers | **to erase** | The burned croplands |
+
+**Four are new and each takes an axis nothing had taken.** The Overseer does not choose —
+it records, and takes what you took last round; nothing in the game copied you before. The
+Purifiers are the one persona that *never reads your board*, which is the book's own point
+about them: *"The Purifiers wanted nothing the worlds had… the first proof that some things
+cannot be bought."* Vale drafts the monument rather than the crowd. The Neurex does not
+draft at all: whatever you field most of is what comes back.
+
+## The maps are cosmetic, and that is the point
+
+Ground only. **The resolver is not told which map it is and does not ask**, so not one
+figure in this folder is re-derived by any of it. That is exactly why it is the right thing
+to do first — nine of them can be looked at on a phone before anyone decides which want
+teeth. `test/play-maps.png` is written every run: all nine at the real size with a real
+deployment on top, because whether a scene competes with the counters is a thing you look
+at rather than assert.
+
+**Every one is a place in the book, and carries the sentence it was drawn from**, marked
+`qv` exactly like a unit's line — *"a vessel assembled from the corpses of at least nine
+other vessels"*; *"the war room of the Union Palace held the whole galaxy in light above
+its table"*; *"two towers of Vale's smiling face, and an empty podium with its small
+bouquet of microphones waiting like the future"*.
+
+**The Pod Room counts.** *"It was circular and vast, and the walls were pods… fifty-two
+pods in the chamber. Thirty-seven occupied."* The map draws fifty-two, and thirty-seven of
+them are lit.
+
+**And personas now carry a provenance mark.** Units have had `qv` and `nv` for sessions, so
+the roster can tell Sam whose line is whose; personas had nothing, and all nine of those
+descriptions are mine. `dv: 0` says so.
+
+## The difficulty curve, measured rather than ordered by taste
+
+`RUN.order` climbs, and the figures are the floor seat's win rate over 200 matches a table:
+
+| | Vex | Neurex | Overseer | Hale | Leader | Harlow | Varan | Vale | Purifiers |
+|---|---|---|---|---|---|---|---|---|---|
+| floor wins | 88% | 84% | 84% | 82% | 71% | 55% | 30% | 15% | **1.5%** |
+| `ace` wins | — | 96% | 92% | — | — | 84% | 60% | 56% | **24%** |
+
+**For the first time a run ends on something a competent player loses to three times in
+four.** Before this, four of the five were a formality for `ace`. The Purifiers at 1.5%
+against a floor player is a wall rather than a curve — that is a tuning question and it is
+Sam's, but it is the first opponent in this game that a good draft has to actually answer.
+
+## Two reds, and both are open decisions rather than defects
+
+`match.mjs` now reads **8 of 10**.
+
+- *compositions are contested* — 59% settled 95/5. Sam's long-standing call, unchanged.
+- *the booster pool has no dead option* — **5 of 8 do not clear the control.** This is note
+  17's own finding arriving through the pool's guard rather than through a report, and it
+  is exactly the decision left with him: cut the tail, bring Veterans down, or accept that
+  the pool is one prize and seven textures. **It has deliberately not been loosened.** A
+  check quietly relaxed to match a pool nobody decided about is worse than a red one.
+
+## What it costs to run
+
+Nine tables instead of five, and a throw sweep across nine opponents instead of five, so
+`match.mjs` roughly doubled. `THROW=` and `RUN=` still cut it down for a smoke run.

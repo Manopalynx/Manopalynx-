@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v20';
+export const BUILD = 'column-v21';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -383,7 +383,15 @@ export const BY_ORDER = Object.fromEntries(ORDERS.map(k => [k.id, k]));
 export const RUN = {
   ramp: 18,        // credits the opponent starts with, per match already survived
   pickEvery: 3,    // matches between the opponent gaining an extra pick each round
-  order: ['vex', 'hale', 'harlow', 'leader', 'varan'],
+  // NINE OPPONENTS, six factions, in rising order of what a floor player scores
+  // against them. It was five; Sam's note 18 added four and the run got longer
+  // with them, which lands on top of note 19 rather than beside it.
+  // MEASURED, not guessed. Floor-seat win rate against each: Vex 88, Neurex 88,
+  // Overseer 85, Hale 81, Leader 78, Harlow 43, Varan 28, Vale 21, Purifiers 1 --
+  // and against the `ace` seat the tail reads Harlow 84, Varan 60, Vale 56,
+  // Purifiers 24. So the run climbs for both seats, and for the first time it
+  // ENDS on something a competent player loses to three times in four.
+  order: ['vex', 'neurex', 'overseer', 'hale', 'leader', 'harlow', 'varan', 'vale', 'purifier'],
   // LIVES CARRY AND ONLY THE MARKET SELLS THEM. Sam's rule, and it is what turns
   // credits into a real decision: every purse is a choice between a stronger
   // column now and staying alive to draft another one. The OPPONENT resets to
@@ -484,25 +492,87 @@ export const BY_BOOST = Object.fromEntries(BOOSTS.map(b => [b.id, b]));
 //
 // Named for the book's own auditors and spenders. The descriptions are written
 // for the game, not quoted, except where marked.
+// MAPS. Sam's note 18, and cosmetic for now BY HIS INSTRUCTION -- ground only.
+// Nothing here is read by the resolver, so not one figure in this folder is
+// re-derived by any of it, which is exactly why it is the right thing to do
+// first: nine of them can be looked at on a phone before anyone decides which
+// want teeth.
+//
+// EVERY ONE IS A PLACE IN THE BOOK, and `q` is the sentence it is drawn from,
+// marked `qv` like a unit's line. The roster already separates the author's words
+// from mine on every card; a map is no different, and there are nine of them.
+export const MAPS = [
+  { id: 'eden', n: 'Eden — the crossroads',
+    q: 'Eden had been the heart of the Union\u2019s trade network in the days when we were a syndicate worth fearing: the great crossroads, the market of markets.', qv: 1 },
+  { id: 'terraces', n: 'Horizon — the terrace cuts',
+    q: 'Their whole armored line has to come up the terrace cuts, here \u2014 it\u2019s the only grade the walkers can climb.', qv: 1 },
+  { id: 'tribute', n: 'The tribute ship',
+    q: 'I signed the instrument of vassalage in a room aboard one of their tribute ships. They kept me waiting four hours.', qv: 1 },
+  { id: 'parade', n: 'The reviewing stand, Enigma',
+    q: 'It moved both flags with the same indifference \u2014 the Union\u2019s silver-on-blue, and above it, on the taller pole, the black insignia of the Onyx Dominion.', qv: 1 },
+  { id: 'raven', n: 'The Raven\u2019s Claw',
+    q: 'A vessel assembled from the corpses of at least nine other vessels, in a stateroom decorated with trophies whose provenance I chose not to examine.', qv: 1 },
+  { id: 'warroom', n: 'The war room',
+    q: 'The war room of the Union Palace held the whole galaxy in light above its table.', qv: 1 },
+  { id: 'plaza', n: 'The plaza',
+    q: 'At the plaza\u2019s center stood the stage, flanked by two towers of Vale\u2019s smiling face, and an empty podium with its small bouquet of microphones waiting like the future.', qv: 1 },
+  { id: 'croplands', n: 'The burned croplands',
+    q: 'They burned the orbitals, then the cities, then the croplands, and then they stayed in orbit an extra day to burn the forests.', qv: 1 },
+  { id: 'pods', n: 'The Pod Room',
+    q: 'It was circular and vast, and the walls were pods \u2014 and the occupied pods gave off a faint interior light, so that the great dark room glowed in patches, like votive candles in a drowned church.', qv: 1 }
+];
+export const BY_MAP = Object.fromEntries(MAPS.map(m => [m.id, m]));
+
+/* ----------------------------------------------------------------- the personas */
+// The personality IS the drafting policy. Voice lines can come later; a persona
+// that only talks is decoration.
+//
+// NINE NOW, AND SIX FACTIONS. It was five, of which three were Union -- Sam's
+// note 18: "we need to make sure we have variety rather than almost everyone
+// being from the Union". The book carries Union, the Onyx Dominion, Basileia,
+// the Purifiers, the Neurex and the syndicates, and every one of them is now
+// somebody you play.
+//
+// `d` IS WRITTEN FOR THE GAME AND SAYS SO. Units carry `qv` and `nv` so the
+// roster can tell Sam whose line is whose; personas carried no mark at all, and
+// every one of these descriptions is mine. `dv: 0` states it rather than leaving
+// it to be assumed -- the whole point of the marks is that he can strike mine
+// without opening a file.
 export const PERSONAS = {
   varan: {
-    n: 'Varan',
-    d: 'Drafts to deny. Takes what you need rather than what he needs — the auditor reading for the shape of what is not there.'
+    n: 'Varan', f: 'Onyx Dominion', map: 'tribute', dv: 0,
+    d: 'Drafts to deny. Takes what you need rather than what he needs \u2014 the auditor reading for the shape of what is not there.'
   },
   harlow: {
-    n: 'Harlow',
+    n: 'Harlow', f: 'Union', map: 'eden', dv: 0,
     d: 'Drafts to keep. Durable, refuses trades, nothing dies that did not have to.'
   },
   hale: {
-    n: 'Hale',
+    n: 'Hale', f: 'Union', map: 'terraces', dv: 0,
     d: 'Drafts to schedule. Front-loads, presses tempo, closes early.'
   },
   vex: {
-    n: 'Vex',
+    n: 'Vex', f: 'The syndicates', map: 'raven', dv: 0,
     d: 'Drafts to profit. Takes the biggest number on the card, every time.'
   },
   leader: {
-    n: 'The Leader',
+    n: 'The Leader', f: 'Union', map: 'warroom', dv: 0,
     d: 'Drafts to spend. Concedes early rounds deliberately to buy the late one.'
+  },
+  overseer: {
+    n: 'The Overseer', f: 'Onyx Dominion', map: 'parade', dv: 0,
+    d: 'Drafts what you drafted. It does not choose \u2014 it records, and everything you take goes in the file it reads back at you.'
+  },
+  vale: {
+    n: 'Adran Vale', f: 'Basileia', map: 'plaza', dv: 0,
+    d: 'Drafts to be seen. Takes the monument over the crowd \u2014 what a hundred thousand people would recognise on a banner.'
+  },
+  purifier: {
+    n: 'The Purifiers', f: 'The Purifiers', map: 'croplands', dv: 0,
+    d: 'Drafts to erase. The only opponent that never looks at your column, because nothing you hold is worth pricing.'
+  },
+  neurex: {
+    n: 'The Neurex', f: 'The Neurex', map: 'pods', dv: 0,
+    d: 'Does not draft. It becomes what it consumes \u2014 whatever you field most of is what comes back at you.'
   }
 };
