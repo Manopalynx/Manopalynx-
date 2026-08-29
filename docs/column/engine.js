@@ -545,8 +545,56 @@ export const POLICIES = {
   // The human seat in a sweep, and deliberately unsophisticated: it exists to
   // exercise every path, not to play well. Every "the player wins X%" figure
   // from this policy is a FLOOR, exactly as the Ledger's harness human is.
-  house: cards => 0
+  house: cards => 0,
+
+  // A SEAT THAT PLAYS LIKE A PERSON, and it exists because Sam is better than
+  // anything else in this file. He played a run, bought nothing at the market,
+  // and was still winning at match five; `counter` -- the best policy here --
+  // reaches match five in 0 of 400 runs, and the real page agrees with the sweep
+  // to within noise, so the gap is the SEAT and not a defect. Which means every
+  // difficulty figure in this repository was measured on a drafter far weaker
+  // than the person the game is for. That is the Ledger's own worst mistake
+  // arriving again: a harness measuring a game its owner does not play.
+  //
+  // WHAT MAKES IT STRONG is not cleverness, it is asking the right question.
+  // `counter` scores a pick by fighting three copies of it against the first
+  // three cards the enemy holds. `ace` asks what a person asks: what does the
+  // board look like AFTER this pick, against everything they actually have?
+  ace: (cards, mine = [], theirs = []) => {
+    // Round one has nothing to answer, so fall back to weight on paper.
+    if (!armyFrom(theirs).cards.length) return best(cards, tok => gain(tok, mine, paper));
+    let bi = 0, bs = -Infinity;
+    cards.forEach((tok, i) => {
+      const sc = armyScore([...mine, tok], theirs) + gain(tok, mine) * 1e-9;
+      if (sc > bs) { bs = sc; bi = i; }
+    });
+    return bi;
+  }
 };
+
+/* ------------------------------------- what a board is worth, by fighting it */
+// TWO SEEDS, not one. A battle is a pure function of two armies and a seed, and
+// the only thing the seed moves is deployment jitter -- but one seed lets a coin
+// land the same way every time a policy asks, and a policy that is wrong in one
+// fixed direction is worse than one that is noisy. Two is what the budget takes:
+// a resolve of two nine-card armies is about 5ms, and a seat that drafts by
+// resolving spends that on every card of every offer of every pick.
+const ACE_SEEDS = [7, 5041];
+
+/**
+ * How good `mine` is against `theirs`, in survivors. Positive is winning.
+ * Used by the `ace` seat for both halves of what a player does -- which card to
+ * take, and what to buy -- so the draft and the market cannot disagree about
+ * what strength is.
+ */
+export function armyScore(mine, theirs) {
+  let s = 0;
+  for (const seed of ACE_SEEDS) {
+    const r = resolve(mine, theirs, seed, false);
+    s += (r.winner === 0 ? 400 : r.winner === 1 ? -400 : 0) + (r.left[0] - r.left[1]) * 10;
+  }
+  return s / ACE_SEEDS.length;
+}
 
 // How well one PICK answers an army, measured rather than asserted: fight it.
 // Cheap because the pool is twelve, the trio is small and the log is off.
@@ -750,6 +798,103 @@ export function spend(money, picks, lives, theirs = [], boosts = []) {
   return buys;
 }
 
+/* --------------------------------------------- the market, as a PLAYER plays it */
+// THERE HAS NEVER BEEN A HUMAN SHOPPING POLICY. `playMatch` called `spend()` for
+// both sides, so every figure about the economy in this repository was measured
+// with the player shopping exactly like the AI -- caps per visit, spend to the
+// floor, never save. "Should I buy a life?" is the second half of Sam's note 19
+// and it has never been asked once, because the seat asking it was the opponent.
+//
+// This is the other half. It buys by the same measure the `ace` drafts by --
+// resolve the board with the purchase and without it -- so the two halves of a
+// player cannot disagree about what strength is. And it does the two things
+// `spend()` structurally cannot:
+//
+//   IT SAVES. A special costs more than a market's takings, which is the whole
+//   reason they exist; a policy that spends to the floor every visit can only
+//   ever reach one by accident.
+//   IT BUYS LIVES AS A RUN DECISION rather than a match one. `spend()` takes a
+//   life only on its last, because it is trying to win THIS match. A player is
+//   trying to survive a run, and a life is the only thing the market sells that
+//   a redrafted army does not throw away.
+//
+// PREFILTERED ON PAPER, then resolved. Scoring every card, every upgrade, every
+// piece of kit and every sabotage target by fighting the board is thirty-odd
+// resolves a visit; taking the best few on paper first costs nothing and makes
+// the sweep affordable.
+const ACE_TOP = 5;
+// Below this much board per credit, a purchase is not worth the credits it takes
+// out of the fund for the next special. Zero would buy anything that helps at all.
+const ACE_FLOOR = 0.35;
+
+export function buyFor(money, picks, lives, theirs = [], boosts = []) {
+  const buys = [];
+  let m = money, army = picks.slice(), got = lives;
+  // THEIR LIST, ACCUMULATED. Sabotage takes effect in the target's army, so a
+  // second one on the same card lands in a Set that already holds it and does
+  // nothing at all -- and the first version of this scored every candidate
+  // against the UNCHANGED board, so it bought the same sabotage eight times in a
+  // row and called each one an improvement. That is the money pump exactly: a
+  // purchase whose effect is not written down, bought again. Orders are the same
+  // Set and had the same fault.
+  let foe = theirs.slice();
+  const done = new Set();
+  const enemy = armyFrom(theirs).cards;
+  // A life first and only when it is the difference between a run and the end of
+  // one. It buys no strength at all, so nothing that scores strength will ever
+  // choose it.
+  if (got === 1 && m >= SHOP.life && lives < RULES.lives) {
+    buys.push({ k: 'life' }); m -= SHOP.life; got++;
+  }
+  for (let guard = 0; guard < 12; guard++) {
+    const base = enemy.length ? armyScore(army, foe) : 0;
+    const cand = [];
+    const consider = (k, id, cost, tokens) => {
+      if (m >= cost && !done.has(k + ':' + id)) cand.push({ k, id, cost, tokens });
+    };
+
+    for (const x of specialsFor(m, army, boosts)) consider('special', x.id, x.cost, [x.id]);
+    // The strongest few on paper, then fought. `power` is the same function every
+    // drafting policy scores with.
+    DRAFT.map(u => u.id).sort((x, y) => power(y) - power(x)).slice(0, ACE_TOP)
+      .forEach(id => consider('card', id, SHOP.card, [id]));
+    upgradeable(army).forEach(x => consider('upgrade', x.id, SHOP.upgrade, [UP_TAG + x.id]));
+    kitFor(m, army, boosts).forEach(x => consider('kit', x.id, x.cost, [EQ_TAG + x.id]));
+    ORDERS.forEach(x => consider('order', x.id, x.cost, [ORD_TAG + x.id]));
+    // Sabotage lands in THEIR list, so its gain is measured by weakening them.
+    if (enemy.length) [...new Set(enemy)]
+      .sort((x, y) => BY_ID[y].hp * BY_ID[y].count - BY_ID[x].hp * BY_ID[x].count)
+      .slice(0, ACE_TOP)
+      .forEach(id => consider('sabotage', id, SABOTAGE.cost, null));
+
+    let pick = null, rate = ACE_FLOOR;
+    for (const c of cand) {
+      const after = c.k === 'sabotage'
+        ? armyScore(army, [...foe, SAB_TAG + c.id])
+        : armyScore([...army, ...c.tokens], foe);
+      const r = (after - base) / c.cost;
+      if (r > rate) { rate = r; pick = c; }
+    }
+    // SAVING IS A DECISION, not what is left over. With a special unheld and the
+    // fund already past half of it, a marginal card is worth less than the visit
+    // it delays.
+    const want = specialsFor(Infinity, army, boosts).sort((a, b) => a.cost - b.cost)[0];
+    if (pick && want && pick.k !== 'special' && m >= want.cost / 2 && rate < ACE_FLOOR * 3) break;
+    if (!pick) break;
+    buys.push({ k: pick.k, id: pick.id });
+    m -= pick.cost;
+    // ONCE EACH for the two that live in a Set, and the board updated for both,
+    // so the next pass scores what it would actually be buying.
+    if (pick.k === 'sabotage') { foe = [...foe, SAB_TAG + pick.id]; done.add('sabotage:' + pick.id); }
+    else { army = [...army, ...pick.tokens]; if (pick.k === 'order') done.add('order:' + pick.id); }
+  }
+  // A wider offer is the cheapest thing on the shelf and cannot be scored by
+  // fighting, because what it changes is next round's OFFER. Taken with what is
+  // left rather than measured.
+  if (m >= SHOP.offer) buys.push({ k: 'offer' });
+  return buys;
+}
+
 /* ----------------------------------------------------------------- a whole match */
 /**
  * Sam's structure, played out.
@@ -764,7 +909,7 @@ export function spend(money, picks, lives, theirs = [], boosts = []) {
 export function playMatch({ a = 'house', b = 'varan', seed = 1,
                             money: purse = [0, 0], picks = [0, 0],
                             lives: start = [RULES.lives, RULES.lives],
-                            boosts = [[], []] } = {}) {
+                            boosts = [[], []], shop = ['ai', 'ai'] } = {}) {
   const rand = rng(seed);
   const policy = [POLICIES[a], POLICIES[b]];
   const army = [[], []];
@@ -828,7 +973,12 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
     if (lives[0] > 0 && lives[1] > 0) {
       for (const s of [0, 1]) {
         if ((r + 1) % SHOP.every !== 0) continue;
-        for (const buy of spend(money[s], army[s], lives[s], army[1 - s], boosts[s])) {
+        // WHICH SHOPPER, per side. `ai` is `spend()`, the opponent's, which was
+        // both sides' for the whole life of the economy; `ace` is the player's;
+        // `none` is the arm Sam described -- a run that buys nothing at all.
+        const shopper = shop[s] === 'none' ? () => []
+                      : shop[s] === 'ace' ? buyFor : spend;
+        for (const buy of shopper(money[s], army[s], lives[s], army[1 - s], boosts[s])) {
           if (buy.k === 'life') { lives[s]++; money[s] -= SHOP.life; }
           else if (buy.k === 'upgrade') { army[s].push(UP_TAG + buy.id); money[s] -= SHOP.upgrade; }
           else if (buy.k === 'card') { army[s].push(buy.id); money[s] -= SHOP.card; }
@@ -856,7 +1006,14 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
  * Sweepable, which is the point of putting it here: "how far does the floor
  * get" is the only number that says whether a run is a run or a treadmill.
  */
-export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = null } = {}) {
+// Which booster the `ace` takes, in the order the isolated measurement put them:
+// Veterans +0.85, a fourth pick +0.44, the Vanguard +0.20. A person who has read
+// the game takes the best one offered, and anything this list does not name goes
+// last rather than being unreachable -- the pool has been re-cut three times.
+const ACE_BOOSTS = ['veteran', 'extra', 'vanguard'];
+
+export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = null,
+                          shop = ['ai', 'ai'], boost = null } = {}) {
   const rand = rng((seed * 7717 + 3) >>> 0);
   const matches = [];
   const boosts = [[], []];
@@ -869,7 +1026,7 @@ export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = nu
       picks: [0, Math.floor(n / RUN.pickEvery)],
       // LIVES CARRY FOR YOU AND NOT FOR THEM. Only the market restores one.
       lives: [RUN.carryLives ? lives : RULES.lives, RULES.lives],
-      boosts: [boosts[0].slice(), boosts[1].slice()]
+      boosts: [boosts[0].slice(), boosts[1].slice()], shop
     });
     const won = r.winner === 0;
     matches.push({ n, opp, won, rounds: r.rounds.length, cards: r.army[0].length,
@@ -895,7 +1052,14 @@ export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = nu
     // match its dead one is not offered. A check built on it passes the defect it
     // exists to catch, which is how this was found -- by breaking it on purpose.
     const mine = (take < 0 && !prefer) ? [] : boosterOffer(rand, boosts[0]);
-    const at = prefer ? mine.indexOf(prefer) : Math.min(take, mine.length - 1);
+    // `boost: 'ace'` takes the best of what is offered rather than an index --
+    // a fixed index is a sample of the pool, which is not a choice at all.
+    const at = boost === 'ace'
+      ? mine.reduce((b, id, i) => {
+          const rank = x => { const k = ACE_BOOSTS.indexOf(x.split(':')[0]); return k < 0 ? 99 : k; };
+          return rank(id) < rank(mine[b]) ? i : b;
+        }, 0)
+      : prefer ? mine.indexOf(prefer) : Math.min(take, mine.length - 1);
     if (mine.length && at >= 0) boosts[0].push(mine[at]);
     const theirs = boosterOffer(rand, boosts[1]);
     if (theirs.length) boosts[1].push(theirs[0]);

@@ -31,7 +31,7 @@
 
 import { UNITS, BY_ID, RULES, UPGRADE, SHOP, RUN, BOOSTS } from '../data.js';
 import { playMatch, playRun, resolve, rng, offer, armyFrom, isUp,
-         stock, spend } from '../engine.js';
+         stock, spend, buyFor } from '../engine.js';
 
 const N = +process.argv[2] || 200;
 const HUMAN = 'house';
@@ -213,6 +213,111 @@ const edge = {};
   console.log(`  ${'overall'.padEnd(11)} straight ${(straightWin * 100).toFixed(1)}%   thrown ${(thrownWin * 100).toFixed(1)}%` +
               `   ${thrownWin >= straightWin ? '+' : ''}${((thrownWin - straightWin) * 100).toFixed(1)}pt` +
               `   over ${n} paired matches, se about ${(Math.sqrt(0.5 / n) * 100).toFixed(1)}pt\n`);
+}
+
+/* -------------------- does every purchase actually buy something? ------------ */
+// THE SWEEP, NOT THE INSTANCE. A shopper that buys a thing whose effect it did
+// not write down will buy it again, and the engine will take the credits both
+// times -- which is the Ledger's money pump with the sign reversed. It is not
+// hypothetical: the first version of `buyFor` bought the same sabotage EIGHT
+// times in one visit, because sabotage lands in a Set and it scored every
+// candidate against a board it never updated. Nothing threw; the credits went.
+//
+// So the claim is the general one and it runs over BOTH shoppers: apply a
+// policy's buys in order, and every one of them must move the state it claims to
+// move. `armyFrom` is the arbiter, because it is what the resolver reads.
+/* ------------------- the seat that plays like a person, and what it costs ---- */
+// SAM'S NOTE 19. He played a run, bought nothing, and was still winning at match
+// five; every figure this file had printed said a run is one to two matches. The
+// page was checked first and agrees with the sweep to within noise, so the gap
+// was never a defect -- it was that the harness had no seat that plays like him.
+// `house` takes the first card offered and is a deliberate floor; `counter`
+// scores a pick by fighting three copies of it against three of theirs.
+//
+// `ace` asks what a player asks -- what does the board look like AFTER this pick,
+// against everything they actually hold -- and `buyFor` shops the same way, which
+// is the first human shopping policy this project has ever had: `playMatch`
+// called the opponent's `spend()` for BOTH sides for the whole life of the
+// economy, so "should I buy a life?" had never been asked by a player once.
+//
+// OFF BY DEFAULT AND EXPENSIVE ON PURPOSE. A seat that drafts by resolving
+// spends about 5ms a card of every offer of every pick, so a run is twelve
+// seconds rather than thirty milliseconds. `ACE=40` is enough to separate the
+// arms; the suite cannot afford it on every save and should not pretend to.
+const ACE = +process.env.ACE || 0;
+if (ACE) {
+  const stat = out => {
+    const mean = out.reduce((x, y) => x + y, 0) / out.length;
+    const se = Math.sqrt(out.reduce((x, y) => x + (y - mean) ** 2, 0) / out.length / out.length);
+    return { mean, se, best: Math.max(...out),
+             three: 100 * out.filter(v => v >= 3).length / out.length,
+             five: 100 * out.filter(v => v >= 5).length / out.length };
+  };
+  console.log(`\nhow far a run gets, by who is sitting in it — ${ACE} runs an arm`);
+  console.log('seat                        matches survived    best  reached 3  reached 5');
+  for (const [label, opt] of [
+    ['house, the floor',      { a: 'house',   shop: ['ai', 'ai'] }],
+    ['counter',               { a: 'counter', shop: ['ai', 'ai'] }],
+    ['ace, never shops',      { a: 'ace',     shop: ['none', 'ai'], boost: 'ace' }],
+    ['ace, plays the market', { a: 'ace',     shop: ['ace', 'ai'], boost: 'ace' }],
+  ]) {
+    const out = [];
+    for (let s = 1; s <= ACE; s++) out.push(playRun({ ...opt, seed: s }).survived);
+    const r = stat(out);
+    console.log(`${label.padEnd(24)} ${r.mean.toFixed(2)} ±${r.se.toFixed(2)}`.padEnd(52) +
+      `${String(r.best).padStart(4)}  ${r.three.toFixed(0).padStart(8)}%  ${r.five.toFixed(0).padStart(8)}%`);
+  }
+  // AND WHICH OPPONENT IS ACTUALLY HARD. The persona table in this file is the
+  // FLOOR player's, so it says how hard each persona is for somebody who takes
+  // whatever is in front of them. That is not the difficulty curve a run has.
+  console.log(`\nmatch win rate against each opponent, floor seat against ace — ${ACE} matches each`);
+  console.log('opponent      floor    ace');
+  for (const opp of RUN.order) {
+    const win = a => {
+      let w = 0;
+      for (let s = 1; s <= ACE; s++) w += playMatch({ a, b: opp, seed: s * 977 + 5 }).winner === 0 ? 1 : 0;
+      return 100 * w / ACE;
+    };
+    console.log(`${opp.padEnd(12)} ${win('house').toFixed(0).padStart(4)}%  ${win('ace').toFixed(0).padStart(4)}%`);
+  }
+}
+
+let pumpWhy = null, pumpN = 0;
+{
+  const r = rng(31337);
+  let dud = null, applied = 0;
+  const fingerprint = (mine, foe, lives, wide) => {
+    const a = armyFrom(mine), b = armyFrom(foe);
+    return JSON.stringify([a.cards.length, a.up, [...a.eq].sort(), [...a.ord].sort(),
+                           [...b.sab].sort(), lives, wide]);
+  };
+  for (let i = 0; i < 40 && !dud; i++) {
+    const mine = [], theirs = [];
+    for (let k = 0; k < 7; k++) { mine.push(offer(r, 1)[0]); theirs.push(offer(r, 1)[0]); }
+    mine.push(mine[0]);
+    for (const money of [30, 55, 90, 150, 260, 400]) {
+      for (const [who, shopper] of [['the opponent', spend], ['the player', buyFor]]) {
+        let army = mine.slice(), foe = theirs.slice(), lives = 3, wide = 0, m = money;
+        for (const buy of shopper(money, mine, lives, theirs, [])) {
+          const was = fingerprint(army, foe, lives, wide);
+          if (buy.k === 'life') lives++;
+          else if (buy.k === 'upgrade') army.push('up:' + buy.id);
+          else if (buy.k === 'card' || buy.k === 'special') army.push(buy.id);
+          else if (buy.k === 'kit') army.push('eq:' + buy.id);
+          else if (buy.k === 'order') army.push('ord:' + buy.id);
+          else if (buy.k === 'sabotage') foe.push('sab:' + buy.id);
+          else if (buy.k === 'offer') wide = 1;
+          applied++;
+          if (fingerprint(army, foe, lives, wide) === was)
+            dud = `${who} bought ${buy.k}${buy.id ? ' ' + buy.id : ''} with ${money} and nothing changed`;
+          if (dud) break;
+        }
+        if (dud) break;
+      }
+      if (dud) break;
+    }
+  }
+  pumpWhy = dud; pumpN = applied;
 }
 
 /* -------------- can the opponent reach every shelf, and only the shelves? ---- */
@@ -411,6 +516,10 @@ else bad('upgrades are a real pick and not the only pick', [
   upRate < 0.10 ? 'nobody takes them: an upgrade is not worth a pick, so the crowd never shrinks'
                 : 'everybody takes them: reinforcement is dead and the army never grows'
 ]);
+
+if (!pumpWhy) ok(`every purchase changes the board — ${pumpN} applied, both shoppers`);
+else bad('every purchase changes the board', [pumpWhy,
+  'a purchase whose effect is not written down gets bought again, and paid for again']);
 
 if (!shelfWhy.length) ok(`the opponent reaches every shelf and no others — ${shelfKinds}`);
 else bad('the opponent reaches every shelf and no others', shelfWhy);

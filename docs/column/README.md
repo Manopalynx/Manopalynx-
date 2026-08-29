@@ -25,8 +25,8 @@ Sam owns every decision here. Where a choice is still open it says so rather tha
 
 ## Where it stands
 
-`BUILD` is `column-v18` in `data.js`. The service worker that carries it is
-`grandiose-v92` in `docs/sw.js` — one cache for all three published apps, so **shipping a
+`BUILD` is `column-v19` in `data.js`. The service worker that carries it is
+`grandiose-v93` in `docs/sw.js` — one cache for all three published apps, so **shipping a
 change here bumps Grandiose's version too**, and `test/offline.mjs` fails if the two ever
 disagree.
 
@@ -1841,3 +1841,93 @@ has ever sent. It is `.pick.shopRow` now, and `play-chooser.png` is written ever
 the next one is visible without asking.
 
 `play.mjs` is at **30 claims**.
+
+
+---
+
+# Note 19 — a seat that plays like a person, and the figures it invalidates
+
+Sam played a run, **bought nothing at the market**, and was still winning at match five
+when he stopped. Every figure this project had ever printed said a run is one to two
+matches.
+
+**The page was checked first, because "the sweep and the game disagree" would be a
+defect.** It is not. The real page, playing whole runs with the harness's floor policy and
+never shopping, survived 2, 0 and 3 — mean 1.67 against `playRun`'s 1.21 for the same seat.
+They agree.
+
+So the gap was never the code. **The harness had no seat that plays like him**, and every
+difficulty number in this folder was measured on a drafter far weaker than the person the
+game is for. That is the Ledger's own worst mistake arriving again by a different road:
+`sweep.mjs` seated two humans at three of four tables for its entire life, so every
+conquest figure in that repository described a game he does not play.
+
+## What `ace` does differently
+
+`house` takes the first card offered — a deliberate floor. `counter` scores a pick by
+fighting three copies of it against the first three cards the enemy holds, at one fixed
+seed. **`ace` asks what a player asks: what does the board look like *after* this pick,
+against everything they actually have?** It resolves the real armies, over two seeds, and
+takes the best.
+
+**And `buyFor` is the first human shopping policy this project has ever had.** `playMatch`
+called the opponent's `spend()` for *both* sides for the entire life of the economy — so
+every figure about the market was measured with the player shopping like the AI, and
+*"should I buy a life?"*, which is the second half of Sam's note, had never been asked by a
+player once. It buys by the same measure `ace` drafts by, and it does the two things
+`spend()` structurally cannot: **it saves across visits** — a special costs more than a
+market's takings, which is the whole reason they exist — and **it treats a life as a run
+decision** rather than a last-ditch one.
+
+| seat | matches survived | best | reached 3 | reached 5 |
+|---|---|---|---|---|
+| `house`, the floor | 2.05 ±0.14 | 4 | 30% | 0% |
+| `counter` | 2.23 ±0.19 | 4 | 35% | 0% |
+| **`ace`, never shops** | **2.55 ±0.19** | 6 | 58% | 3% |
+| **`ace`, plays the market** | **3.55 ±0.20** | 6 | **80%** | **15%** |
+
+**Shopping is worth a whole match to a competent player** — 3.55 against 2.55 — and that
+number has never existed before, because there was nobody to measure it on.
+
+## The difficulty curve is not the one the document has been printing
+
+The persona table in `match.mjs` is the *floor* player's, so it says how hard each opponent
+is for somebody who takes whatever is in front of them.
+
+| opponent | floor seat | `ace` |
+|---|---|---|
+| Vex | 88% | **98%** |
+| Hale | 80% | **98%** |
+| Harlow | 35% | **88%** |
+| The Leader | 83% | **95%** |
+| Varan | 20% | **55%** |
+
+**Four of the five are a formality for a competent seat**, and only Varan is a contest.
+Sam's note 19 is confirmed with a number: the ramp was calibrated against a player who does
+not exist.
+
+**Nothing has been tuned on the strength of this.** Which levers to spend — `RUN.ramp`
+(₡18 a match), `RUN.pickEvery`, the opponent's single random booster, whether its lives
+reset, the caps on its shopper — is his.
+
+## Off by default, and expensive on purpose
+
+A seat that drafts by resolving spends about **5ms a card of every offer of every pick**, so
+a run is twelve seconds rather than thirty milliseconds. `ACE=40` prints both tables above;
+the default suite cannot afford it on every save and does not pretend to.
+
+## The money pump I wrote, and the guard that now makes it impossible
+
+The first `buyFor` **bought the same sabotage eight times in one visit.** Sabotage lands in
+a Set — a second one on the same card does nothing at all — and the policy scored every
+candidate against a board it never updated, so each pass re-found the same purchase and
+called it an improvement. Orders had it too. Nothing threw; the credits went.
+
+That is the Ledger's money pump with the sign reversed, written fresh, in the same session
+that quoted the entry. It was caught by **printing what the policy bought** rather than by
+reading it.
+
+So the guard is the general one and it sweeps **both** shoppers: apply a policy's buys in
+order and every one must move the state `armyFrom` reports — cards, levels, kit, orders,
+sabotage, lives, the wider offer. 2,289 purchases applied. Mutation-tested by putting the
+defect back: *"the player bought sabotage swarm with 260 and nothing changed"*, red.
