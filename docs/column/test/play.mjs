@@ -321,7 +321,56 @@ const state = () => page.evaluate(() => {
     // deck gains or loses comes out of the battlefield and the whole board
     // moves. This is the number Sam's note 4 is about.
     fieldH: Math.round(document.getElementById('fieldWrap').getBoundingClientRect().height),
-    offer: document.querySelectorAll('#cards .card').length
+    offer: document.querySelectorAll('#cards .card').length,
+
+    // WHAT THE SAME CARDS LOOK LIKE AT A WIDER OFFER — his note 22, and the
+    // reason it went unseen for as long as it has existed.
+    //
+    // The row is flex:1 1 0, so a fourth card takes every card from 118px to
+    // 86px while the text does not shrink with it: the stat line wrapped into a
+    // box one line tall with overflow:hidden and "840 hp - 44 dps" lost its
+    // damage in silence. The check above could not see it for TWO separate
+    // reasons, and both are the fixture rather than the assertion:
+    //
+    //   · it only ever sees three cards, because this suite never buys the
+    //     market's wider offer, and
+    //   · it reads overflowY alone, so a line cut sideways is invisible to it.
+    //
+    // So this widens the REAL row with the REAL card faces and measures both
+    // directions. The three genuine cards stay in it and are what get measured
+    // at the narrower width; the clones only make the row wider. Everything is
+    // put back inside this one evaluate, so the DOM the driver sees afterwards
+    // is untouched and no later tap can land on a clone.
+    wideFit: (() => {
+      const row = document.getElementById('cards');
+      if (!row || row.children.length !== 3) return [];
+      const added = [], out = [];
+      for (const n of [4, 5]) {
+        while (row.children.length < n) {
+          const c = row.children[0].cloneNode(true);
+          row.appendChild(c); added.push(c);
+        }
+        for (const c of row.children) for (const e of [c, ...c.querySelectorAll('*')]) {
+          const st = getComputedStyle(e);
+          const down = /hidden|clip/.test(st.overflowY) ? e.scrollHeight - e.clientHeight : 0;
+          // AN ELLIPSIS IS NOT THIS DEFECT. The class being guarded is content
+          // that disappears without a mark; a line the reader can SEE is cut
+          // has not lost them anything they cannot go and read on the inspect
+          // screen. So a sideways overflow is only counted where nothing tells
+          // the reader it happened.
+          const marked = st.textOverflow === 'ellipsis';
+          const across = !marked && /hidden|clip/.test(st.overflowX)
+            ? e.scrollWidth - e.clientWidth : 0;
+          if (down > 1 || across > 1) out.push({
+            n, tag: e.className || e.tagName,
+            dir: down > 1 ? 'down' : 'across', over: down > 1 ? down : across,
+            text: (e.textContent || '').slice(0, 30)
+          });
+        }
+      }
+      for (const c of added) c.remove();
+      return out;
+    })()
   };
 });
 
@@ -336,6 +385,8 @@ let livesBought = 0, livesSeen = null;
 const battleH = new Set();
 // The first card face whose content is taller than the box that hides it.
 let clipped = null;
+let wideClip = null;
+const wideCards = new Set();
 // Every field height seen during the draft, and whether a reveal ever needed a
 // tap. Both of these are measurements of Sam's notes 4 and 5.
 const heights = new Set();
@@ -372,6 +423,15 @@ for (let guard = 0; guard < 400; guard++) {
   // point of the fixed box is that the field does not move. Notes 12 and 13 put
   // two more lines on every face, so this is the failure they can cause.
   if (s.phase === 'pick') for (const c of s.cardFit) if (c.over > 1) clipped = clipped || c;
+  if (s.phase === 'pick') {
+    for (const c of s.wideFit) if (c.over > 1) wideClip = wideClip || c;
+    // WHICH CARDS THIS ACTUALLY COVERED. The worst case for the stat line is not
+    // the card with the biggest numbers, it is the card with NO attack --
+    // "660 hp - no attack" is wider than "840 hp - 44 dps" -- so a run that
+    // happened to miss the Deflector would pass while the defect stood. The
+    // count is printed rather than assumed.
+    for (const c of s.cardFit) if (c.name && c.name !== '?') wideCards.add(c.name);
+  }
 
   if (s.phase === 'round' && s.go === 'The market') marketRounds.push(s.round);
 
@@ -611,6 +671,18 @@ if (!clipped) ok('no card face is clipped by the row that hides its overflow');
 else bad('no card face is clipped', [
   `${clipped.name}: '${clipped.where}' overflows its box by ${clipped.over}px`,
   'the row is overflow:hidden so this is cut off in silence — the field never moves']);
+
+// HIS NOTE 22. The check above sees the three-card row only, because this suite
+// never buys the market's wider offer -- so for as long as a wider offer has
+// existed, the case has been untested and the row has been cutting the stat line
+// in half at four cards. Measured, not inferred: the stat line wants 90px on one
+// line and gets 76px at four cards.
+if (!wideClip)
+  ok(`no card face is clipped at a wider offer either — 4 and 5 cards, ${wideCards.size} distinct cards seen`);
+else bad('no card face is clipped at a wider offer', [
+  `at ${wideClip.n} cards, '${wideClip.tag}' is cut ${wideClip.dir} by ${wideClip.over}px: "${wideClip.text}"`,
+  'the market sells a wider offer, so this is a row a player reaches in play',
+  `${wideCards.size} distinct cards were seen at width`]);
 
 const px = new Set([...heights].map(h => h.split('px')[0]));
 if (px.size === 1) ok(`the battlefield never moves during a draft (${[...px][0]}px throughout)`);

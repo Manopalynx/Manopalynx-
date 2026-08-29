@@ -2411,3 +2411,61 @@ saying the revive is worth 44% of anything.
 **Separating the two needs the revive rebuilt and measured at a sample that can resolve
 0.2σ** — which is Sam's call on whether it is worth the runs, and it is a different
 question from whether it is worth building.
+
+---
+
+# Note 22: the card text was being cut in half at a wider offer
+
+**Confirmed on the real row before anything was changed.** The card row is `flex:1 1 0` and
+fixed at 132px, so a fourth card takes every card from **118px to 86px** while the text does
+not shrink with it. The stat line wants **90px** on one line and gets 76px, so it wrapped
+into a box one line tall with `overflow:hidden` and *"840 hp · 44 dps"* lost its damage.
+The trait line lost a line the same way.
+
+**It is four cards, not five** — `RULES.offer` is 3 and the market's wider offer adds one.
+The booster that widened the offer was cut, but **the market still sells it at ₡14**, so the
+row is one a player reaches in play.
+
+## Why nothing caught it, and it was the fixture both times
+
+`play.mjs` has had a *no card face is clipped* claim throughout. It could not see this for
+two independent reasons, and neither is the assertion:
+
+1. **It only ever sees three cards**, because the suite never buys a wider offer.
+2. **It reads `overflowY` alone**, so a line cut sideways is invisible to it.
+
+## The fix, and the two wrong turns before it
+
+The type scales with the row, counted by CSS `:has()` rather than by a state the render
+could forget to set. Chasing the stat line with the font alone took three passes and was
+still losing, because **each pass had tuned on the wrong worst case**:
+
+| pass | tuned on | what it missed |
+|---|---|---|
+| one factor for the card | a normal card | the trait line, much the longest |
+| a factor for the trait line | `840 hp · 44 dps` | `660 hp · no attack` is wider |
+| a factor for the stat line | `660 hp · no attack` | **an upgrade card** — `+35% hp & damage` |
+
+Small enough to fit an upgrade card's stat at 67px is small enough to be unreadable, which
+loses the note it was fixing. So **the two lines swap their boxes at a wider offer**: the
+total is identical, 22 + 12 before and 10 + 24 after, so the card is the same height and the
+battlefield does not move. The stat line — the one Sam asked for — gets two lines and keeps
+everything; the trait line gets one and **truncates with an ellipsis**, and the full traits
+are on the inspect screen either way.
+
+**The ellipsis is the design, not a compromise.** The defect class is content that vanishes
+without a mark. A line the reader can see is cut has not lost them anything silently, so the
+guard exempts an element whose `text-overflow` is `ellipsis` — and only that.
+
+One more thing it moved rather than fixed: bounding the nowrap trait line to `width:100%` is
+load-bearing. The card is a centred flex column, so a child sizes to its content, and a
+nowrap line sized to the whole untruncated string — which made the **card** 37px wider than
+its own box and pushed the silent clip up one element instead of removing it.
+
+## The guard
+
+A new claim widens the **real** row with the **real** card faces to 4 and 5, measures both
+directions, and puts everything back inside one `evaluate` so no later tap can land on a
+clone. It prints how many distinct cards it saw at width — 21 on the run that shipped —
+because the worst case is never the obvious card. Mutation-tested by neutering the fix: it
+fails with the original symptom, *'stat' is cut down by 11px*.

@@ -110,22 +110,69 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
    with a four-line hint is taller than one with two, so the deck grew and shrank
    with whatever happened to be offered. The row is a fixed box and the cards
    fill it. */
-#cards{display:flex;gap:8px;height:132px}
+#cards{display:flex;gap:8px;height:132px;--ct:1;--ht:1;--st:1}
+/* HIS NOTE 22: at a wider offer the card text was cut off in silence.
+   The row is fixed at 132px so the field never moves, and every line inside it
+   has a fixed height too -- so when the market's wider offer puts a fourth card
+   in the row, each card drops from 118px to 86px and the text does not shrink
+   with it. Measured rather than guessed: the stat line wants 90px on one line
+   and has 108px at three cards, 76px at four. It wrapped to a second line inside
+   a box one line tall with overflow:hidden, so "840 hp - 44 dps" simply lost its
+   damage. The trait line lost a line the same way.
+   Widening cannot take the height back (the deck is a flex sibling of the
+   battlefield), so the type scales instead, and it counts the row rather than
+   being told: no state, nothing for a render to forget to set, and the same
+   answer whatever put the fourth card there.
+   The factors are the measured need with margin -- 76/90 = .84 at four,
+   57/90 = .63 at five -- and five is not reachable today: RULES.offer is 3 and
+   the market's wider offer adds one. It is here so the failure is graceful
+   rather than silent if it ever is, and 5 costs type small enough that the card
+   would want a different layout instead. */
+/* The trait line gets its OWN factor because it is much the longest -- at four
+   cards the shared one fixed the stat line and left this one still losing 5px,
+   so one factor for both would have meant shrinking the numbers Sam asked for
+   in order to fit the traits underneath them. */
+/* AND THE STAT LINE IS GIVEN THE ROOM RATHER THAN SHRUNK TO FIT. Chasing it
+   with the font alone took three passes and was still losing: its worst case is
+   not the card with the biggest numbers, nor even the card with no attack, but
+   an UPGRADE card, whose stat line reads "+35% hp & damage". Small enough to fit
+   that at 67px is small enough to be unreadable, which loses the note it was
+   fixing.
+   So the two lines swap their boxes at a wider offer. The total is identical --
+   22 + 12 before, 10 + 24 after -- so the card is the same height and the
+   battlefield does not move. The stat line, which is the line Sam asked for,
+   gets two lines and keeps everything; the trait line gets one and truncates
+   with an ellipsis, which is a VISIBLE truncation rather than a silent one. The
+   full traits are on the inspect screen either way.
+   THE ELLIPSIS IS THE POINT: a line the reader can see is cut is not the defect
+   class. A line that vanishes without a mark is. */
+#cards:has(.card:nth-child(4)){--ct:.82;--ht:.82;--st:.82}
+#cards:has(.card:nth-child(5)){--ct:.62;--ht:.62;--st:.62}
+/* `width:100%` is load-bearing, not tidiness. The card is a centred flex column,
+   so a child sizes to its content -- and a nowrap line sizes to the whole
+   untruncated string, which made the CARD 37px wider than its own box and moved
+   the silent clip up one element instead of removing it. Bounded to the card,
+   the ellipsis happens inside the line where it can be seen. */
+#cards:has(.card:nth-child(4)) .card .hint,
+#cards:has(.card:nth-child(5)) .card .hint{
+  height:10px;white-space:nowrap;text-overflow:ellipsis;width:100%}
+#cards:has(.card:nth-child(4)) .card .stat,
+#cards:has(.card:nth-child(5)) .card .stat{height:24px}
 .card{flex:1 1 0;min-width:0;height:100%;overflow:hidden;border:0;border-radius:12px;
   background:var(--card);color:var(--cardInk);
   box-shadow:inset 0 -13px 0 var(--cardIn);padding:7px 5px 15px;text-align:center;font:inherit;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
 .card:active{transform:translateY(1px)}
 .card.up{background:var(--up);box-shadow:inset 0 -13px 0 var(--upIn)}
-.card b{font-size:11.5px;line-height:1.05;height:24px;display:flex;align-items:center;overflow:hidden}
+.card b{font-size:calc(11.5px * var(--ct));line-height:1.05;height:24px;display:flex;align-items:center;overflow:hidden}
 .card .cls{display:none}
-.card .hint{font-size:9px;opacity:.7;line-height:1.2;height:22px;overflow:hidden}
+.card .hint{font-size:calc(9px * var(--ht));opacity:.7;line-height:1.2;height:22px;overflow:hidden}
 /* His note 13: what the card IS, in one line. Slightly stronger than the trait
    hint because it is the comparison a player makes between three cards. */
-.card .stat{font-size:9.5px;opacity:.9;font-weight:600;line-height:1.2;height:12px;overflow:hidden;font-variant-numeric:tabular-nums}
+.card .stat{font-size:calc(9.5px * var(--st));opacity:.9;font-weight:600;line-height:1.2;height:12px;overflow:hidden;font-variant-numeric:tabular-nums}
 /* His note 12: how many you already hold. Quiet -- it is context for the pick,
    not the pick. */
-.card .held{font-size:8.5px;opacity:.55;line-height:1.15;height:10px;overflow:hidden}
+.card .held{font-size:calc(8.5px * var(--ct));opacity:.55;line-height:1.15;height:10px;overflow:hidden}
 /* The drawing, at 40pt on a 117pt card — sixteen times the area of the counter
    it stands for, and the only place a unit can carry any detail at all. */
 .card .art{display:block;line-height:0;position:relative}
