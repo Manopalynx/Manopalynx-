@@ -47,7 +47,8 @@ side, never dealt by the draft).
 redrafted every time and the **credits and the lives carried**. The opponent starts each
 match with ₡18 a match already survived and gains an extra pick a round every third match.
 After each match survived you take **one booster of three offered**; the opponent takes one
-at random.
+at random. The pool is three, so the whole of it is on screen and the decision is the order
+you take them in.
 
 **The roster is fifteen cards** — twelve the draft deals, three the market sells. Every
 line on every card is the author's; one unit, the Deflector, was invented for the game and
@@ -62,17 +63,17 @@ says so on its own card.
 | battles unresolved at the tick ceiling | 0% | `test/match.mjs` |
 | a floor player against each persona | Vex 88%, Hale 82%, Harlow 55%, Leader 71%, Varan 30% | `test/match.mjs` |
 | throwing the opening round | **+4.3pt** over 15,000 paired matches, worst +10.9pt vs Harlow | `test/match.mjs` |
-| boosters worth more than taking none | **two of five**, isolated | `test/match.mjs` |
+| boosters worth more than taking none | **all three**, isolated | `test/match.mjs` |
 
-**Two of those are red, and both are decisions rather than tuning misses.**
+**One of those is red, and it is a decision rather than a tuning miss.** 59% of mixed
+compositions are settled 95/5; his answer is battlefield variety rather than softer
+counters, and the mechanism is unspecified and deliberately not guessed at.
 
-- **59% of mixed compositions are settled 95/5.** His answer is battlefield variety rather
-  than softer counters — the mechanism is unspecified and deliberately not guessed at.
-- **Three of the five boosters are worth nothing on their own.** Isolated over 300 runs a
-  side: Veterans +0.92 matches (11.5σ), A fourth pick +0.44 (6.6σ), then Standing muster
-  +0.09, Requisition +0.09 and Wider muster +0.05 — all three inside noise. See *The
-  booster figures measured the wrong thing* below; which of the three to cut, buff or keep
-  is his.
+**Boosters.** Three, after eight were measured. A fourth pick, Veterans, The Vanguard —
+isolated against a run that takes none, +0.44 (9.2σ), +0.85 (15.8σ) and +0.20 (4.2σ). Five
+others measured between +0.05 and +0.09, inside noise, and were cut. See *The pool is three
+because a run is 1.4 matches* below: the finding is not about which boosters, it is that a
+run is too short for one to compound.
 
 **Also open:** **merging** — design point 4, specified and never built — and whether the
 opponent gets back the strength its shopper rewrite cost it. Throwing the opening round
@@ -1464,3 +1465,98 @@ the only reason anyone looked at the arm.
 persona tables at 200 matches each, 600 paired throw matches across the five opponents, 360
 runs of booster arms, and a 400-pair composition sweep. It is not a check to run on every
 save, and `THROW=` and `RUNS=` exist so it does not have to be.
+
+
+---
+
+# The pool is three, because a run is 1.4 matches
+
+Sam handed me the three dead boosters. Fixing them took two more rounds of the same
+measurement, cost three more boosters, and ended somewhere other than a better five.
+
+**Round one — replace them on the axes that worked.** The two survivors changed how many
+picks you get and what a pick is worth, so the three replacements went there: *The Vanguard*
+(a round you lose buys two picks, the Leader's own doctrine doubled), *Reserves* (two picks
+to open a match) and *Field surgeons* (the first life you lose each match, given back —
+lives carry, so they are what a run is really spending).
+
+Measured isolated, 300 runs an arm: The Vanguard **+0.14 (2.6σ)**, Reserves **+0.06 (1.2σ)**,
+Field surgeons **+0.06 (1.2σ)**. Two of my three died by the test that had just killed three
+of his.
+
+**Round two — build one that scales.** Lining the numbers up gave a model. Run length moves
+with the *total* extra picks in a run, at roughly **+0.05 matches a pick**:
+
+| | what it adds | measured |
+|---|---|---|
+| A fourth pick | +1 a round, ~+7 a match | +0.42 |
+| The Vanguard | +1 a round *lost*, ~+3.5 | +0.13 |
+| Reserves | +2, once | +0.06 |
+
+So a booster that adds a fixed handful cannot buy much, and one that *multiplies* — Veterans,
+which upgrades every card the whole draft produces — is worth double the best of them. The
+rule that fell out was: **scale with the run, don't add to it.** *Attrition* was built to that
+rule and to nothing else — every opponent after this one begins with half their credits, so it
+is worth twice as much at match four as at match two, the only booster in any of these pools
+that grows.
+
+**Attrition measured +0.06, at 1.1σ.** Identical to the fillers it was designed to beat.
+
+## What that actually says
+
+A run from a competent seat survives **1.44 matches**, and the first booster only arrives
+*after* match one. A booster therefore gets one or two matches to matter. **Anything that
+scales with run length is worth nothing because there is no run length** — which is exactly
+why Attrition, built for that and only that, landed on the same number as *Wider muster*.
+
+Eight boosters, three designs, one table:
+
+| | | isolated |
+|---|---|---|
+| **Veterans** | every card, from the moment you take it | **+0.85** (15.8σ) |
+| **A fourth pick** | +1 pick a round | **+0.44** (9.2σ) |
+| **The Vanguard** | +1 pick a round lost | **+0.20** (4.2σ) |
+| Standing muster · Requisition · Wider muster | offer-shaped, economy-shaped | +0.09, +0.09, +0.05 |
+| Reserves · Field surgeons · Attrition | a fixed few, lives, a scaling ramp | +0.06, +0.06, +0.06 |
+
+**So the pool is three, and not a fourth invented to round the number up** — that is the
+thing this whole re-cut was about. Three offered after each match means the whole pool is on
+screen and the decision is the *order*: Veterans first compounds hardest, the fourth pick pays
+sooner. That is a smaller decision than intended, and an honest one.
+
+**The question that is left is not which boosters — it is how long a run is**, and that is
+Sam's. A pool this thin is a symptom of a run ending before anything can compound.
+
+## Cutting the weak ones made the opponent harder
+
+Worth stating because it is a real balance move made by a change that looks like tidying: the
+opponent takes a booster at random every match, so removing the fillers **raised the average
+strength of what it draws**. A do-nothing control went from surviving 1.61 matches to **1.30**
+— nineteen per cent shorter runs, from cutting things that measured as worth nothing.
+
+## And what went with them
+
+*Standing muster* was the only booster carrying an argument, so its removal took `nameIt`,
+`boostArg`, the naming screen, `offer()`'s `force` parameter and the `named:walker` prefix
+handling with it — along with `priceFor` and `marketEvery`, which existed for *Requisition*
+and had become functions returning their own argument.
+
+**One guard was rescued rather than deleted.** The naming screen's claim protected a real
+promise — *a named Kraken would be dealt free every round* — and that promise outlives the
+booster, because `offer()` deals from `DRAFT` and never from `UNITS`. It is a sweep in
+`test/matchup.mjs` now: four hundred deals against armies that already hold a bought special,
+asserting none is ever dealt back. Mutation-tested by pointing `offer()` at `UNITS`, where it
+names `kraken, purifier, adarnas` and goes red.
+
+## A promise the engine was not keeping
+
+Found while checking what carries between matches. Three kit items said **"for the rest of the
+run"** — in `data.js`, on the shop button, and on the chooser. Kit is a token in the army list
+(`eq:plate`), and a run **redrafts the army from nothing every match**: it carries credits,
+lives and boosters, and the run screen says so in those words. So the button was promising
+something the engine does not do, on a ₡30 purchase, before the player could find out.
+
+The copy now says *"for the rest of this match"*. The price is unaffected — it was measured
+over a single match, which makes it exact here rather than the floor the pricing note called
+it. **Whether kit should carry is a live design question and Sam's; that it must not say it
+carries while it does not is neither.**

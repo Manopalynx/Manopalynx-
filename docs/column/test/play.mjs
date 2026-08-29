@@ -26,10 +26,6 @@ import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve as rp, extname, join } from 'path';
 import { chromium } from 'playwright';
-// The draft pool, read from the data rather than restated: the point of the claim
-// below is that a NAMED unit is one the draft can deal, and a hand-typed list here
-// would be a second copy of the very thing being checked.
-import { DRAFT, SPECIALS } from '../data.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DOCS = rp(HERE, '..', '..');
@@ -492,34 +488,6 @@ await page.screenshot({ path: rp(HERE, 'play.png') });
     else bad("the opponent's booster is drawn and named", ['the screen never said what they took']);
 
     await page.locator('.sheet [data-b]').first().click();
-
-    // STANDING MUSTER OPENS A SECOND SHEET, and this is where the suite used to
-    // die. Taking `named` asks you to name a unit, so the run screen's `#on` is
-    // not there yet -- and because the page seeds each match from the clock, the
-    // booster offered first is a different one every run. The result was a suite
-    // that crashed outright, with no FAIL line, on roughly one run in three that
-    // got this far. The branch is handled rather than avoided, so the naming
-    // screen is now covered instead of being a hazard.
-    const naming = await page.locator('.sheet [data-id]').count();
-    if (naming) {
-      // READ THE SHEET BEFORE CLICKING IT AWAY. The first version of this took the
-      // list afterwards, got an empty one, and `[].every()` is true -- so it
-      // printed "0 offered" and passed. A claim whose subject has already left
-      // the screen is the vacuous pass this suite exists to refuse.
-      const offered = await page.locator('.sheet [data-id]').evaluateAll(
-        els => els.map(e => e.dataset.id));
-      const named = offered[0];
-      await page.locator('.sheet [data-id]').first().click();
-      // ONLY A CARD THE DRAFT CAN DEAL. Naming a bought special would have it
-      // dealt free every round, which is the whole of what shop-only protects.
-      const special = offered.filter(id => SPECIALS.some(u => u.id === id));
-      if (offered.length && !special.length && offered.every(id => DRAFT.some(u => u.id === id)))
-        ok(`Standing muster names only cards the draft can deal — ${offered.length} offered, took ${named}`);
-      else bad('Standing muster names only cards the draft can deal', [
-        offered.length ? `the naming screen offered ${special.join(', ') || offered.join(', ')}`
-                       : 'the naming screen offered nothing to read — the check had no subject',
-        'a named special would be dealt free every round, which is what shop-only protects']);
-    }
 
     const stated = await page.evaluate(() => (document.querySelector('.sheet') || {}).textContent || '');
     await page.click('#on');

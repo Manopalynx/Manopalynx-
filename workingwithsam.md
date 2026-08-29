@@ -238,24 +238,24 @@ Every entry found by measurement, in two or more sessions, in code that threw no
 
 **Your instrument is wrong more often than the code is.** Four to five broken checks per
 session, each of which would have shipped a confident wrong answer: a probe reporting on the
-wrong element and returning a truthy string so the fallback never ran; a value printed at
-the end of a run and labelled "peak"; a live reference read after a later step mutated it; an
-exit code attached to a wrapper `echo`; a `sed` mutation that never applied because `\|` is
-alternation to GNU sed. **When a check fails, ask whether the assertion is stale before
-touching code**, and **prefer a differential to an absolute**: render twice, cause on and off,
-and diff. But **a difference between two options is not a value — it needs a control that is
-neither**: a mirror baseline was 23% and not the 50% assumed, making a buff read as a penalty,
-and five boosters read as three duds until one run took none. `[3,4,5,7,8,12]`
+wrong element and returning a truthy string so the fallback never ran; a value printed at the
+end of a run and labelled "peak"; a live reference read after a later step mutated it; an exit
+code attached to a wrapper `echo`. **When a check fails, ask whether the assertion is stale
+before touching code**, and **prefer a differential to an absolute**: render twice, on and off,
+and diff. But **a differential needs a control that is neither option, and an arm differing
+from it in one thing only**: a mirror baseline was 23%, not 50%; and "prefer X, else take
+another" flattered all five boosters — an unimplemented one scored +0.58. `[3,4,5,7,8,12]`
 
 **The thing that is broken is the thing nothing complains about.** Nine ledger defects; five
-capabilities an opponent never had; a `fitLabels` that had been a no-op since it was
-written; a document that existed twice; a `simTick` stepped with one pass missing. None
-threw, warned, or looked wrong on screen. `[1,3,4,5,7,8]`
+capabilities an opponent never had; a `fitLabels` no-op since it was written; a document that
+existed twice; a `simTick` missing a pass; a suite that crashed one run in three. None threw,
+warned, or looked wrong on screen. `[1,3,4,5,7,8,12]`
 
-**Mutation-test every check.** Break what it guards and watch it go red; if it stays green it
-is decoration — and **suspect the fixture before the assertion**: three checks were vacuous
-because the table had two seats where three were needed. **Print what a check covered, not
-only that it passed.** `[4,7,8]`
+**Mutation-test every check, the one you just wrote first**: the flaw above surfaced only
+when a deliberate no-op sailed through. **Suspect the fixture before the assertion** — a
+two-seat table needing three, a persona table a fifth of whose runs were a duplicate row, a
+throw-guard aimed at the one opponent it does not reward. **Print what a check covered, not
+only that it passed**: "24 of 24" then "21 of 21" had stopped running four. `[4,7,8,12]`
 
 **A number written twice will disagree, and the second copy is usually in the check.** The
 citadel price was `gc * 5 / 2` in six places and wrong in all six; the probe that should have
@@ -269,25 +269,25 @@ exists but never fires** — check a mechanic fires at all before tuning it, and
 second lock after removing the first. `[3,7]`
 
 **The guard for a defect class is a sweep, not a test of the instance.** `pump.test.mjs`
-drives every reversible action round its own loop; `copy.test.mjs` refuses the mechanism by
-which copy goes stale. A test naming the citadel would have caught the citadel. `[7]`
+drives every reversible action round its own loop; a test naming the citadel would have
+caught the citadel. `[7]`
 
 **A flaky check is worse than no check** — it teaches you to read red as noise, which is how
-one build shipped on an unread failure. **Read "1 failure(s)" as a thing to open.** When a
-threshold looks wrong, check what the sample can *see* before touching the number; when a
-tolerance change flips everything at once, the metric has no room in it. **Count the runs that
-did not finish** — a draw scored as half a win made 28% dead battles read as balance. `[7,8,12]`
+one build shipped on an unread failure. **Read "1 failure(s)" as a thing to open.** Check what
+the sample can *see* before touching a threshold; when a tolerance change flips everything at
+once, the metric has no room. **Count the runs that did not finish**: a draw scored half a win
+made 28% dead battles read as balance. `[7,8,12]`
 
 **A lever measured alone tells you about the lever, not the game.** The sign was predicted
-wrong on five balance levers across two sessions, always the same way, and the truth was
-that a credit not destroyed becomes rent, and rent concentrates. **Measure combinations**,
-and ask what the harness does *not* do before quoting a figure: `sweep.mjs` seated two
-humans since it was written and **Sam plays one against three**. `[7]`
+wrong on five balance levers across two sessions, always the same way: a credit not destroyed
+becomes rent, and rent concentrates. **Measure combinations**, and ask what the harness does
+*not* do before quoting a figure — `sweep.mjs` seated two humans and **Sam plays one against
+three**. `[7]`
 
-**Interface copy goes stale in meaning while its digits stay right.** A sentence quoting a
-whole upkeep bill as the cost of one vassal was numerically correct and false — worse than a
-stale number, because a stale number is wrong once and a false sentence misleads a decision.
-`[2,7]`
+**Interface copy goes stale in meaning while its digits stay right** — worse than a stale
+number, which is wrong once, because a false sentence misleads a decision. An upkeep bill
+quoted as one vassal's cost; kit sold as lasting "the rest of the run" by an engine that
+redrafts from nothing every match. `[2,7,12]`
 
 **Grep for what assumed the old world.** When you make something newly possible, for code
 that assumed it wasn't; after a structural move, for the old names. And **defensive code in
@@ -295,10 +295,9 @@ one half of a pair hides a bug in the other**: one binder stripped a trailing `(
 twin did not, so a button worked in half the interface and was dead in the rest. `[2,5]`
 
 **Three things once called invisible now answer to a command**: the default branch to
-`git ls-remote --symref origin HEAD`, the environment's source revision to `get_session`,
-the network policy to `curl -sS "$HTTPS_PROXY/__agentproxy/status"`. Only the Pages source
-resists, and it can 503 while its build succeeds. A push, `origin/main` holding the bytes,
-and the site serving them stay three facts: `git show origin/main:<path>`. `[5,6,7,8,10]`
+`git ls-remote --symref origin HEAD`, the source revision to `get_session`, the network
+policy to `curl -sS "$HTTPS_PROXY/__agentproxy/status"`. A push, `origin/main` holding the
+bytes, and the site serving them stay three facts: `git show origin/main:<path>`. `[5,6,7,8,10]`
 
 ---
 

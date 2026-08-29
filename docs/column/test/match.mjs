@@ -280,11 +280,13 @@ let shelfKinds = '', shelfWhy = [];
 // these numbers were first published, and a measured figure whose parameters are
 // not written down is not reproducible: the same pool re-measured as played
 // matches from the floor seat gives 2.43 against 1.67 and neither is wrong.
-// 60 an arm costs about two minutes and puts the smallest real gap (+0.63) at
-// roughly four standard errors, which is enough for a claim that only has to
-// decide 'better than nothing'. RUNS=200 tightens it when a figure is being
-// quoted rather than guarded.
-const RUNS = +process.env.RUNS || 60;
+// SIZED AGAINST THE SMALLEST BOOSTER IN THE POOL, not against the clock. At 60
+// an arm the Vanguard reads 2.2 standard errors, which is a fifth of a sigma
+// above this claim's own 2-sigma bar -- a guard that close to its threshold is
+// the flaky check this file has an entry about, and a real change either side of
+// it would be unreadable. At 120 the same booster reads about 3, for about
+// ninety seconds more. RUNS=300 is what a quoted figure is measured at.
+const RUNS = +process.env.RUNS || 120;
 // MEAN AND ITS ERROR, because "better than nothing" needs a bar and 0 is not one.
 // A booster that does nothing measures 0 ± the noise, so a threshold of "above
 // zero" catches a dead one about half the time -- which is a check that reads

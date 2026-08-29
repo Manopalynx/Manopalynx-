@@ -339,13 +339,23 @@ export const SHOP = {
 // than assumed: KIT CARRIES BETWEEN MATCHES AND CARDS DO NOT, because the army
 // is redrafted every match. A single-match measurement is therefore a floor for
 // a piece of kit and exact for an order, which lasts a round.
+// THESE LAST THE MATCH, NOT THE RUN, and the copy said otherwise in three places
+// for as long as kit has existed. Kit is a token in the army list (`eq:plate`),
+// and a run redrafts the army from nothing every match -- `playRun` carries
+// credits, lives and boosters forward and nothing else, which is what the run
+// screen itself tells the player. So the button in the shop was promising
+// something the engine does not do, on a purchase the player pays 30 for before
+// they can find out. The price is unaffected: it was measured over a single
+// match, which makes it exact here rather than the floor the pricing note called
+// it. WHETHER kit should carry is a live design question and Sam's; that it must
+// not SAY it carries while it does not is neither.
 export const KIT = [
   { id: 'plate',  n: 'Ablative plate', cost: 30,
-    d: 'Every heavy of yours takes 10 less from each hit, for the rest of the run.' },
+    d: 'Every heavy of yours takes 10 less from each hit, for the rest of this match.' },
   { id: 'sights', n: 'Range-finders',  cost: 30,
-    d: 'Everything of yours that shoots past 6 reaches 8 further, for the rest of the run.' },
+    d: 'Everything of yours that shoots past 6 reaches 8 further, for the rest of this match.' },
   { id: 'drill',  n: 'Field drill',    cost: 30,
-    d: 'Every light body of yours carries 70 more health, for the rest of the run.' }
+    d: 'Every light body of yours carries 70 more health, for the rest of this match.' }
 ];
 // `left` is the FRACTION OF HEALTH THE TARGET KEEPS, not the fraction taken off,
 // and it is 0.4 rather than 0.5. It was called `half` while holding 0.4 -- nothing
@@ -388,26 +398,64 @@ export const RUN = {
 // Stage three. After a match survived you choose one of three; the opponent
 // takes one at random. Same count, and the asymmetry is the CHOICE.
 //
-// RE-CUT, on a measurement taken twice. The first pool was one prize and four
-// fillers -- only "a fourth pick" moved a run at all, and the four that moved
-// the ECONOMY moved nothing. That was re-run after the specials, the kit and the
-// rewritten shopper had made the economy three times richer, and it came out the
-// same: +0.39 matches for the fourth pick, and -0.04 to -0.19 for the rest.
+// RE-CUT TWICE, and the second cut is the one that mattered.
 //
-// So the pool is draft-shaped now. Every one of these changes what you are
-// offered, what a pick is worth, or how many you get -- because the draft is the
-// game, and that is the third time this project has measured its way to the same
-// sentence. One economy booster is kept, deliberately strengthened, so that
-// conclusion stays falsifiable rather than becoming an assumption.
+// The first pool was economy -- more credits, cheaper shelves, double salvage --
+// and only "a fourth pick" moved a run at all. Re-measured after the specials,
+// the kit and the rewritten shopper had tripled the economy, it came out the
+// same. So the pool went draft-shaped: five boosters that changed what you were
+// offered, what a pick was worth, or how many you got.
 //
-// `named` carries an argument: the unit it names. It is stored as `named:<id>`,
-// which is why boosters are compared with a prefix rather than by equality.
+// THREE OF THOSE FIVE THEN MEASURED AS NOTHING, once the measurement itself was
+// fixed. The arm had been "prefer X, take something ELSE when X is not offered",
+// so every arm was collecting real boosters and beat a do-nothing control
+// whatever X was -- a booster id the engine does not implement scored +0.58 in
+// it. Isolated properly, over 300 runs an arm: Veterans +0.92 matches, a fourth
+// pick +0.44, and Standing muster, Requisition and Wider muster at +0.09, +0.09
+// and +0.05, none of them separable from noise.
+//
+// WHAT SURVIVED SAYS WHAT THE GAME IS. The two that worked change how many picks
+// you get and what a pick is worth. The three that did not change what you are
+// OFFERED and what the market CHARGES -- and being shown five cards instead of
+// three is worth a twentieth of a match, which says the third card was never the
+// binding constraint. Economy has now measured dead on this axis three separate
+// times and the offer once, so neither is represented here any more.
+//
+// THE REPLACEMENTS WERE MEASURED THE SAME WAY AND THREE MORE DIED. Reserves (two
+// picks to open a match) +0.06 at 1.2 sigma. Field surgeons (a life back each
+// match) +0.06 at 1.2 sigma. Attrition (the opponent's ramp halved, designed
+// deliberately to GROW with the run) +0.06 at 1.1 sigma. Eight boosters have now
+// been measured against a do-nothing control across three separate designs, and
+// they line up in one table:
+//
+//   Veterans        every card, from the moment you take it        +0.86
+//   A fourth pick   +1 pick a round, about +7 a match              +0.42
+//   The Vanguard    +1 pick a round LOST, about +3.5 a match       +0.13
+//   the other five  offer-shaped, economy-shaped, or a fixed few   +0.05 to +0.09
+//
+// THE CONSTRAINT IS THE RUN, NOT THE POOL. A run survives 1.44 matches from this
+// seat, and the first booster only arrives after match one -- so a booster gets
+// one or two matches to matter. Anything that scales with run length is worth
+// nothing because there is no run length; that is why Attrition, built for
+// exactly that, measured the same as the fillers it replaced. Only a booster
+// that acts at once and on EVERYTHING is worth much, and Veterans is the only
+// one of those anybody has thought of.
+//
+// SO: THREE, and not a fourth invented to round the number up. Three offered
+// after each match means the whole pool is on screen and the decision is the
+// ORDER -- Veterans first compounds hardest, the fourth pick pays sooner -- which
+// is a smaller decision than intended and an honest one. Whether the booster slot
+// should carry more than that is a question about how long a run is, and that is
+// Sam's.
+//
+// The Vanguard is the novel's own argument as a rule. The Leader spends eleven
+// thousand crew to take the Dominion's undefended core and tells the council the
+// sacrifice purchased the war; the extra pick for losing a round already says
+// that, and this says it twice.
 export const BOOSTS = [
-  { id: 'extra',   n: 'A fourth pick',   d: 'Four picks a round instead of three.' },
-  { id: 'wide',    n: 'Wider muster',    d: 'Five cards offered each round instead of three.' },
-  { id: 'veteran', n: 'Veterans',        d: 'Every card you draft arrives already upgraded once.' },
-  { id: 'named',   n: 'Standing muster', d: 'One unit you name is always among the cards you are offered.' },
-  { id: 'requisition', n: 'Requisition', d: 'The market opens every second round and everything in it costs a fifth less.' }
+  { id: 'extra',    n: 'A fourth pick', d: 'Four picks a round instead of three.' },
+  { id: 'veteran',  n: 'Veterans',      d: 'Every card you draft arrives already upgraded once.' },
+  { id: 'vanguard', n: 'The Vanguard',  d: 'A round you lose buys two picks, not one.' }
 ];
 export const BY_BOOST = Object.fromEntries(BOOSTS.map(b => [b.id, b]));
 

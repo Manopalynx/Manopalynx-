@@ -2757,3 +2757,126 @@ shop-only was protecting, undone by a feature added two hours later.
 Guarded in two places: the naming only chooses from the draft pool, and `offer()` refuses to
 force a card the draft cannot deal, because that function is the one that *promises* an offer
 contains no special. **The guard belongs where the promise is, not only where the mistake was.**
+
+### Part seventeen — the audit, and four instruments aimed somewhere other than their name
+
+He asked for a full pass over everything built and written for The Column, with authority to
+change what was worth changing. No game rule moved in it. What moved was what the instruments
+look at, and four of them were pointed away from the thing they were named for.
+
+**The booster values measured a preference, not a booster.** Found by breaking my own new
+guard on purpose: a booster id the engine does not implement — a pure no-op — scored **+0.58
+matches at 2.9σ, and the check passed it.** The arm was `prefer: X, take: 0` — take X when
+offered, and *take something else when it is not*. Over a run that is mostly other boosters,
+so every arm beat a do-nothing control by taking boosters at all. `prefer: X, take: -1` now
+takes X when offered and nothing otherwise, which is the only arm where X is the sole
+difference from the control.
+
+That is the third control this one measurement has needed, and the entry I wrote in
+`workingwithsam.md` two parts ago — *a difference between two options is not a value, it needs
+a control that is neither* — was necessary and not sufficient. The control was right; the
+**arm** was not isolating. The sharper sentence is that the treatment must differ from the
+control in exactly one thing, and "prefer X" differs in two: it takes X, and it takes.
+
+**The throw sweep was aimed at the one opponent it does not beat.** `match.mjs` measured
+`varan` alone for its whole life. Over 15,000 paired matches: −0.5pt against varan, +2.7 to
++10.9 against the other four, **+4.3pt overall** — the same figure it has always had, through
+the market, the specials, the kit and the re-cut. The green tick beside it was green because
+of the fixture. It sweeps all five now and triggers on the overall, because at 120 paired
+matches an opponent the standard error is 6.5pt and a 15pt bar on one row is a coin toss
+dressed as a guard. I checked what the sample could see before I chose the threshold, which
+is the one thing I did right first time here.
+
+**The persona table had a duplicate row and a missing persona.** `['counter','varan',...]`,
+and `counter` is a one-line alias of `varan` in `POLICIES` — two rows, same policy, identical
+figures to the digit, while `vex`, the run's *first* opponent, was never measured at all. It
+reads `[...RUN.order]` now. Vex turns out to be the weakest opponent in the game: a floor
+player beats it 88%.
+
+**And `test/play.mjs` crashed on one booster in three while reading green all session.**
+Taking Standing muster opens a naming screen, so the run screen's `#on` is not there yet; the
+suite clicked the first booster offered and waited thirty seconds for a button on a screen it
+was not on, then died with a Playwright timeout and no FAIL line. It needed the harness to
+survive its opening match *and* be offered `named` first. It arrived with the booster re-cut
+in part sixteen and I had run the suite four times since without hitting it.
+
+The same suite had a quieter version of the same fault. The page seeds every match from
+`Date.now() ^ Math.random()`, so it takes a different path each run — two runs an hour apart
+printed `24 of 24` and `21 of 21`, and nothing said the second had skipped four checks. **The
+fix for a hardcoded total was to count as they fire, and that fixed the wrong number and left
+the right one invisible.** It prints what did not run now.
+
+Four new guards, each broken on purpose and watched go red before it was kept: every unit has
+a mark and every mark has a unit (`glyph()` returns `''` for an id it does not know, so a new
+unit deploys as a blank counter and nothing throws); the opponent reaches every shelf and no
+others, both directions; `docs/data.js` BUILD and `docs/sw.js` CACHE agree.
+
+**The documents were worse than the code.** `docs/column/README.md` opened with *"The engine
+and both instruments are built. There is no interface yet, deliberately"* — the first thing
+anyone reads, wrong since the day the game became playable. Its publishing section said the
+Column **gets its own service worker and its own cache prefix**; it gets neither, and the
+truth is the opposite — one worker, one cache, one *atomic* `addAll` shared with Grandiose and
+Matchbox, which is the failure that has already taken all three apps' files down at once. The
+root README said *"design only, nothing built yet"*.
+
+The document is a build log with present-tense headings, and a heading that says "Still open"
+was still open *then*. It now opens with a section that is the present tense and says so, and
+says that the rest is a log where the last mention wins.
+
+### Part eighteen — the pool is three, because a run is 1.4 matches
+
+He read the audit and gave me the decision: *go for what you think makes the most sense for
+the three dead boosters*. It took two more rounds of the same measurement and cost three more
+boosters.
+
+**Round one, on the axes that had worked.** The two survivors changed how many picks you get
+and what a pick is worth, so the replacements went there: The Vanguard (a round you lose buys
+two picks — the Leader's own doctrine, doubled), Reserves (two picks to open a match), Field
+surgeons (the first life you lose each match, given back). Isolated at 300 runs an arm:
+**+0.14, +0.06, +0.06.** Two of my three died by the test that had just killed three of his.
+
+**Round two, on a model.** The numbers line up: run length moves with the *total* extra picks
+in a run, at about +0.05 matches a pick. A fourth pick adds ~7 a match and is worth +0.42; the
+Vanguard ~3.5 and is worth +0.13; Reserves adds 2 once and is worth +0.06. So the rule looked
+like **scale with the run, don't add to it** — and Attrition was built to that rule and
+nothing else: every opponent after this one starts on half their credits, worth twice as much
+at match four as at match two, the only booster in any of these pools that grows.
+
+**Attrition measured +0.06 at 1.1σ.** The same number as the fillers it was designed to beat.
+
+Which is the finding, and it is not about boosters. **A run survives 1.44 matches, and the
+first booster only arrives after match one.** A booster gets one or two matches to matter, so
+anything that scales with run length is worth nothing *because there is no run length* — which
+is precisely why the one built for that landed on Wider muster's number. Eight boosters,
+three designs, and only Veterans is large, because it is the only one that acts at once and on
+everything.
+
+So: three, and not a fourth invented to round the number up, which is the thing the whole
+re-cut was about. The question left is how long a run is, and that is his.
+
+**Cutting the weak ones made the opponent harder**, which is a real balance move dressed as
+tidying: it takes a booster at random every match, so removing the fillers raised the average
+strength of its draw. A do-nothing control went from 1.61 matches to **1.30** — runs nineteen
+per cent shorter, from deleting things that measured as worth nothing.
+
+**And a promise the engine was not keeping**, found while checking what carries between
+matches. Three kit items said *"for the rest of the run"* in three places, one of them the
+shop button. Kit is a token in the army list and a run redrafts the army from nothing every
+match — the run screen says so in those words, two screens earlier. A ₡30 purchase was
+promising something the engine does not do. The copy says *this match* now; the price is
+unaffected, because it was measured over a single match, which makes it exact rather than the
+floor the pricing note called it. Whether kit *should* carry is his.
+
+### What I would tell the next instance
+
+**Break your own new check before you trust it.** The booster flaw was invisible from reading
+the code and obvious the moment a deliberate no-op sailed through. Every guard I kept this
+session was mutation-tested; the one I did not mutation-test first is the one that was wrong.
+
+**A green suite that crashed one run in three had been green all session.** Non-determinism in
+a test harness does not announce itself — it looks like a pass. If a suite's path depends on
+the thing it is testing, make it print what it covered, not only that it passed.
+
+**The document lied in a more load-bearing way than the code did.** Nothing in the engine was
+as wrong as a README that said there was no interface and that the app had its own service
+worker. Code gets exercised; prose does not.

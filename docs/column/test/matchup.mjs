@@ -26,7 +26,7 @@
 // Run:  node docs/column/test/matchup.mjs [seeds]
 
 import { UNITS, DRAFT, SPECIALS, BY_ID } from '../data.js';
-import { resolve } from '../engine.js';
+import { resolve, offer, rng, tokId } from '../engine.js';
 import { GLYPH } from '../glyphs.js';
 
 const SEEDS = +process.argv[2] || 12;
@@ -159,6 +159,35 @@ else bad('every unit is the best answer to something', [
     `nothing in the twelve beats: ${none.map(b => b.sp.n).join(', ')}`,
     'a card the drafted roster cannot answer ends the game rather than deepening it'
   ]);
+}
+
+/* ------------------------- can the free draft ever deal a special? ----------- */
+// THE PROMISE `offer()` MAKES, guarded where it cannot be removed by deleting a
+// booster. Standing muster used to let a side name a unit that was then always
+// offered, and naming a bought Kraken would have had it dealt free every round --
+// so the guard lived in two places, one of which was that booster's own screen.
+// The booster is gone; the promise is not. A special is bought or it is not had,
+// and if a special ever reaches the free draft it also enters the counter graph
+// that the claims above are measured on, so this is load-bearing for the rest of
+// this file as well as for the shop.
+{
+  const r = rng(31337);
+  const seen = new Set();
+  // Drawn against real armies too: the offer substitutes upgrade tokens for cards
+  // a side already holds, which is the branch that could put a bought special back
+  // into a deal.
+  for (let i = 0; i < 400; i++) {
+    const held = [];
+    for (let k = 0; k < 5; k++) held.push(offer(r, 1)[0]);
+    held.push(SPECIALS[i % SPECIALS.length].id);       // a special they DID buy
+    offer(r, 6, held).forEach(t => seen.add(tokId(t)));
+  }
+  const leaked = [...seen].filter(id => SPECIALS.some(u => u.id === id));
+  if (!leaked.length) ok(`the free draft never deals a special — ${seen.size} distinct cards over 400 deals`);
+  else bad('the free draft never deals a special', [
+    `dealt: ${leaked.join(', ')}`,
+    'a special in the free draft is three of the roster\'s biggest cards, unpaid for',
+    'and it enters the counter graph every claim above is measured on']);
 }
 
 /* --------------------------------- does every unit have a face? ------------- */
