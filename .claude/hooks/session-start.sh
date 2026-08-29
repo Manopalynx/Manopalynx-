@@ -11,6 +11,15 @@
 #      plausible-looking CLAUDE.md and no reason to doubt it. This check exists
 #      to make that failure loud instead of silent.
 #
+#      AND THE LOCAL `main` REF SEPARATELY, because HEAD being right does not
+#      make `main` right. On 29 August 2026 the working branch was correctly
+#      based on origin/main while the local `main` was an UNRELATED history
+#      from ten days earlier with no Column in it at all. `git checkout main`
+#      refused, which was luck -- `git show main:docs/column/ui.js` would have
+#      answered quietly and wrongly, and an instance checking "what is live"
+#      that way reads a smaller project and believes it. That is the same trap
+#      as a stale base, one ref along: it does not read as stale.
+#
 #   2. Install the test dependency, so `node test/*.mjs` works without a manual
 #      `npm i` first.
 #
@@ -90,6 +99,33 @@ MSG
     fi
   else
     echo "Session base: '$branch' at $head. Could not reach origin/main, so the base is unverified."
+  fi
+
+  # ------------------------------------------------------ the local `main` ref
+  # A separate question from HEAD, and silent when it is wrong: `git show
+  # main:<path>` and `git log main` answer from whatever `main` points at, with
+  # no hint that it is not what is published.
+  if git rev-parse --verify -q refs/heads/main >/dev/null 2>&1 &&
+     git rev-parse --verify -q origin/main >/dev/null 2>&1 &&
+     [ "$(git rev-parse main)" != "$(git rev-parse origin/main)" ]; then
+    only=$(git rev-list --count origin/main..main 2>/dev/null || echo "?")
+    lag=$(git rev-list --count main..origin/main 2>/dev/null || echo "?")
+    cat <<MSG
+-----------------------------------------------------------------------------
+STALE LOCAL main -- '$(git rev-parse --short main)', not origin/main '$(git rev-parse --short origin/main)'.
+
+  commits on local main only : $only
+  commits it is missing      : $lag
+
+Anything you read through 'main' -- git show main:<path>, git log main, a diff
+against main -- is answering from that ref and will NOT say it is stale. Read
+'origin/main' instead, which is what GitHub Pages serves, or repair the ref:
+
+  git fetch origin main && git branch -f main origin/main
+
+(If you are ON main, the base check above is the one that matters.)
+-----------------------------------------------------------------------------
+MSG
   fi
 fi
 
