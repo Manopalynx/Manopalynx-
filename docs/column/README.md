@@ -1655,3 +1655,12 @@ overcharging by one — and both go red.
 
 `play.mjs` is at **27 claims**, green over three consecutive runs on three different
 random paths.
+
+## And one sentence on the result screen that was false to whoever read it
+
+*"12 cards, 3 picks spent on upgrades — **34 bodies at the end**"* is the size of the
+column you finished with, which is what the number is. It is read by somebody who has just
+watched that column be wiped out, on a screen headed **The column is broken** — so it
+claimed 34 bodies where there were none. The digit was right and the sentence was false,
+which is the worse of the two and the catalogue's own entry. It reads *"34 bodies on the
+field in the last round"* now.

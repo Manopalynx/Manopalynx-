@@ -27,8 +27,10 @@ const el = { bar: $('bar'), la: $('livesA'), lb: $('livesB'), who: $('who'),
 const SAVE = 'column-save';
 const BEST = 'column-best';
 const coin = n => `${COIN}${n}`;
-// A booster id may carry what it names -- `named:walker` -- so nothing looks one
-// up by the raw string.
+// Defensively split on `:`, for the same reason `has()` in the engine still
+// matches on a prefix: no booster carries an argument now that Standing muster
+// is gone, and the cost of keeping the handling is a `split` while the cost of
+// dropping it is the next one that needs an argument silently not working.
 const boostOf = b => BY_BOOST[b.split(':')[0]];
 const boostLabel = b => {
   const def = boostOf(b), arg = b.split(':')[1];
@@ -846,8 +848,9 @@ function over() {
       b.onclick = onward; d.appendChild(b);
     }
     d.querySelectorAll('[data-b]').forEach(b => b.onclick = () => {
-      // A booster that names a unit asks which. It is the only one that does,
-      // and it is the whole of what "you choose and they do not" means here.
+      // Three offered and the whole pool is three, so the decision is the ORDER
+      // you take them in -- Veterans first compounds hardest, the fourth pick
+      // pays sooner. Theirs is drawn; that asymmetry is the whole of the choice.
       boosts[0].push(b.dataset.b);
       onward();
     });
@@ -860,8 +863,13 @@ function over() {
     ${run ? `<h2>The run ends</h2><p>You survived <b>${run.n}</b>
        ${run.n === 1 ? 'match' : 'matches'} before this one. Best: ${bestRun()}.</p>` : ''}
     <h2>Your column</h2>
+    <!-- "bodies at the end" was the size of the column you FINISHED WITH, which is
+         what this number is, and it is read by someone who has just watched that
+         column be wiped out -- so on the screen that says "The column is broken"
+         it claimed 34 bodies where there were none. The digit was right and the
+         sentence was false, which is the worse of the two. -->
     <p>${mine.cards.length} cards${ups ? `, ${ups} pick${ups === 1 ? '' : 's'} spent on upgrades` : ''} —
-       ${mine.cards.reduce((n, id) => n + BY_ID[id].count, 0)} bodies at the end.
+       ${mine.cards.reduce((n, id) => n + BY_ID[id].count, 0)} bodies on the field in the last round.
        ${S.lives[0]} ${S.lives[0] === 1 ? 'life' : 'lives'} left, ${coin(credits)} unspent.</p>
     <button class="pick" id="again"><b>Again</b></button>`, true);
   d.querySelector('#again').onclick = () => {
