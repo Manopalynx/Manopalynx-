@@ -2896,3 +2896,90 @@ the thing it is testing, make it print what it covered, not only that it passed.
 **The document lied in a more load-bearing way than the code did.** Nothing in the engine was
 as wrong as a README that said there was no interface and that the app had its own service
 worker. Code gets exercised; prose does not.
+
+## Instance 13 — 29 August 2026
+
+He asked me to read everything and come back with what I spotted, then fed me notes 11–19
+in batches, with a rule from batch two on: **discuss each note before building it.** That
+rule earned its keep immediately and repeatedly — three of his notes changed shape in the
+discussion, and one of them turned out to be already done.
+
+### The Vanguard was only ever in the sweep
+
+`bonusPicks()` reads that booster and had **exactly one caller in the repository:
+`playMatch`, which is the sweep.** The interface set `S.bonus` to the loser and cleared it
+after a single pick — the rule as a state-machine shape rather than as a number — so it gave
+one whatever you held. The booster measured +0.18 matches in `match.mjs` and did nothing at
+all on the phone, for both sides, while the suite printed *"the pool has no dead option"*,
+green, because that claim is true of `playRun` and `playRun` never loads `ui.js`.
+
+I found it by cross-referencing every engine export against its callers, and I did not
+believe it until two arms of the real page said so. **A sweep cannot see this class of
+defect at all**, which is the thing to carry: the Ledger's catalogue has *an engine function
+whose only caller is a human button*, and this is its exact mirror.
+
+### Then my own guard had the flaw it existed to catch
+
+The guard is *every engine rule that reads a booster is called by the interface*. Its first
+version matched the raw file — and both files carry comments naming `bonusPicks()`, written
+to explain why it must be called, so it **passed a mutation that removed every real call and
+left the prose standing.** It strips comments now. Nothing about reading it said so.
+
+Its second failure was the opposite: it matched the literal `has(boosts, 'x')`, which
+quietly made it a style rule, and called a live booster dead because `earn` indexes a side's
+list and reads `has(mine, 'salvage')`. Two wrong versions of one guard, both found by
+breaking it.
+
+### Four checks that were wrong about the game rather than the game being wrong
+
+All four surfaced by running the suite, and in every case the assertion was stale:
+`the arithmetic closes` read lives as `(5 − hearts) + (5 − hearts)`, which stopped being
+lives spent the day the market started selling one; `buying takes the price` read a "from"
+row's price and clicked a different purchase; a strict-mode `locator('b')` matched five
+elements and killed a run with a stack trace instead of a FAIL line; and `no card face is
+clipped` went **vacuous the moment it worked**, because giving every line a fixed height
+means the card can never overflow and the clipping just moves inside a child.
+
+### Note 19, and the largest finding of the session
+
+He played a run, bought nothing, and was still winning at match five. Every figure this
+project had printed said a run is one to two matches.
+
+**I checked the page first**, because "the sweep and the game disagree" would be a defect.
+It is not — the real page playing whole runs with the floor policy and no shopping survived
+2, 0, 3 against `playRun`'s 1.21 for the same seat. So the gap was never code: **the harness
+had no seat that plays like him**, and every difficulty number in the folder was measured on
+a drafter far weaker than the person the game is for. `ace` resolves the board after each
+candidate pick and survives 3.55 matches; `buyFor` is the first human shopping policy this
+project has ever had, because `playMatch` called the opponent's `spend()` for *both* sides
+for the entire life of the economy — so *"should I buy a life?"* had never been asked by a
+player once.
+
+Against `ace`, four of the five opponents were a formality. That is his note confirmed with
+a number, and it is the Ledger's worst mistake arriving by a different road.
+
+### And I wrote a money pump, in the session that quoted the entry
+
+The first `buyFor` **bought the same sabotage eight times in one visit.** Sabotage lands in
+a Set, so the second does nothing — and I scored every candidate against a board I never
+updated, so each pass re-found it and called it an improvement. Nothing threw; the credits
+went. Caught by **printing what it bought**, not by reading it. The guard is the general one
+now and sweeps both shoppers: every purchase must move the state `armyFrom` reports.
+
+### What I would tell the next instance
+
+**Measure the seat, not just the table.** The catalogue already said to ask what the harness
+does not do. It did not say to ask *who is sitting in it*, and that omission invalidated
+every difficulty figure in a project that had been audited twice.
+
+**A guard is code and rots like code.** Four of my own guards were wrong this session, in
+four different ways — matching prose, matching a variable name, measuring a container that
+can no longer overflow, and flagging a decoration. Every one passed review by reading and
+failed the moment it was broken on purpose.
+
+**When his idea measures dead, say so and say why.** His revive was built twice, at two
+magnitudes, and measured +0.13 and +0.10. The temptation to inflate it until it cleared the
+bar was real and would have been a check measuring itself. The honest answer was better than
+a passing one: the field resets every round, so a battle-side effect can only change a round
+that was close, and 59% of compositions are settled before a shot is fired. That is his own
+open decision, arriving from a third direction.

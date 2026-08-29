@@ -282,7 +282,8 @@ made 28% dead battles read as balance. `[7,8,12]`
 wrong on five balance levers across two sessions, always the same way: a credit not destroyed
 becomes rent, and rent concentrates. **Measure combinations**, and ask what the harness does
 *not* do before quoting a figure — `sweep.mjs` seated two humans and **Sam plays one against
-three**. `[7]`
+three**. **And who sits in the seat**: he reached match five where the best policy reached
+it in 0 of 400 runs, so every difficulty figure described a weaker player. `[7,13]`
 
 **Interface copy goes stale in meaning while its digits stay right** — worse than a stale
 number, which is wrong once, because a false sentence misleads a decision. An upkeep bill
