@@ -994,12 +994,18 @@ function over() {
     const nextN = run.n + 1;
     setBest(nextN);
     const lives = S.lives[0];
-    // CAPTURED HERE, off the boosters this match was actually played with, which
-    // is what `playRun` does -- a booster taken on this screen shapes the matches
-    // ahead rather than the one just finished. Read now rather than at the tap,
-    // because `carryOn` fires later and a live reference read after a later step
-    // is a defect this record already carries twice.
-    const keepCards = carried(S.boosts[0], S.army[0]);
+    // TWO CAPTURES WITH DIFFERENT TIMING, and the difference is the whole of
+    // Sam's bug report.
+    //
+    // The ARMY is copied now, because `carryOn` fires later and a live reference
+    // read after a later step is a defect this record already carries twice.
+    //
+    // The BOOSTERS are read at the tap, deliberately, because the booster chosen
+    // on this very screen has to count. It used to be read here, before the
+    // choice -- so taking The Compact carried nothing into the next match and
+    // first paid a match later. The sweep did the same thing, which is why the
+    // suite never saw it; he found it by playing and reading "0 cards to 0".
+    const finishedArmy = S.army[0].slice();
     const boosts = [S.boosts[0].slice(), S.boosts[1].slice()];
     // Three to you, one at random to them, off the run's own seed so the same
     // run offers the same choices however many times it is reloaded.
@@ -1011,7 +1017,8 @@ function over() {
     const carryOn = () => {
       document.querySelectorAll('.sheet').forEach(x => x.remove());
       newMatch(RUN.order[nextN % RUN.order.length],
-               { n: nextN, credits, lives, boosts, seed: run.seed, keep: keepCards });
+               { n: nextN, credits, lives, boosts, seed: run.seed,
+                 keep: carried(boosts[0], finishedArmy) });
     };
 
     const onward = () => {

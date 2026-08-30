@@ -840,19 +840,42 @@ await page.screenshot({ path: png('play.png') });
     if (drawn) ok("the opponent's booster is drawn and named, yours is chosen");
     else bad("the opponent's booster is drawn and named", ['the screen never said what they took']);
 
-    await page.locator('.sheet [data-b]').first().click();
+    // TAKE THE COMPACT IF IT IS OFFERED, so the claim below actually fires. The
+    // suite used to click whatever was first, which is drawn at random -- and a
+    // check that only sometimes runs is how this defect lived: it was found by
+    // Sam playing a match, not by anything here.
+    const compactOffered = await page.locator('.sheet [data-b="compact"]').count() > 0;
+    await page.locator(compactOffered ? '.sheet [data-b="compact"]' : '.sheet [data-b]').first().click();
 
     const stated = await page.evaluate(() => (document.querySelector('.sheet') || {}).textContent || '');
     await page.click('#on');
     const two = await page.evaluate(() => {
       const s = JSON.parse(localStorage.getItem('column-save') || 'null');
       return s && { n: s.run && s.run.n, money: s.money, per: s.perRound,
-                    boosts: s.boosts, lives: s.lives };
+                    boosts: s.boosts, lives: s.lives, army: s.army };
     });
     if (/begin with/i.test(stated) && two && two.n === 1 && two.money[1] >= 18)
       ok(`the ramp is stated and applied — match 2's opponent starts on ${two.money[1]}`);
     else bad('the ramp is stated and applied', [
       `stated ${/begin with/i.test(stated)}, match ${two && two.n}, their purse ${two && two.money[1]}`]);
+
+    // THE COMPACT CARRIES A CARD, and it has to arrive in the match you play
+    // NEXT rather than the one after. This is Sam's bug report as a check: the
+    // old suite asserted only that the booster was HELD in match 2, which was
+    // true while nothing at all was carried, and the run screen said
+    // "0 cards to 0" on the round after taking it.
+    //
+    // Read off the saved state rather than off the screen, because the carried
+    // card is in the army before a single pick is made and there is nothing to
+    // photograph yet.
+    if (compactOffered) {
+      const carriedIn = (two && two.army && two.army[0]) || [];
+      if (carriedIn.length >= 1)
+        ok(`The Compact carries a card into the very next match (${carriedIn.join(', ')})`);
+      else bad('The Compact carries a card into the very next match', [
+        'match 2 began with an empty column while The Compact was held',
+        'the booster pays a match late, which is what it did before this was a check']);
+    } else skipped.push('The Compact carries a card into the very next match');
 
     // LIVES CARRY, AND ONLY THE MARKET RESTORES THEM. If they reset, the whole
     // point of the credit decision goes with them.

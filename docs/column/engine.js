@@ -771,7 +771,20 @@ export const bonusPicks = boosts => RULES.loserBonusPicks + (has(boosts, 'vangua
 // matches against +0.03 to +0.33 for everything else. The seam is kept rather
 // than inlined because it is where the next booster of that shape goes, and
 // because a pick becoming two things is a rule the screen must not re-derive.
-export const pickTokens = (boosts, tok) => [tok];
+export const pickTokens = (boosts, tok) => {
+  // VETERANS: every card you draft arrives already upgraded once.
+  //
+  // This is the one place what a pick TURNS INTO is decided, which is why the
+  // booster lives here -- the interface and the sweep both call it, so they
+  // cannot disagree about what a pick produced. The file said this was where the
+  // next booster of Veterans' shape would go; it is Veterans again.
+  //
+  // Only a bare card id is upgraded. An `up:` token is already an upgrade and a
+  // second one would be a level nobody drafted, and `armyFrom` caps at
+  // UPGRADE.max anyway, so a card at full level simply keeps it.
+  if (has(boosts, 'veterans') && !tok.includes(':')) return [tok, UP_TAG + tok];
+  return [tok];
+};
 
 // What the market has in it for a given side, and what it costs. Derived from
 // the army rather than listed, so an upgrade that cannot apply is never offered
@@ -1167,7 +1180,17 @@ export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = nu
     // THE COMPACT: one card of the column you finished with marches into the next
     // match, at the level it reached. Everything else is redrafted from nothing,
     // which is what makes the draft the game -- this is one exception, earned.
-    kept = carried(boosts[0], r.army[0]);
+    //
+    // IT IS COMPUTED AFTER THE BOOSTER IS TAKEN, at the foot of this loop, and
+    // that ordering is the whole of Sam's bug report. It used to be read HERE,
+    // before the take -- so taking The Compact at the end of match 1 carried
+    // nothing into match 2, and first paid at the end of match 2. One dead match,
+    // every time, and unique to this booster: everything else is read from the
+    // list during a match, which by then includes what you just chose.
+    //
+    // The interface agreed with the sweep exactly, which is why nothing caught
+    // it, and why the +0.30 it measured was real but a payout short. He found it
+    // by playing a match and reading "0 cards to 0" on the next one.
     // A booster each, and the asymmetry is the choice: three offered to you, one
     // at random to them. THREE ARMS, and the difference between the last two is
     // the whole reason a dead booster can hide:
@@ -1194,6 +1217,7 @@ export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = nu
       if (!boosts[0].some(x => x === force)) boosts[0].push(force);
       const t = boosterOffer(rand, boosts[1]);
       if (t.length) boosts[1].push(t[0]);
+      kept = carried(boosts[0], r.army[0]);
       continue;
     }
     const mine = (take < 0 && !prefer) ? [] : boosterOffer(rand, boosts[0]);
@@ -1208,6 +1232,7 @@ export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = nu
     if (mine.length && at >= 0) boosts[0].push(mine[at]);
     const theirs = boosterOffer(rand, boosts[1]);
     if (theirs.length) boosts[1].push(theirs[0]);
+    kept = carried(boosts[0], r.army[0]);
   }
   return { survived: matches.filter(m => m.won).length, matches, money, boosts, lives };
 }

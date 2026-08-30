@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v28';
+export const BUILD = 'column-v29';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -476,7 +476,12 @@ export const RUN = {
 export const BOOSTS = [
   { id: 'compact',  n: 'The Compact',    d: 'One card of your column marches into the next match, at the level it reached.' },
   { id: 'surgeons', n: 'Field surgeons', d: 'The first life you lose in each match is given back.' },
-  { id: 'vanguard', n: 'The Vanguard',   d: 'A round you lose buys two picks, not one.' }
+  { id: 'vanguard', n: 'The Vanguard',   d: 'A round you lose buys two picks, not one.' },
+  // BACK, at full strength, and the reason is Sam's rather than a re-measurement:
+  // it was cut for being the one prize in a pool of five you saw most of every
+  // match. A random three of eight changes that arithmetic -- a strong booster
+  // you are only sometimes offered is exciting rather than mandatory.
+  { id: 'veterans', n: 'Veterans',       d: 'Every card you draft arrives already upgraded once.' }
 ];
 export const BY_BOOST = Object.fromEntries(BOOSTS.map(b => [b.id, b]));
 

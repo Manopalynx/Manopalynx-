@@ -2841,3 +2841,77 @@ every weapon everywhere — so there is no edge to show, and shading the whole b
 "this part is different" about a rule with no parts. Four grounds are caps and one is bare;
 for those five the bar and the panel are the whole of it, which is why the two halves of this
 were done together.
+
+---
+
+# The Compact was paying a match late, and Veterans is back
+
+## Sam found it by playing, and nothing here could have
+
+He took The Compact at the end of match 1, and match 2's first round said **"0 cards to 0"**.
+Both the interface and the sweep computed the carried card **before** the booster just chosen
+was added to the list:
+
+```js
+const keepCards = carried(S.boosts[0], S.army[0]);   // ui.js
+kept = carried(boosts[0], r.army[0]);                 // engine.js
+```
+
+So The Compact did nothing to the next match and first paid at the end of *that* one — **one
+dead match, every time, and unique to this booster.** Field surgeons and The Vanguard are read
+from the list *during* a match, which by then includes what you just took; only the Compact
+reads the army of a match fought before you owned it.
+
+**The two implementations agreed exactly, which is why nothing caught it** — and the suite's
+existing claim asserted only that the booster was *held* in match 2, which was true while
+nothing at all was carried.
+
+**Both now read the boosters at the moment of the take**, and the army is still copied early,
+because those two need opposite timing: a live army reference read after a later step is a
+defect this record already carries twice, while the booster list is *supposed* to change.
+
+**The guard is the one that would have caught it.** It reads the saved state — the carried
+card is in the column before a single pick, so there is nothing on screen to photograph — and
+it now takes The Compact when offered rather than clicking whatever is first, because a check
+that only sometimes runs is how this survived. Mutation-tested twice by restoring the old
+ordering: it fails with Sam's exact symptom, *"match 2 began with an empty column"*.
+
+## Veterans is back, at full strength, and the reason is his
+
+It was cut for being the one prize in a pool of five you saw most of every match. **A random
+three of eight changes that arithmetic** — a strong booster you are only sometimes offered is
+exciting rather than mandatory. It lives on `pickTokens`, which this file already said was
+where the next booster of Veterans' shape would go.
+
+## What the pool measures now
+
+120 runs an arm, and **the control moved**, so these are not comparable to the old figures
+except as deltas: taking nothing fell from 2.23 to 1.82 matches, because the opponent now
+draws from the same four and sometimes draws Veterans.
+
+| | matches | against taking nothing |
+|---|---|---|
+| **Veterans** | 3.07 | **+1.25 (10.5σ)** |
+| **The Compact** | 2.19 | **+0.38 (3.6σ)** |
+| The Vanguard | 2.07 | +0.25 (2.4σ) |
+| Field surgeons | 2.02 | +0.20 (2.0σ) |
+| *taking nothing* | *1.82* | *the control* |
+
+**The Compact rose from +0.30 to +0.38** — the extra payout the fix restored, showing up as a
+number.
+
+## And a second red, which is the predicted one rather than a new fault
+
+`match.mjs` now reads **8 of 10**: *the booster pool has no dead option — 1 of 4 do not clear
+the control*, Field surgeons at 2.0σ.
+
+This is the check changing meaning under a growing pool, which was flagged before the numbers
+came back. At three boosters, all the same size, "every one clears the control at 2σ" was
+achievable. **At eight it will not be, and it should not be** — a deep pool wants texture, and
+the honest bar is *no booster is worse than doing nothing*, a floor rather than a levelling
+rule.
+
+**It has deliberately not been relaxed.** Field surgeons is +0.20 and positive; whether that
+is a weaker booster or 120 runs failing to resolve it is not established, and re-aiming a red
+check at the number that passes is how a design question gets settled by stealth. Both the
+bar and the runs are Sam's to spend.
