@@ -2915,3 +2915,80 @@ rule.
 is a weaker booster or 120 runs failing to resolve it is not established, and re-aiming a red
 check at the number that passes is how a design question gets settled by stealth. Both the
 bar and the runs are Sam's to spend.
+
+---
+
+# The Ledger, and the instrument that had been shrinking every booster figure
+
+## The arm was wrong, and it had been wrong for every figure this file printed
+
+`match.mjs` measured a booster with `prefer`, which holds it **only when it is among the
+three drawn**. With a pool of three that was almost always. With five it is three times in
+five. **So every effect shrank as the pool grew, for no reason but the size of the pool** —
+and `engine.js` says exactly this in its own comment beside the arms: *"the question a pool
+needs answered is what is this worth if you have it"*.
+
+It showed as a booster apparently going stale:
+
+| | pool of 3 | of 4 | of 5 | **corrected (`force`)** |
+|---|---|---|---|---|
+| The Compact | +0.30 | +0.38 | +0.19 | **+0.48** |
+| Field surgeons | +0.32 | +0.20 | +0.04 | **+0.29** |
+| The Vanguard | +0.32 | +0.25 | +0.14 | **+0.34** |
+
+**Field surgeons was never weak.** It had been read as fading, a bar was relaxed to
+accommodate it, and the whole thing was this file measuring its own pool size. The bar is
+back at two standard errors, because a check relaxed to match a wrong measurement is worse
+than one left red.
+
+## And the sample was below this file's own standard
+
+The line above the arm calls **300 runs** what a quoted figure is measured at, and then
+measured the quoted figures at 120. At 120 the error bar on an arm is about ±0.25 matches,
+so a real +0.22 booster reads 1.9σ and the check calls it dead — **which is what happened to
+The Ledger on the run that shipped it: 1.9σ at 120, 2.8σ at 300, same booster, same code.**
+The default is 300 now; `RUNS=120` still cuts it for a smoke run.
+
+## The Ledger: the idea was sound and the dose was wrong
+
+Once a **match** it measures **+0.05 at 0.6σ** — dead, because one free pick in twenty-one is
+nothing. Once a **round** it is **+0.22 at 2.8σ**, the same size as The Vanguard and Field
+surgeons rather than the much larger thing a comment here predicted. **Third time tonight
+that the dose rather than the mechanism was the answer**, after the choke and the revive.
+
+It was verified wired before being called dead — two matches on the same seed with and
+without it produce different columns — because an arm that reaches nothing prints a tidy
++0.00 and reads exactly like a booster that does not work.
+
+**It replaces Wider muster**, which measured dead four times across two seats. More cards
+offered does not help when the problem is which cards win; this is the other axis.
+
+## What it took in the interface
+
+The offer is twelve cards and the row is built for three — the note about the stat line
+clipping at *four* is a few sections up. So the row carries one button and the choosing
+happens on a sheet with room to read a card, using the roster's own row so a card named there
+is recognisable as the counter it becomes. `commit(i)` indexes the same array either way, so
+both paths are the same pick.
+
+**A bonus pick never gets it**, in the engine and the interface both, and neither infers that
+— each passes `false` at its own call site.
+
+**And it caught a bug in its own new code.** `firstOfRound()` first read `S.solo`, which is
+assigned *after* the offer is built, so it saw the previous round's value and the booster
+never fired. A live reference read after a later step has mutated it is the defect this
+record already carried twice; this was the third, in code written to avoid it.
+
+## The pool, at 300 runs an arm
+
+| | matches | against taking nothing |
+|---|---|---|
+| **Veterans** | 3.71 | **+1.79 (19.9σ)** |
+| **The Compact** | 2.40 | **+0.48 (5.7σ)** |
+| The Vanguard | 2.26 | +0.34 (4.2σ) |
+| Field surgeons | 2.21 | +0.29 (3.5σ) |
+| **The Ledger** | 2.14 | **+0.22 (2.8σ)** |
+| *taking nothing* | *1.92* | *the control* |
+
+Five of the eight, every one clearing the bar, and `match.mjs` back to **9 of 10** with the
+composition red the only one left.

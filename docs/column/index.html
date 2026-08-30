@@ -189,6 +189,12 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
 .ground .gl{display:block;opacity:.82;font-size:.92em}
 .pick i .ground{display:block;margin:3px 0 0}
 .gname{color:#7fd6a0}
+/* THE LEDGER'S ROW. One button where three cards would be, so the deck keeps its
+   132px and the battlefield does not move. It reads as a card rather than as a
+   control because that is what it stands in for. */
+.card.ledgerAll{justify-content:center;gap:6px}
+.card.ledgerAll b{font-size:13px;height:auto}
+.card.ledgerAll .hint{height:auto;font-size:10px;padding:0 10px;line-height:1.3}
 /* Fixed height, like everything else down here. An EMPTY button is twenty-two
    pixels shorter than one with a word in it, and hiding it with visibility keeps
    its box but not its content -- so the deck still changed size between a pick

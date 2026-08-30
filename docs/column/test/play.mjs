@@ -26,7 +26,7 @@ import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve as rp, extname, join } from 'path';
 import { chromium } from 'playwright';
-import { BOOSTS, RULES, PERSONAS, MAPS, BY_MAP, TERRAIN, groundSays } from '../data.js';
+import { BOOSTS, RULES, PERSONAS, MAPS, BY_MAP, TERRAIN, groundSays, DRAFT } from '../data.js';
 import { bonusPicks, POLICIES } from '../engine.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -80,6 +80,20 @@ const base = `http://127.0.0.1:${server.address().port}`;
 // "24 of 24" and "21 of 21": the second lost its opening match, so the four
 // checks past that point never ran, and nothing said so. Both look like a clean
 // green. `skipped` is what a claim count cannot say on its own.
+// ONE WAY TO TAKE A PICK, whichever screen the game is showing. The Ledger
+// replaces the card row with a button that opens a sheet, and a driver that only
+// knows how to click a card would stall there rather than fail -- which reads
+// exactly like a hung page.
+const takePick = async page => {
+  if (await page.locator('#cards .ledgerAll').count()) {
+    await page.locator('#cards .ledgerAll').click();
+    await page.locator('.sheet [data-pick]').first().click();
+    return 'ledger';
+  }
+  await page.locator('#cards .card').first().click();
+  return 'card';
+};
+
 let failed = 0, ran = 0;
 const skipped = [];
 const ok = m => { ran++; console.log(` ok   ${m}`); };
@@ -351,6 +365,9 @@ const state = () => page.evaluate(() => {
     // moves. This is the number Sam's note 4 is about.
     fieldH: Math.round(document.getElementById('fieldWrap').getBoundingClientRect().height),
     offer: document.querySelectorAll('#cards .card').length,
+    // THE LEDGER puts one button where three cards would be, so the row's count
+    // stops meaning what it meant. Reported rather than inferred from the count.
+    ledger: !!document.querySelector('#cards .ledgerAll'),
 
     // WHAT THE SAME CARDS LOOK LIKE AT A WIDER OFFER — his note 22, and the
     // reason it went unseen for as long as it has existed.
@@ -484,7 +501,7 @@ for (let guard = 0; guard < 400; guard++) {
   }
 
   if (s.phase === 'pick') {
-    if (s.offer !== 3) { deadEnd = `offered ${s.offer} cards at ${s.prompt}`; break; }
+    if (!s.ledger && s.offer !== 3) { deadEnd = `offered ${s.offer} cards at ${s.prompt}`; break; }
     if (s.round === 3 && !shot.draft) {
       shot.draft = 1;
       await page.screenshot({ path: png('play-draft.png') });
@@ -521,7 +538,7 @@ for (let guard = 0; guard < 400; guard++) {
       // in a click timeout thirty seconds later -- a crash instead of a finding.
       if (pause !== true) { deadEnd = `the pause did not back out: ${pause}`; break; }
     }
-    await page.locator('#cards .card').first().click();
+    await takePick(page);
   } else if (s.go === 'Fight') {
     // At the moment of the fight the deployment is on screen and every card is
     // alive, so this is the one place the two counts must agree exactly.
@@ -792,7 +809,7 @@ await page.screenshot({ path: png('play.png') });
     // this check did, and reported as a carry failure.
     lastLives = s.lives[0];
     if (s.phase === 'revealed') { await page.waitForTimeout(120); continue; }
-    if (s.phase === 'pick') { await page.locator('#cards .card').first().click(); continue; }
+    if (s.phase === 'pick') { await takePick(page); continue; }
     if (s.go === 'The market') { await page.click('#go'); await page.click('#leave'); continue; }
     if (s.go === 'Next round') { await page.click('#go'); continue; }
     if (s.go === 'Fight') {
@@ -840,12 +857,23 @@ await page.screenshot({ path: png('play.png') });
     if (drawn) ok("the opponent's booster is drawn and named, yours is chosen");
     else bad("the opponent's booster is drawn and named", ['the screen never said what they took']);
 
-    // TAKE THE COMPACT IF IT IS OFFERED, so the claim below actually fires. The
-    // suite used to click whatever was first, which is drawn at random -- and a
-    // check that only sometimes runs is how this defect lived: it was found by
-    // Sam playing a match, not by anything here.
-    const compactOffered = await page.locator('.sheet [data-b="compact"]').count() > 0;
-    await page.locator(compactOffered ? '.sheet [data-b="compact"]' : '.sheet [data-b]').first().click();
+    // TAKE A BOOSTER THIS SUITE HAS A CLAIM ABOUT, rather than whatever is first.
+    // Both The Compact and The Ledger only show their effect in the match AFTER
+    // they are taken, so each needs to be held going into match 2 -- and the
+    // offer is random, so clicking blind left both claims permanently skipped.
+    // That is how the Compact's own defect survived: Sam found it by playing.
+    //
+    // One run can only take one of them, so whichever is offered is tested and
+    // the other reports as skipped. Injecting the booster into the save instead
+    // was tried and does not work: the save carries the computed offer AND the
+    // phase, so a doctored one either restores the old three cards or lands in a
+    // state the game never reaches.
+    let took = null;
+    for (const want of ['compact', 'ledger']) {
+      if (await page.locator(`.sheet [data-b="${want}"]`).count()) { took = want; break; }
+    }
+    await page.locator(took ? `.sheet [data-b="${took}"]` : '.sheet [data-b]').first().click();
+    const compactOffered = took === 'compact';
 
     const stated = await page.evaluate(() => (document.querySelector('.sheet') || {}).textContent || '');
     await page.click('#on');
@@ -876,6 +904,32 @@ await page.screenshot({ path: png('play.png') });
         'match 2 began with an empty column while The Compact was held',
         'the booster pays a match late, which is what it did before this was a check']);
     } else skipped.push('The Compact carries a card into the very next match');
+
+    // THE LEDGER, on the real first pick of the real next match. It replaces the
+    // card row with one button, so the row's count stops meaning what it meant --
+    // which is why `offer` and `ledger` are reported separately by the probe.
+    if (took === 'ledger') {
+      const st = await page.evaluate(() => ({
+        row: !!document.querySelector('#cards .ledgerAll'),
+        cards: document.querySelectorAll('#cards .card').length,
+      }));
+      let listed = 0, grew = false;
+      if (st.row) {
+        await page.locator('#cards .ledgerAll').click();
+        listed = await page.locator('.sheet [data-pick]').count();
+        await page.locator('.sheet [data-pick]').nth(Math.min(4, Math.max(0, listed - 1))).click();
+        await page.waitForTimeout(400);
+        grew = await page.evaluate(() => {
+          const s = JSON.parse(localStorage.getItem('column-save') || 'null');
+          return !!(s && s.army && s.army[0].length >= 1);
+        });
+      }
+      if (st.row && listed === DRAFT.length && grew)
+        ok(`The Ledger names any card — the whole roster of ${listed} on the first pick, and it arrives`);
+      else bad('The Ledger names any card', [
+        `row shown ${st.row}, cards in the row ${st.cards}, listed ${listed} of ${DRAFT.length}, arrived ${grew}`,
+        'the first pick of a match is the whole roster or the booster does nothing']);
+    } else skipped.push('The Ledger names any card');
 
     // LIVES CARRY, AND ONLY THE MARKET RESTORES THEM. If they reset, the whole
     // point of the credit decision goes with them.

@@ -723,6 +723,31 @@ const has = (boosts, id) => boosts.some(b => b === id || b.startsWith(id + ':'))
 // than simply more. Worth re-measuring rather than assuming -- it scored +0.05
 // last time, on a seat too weak to tell which of five cards was the better one.
 export const offerSize = (boosts, wide) => RULES.offer + wide;
+
+/** WHAT A SIDE IS OFFERED FOR ONE PICK.
+ *
+ *  THE LEDGER: the first pick of a match is a free choice from the whole
+ *  roster instead of three cards off the top of the deck. It replaces Wider
+ *  muster, which measured dead four separate times across two seats -- more
+ *  cards offered does not help when the problem is which cards win. This is the
+ *  opposite axis: not more, but chosen.
+ *
+ *  It is one function because the interface and the sweep must agree about what
+ *  a pick was offered. A booster that shapes the offer, implemented twice, is
+ *  the exact shape of the defect that let The Vanguard ship doing nothing on the
+ *  phone while the sweep priced it at +0.18.
+ *
+ *  `first` is the first pick of a ROUND, and that was measured rather than
+ *  chosen. Once a MATCH it is +0.05 at 0.6 sigma over 300 runs -- dead, because
+ *  one free pick in twenty-one is nothing. Once a ROUND it is +0.22 at 2.8
+ *  sigma, which is the same size as The Vanguard and Field surgeons rather than
+ *  the much larger thing a comment here predicted it would be. The idea was
+ *  sound and the dose was wrong, which is the third time tonight that has been
+ *  the answer. */
+export function offerFor(rand, boosts, wide, picks, first) {
+  if (first && has(boosts, 'ledger')) return DRAFT.map(u => u.id);
+  return offer(rand, offerSize(boosts, wide), picks);
+}
 export const picksFor = (boosts, extra) => RULES.picksPerRound + extra;
 // How often the market opens for a side. One place, because the interface and
 // the sweep both need it and a cadence written twice is a cadence that disagrees.
@@ -1069,6 +1094,8 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
     // doctrine as a rule: a round you lose pays for the round after it.
     if (loser !== null) {
       for (let k = 0; k < bonusPicks(boosts[loser]); k++) {
+        // NEVER THE LEDGER'S PICK. A bonus pick only exists after a round has
+        // been lost, so it is never the first pick of the match.
         const cards = offer(rand, offerSize(boosts[loser], wide[loser]), army[loser]);
         army[loser].push(...pickTokens(boosts[loser],
                           cards[policy[loser](cards, army[loser], army[1 - loser])]));
@@ -1082,12 +1109,13 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
       const seen = [army[0].slice(), army[1].slice()];
       // A side that has run out of picks takes none, and draws nothing off the
       // stream -- so a seeded run replays whatever the pick counts are.
+      const first = p === 0;              // The Ledger: the first pick of a ROUND
       if (p < perRound[0]) {
-        const c = offer(rand, offerSize(boosts[0], wide[0]), seen[0]);
+        const c = offerFor(rand, boosts[0], wide[0], seen[0], first);
         army[0].push(...pickTokens(boosts[0], c[policy[0](c, seen[0], seen[1])]));
       }
       if (p < perRound[1]) {
-        const c = offer(rand, offerSize(boosts[1], wide[1]), seen[1]);
+        const c = offerFor(rand, boosts[1], wide[1], seen[1], first);
         army[1].push(...pickTokens(boosts[1], c[policy[1](c, seen[1], seen[0])]));
       }
     }

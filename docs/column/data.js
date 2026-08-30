@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v29';
+export const BUILD = 'column-v30';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -481,7 +481,11 @@ export const BOOSTS = [
   // it was cut for being the one prize in a pool of five you saw most of every
   // match. A random three of eight changes that arithmetic -- a strong booster
   // you are only sometimes offered is exciting rather than mandatory.
-  { id: 'veterans', n: 'Veterans',       d: 'Every card you draft arrives already upgraded once.' }
+  { id: 'veterans', n: 'Veterans',       d: 'Every card you draft arrives already upgraded once.' },
+  // REPLACES WIDER MUSTER, which measured dead four separate times on two seats
+  // (+0.08, -0.15, -0.38, +0.03). More cards offered does not help when the
+  // problem is which cards win; this is the other axis -- not more, but chosen.
+  { id: 'ledger',   n: 'The Ledger',     d: 'Your first pick of each round is any card in the roster, named rather than offered.' }
 ];
 export const BY_BOOST = Object.fromEntries(BOOSTS.map(b => [b.id, b]));
 

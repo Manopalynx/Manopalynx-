@@ -413,7 +413,17 @@ let shelfKinds = '', shelfWhy = [];
 // the flaky check this file has an entry about, and a real change either side of
 // it would be unreadable. At 120 the same booster reads about 3, for about
 // ninety seconds more. RUNS=300 is what a quoted figure is measured at.
-const RUNS = +process.env.RUNS || 120;
+// 300, NOT 120, AND THIS FILE ALREADY SAID SO -- the line above calls 300 what a
+// quoted figure is measured at, and then measured the quoted figures at 120.
+//
+// At 120 runs the error bar on an arm is about +/-0.25 matches, so a real +0.22
+// booster reads 1.9 sigma and the check calls it dead. That happened to The
+// Ledger on the run that shipped it: 1.9 sigma at 120, 2.8 sigma at 300, same
+// booster, same code. A check that cannot resolve the thing it is judging fails
+// honest work and passes nothing extra.
+//
+// RUNS=120 still cuts it down for a smoke run; the default is now the standard.
+const RUNS = +process.env.RUNS || 300;
 // MEAN AND ITS ERROR, because "better than nothing" needs a bar and 0 is not one.
 // A booster that does nothing measures 0 ± the noise, so a threshold of "above
 // zero" catches a dead one about half the time -- which is a check that reads
@@ -421,9 +431,24 @@ const RUNS = +process.env.RUNS || 120;
 // difference instead. The seeds are fixed, so this is reproducible run to run;
 // the error bar is about telling a real effect from a lucky one, not about the
 // figure moving when nothing changed.
-const runLen = prefer => {
+// AND THE ARM IS `force`, NOT `prefer`, which is a defect this file carried into
+// every booster figure it has ever printed.
+//
+// `prefer` holds the booster only when it is among the three drawn. With a pool
+// of three that was almost always; with five it is three times in five, and with
+// eight it would be three in eight -- so EVERY effect shrinks as the pool grows,
+// for no reason but the size of the pool. That is exactly what was seen when the
+// pool went three to four to five: The Compact read +0.30, then +0.38, then
+// +0.28, then +0.19, and Field surgeons +0.32 down to +0.04, while neither
+// booster changed at all.
+//
+// `engine.js` says this in its own comment beside the arms -- "the question a
+// pool needs answered is what is this worth IF YOU HAVE IT" -- and this file was
+// asking a different one. `force` holds it from the first match, so a figure is
+// about the booster rather than about how often it was drawn.
+const runLen = force => {
   const v = [];
-  for (let i = 0; i < RUNS; i++) v.push(playRun({ a: 'counter', seed: i * 7 + 1, prefer, take: -1 }).survived);
+  for (let i = 0; i < RUNS; i++) v.push(playRun({ a: 'counter', seed: i * 7 + 1, force, take: -1 }).survived);
   const m = v.reduce((a, b) => a + b, 0) / RUNS;
   const sd = Math.sqrt(v.reduce((a, b) => a + (b - m) ** 2, 0) / Math.max(1, RUNS - 1));
   return { m, se: sd / Math.sqrt(RUNS) };
@@ -439,6 +464,17 @@ for (const b of BOOSTS) {
   const v = runLen(b.id);
   const d = v.m - control.m, se = Math.hypot(v.se, control.se);
   console.log(`  ${b.n.padEnd(18)} ${v.m.toFixed(2)}   ${d >= 0 ? '+' : ''}${d.toFixed(2)}  (${(d / se).toFixed(1)}σ)`);
+  // THE BAR IS BACK TO TWO STANDARD ERRORS ABOVE THE CONTROL, and the story of
+  // it moving is worth keeping: it was relaxed to a floor on a reading that
+  // turned out to be this file's own instrument. Field surgeons appeared to fade
+  // from +0.32 to +0.04 as the pool grew, which looked like a booster going
+  // stale and was the arm shrinking every effect. With `force` it is +0.21 at
+  // 2.6 sigma and clears the original bar.
+  //
+  // A check relaxed to match a measurement that was wrong is worse than one left
+  // red, so it is put back. If a deep pool ever genuinely wants texture below
+  // this bar, that is a decision to take on a correct measurement rather than on
+  // this one.
   if (d <= 2 * se)
     deadBoosts.push(`${b.n}: ${d >= 0 ? '+' : ''}${d.toFixed(2)} matches against taking nothing, ` +
                     `${(d / se).toFixed(1)}σ — not distinguishable from a booster that does nothing`);
@@ -546,7 +582,7 @@ else bad('every purchase changes the board', [pumpWhy,
 if (!shelfWhy.length) ok(`the opponent reaches every shelf and no others — ${shelfKinds}`);
 else bad('the opponent reaches every shelf and no others', shelfWhy);
 
-if (!deadBoosts.length) ok(`every booster beats taking none — the pool has no dead option (${RUNS} runs an arm)`);
+if (!deadBoosts.length) ok(`every booster beats taking none — the pool has no dead option (${BOOSTS.length} boosters, ${RUNS} runs an arm)`);
 else bad(`the booster pool has no dead option — ${deadBoosts.length} of ${BOOSTS.length} do not clear the control`, [
   ...deadBoosts,
   'a booster that does not beat the control is a choice the player is asked to make for nothing',

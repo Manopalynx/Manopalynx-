@@ -16,7 +16,7 @@ import { BY_ID, RULES, PERSONAS, UPGRADE, DRAFT, SPECIALS, SHOP, RUN,
          TERRAIN, groundSays } from './data.js';
 import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId,
          earn, stock, spend, upgradeable, specialsFor, kitFor, ordersFor, boosterOffer,
-         offerSize, picksFor, pickTokens, bonusPicks,
+         offerSize, offerFor, picksFor, pickTokens, bonusPicks,
          rampFor, mends, carried } from './engine.js';
 import { draw, effects, auras, ground, SIDE, shape } from './render.js';
 import { glyph } from './glyphs.js';
@@ -100,6 +100,21 @@ let revealTimer = null;
  *  His note 20: terrain is FIXED PER MAP, so it is a property of the opponent
  *  you are facing rather than a roll, and it is knowable before the first pick.
  *  One derivation, read by the resolver, the renderer and the text. */
+/** THE FIRST PICK OF A ROUND, which is when The Ledger fires. Once a MATCH was
+ *  built first and measured +0.05 at 0.6 sigma -- one free pick in twenty-one is
+ *  nothing. Once a round is +0.22 at 2.8 sigma, the same size as The Vanguard.
+ *
+ *  IT DOES NOT READ `S.solo`, and that is the whole of a bug this file caught in
+ *  its own new code. The first version did -- and `S.solo = false` is assigned
+ *  AFTER the offer is built, so it was reading the previous round's value and the
+ *  booster never fired. A live reference read after a later step has mutated it
+ *  is the defect this record already carried twice; this was the third.
+ *
+ *  A bonus pick passes `false` at its own call site instead. That is exact
+ *  rather than inferred: a bonus pick only exists after a round has been lost,
+ *  so it can never be the first pick of a match. */
+const firstOfRound = () => S && S.pickNo === 0;
+
 export const terrainOf = opp => (PERSONAS[opp] && BY_MAP[PERSONAS[opp].map] || {}).terrain || null;
 
 /** THE GROUND, AS A PANEL RATHER THAN A SENTENCE.
@@ -236,7 +251,7 @@ function next() {
     return reveal(popKeys(1, tok));
   }
   if (S.bonus === 0) {                       // your extra pick, taken alone
-    S.offer = offer(rand, offerSize(S.boosts[0], S.wide[0]), S.army[0]);
+    S.offer = offerFor(rand, S.boosts[0], S.wide[0], S.army[0], false);
     S.solo = true; S.phase = 'pick';
     return render();
   }
@@ -245,21 +260,45 @@ function next() {
   // ramp has to be watchable, not just felt.
   if (S.pickNo < Math.max(S.perRound[0], S.perRound[1])) {
     if (S.pickNo >= S.perRound[0]) {
-      const c = offer(rand, offerSize(S.boosts[1], S.wide[1]), S.army[1]);
+      const c = offerFor(rand, S.boosts[1], S.wide[1], S.army[1], firstOfRound());
       const tok = c[POLICIES[S.opp](c, S.army[1].slice(), S.army[0].slice())];
       S.army[1].push(...pickTokens(S.boosts[1], tok));
       S.pickNo++;
       S.mine = null; S.theirs = tok;
       return reveal(popKeys(1, tok));
     }
-    S.offer = offer(rand, offerSize(S.boosts[0], S.wide[0]), S.army[0]);
+    S.offer = offerFor(rand, S.boosts[0], S.wide[0], S.army[0], firstOfRound());
     S.withThem = S.pickNo < S.perRound[1];
-    if (S.withThem) S.oppOffer = offer(rand, offerSize(S.boosts[1], S.wide[1]), S.army[1]);
+    if (S.withThem) S.oppOffer = offerFor(rand, S.boosts[1], S.wide[1], S.army[1], firstOfRound());
     S.solo = false; S.phase = 'pick';
     return render();
   }
   S.phase = 'ready';
   render();
+}
+
+/** THE LEDGER'S SHEET. The roster's own row, made tappable -- the same drawing
+ *  the field uses beside the same stat line, because a card named here has to be
+ *  recognisable as the counter it becomes. */
+function namePick() {
+  const rows = S.offer.map((tok, i) => {
+    const u = BY_ID[tokId(tok)];
+    const sz = { heavy: 3.7, medium: 3.2, light: 2.9 }[u.w];
+    return `<button class="pick shopRow tall" data-pick="${i}">
+      <svg width="34" height="34" viewBox="-5 -5 10 10">${shape(u.w, 0, 0, sz, SIDE[0].fill, SIDE[0].line)}
+        ${glyph(u.id, 0, 0, sz * 0.62, SIDE[0].ink, 1.15)}</svg>
+      <span><b>${u.n}</b><i>${u.w} &middot; ${u.count} ${u.count === 1 ? 'body' : 'bodies'} &middot; ${statLine(u)}</i>
+        <div class="abs">${abilityList(u)}</div></span>
+    </button>`;
+  }).join('');
+  const d = sheet(`<h1>Name a card</h1>
+    <p>The Ledger: your first pick of the match is any card in the roster, named
+       rather than offered. It joins your column where its role puts it, like any other.</p>
+    ${rows}`);
+  d.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => {
+    d.remove();
+    commit(+b.dataset.pick);
+  });
 }
 
 function commit(i) {
@@ -611,7 +650,25 @@ function render() {
     el.sub.innerHTML = S.solo
       ? `You lost the round, so ${bonus > 1 ? 'these are' : 'this one is'} yours alone &middot; ${size} cards to ${theirs}`
       : `${size} cards to ${theirs} &middot; they are choosing at the same time`;
-    S.offer.forEach((tok, i) => el.cards.appendChild(cardFace(tok, i)));
+    // THE LEDGER'S OFFER IS THE WHOLE ROSTER, which is twelve cards and will not
+    // go in a row built for three. The row is fixed at 132px because the deck is
+    // a flex sibling of the battlefield, and twelve cards in it would be 24px
+    // each -- the note about the stat line clipping at FOUR is two screens up.
+    //
+    // So the row carries one button and the choosing happens on a sheet, where
+    // there is room to read a card before naming it. `commit(i)` indexes
+    // `S.offer` either way, so the two paths are the same pick.
+    if (S.offer.length > offerSize(S.boosts[0], 1)) {
+      el.sub.innerHTML = `Name any of the ${S.offer.length} &middot; ${size} cards to ${theirs}` +
+        (S.withThem ? ' &middot; they are choosing at the same time' : '');
+      const b = document.createElement('button');
+      b.className = 'card ledgerAll';
+      b.innerHTML = '<b>Name any card</b><span class="hint">The Ledger &middot; the whole roster is yours to choose from</span>';
+      b.onclick = namePick;
+      el.cards.appendChild(b);
+    } else {
+      S.offer.forEach((tok, i) => el.cards.appendChild(cardFace(tok, i)));
+    }
   }
 
   if (S.phase === 'revealed') {
