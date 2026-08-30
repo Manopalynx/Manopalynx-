@@ -2633,3 +2633,73 @@ at the centre, or a rule that forces targeting to the nearest rather than the bi
 
 **Nothing here has been quietly tuned to look better.** All nine ship as measured, all nine
 say what they do before the first pick, and the table above is what the suite prints.
+
+---
+
+# The terrace cut: the most faithful reading made the worst game
+
+Sam re-attached the manuscript and the terraces were the first re-cut, because the cut is
+the most mechanically specific battlefield in the novel:
+
+> *"their whole armored line has to come up the terrace cuts, here — it's the only grade the
+> walkers can climb… the walkers, one after another after another, filing off the plain and
+> down into the terrace cut, **into the narrow ground, bunching as the grade forced them
+> together**"*
+
+Cover was built there first and that was a misread: the book writes a funnel and a killing
+ground, and shelter was built instead. So a **choke** was added — ground that squeezes what
+crosses it toward the centre line, packing bodies close enough for one blast to catch
+several, which is Samuel's whole plan at Horizon.
+
+## It measured worse than a flat field, in every variant
+
+| the cut | decided | formalities | battles changed |
+|---|---|---|---|
+| *flat control* | *58.5%* | *12.3%* | — |
+| choke, everything, gap 34 | 62.0% | 13.8% | 174 of 400 |
+| choke, heavy bodies only, gap 34 | 59.0% | 12.3% | 81 |
+| choke, heavy only, gap 16 | 61.0% | 12.5% | 149 |
+| choke, everything, gap 16 | 65.0% | **14.2%** | 202 |
+
+**Not a tuning miss — the mechanism.** Packing both sides equally changes only one thing:
+blasts catch more bodies. The card with the biggest splash was already the best card in the
+pool, so a choke is the same failure as rough ground and exposure — it scales an advantage
+that already existed rather than asking a different question. The prediction that it would
+*"attack numbers rather than reach"* was wrong, and it was wrong in the direction this
+project keeps being wrong in.
+
+**The second reading was better and still not enough.** *"It's the only grade **the walkers**
+can climb"* — the cut funnels the armour, and lighter troops go round; a rule that splits an
+army by what it is made of rather than multiplying the battle. Faithful, and nearly inert:
+81 of 400 battles changed and formalities landed exactly on the flat control.
+
+## What shipped, and it is two properties of one place
+
+A terrace cut is a **narrow defile with high sides**. Nothing shoots far in it, and its walls
+shelter you from fire off the plain above. Both are read off the same geography rather than
+bolted together:
+
+> **The terrace cut** — nothing shoots past 24, and the cut walls refuse 45% of distant fire.
+
+| | decided | formalities |
+|---|---|---|
+| flat | 58.5% | 12.3% |
+| cover alone, as it shipped last round | 53.3% | 6.8% |
+| the cut alone (cap 24) | 52.0% | 4.3% |
+| **both, as it ships now** | **49.0%** | **4.0%** |
+
+267 of 400 battles changed. **It is now the best ground in the game**, level with the tribute
+ship and half the formalities of the cover it replaces.
+
+**The choke rule was removed rather than left unreferenced.** Nothing reaches it, and a rule
+nobody can reach still reads like a live one — which is the trap an audit session already
+cleaned out of `earn` here once.
+
+## The finding worth keeping
+
+**Fidelity and play came apart, and this is the one map where they did.** The most faithful
+mechanic measured worst, the second most faithful measured inert, and what shipped is a
+*different* true thing about the same place. That is not a licence to stop reading the book —
+the winning answer came out of the geography too — but it is the first case in this project
+where "what does the novel say" and "what makes a game" gave different answers, and it is
+recorded rather than smoothed over.

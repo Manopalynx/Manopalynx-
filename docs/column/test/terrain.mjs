@@ -59,7 +59,7 @@ const arms = [];
 for (const { map, t, g } of GROUNDS) {
   const m = measure(pairs, t);
   const moved = m.results.filter((r, i) => r.p !== flat.results[i].p).length;
-  const kind = g.cut ? 'cover' : g.slow ? 'rough' : g.burn ? 'fire' : g.amp ? 'exposure' : 'range cap';
+  const kind = [g.cap && 'range cap', g.cut && 'cover', g.slow && 'rough', g.burn && 'fire', g.amp && 'exposure'].filter(Boolean).join('+');
   arms.push({ map, t, g, m, moved, kind });
   console.log(`  ${g.n.padEnd(20)}${kind.padEnd(17)}${pc(m.rate).padStart(7)}${pc(m.formalityRate).padStart(13)}${pc(m.medianKept).padStart(9)}${String(moved).padStart(11)} of ${m.n}`);
 }

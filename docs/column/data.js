@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v25';
+export const BUILD = 'column-v26';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -538,8 +538,23 @@ export const TERRAIN = {
   // bill in this repository once quoted one vassal's cost for the whole bench.
 
   // --- cover: refuses fire from a distance. Closing with it is the answer. ---
-  cuts:    { n: 'Terrace cuts', from: 58, to: 82, beyond: 12, cut: 0.55,
-             says: 'Bodies in the middle band refuse 55% of fire from beyond 12.' },
+  // --- choke: ground narrower than the army crossing it. Packs bodies. ---
+  // THE MANUSCRIPT'S, and the most specific battlefield in the novel: the line
+  // has to come up the cut because it is the only grade the walkers can climb,
+  // and it bunches as the grade forces it together. An earlier pass read "cuts"
+  // as cover and built shelter where the book wrote a funnel.
+  // TWO PROPERTIES OF ONE PLACE rather than two mechanisms bolted together: a
+  // terrace cut is a narrow defile with high sides, so nothing shoots far in it
+  // and its walls shelter you from fire off the plain above. Both read off the
+  // geography, and together they measure 4.0% formalities against a flat 12.3%
+  // -- the best ground in the game, tied with the tribute ship.
+  //
+  // A CHOKE WAS BUILT FIRST AND MEASURED WORSE THAN A FLAT FIELD, in four
+  // variants. See the document: it is the one place where the most faithful
+  // reading of the manuscript made the worst game, and it is recorded rather
+  // than quietly dropped.
+  cuts:    { n: 'The terrace cut', cap: 24, from: 58, to: 82, beyond: 12, cut: 0.45,
+             says: 'A narrow cut with high sides: nothing shoots past 24, and its walls refuse 45% of distant fire.' },
   stalls:  { n: 'Market stalls', from: 66, to: 74, beyond: 12, cut: 0.45,
              says: 'A thin line of cover at the centre refuses 45% of distant fire.' },
 
