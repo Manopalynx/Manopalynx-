@@ -2703,3 +2703,76 @@ mechanic measured worst, the second most faithful measured inert, and what shipp
 the winning answer came out of the geography too — but it is the first case in this project
 where "what does the novel say" and "what makes a game" gave different answers, and it is
 recorded rather than smoothed over.
+
+---
+
+# The four re-cuts, and the one axis this game actually has
+
+Read out of the manuscript first this time, ten candidates measured, and only what beat the
+flat control kept.
+
+| ground | map | mechanism | formalities | was |
+|---|---|---|---|---|
+| The salvaged decks | Raven's Claw | cap 22 + cover 45% | **3.5%** | 15.3% rough |
+| The terrace cut | terraces | cap 24 + cover 45% | 4.0% | — |
+| The legate's room | tribute ship | cap 20 | 4.0% | — |
+| The stage and towers | plaza | cap 34 + cover 55% | **4.5%** | 12.8% exposure |
+| The pod chamber | Pod Room | cap 26 | **4.8%** | 16.8% rough |
+| The market of markets | Eden | cover 55%, wide | **5.5%** | 11.0% thin cover |
+| The chamber | war room | cap 30 | 6.0% | — |
+| Burning stubble | croplands | fire | 6.3% | — |
+| **The drill square** | parade | **bare, deliberately** | *12.3%* | 13.8% exposure |
+| *flat control* | — | — | *12.3%* | — |
+
+**Every live ground now beats a flat field**, where four of nine used to lose to it.
+
+## What the book changed
+
+- **The Pod Room's floor is empty.** *"the walls were pods. They rose in tiers."* An earlier
+  pass put pod banks on the floor and slowed everything crossing it — neither what the
+  sentence says nor a good game. A vast enclosed chamber is a room: you cannot shoot across
+  it.
+- **The Raven's Claw scene is a stateroom**, not open wreckage: *"a vessel assembled from the
+  corpses of at least nine other vessels, in a stateroom decorated with trophies"*. Bulkheads
+  cap the reach, bolted-on salvage gives cover. It is now the best ground in the game.
+- **The plaza is not open ground.** *"At the plaza's centre stood the stage, flanked by two
+  towers of Vale's smiling face"* — structures in the middle break the sightlines and shelter
+  what is behind them. It had been built as exposure, which is the opposite.
+- **The tribute ship's "cargo hold" was invented.** The sentence says *a room*, and the room
+  is where the Union was made a vassal. It is the legate's room now.
+
+## One board is deliberately bare, and it is marked as one
+
+Enigma's parade ground is a drill square: two hundred soldiers in ranks, two flags, and the
+Overseer watching from the stand. There is nothing on it to use, and the honest mechanic for
+a place with nothing on it is nothing.
+
+**The cost is measured and stated: 12.3% against 3.5% on the best ground.** What it buys is a
+neutral board in the run — somewhere the draft is the whole answer — and it turns out to buy
+one more thing nobody planned: **it is the only ground where Amabie is still the best card**,
+because it is the only one that does not shorten reach. The bare board is where the artillery
+answer is right.
+
+`flat: true` in the data is load-bearing. A ground that reaches the resolver and changes
+nothing is a failure this project has shipped before, so the guard fails any ground that moves
+no battles **unless it declares itself bare** — and fails a declared-bare ground that moves
+any.
+
+## The finding, and it is about the engine rather than the maps
+
+**Five mechanisms have now been measured and only one axis works: reach.** Cover and range
+caps reduce formalities; rough ground, exposure and a choke all made them worse, and all
+three failed the same way — they scale an advantage that already exists instead of asking a
+different question. Fire is the one exception and it works differently: it does not change
+who wins, it thins both sides, which is why its median winner keeps 33.3%, the lowest
+anywhere.
+
+So the nine grounds differ in **degree and placement within one axis**, not in kind. Eden is
+kept as the one cover-only ground at a measured cost of a point — six of nine capping reach
+would be one mechanism at nine settings — but that is a mitigation, not a fix.
+
+**And the variety goal is still half met: two distinct best cards across nine grounds**,
+Ultra Armor on eight and Amabie on the bare one. A ground that changes the numbers is not a
+ground that changes the draft. What would change it is a card whose strength is not about
+reach at all — which points at the roster rather than at the maps, and that is Sam's to
+spend.

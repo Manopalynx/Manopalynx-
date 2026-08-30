@@ -405,14 +405,8 @@ export function resolve(a, b, seed, keepLog = false, onTick = null, terrain = nu
 
     // ---- apply ----
     for (const [u, dx, dy] of moves) {
-      // ROUGH GROUND slows whatever is crossing it, and it is applied HERE --
-      // the one place a move becomes a position -- rather than at each of the
-      // two places a move is decided. A unit half in and half out is judged by
-      // where it is standing when it moves, which is the same rule the damage
-      // side uses.
-      const k = ground && ground.slow && inBand(u, ground) ? ground.slow : 1;
-      u.x = Math.max(2, Math.min(FIELD.w - 2, u.x + dx * k));
-      u.y = Math.max(2, Math.min(FIELD.d - 2, u.y + dy * k));
+      u.x = Math.max(2, Math.min(FIELD.w - 2, u.x + dx));
+      u.y = Math.max(2, Math.min(FIELD.d - 2, u.y + dy));
     }
     for (const [u, d] of damage) u.hp -= d;
     // BURNING GROUND is environmental rather than an attack: it has no attacker,
@@ -476,13 +470,13 @@ function hurtInto(target, amount, from, add, dealt, ground) {
   // cover protects whoever is standing in it. Applied before armour for the same
   // reason deflection is -- armour is the last word and its floor of 1 is what
   // stops any stack of reductions taking a hit to nothing.
-  if (ground && inBand(target, ground)) {
-    // COVER refuses fire that comes from a distance, so closing with something
-    // in it is the answer. EXPOSURE is its inverse and applies to everything --
-    // there is nowhere to stand, so being there costs you whoever is shooting.
-    if (ground.cut && from.s.rng > 4 && dist(from, target) > ground.beyond) d *= (1 - ground.cut);
-    if (ground.amp) d *= (1 + ground.amp);
-  }
+  // COVER refuses fire that comes from a distance, so closing with something in
+  // it is the answer. It reads the TARGET's position: cover protects whoever is
+  // standing in it. Applied before armour for the same reason deflection is --
+  // armour is the last word and its floor of 1 is what stops any stack of
+  // reductions taking a hit to nothing.
+  if (ground && ground.cut && inBand(target, ground) &&
+      from.s.rng > 4 && dist(from, target) > ground.beyond) d *= (1 - ground.cut);
   d = Math.max(1, d - (spec.arm || 0));
   add(target, d);
   dealt.push(d);

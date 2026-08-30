@@ -59,7 +59,7 @@ const arms = [];
 for (const { map, t, g } of GROUNDS) {
   const m = measure(pairs, t);
   const moved = m.results.filter((r, i) => r.p !== flat.results[i].p).length;
-  const kind = [g.cap && 'range cap', g.cut && 'cover', g.slow && 'rough', g.burn && 'fire', g.amp && 'exposure'].filter(Boolean).join('+');
+  const kind = [g.cap && 'range cap', g.cut && 'cover', g.burn && 'fire', g.flat && 'bare'].filter(Boolean).join('+');
   arms.push({ map, t, g, m, moved, kind });
   console.log(`  ${g.n.padEnd(20)}${kind.padEnd(17)}${pc(m.rate).padStart(7)}${pc(m.formalityRate).padStart(13)}${pc(m.medianKept).padStart(9)}${String(moved).padStart(11)} of ${m.n}`);
 }
@@ -131,9 +131,20 @@ else { console.log('FAIL  the flat arm did not reproduce itself. Nothing above m
 // A GROUND THAT REACHES NOTHING prints a tidy 0.0pt and reads exactly like a
 // rule that does not matter, which is how an unimplemented booster once measured
 // +0.58 here. Every one of the nine has to move something.
-const inert = arms.filter(a => a.moved === 0);
-if (!inert.length) console.log(` ok   every ground reaches the resolver — all ${arms.length} changed battles`);
-else { console.log(`FAIL  ${inert.length} ground(s) changed nothing: ${inert.map(a => a.g.n).join(', ')}`); bad++; }
+// A GROUND MAY BE DELIBERATELY BARE -- the drill square is -- but it has to SAY
+// so in the data. An inert ground that never declared itself is the failure this
+// guard exists for, and a bare one that does declare itself is a design choice
+// with its cost on the table.
+const inert = arms.filter(a => a.moved === 0 && !a.g.flat);
+const declared = arms.filter(a => a.g.flat);
+const lying = declared.filter(a => a.moved > 0);
+if (!inert.length && !lying.length)
+  console.log(` ok   every ground reaches the resolver, or says it is bare (${arms.length - declared.length} live, ${declared.length} bare)`);
+else {
+  if (inert.length) console.log(`FAIL  ${inert.length} ground(s) changed nothing and never said they were bare: ${inert.map(a => a.g.n).join(', ')}`);
+  if (lying.length) console.log(`FAIL  ${lying.length} ground(s) claim to be bare and changed battles: ${lying.map(a => a.g.n).join(', ')}`);
+  bad++;
+}
 
 // A MAP WITH NO TERRAIN MUST BE THE OLD BATTLE, byte for byte. Every figure in
 // this folder was measured flat, so if a mapless resolve() has drifted then the

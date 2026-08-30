@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v26';
+export const BUILD = 'column-v27';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -555,30 +555,76 @@ export const TERRAIN = {
   // than quietly dropped.
   cuts:    { n: 'The terrace cut', cap: 24, from: 58, to: 82, beyond: 12, cut: 0.45,
              says: 'A narrow cut with high sides: nothing shoots past 24, and its walls refuse 45% of distant fire.' },
-  stalls:  { n: 'Market stalls', from: 66, to: 74, beyond: 12, cut: 0.45,
-             says: 'A thin line of cover at the centre refuses 45% of distant fire.' },
+  // "the great crossroads, the market of markets" -- so a market, not a thin
+  // line of stalls at the centre, which was the weakest ground of the nine at
+  // 11.0%. A dense market with wide cover measures 5.5%.
+  //
+  // AND IT IS DELIBERATELY THE ONE GROUND WITH NO RANGE CAP. Adding narrow
+  // lanes to it measured 4.5%, a point better -- and taken, six of the nine
+  // grounds would cap reach and the set would be one mechanism at nine
+  // settings. The point costs less than the variety does.
+  stalls:  { n: 'The market of markets', from: 52, to: 88, beyond: 12, cut: 0.55,
+             says: 'A dense market: its stalls and awnings refuse 55% of distant fire.' },
 
-  // --- rough: slows whatever crosses it. Punishes anything that must arrive. ---
-  wreck:   { n: 'Wreckage', from: 55, to: 85, slow: 0.45,
-             says: 'Wreckage across the middle halves the pace of anything crossing it.' },
-  clutter: { n: 'Pod banks', from: 40, to: 100, slow: 0.60,
-             says: 'Pod banks over most of the floor slow everything that moves.' },
+  // --- ROUGH GROUND AND EXPOSURE ARE GONE. Both measured worse than a flat
+  // field on every map that carried them, and both failed the same way: they
+  // scale an advantage that already exists rather than asking a new question.
+  // A choke measured worse still. The rules went with them rather than being
+  // left unreferenced. See the document.
+
+  // The Neurex's chamber, read again off the page: "It was circular and vast,
+  // and the walls were pods. They rose in tiers." The pods are on the WALLS and
+  // the floor is open -- an earlier pass put them on the floor and slowed
+  // everything crossing it, which is neither what the sentence says nor a good
+  // game. A vast enclosed room is a room: you cannot shoot across it.
+  clutter: { n: 'The pod chamber', cap: 26,
+             says: 'A vast enclosed chamber: nothing shoots further than 26.' },
+
+  // Vex's ship, and the scene is a stateroom aboard it rather than open
+  // wreckage: "a vessel assembled from the corpses of at least nine other
+  // vessels, in a stateroom decorated with trophies". Bulkheads cap the reach;
+  // the salvage bolted through it gives cover.
+  wreck:   { n: 'The salvaged decks', cap: 22, from: 58, to: 82, beyond: 12, cut: 0.45,
+             says: 'Bulkheads and bolted-on salvage: nothing shoots past 22, and the plating refuses 45% of distant fire.' },
 
   // --- fire: costs you for standing there at all, and ignores armour. ---
   embers:  { n: 'Burning stubble', from: 46, to: 94, burn: 1.6,
              says: 'The stubble is still burning: 1.6 damage a tick to anything standing in it.' },
 
   // --- close: caps every weapon's reach. A room, not a field. ---
-  hold:    { n: 'Cargo hold', cap: 20,
-             says: 'Bulkheads everywhere: nothing shoots further than 20.' },
+  // "I signed the instrument of vassalage in a ROOM aboard one of their tribute
+  // ships. They kept me waiting four hours." A cargo hold was invented; the
+  // sentence says a room, and the room is where the Union was made a vassal.
+  hold:    { n: 'The legate\'s room', cap: 20,
+             says: 'A room aboard a tribute ship: nothing shoots further than 20.' },
   chamber: { n: 'The chamber', cap: 30,
              says: 'A room rather than a field: nothing shoots further than 30.' },
 
-  // --- exposure: the inverse of cover. Nowhere to stand. ---
-  stand:   { n: 'The reviewing stand', from: 60, to: 80, amp: 0.40,
-             says: 'Open ground under the stand: everything there takes 40% more.' },
-  open:    { n: 'The open plaza', from: 40, to: 100, amp: 0.20,
-             says: 'The plaza is open ground: everything on it takes 20% more.' }
+  // Vale's plaza is not open ground, which is what an earlier pass called it:
+  // "At the plaza's centre stood the stage, flanked by two towers of Vale's
+  // smiling face". A stage and two towers are structures in the middle of it --
+  // they break the sightlines and they shelter whatever is behind them.
+  open:    { n: 'The stage and towers', cap: 34, from: 62, to: 78, beyond: 12, cut: 0.55,
+             says: 'The stage and its two towers break the ground: nothing shoots past 34, and they refuse 55% of distant fire.' },
+
+  // AND ONE BOARD IS DELIBERATELY BARE, which is a decision rather than an
+  // omission and is marked as one. Enigma's parade ground is a drill square:
+  // two hundred soldiers in ranks, two flags, and the Overseer watching from
+  // the stand. There is nothing on it to use, and the honest mechanic for a
+  // place with nothing on it is nothing.
+  //
+  // It costs something and the cost is measured: a bare board is the flat
+  // control, 12.3% formalities against 4.0% on the best ground. What it buys is
+  // a neutral board in the run -- somewhere the draft is the whole answer -- and
+  // the most faithful reading of the one scene in the novel that is explicitly
+  // about having nowhere to hide.
+  //
+  // `flat: true` is load-bearing. A ground that reaches the resolver and changes
+  // nothing is the failure mode this project has shipped before; the guard in
+  // terrain.mjs fails any ground that moves no battles UNLESS it says here that
+  // it means to.
+  stand:   { n: 'The drill square', flat: true,
+             says: 'A bare parade square: no cover, no obstacle, nothing here to use.' }
 };
 
 export const MAPS = [
