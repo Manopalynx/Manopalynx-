@@ -363,7 +363,8 @@ function fight() {
   // renderer, so the field cannot draw a band the battle did not fight on --
   // which is the same rule the replay log exists to enforce for everything else.
   const out = resolve([...S.army[0], ...S.pending[0]], [...S.army[1], ...S.pending[1]],
-                      seed, true, (t, live) => S.frames.push(live), terrainOf(S && S.opp));
+                      seed, true, (t, live) => S.frames.push(live), terrainOf(S && S.opp),
+                      [S.boosts[0], S.boosts[1]]);
   // Indexed by tick, so a playback step can ask for the ticks it just skipped
   // rather than for "the last thing that happened".
   S.ev = [];

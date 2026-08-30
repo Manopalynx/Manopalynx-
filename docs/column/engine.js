@@ -16,7 +16,7 @@
 // nothing about the game would look wrong.
 
 import { UNITS, DRAFT, SPECIALS, BY_ID, FIELD, MAX_TICKS, RULES, UPGRADE, SHOP, RUN,
-         BOOSTS, KIT, ORDERS, SABOTAGE, BY_KIT, BY_ORDER, TERRAIN } from './data.js';
+         BOOSTS, KIT, ORDERS, SABOTAGE, BY_KIT, BY_ORDER, TERRAIN, BATTLE } from './data.js';
 
 /* ------------------------------------------------------------------------ rng */
 // mulberry32. Small, fast, and — the only property that matters here — the same
@@ -317,14 +317,31 @@ function choose(unit, enemies) {
  * @returns {{winner:number|null, ticks:number, left:number[], log:object[]}}
  *          winner 0, 1, or null for a draw at MAX_TICKS.
  */
-export function resolve(a, b, seed, keepLog = false, onTick = null, terrain = null) {
+export function resolve(a, b, seed, keepLog = false, onTick = null, terrain = null,
+                        boosts = null) {
   // TERRAIN DEFAULTS TO NONE, and that is deliberate rather than lazy: every
   // figure this project has ever printed was measured on a flat field, so a
   // resolve() with no terrain has to stay byte-for-byte the battle it was. That
   // makes the flat field the control for free, and it means nothing already
   // measured silently changes underneath a map that has none.
   const ground = terrain ? TERRAIN[terrain] || null : null;
+  // BATTLE-SIDE BOOSTERS, and they default to none for the same reason terrain
+  // does: a resolve() without them has to be byte-for-byte the battle every
+  // existing figure was measured on. `boosts` is per side, so the two halves of
+  // the field can differ -- which they must, because the opponent draws its own.
+  const bst = boosts || [[], []];
+  const rep = [0, 1].map(s => (has(bst[s], 'repair') ? BATTLE.repair : 0));
+  const pods = [0, 1].map(s => has(bst[s], 'pods'));
+  // ABSORBED is once a battle a side, so it needs to remember. The Neurex do not
+  // resurrect, they COLLECT -- "alive, preserved, filed" -- so the body does not
+  // get up where it fell: it is returned, whole, to the line it started on. That
+  // is also the fix for the suspected reason the old revive died, which acted at
+  // a random place and time while every dose that worked was persistent.
+  const absorb = [0, 1].map(s => (has(bst[s], 'absorbed') ? BATTLE.absorbed : 0));
   const units = deployment(a, b, seed);
+  // WHERE EACH BODY STARTED, captured before a tick runs, because that is where
+  // an absorbed one comes back to.
+  for (const u of units) { u.ox = u.x; u.oy = u.y; }
   const log = [];
   let t = 0;
 
@@ -409,6 +426,14 @@ export function resolve(a, b, seed, keepLog = false, onTick = null, terrain = nu
       u.y = Math.max(2, Math.min(FIELD.d - 2, u.y + dy));
     }
     for (const [u, d] of damage) u.hp -= d;
+    // FIELD REPAIR, and it is deliberately the shape the revive was not:
+    // present for the whole battle, everywhere, on every body that needs it,
+    // rather than once at a place nobody chose. Only a body already hurt is
+    // mended, so it cannot push anything past what it deployed with.
+    for (const u of live) {
+      if (rep[u.side] && u.alive && u.hp > 0 && u.hp < u.max / 2)
+        u.hp = Math.min(u.max / 2, u.hp + rep[u.side]);
+    }
     // BURNING GROUND is environmental rather than an attack: it has no attacker,
     // ignores armour, and is not in the replay log's event list because nothing
     // fired. It is applied after movement so that a body which walked into the
@@ -421,16 +446,31 @@ export function resolve(a, b, seed, keepLog = false, onTick = null, terrain = nu
     const boomed = [];
     for (const u of live) {
       if (u.hp <= 0 && u.alive) {
+        // ABSORBED: taken back rather than lost. Once a battle a side, at the
+        // line it started on, whole.
+        if (absorb[u.side] > 0) {
+          absorb[u.side]--;
+          u.hp = u.max; u.x = u.ox; u.y = u.oy; u.cd = 0; u.dot = 0; u.dotT = 0;
+          if (keepLog) events.push({ e: 'back', a: u.i * 2 + u.side });
+          continue;
+        }
         u.alive = false;
         if (keepLog) events.push({ e: 'die', a: u.i * 2 + u.side });
-        if (u.s.boom) boomed.push(u);
+        // ESCAPE PODS -- Enigma, and Samuel counting them: "every fourth ship
+        // emptied of crew, flown into the swarm's centre, reactors rigged". A
+        // body of yours is worth something on the way out.
+        if (u.s.boom || pods[u.side]) boomed.push(u);
       }
     }
     for (const u of boomed) {
-      const spec = u.s;
+      // A CARD'S OWN DETONATION IF IT HAS ONE, the booster's otherwise -- the
+      // Fireship keeps being the Fireship rather than being overwritten by a
+      // booster, which is the only reading that leaves the card's identity
+      // intact.
+      const blast = u.s.boom || BATTLE.pods;
       for (const e of units) {
-        if (e.alive && e.side !== u.side && dist(u, e) <= spec.boom.r) {
-          e.hp -= Math.max(1, spec.boom.d - (e.s.arm || 0));
+        if (e.alive && e.side !== u.side && dist(u, e) <= blast.r) {
+          e.hp -= Math.max(1, blast.d - (e.s.arm || 0));
           if (e.hp <= 0) e.alive = false;
         }
       }
@@ -1120,8 +1160,11 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
       }
     }
 
+    // BOOSTS REACH THE BATTLE. Three of them are resolver rules now, and a
+    // booster the engine holds but never hands to the fight is exactly how The
+    // Vanguard shipped doing nothing while a sweep priced it at +0.18.
     const out = resolve([...army[0], ...pending[0]], [...army[1], ...pending[1]],
-                        (seed * 7919 + r) >>> 0, false);
+                        (seed * 7919 + r) >>> 0, false, null, null, boosts);
     pending[0] = []; pending[1] = [];
     // A draw costs the side with fewer survivors, so a stalled field still moves
     // the match on rather than burning a round to no effect.

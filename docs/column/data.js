@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v30';
+export const BUILD = 'column-v31';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -473,6 +473,29 @@ export const RUN = {
 // worth nothing because there is no run length". A competent seat survives 3.55.
 // The premise of that finding is gone, so the boosters it killed are worth asking
 // about again rather than assumed dead.
+/** WHAT THE THREE BATTLE-SIDE BOOSTERS ARE WORTH, in one place, because the
+ *  resolver reads them and two sweeps price them and a number written twice
+ *  disagrees. Every one of these was measured at two doses before it shipped --
+ *  three separate things tonight turned out to be the right idea at the wrong
+ *  size, so building one size and calling the idea dead is no longer good
+ *  enough. */
+export const BATTLE = {
+  // EVERY ONE OF THESE IS THE MEASURED DOSE, not the obvious one, and the two
+  // that needed raising are the two whose obvious dose was Sam's own words.
+  //
+  //   absorbed   one body a battle  +0.00 (0.1σ)   five  +0.27 (2.8σ)
+  //   repair     0.9 a tick         +0.03 (0.4σ)   3.5   +0.23 (2.6σ)
+  //   pods       blast 12 / dmg 60  +0.42 (4.5σ)   16/110 +0.72 (7.0σ), too big
+  //
+  // His note was "once per round a random unit revives", and once a battle
+  // measures exactly nothing -- the fourth time tonight that a good idea was the
+  // wrong size rather than the wrong idea. Five is what puts it beside the rest
+  // of the pool instead of below it.
+  repair:   3.5,                 // health a tick, to a body under half, both sides
+  absorbed: 5,                   // bodies taken back a battle, at the line, whole
+  pods:     { r: 12, d: 60 }     // the detonation a body leaves if it has none of its own
+};
+
 export const BOOSTS = [
   { id: 'compact',  n: 'The Compact',    d: 'One card of your column marches into the next match, at the level it reached.' },
   { id: 'surgeons', n: 'Field surgeons', d: 'The first life you lose in each match is given back.' },
@@ -485,7 +508,15 @@ export const BOOSTS = [
   // REPLACES WIDER MUSTER, which measured dead four separate times on two seats
   // (+0.08, -0.15, -0.38, +0.03). More cards offered does not help when the
   // problem is which cards win; this is the other axis -- not more, but chosen.
-  { id: 'ledger',   n: 'The Ledger',     d: 'Your first pick of each round is any card in the roster, named rather than offered.' }
+  { id: 'ledger',   n: 'The Ledger',     d: 'Your first pick of each round is any card in the roster, named rather than offered.' },
+  // THE THREE BATTLE-SIDE ONES. They are worth trying because settled.mjs
+  // falsified the reason they were thought impossible: one extra body from the
+  // first tick rescues 44% of the pairings that were "decided", so there is
+  // room in a battle. All three are PERSISTENT AND EVERYWHERE, which is what
+  // the old revive was not -- it acted once, at a random place and time.
+  { id: 'absorbed', n: 'Absorbed',       d: 'Five of your bodies a battle are taken back — each returned to your line, whole.' },
+  { id: 'repair',   n: 'Field repair',   d: 'Your wounded bodies mend a little every moment, up to half their health.' },
+  { id: 'pods',     n: 'Escape pods',    d: 'Every body of yours is rigged: it detonates where it falls.' }
 ];
 export const BY_BOOST = Object.fromEntries(BOOSTS.map(b => [b.id, b]));
 

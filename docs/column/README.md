@@ -2992,3 +2992,71 @@ record already carried twice; this was the third, in code written to avoid it.
 
 Five of the eight, every one clearing the bar, and `match.mjs` back to **9 of 10** with the
 composition red the only one left.
+
+---
+
+# Three battle-side boosters, and the dose was the answer a fourth time
+
+`settled.mjs` falsified the reason these were thought impossible: one extra body from the
+first tick rescues 44% of the pairings that were "decided", so there is room inside a battle.
+All three are **persistent and everywhere**, which is what the old revive was not — it acted
+once, at a random place and time.
+
+**`resolve()` takes the boosters now**, defaulting to none, for the same reason it takes
+terrain that way: a battle without them is byte-for-byte the battle every existing figure was
+measured on. `playMatch` and the interface both pass them, because a booster the engine holds
+but never hands to the fight is exactly how The Vanguard shipped doing nothing.
+
+## Every one was verified wired before it was measured
+
+`pods` changed a battle immediately. **The other two did not**, which is the signature of a
+rule that never fires — so they were checked directly rather than assumed: `absorbed` logs a
+`back` event and changes 23 of 40 matches, and `repair` moves a battle from 174 ticks to 180.
+An arm that reaches nothing prints a tidy +0.00 and reads exactly like an idea that does not
+work.
+
+## And two of the three were dead at the obvious dose — which was Sam's own words
+
+| | first dose | | raised | |
+|---|---|---|---|---|
+| **Absorbed** | one body a battle | **+0.00 (0.1σ)** | five a battle | **+0.27 (2.8σ)** |
+| **Field repair** | 0.9 health a tick | **+0.03 (0.4σ)** | 3.5 a tick | **+0.23 (2.6σ)** |
+| **Escape pods** | blast 12, damage 60 | **+0.42 (4.5σ)** | blast 16, damage 110 | +0.72 (7.0σ), too big |
+
+His note was *"once per round a random unit revives"*, and once a battle measures **exactly
+nothing**. That is the fourth time tonight a good idea was the wrong size rather than the
+wrong idea, after the choke, the revive and The Ledger — and it is now the first thing to
+test rather than the last.
+
+**Escape pods took the lower dose**: the larger is a second prize at 7.0σ, and one prize is
+enough.
+
+## The pool of eight, at 300 runs an arm
+
+| | matches | against taking nothing |
+|---|---|---|
+| **Veterans** | 3.55 | **+1.73 (19.7σ)** |
+| Escape pods | 2.31 | +0.49 (6.5σ) |
+| The Compact | 2.26 | +0.44 (5.6σ) |
+| Field repair | 2.19 | +0.37 (5.0σ) |
+| The Vanguard | 2.16 | +0.34 (4.6σ) |
+| Absorbed | 2.11 | +0.29 (3.8σ) |
+| Field surgeons | 2.07 | +0.25 (3.4σ) |
+| **The Ledger** | 1.92 | **+0.10 (1.4σ)** |
+| *taking nothing* | *1.82* | *the control* |
+
+**One prize and six in a band from +0.25 to +0.49**, which is the shape a random three-of-eight
+wants: the question stops being *which is best* and becomes *which of these three do I want*.
+
+## The red, and it is The Ledger
+
+`match.mjs` reads **8 of 10**: *the booster pool has no dead option — 1 of 8 do not clear the
+control*, The Ledger at 1.4σ.
+
+It measured +0.22 at 2.8σ in a pool of five and +0.10 at 1.4σ in a pool of eight, and the
+control moved with it — **the opponent draws from the same eight**, so a pool containing
+Escape pods and Veterans is a harder opponent, and the marginal booster is the one that
+stops clearing. Three answers, all Sam's: raise its dose again, cut it and ship seven, or
+keep it as the weakest of eight and let a three-card offer decide how often it matters.
+
+**It has not been quietly buffed to pass.**
