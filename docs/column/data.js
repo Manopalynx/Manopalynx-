@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v27';
+export const BUILD = 'column-v28';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -553,8 +553,8 @@ export const TERRAIN = {
   // variants. See the document: it is the one place where the most faithful
   // reading of the manuscript made the worst game, and it is recorded rather
   // than quietly dropped.
-  cuts:    { n: 'The terrace cut', cap: 24, from: 58, to: 82, beyond: 12, cut: 0.45,
-             says: 'A narrow cut with high sides: nothing shoots past 24, and its walls refuse 45% of distant fire.' },
+  cuts:    { n: 'The terrace cut', art: 'defile', what: 'the cut walls',
+             cap: 24, from: 58, to: 82, beyond: 12, cut: 0.45 },
   // "the great crossroads, the market of markets" -- so a market, not a thin
   // line of stalls at the centre, which was the weakest ground of the nine at
   // 11.0%. A dense market with wide cover measures 5.5%.
@@ -563,8 +563,8 @@ export const TERRAIN = {
   // lanes to it measured 4.5%, a point better -- and taken, six of the nine
   // grounds would cap reach and the set would be one mechanism at nine
   // settings. The point costs less than the variety does.
-  stalls:  { n: 'The market of markets', from: 52, to: 88, beyond: 12, cut: 0.55,
-             says: 'A dense market: its stalls and awnings refuse 55% of distant fire.' },
+  stalls:  { n: 'The market of markets', art: 'stalls', what: 'the stalls and awnings',
+             from: 52, to: 88, beyond: 12, cut: 0.55 },
 
   // --- ROUGH GROUND AND EXPOSURE ARE GONE. Both measured worse than a flat
   // field on every map that carried them, and both failed the same way: they
@@ -577,35 +577,31 @@ export const TERRAIN = {
   // the floor is open -- an earlier pass put them on the floor and slowed
   // everything crossing it, which is neither what the sentence says nor a good
   // game. A vast enclosed room is a room: you cannot shoot across it.
-  clutter: { n: 'The pod chamber', cap: 26,
-             says: 'A vast enclosed chamber: nothing shoots further than 26.' },
+  clutter: { n: 'The pod chamber', cap: 26 },
 
   // Vex's ship, and the scene is a stateroom aboard it rather than open
   // wreckage: "a vessel assembled from the corpses of at least nine other
   // vessels, in a stateroom decorated with trophies". Bulkheads cap the reach;
   // the salvage bolted through it gives cover.
-  wreck:   { n: 'The salvaged decks', cap: 22, from: 58, to: 82, beyond: 12, cut: 0.45,
-             says: 'Bulkheads and bolted-on salvage: nothing shoots past 22, and the plating refuses 45% of distant fire.' },
+  wreck:   { n: 'The salvaged decks', art: 'plating', what: 'the bolted-on plates',
+             cap: 22, from: 58, to: 82, beyond: 12, cut: 0.45 },
 
   // --- fire: costs you for standing there at all, and ignores armour. ---
-  embers:  { n: 'Burning stubble', from: 46, to: 94, burn: 1.6,
-             says: 'The stubble is still burning: 1.6 damage a tick to anything standing in it.' },
+  embers:  { n: 'Burning stubble', art: 'embers', from: 46, to: 94, burn: 1.6 },
 
   // --- close: caps every weapon's reach. A room, not a field. ---
   // "I signed the instrument of vassalage in a ROOM aboard one of their tribute
   // ships. They kept me waiting four hours." A cargo hold was invented; the
   // sentence says a room, and the room is where the Union was made a vassal.
-  hold:    { n: 'The legate\'s room', cap: 20,
-             says: 'A room aboard a tribute ship: nothing shoots further than 20.' },
-  chamber: { n: 'The chamber', cap: 30,
-             says: 'A room rather than a field: nothing shoots further than 30.' },
+  hold:    { n: 'The legate\'s room', cap: 20 },
+  chamber: { n: 'The chamber', cap: 30 },
 
   // Vale's plaza is not open ground, which is what an earlier pass called it:
   // "At the plaza's centre stood the stage, flanked by two towers of Vale's
   // smiling face". A stage and two towers are structures in the middle of it --
   // they break the sightlines and they shelter whatever is behind them.
-  open:    { n: 'The stage and towers', cap: 34, from: 62, to: 78, beyond: 12, cut: 0.55,
-             says: 'The stage and its two towers break the ground: nothing shoots past 34, and they refuse 55% of distant fire.' },
+  open:    { n: 'The stage and towers', art: 'stage', what: 'the stage and its towers',
+             cap: 34, from: 62, to: 78, beyond: 12, cut: 0.55 },
 
   // AND ONE BOARD IS DELIBERATELY BARE, which is a decision rather than an
   // omission and is marked as one. Enigma's parade ground is a drill square:
@@ -623,8 +619,7 @@ export const TERRAIN = {
   // nothing is the failure mode this project has shipped before; the guard in
   // terrain.mjs fails any ground that moves no battles UNLESS it says here that
   // it means to.
-  stand:   { n: 'The drill square', flat: true,
-             says: 'A bare parade square: no cover, no obstacle, nothing here to use.' }
+  stand:   { n: 'The drill square', flat: true }
 };
 
 export const MAPS = [
@@ -650,6 +645,36 @@ export const MAPS = [
   { id: 'pods', terrain: 'clutter', n: 'The Pod Room',
     q: 'It was circular and vast, and the walls were pods \u2014 and the occupied pods gave off a faint interior light, so that the great dark room glowed in patches, like votive candles in a drowned church.', qv: 1 }
 ];
+/** WHAT A GROUND DOES, IN CLAUSES, DERIVED FROM ITS OWN NUMBERS.
+ *
+ *  Every one of these used to be a `says` string typed beside the fields it
+ *  described -- which is a number written twice, and the copy is always the half
+ *  that goes stale. An upkeep bill in this repository once quoted one vassal's
+ *  cost for a whole bench, and a card said kit lasted "the rest of the run" for
+ *  an engine that redrafts every match. Both read perfectly.
+ *
+ *  So the sentence is generated. Change `cap: 24` and the screen says 24 in the
+ *  same breath; there is no second place to forget.
+ *
+ *  ONE CLAUSE PER PROPERTY, not one sentence per ground: five of the nine now do
+ *  two things, and a run-on line is how a player stops reading the thing that
+ *  tells them what the board is. */
+export function groundSays(g) {
+  if (!g) return [];
+  if (g.flat) return ['No cover, no obstacle — nothing here to use.'];
+  const out = [];
+  if (g.cap) out.push(`Nothing shoots further than ${g.cap}.`);
+  // EVERY `what` IS PLURAL, so one verb is always right and no ground needs a
+  // flag someone has to remember. Capitalised properly rather than by swapping a
+  // leading 't', which worked only because every noun so far begins "the".
+  if (g.cut) {
+    const w = g.what || 'it';
+    out.push(`${w[0].toUpperCase()}${w.slice(1)} refuse ${Math.round(g.cut * 100)}% of fire from beyond ${g.beyond}.`);
+  }
+  if (g.burn) out.push(`${g.burn} damage a tick to anything standing in it.`);
+  return out;
+}
+
 export const BY_MAP = Object.fromEntries(MAPS.map(m => [m.id, m]));
 
 /* ----------------------------------------------------------------- the personas */

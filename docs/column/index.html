@@ -181,9 +181,14 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
 #info .ill{float:right;margin:-2px -2px 0 8px;line-height:0}
 /* The ground a match is fought on, stated before the draft. Green because that
    is the band's colour on the field, so the sentence and the shape a player
-   sees are obviously the same thing. */
-.ground{color:#7fd6a0}
-.pick i .ground{font-weight:600}
+   sees are obviously the same thing.
+   ONE CLAUSE A LINE. Five grounds do two things now, and two clauses run
+   together in one line is where a player stops reading. */
+.ground{color:#7fd6a0;margin:6px 0}
+.ground b{display:block;font-weight:600}
+.ground .gl{display:block;opacity:.82;font-size:.92em}
+.pick i .ground{display:block;margin:3px 0 0}
+.gname{color:#7fd6a0}
 /* Fixed height, like everything else down here. An EMPTY button is twenty-two
    pixels shorter than one with a word in it, and hiding it with visibility keeps
    its box but not its content -- so the deck still changed size between a pick

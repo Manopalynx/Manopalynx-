@@ -267,26 +267,72 @@ const OVERLAY =
 // decorative may compete with a counter, because the counters are what a player
 // reads. The dashed edges are what makes it legible as an EDGE rather than as a
 // wash: the whole decision is whether a body is inside it or outside it.
+// WHAT A GROUND IS MADE OF, drawn as itself.
+//
+// Sam's note: the floors should look like what they represent. The scenes
+// already do -- every one of them is built from its own sentence in the novel.
+// What did not was the TERRAIN painted over them, which was one green wash and a
+// dashed edge whatever the ground was, so a market, a defile and a ship's deck
+// were the same rectangle in three colours.
+//
+// Each band now draws its own material. The rule for this file still holds --
+// nothing decorative may compete with a counter -- so all of it sits under 0.16
+// opacity and none of it is larger than a marker.
+//
+// A RANGE CAP DRAWS NOTHING, and that is not an omission. It has no region: it
+// shortens every weapon everywhere, so there is no edge to show and shading the
+// whole board would say "this part is different" about a rule with no parts.
+// The bar names it and the panel explains it; that is job (a), not job (b).
+const MATERIAL = {
+  // "the great crossroads, the market of markets" — stalls in rows with awnings
+  // over them, and the lanes between.
+  stalls: (g, h) => rows(4, g.from + 4, (h - 6) / 3, y =>
+    rows(7, 8, 13, x =>
+      `<rect x="${x}" y="${y}" width="8" height="4.4" fill="#7fd6a0" fill-opacity="0.10"/>` +
+      `<line x1="${x}" y1="${y}" x2="${x + 8}" y2="${y}" stroke="#7fd6a0" stroke-opacity="0.22" stroke-width="0.35"/>`)),
+
+  // "into the narrow ground, bunching as the grade forced them together" — the
+  // two walls of the cut, and the grade lines cut into them.
+  defile: (g, h) =>
+    `<rect x="0" y="${g.from}" width="26" height="${h}" fill="#7fd6a0" fill-opacity="0.09"/>` +
+    `<rect x="74" y="${g.from}" width="26" height="${h}" fill="#7fd6a0" fill-opacity="0.09"/>` +
+    rows(5, g.from + 3, (h - 6) / 4, y =>
+      `<line x1="0" y1="${y}" x2="26" y2="${y}" stroke="#7fd6a0" stroke-opacity="0.18" stroke-width="0.3"/>` +
+      `<line x1="74" y1="${y}" x2="100" y2="${y}" stroke="#7fd6a0" stroke-opacity="0.18" stroke-width="0.3"/>`),
+
+  // "a vessel assembled from the corpses of at least nine other vessels" —
+  // mismatched plates bolted across the deck, none of them lining up.
+  plating: (g, h) => rows(3, g.from + 2, (h - 4) / 2, (y, i) =>
+    rows(4, 4 + i * 5, 24, (x, k) =>
+      `<rect x="${x}" y="${y}" width="${18 + (k % 2) * 4}" height="${h / 3.4}" fill="#7fd6a0" ` +
+        `fill-opacity="${0.06 + ((i + k) % 3) * 0.02}" stroke="#7fd6a0" stroke-opacity="0.16" stroke-width="0.3"/>`)),
+
+  // "the stage, flanked by two towers of Vale's smiling face" — the stage in the
+  // middle of it and a tower to either side.
+  stage: (g, h) =>
+    `<rect x="38" y="${g.from + 1}" width="24" height="${h - 2}" fill="#7fd6a0" fill-opacity="0.12" ` +
+      `stroke="#7fd6a0" stroke-opacity="0.3" stroke-width="0.4"/>` +
+    [20, 72].map(x => `<rect x="${x}" y="${g.from + 2}" width="8" height="${h - 4}" fill="#7fd6a0" ` +
+      `fill-opacity="0.14" stroke="#7fd6a0" stroke-opacity="0.32" stroke-width="0.4"/>`).join(''),
+
+  // "they burned the orbitals, then the cities, then the croplands" — the rows
+  // are still there and still alight.
+  embers: (g, h) => rows(9, g.from + 2, (h - 4) / 8, (y, i) =>
+    `<line x1="0" y1="${y}" x2="100" y2="${y}" stroke="#f2955c" stroke-opacity="0.10" stroke-width="0.5"/>` +
+    rows(6, 6 + (i % 2) * 8, 17, x =>
+      `<circle cx="${x}" cy="${y}" r="0.7" fill="#f2955c" fill-opacity="0.28"/>`)),
+};
+
 const band = t => {
   const g = TERRAIN[t];
-  if (!g) return '';
-  // A CAP HAS NO PLACE ON THE FIELD, so it is not drawn as one. `hold` and
-  // `chamber` shorten every weapon everywhere; there is no band to shade, and
-  // shading the whole board would say "this region is different" about a rule
-  // that has no region. The chooser's sentence carries it instead.
-  if (g.from === undefined) return '';
-  // Each mechanism gets its own colour and its own edge, because the decision a
-  // player makes is different for each: green is protection, amber is a place
-  // that costs you, and the hatch is ground that is slow to cross. Opacities sit
-  // in the same range as the deployment tints -- the rule for this file is that
-  // nothing decorative may compete with a counter.
-  const hue = g.burn ? '#f2955c' : '#7fd6a0';
+  if (!g || g.from === undefined) return '';
   const h = g.to - g.from;
+  const hue = g.burn ? '#f2955c' : '#7fd6a0';
   const edge = y => `<line x1="0" y1="${y}" x2="100" y2="${y}" stroke="${hue}" ` +
-    `stroke-opacity="0.35" stroke-width="0.35" stroke-dasharray="2 2"/>`;
-  const hatch = '';
-  return `<rect x="0" y="${g.from}" width="100" height="${h}" fill="${hue}" ` +
-           `fill-opacity="0.07"/>` + hatch + edge(g.from) + edge(g.to);
+    `stroke-opacity="0.3" stroke-width="0.35" stroke-dasharray="2 2"/>`;
+  const art = MATERIAL[g.art];
+  return `<rect x="0" y="${g.from}" width="100" height="${h}" fill="${hue}" fill-opacity="0.04"/>` +
+    (art ? art(g, h) : '') + edge(g.from) + edge(g.to);
 };
 
 /** The ground for a map id. Unknown ids fall back to Eden rather than to nothing. */

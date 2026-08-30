@@ -26,7 +26,7 @@ import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve as rp, extname, join } from 'path';
 import { chromium } from 'playwright';
-import { BOOSTS, RULES, PERSONAS, MAPS, BY_MAP, TERRAIN } from '../data.js';
+import { BOOSTS, RULES, PERSONAS, MAPS, BY_MAP, TERRAIN, groundSays } from '../data.js';
 import { bonusPicks, POLICIES } from '../engine.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -244,7 +244,12 @@ for (const p of withGround) {
   const t = TERRAIN[BY_MAP[p.map].terrain];
   const row = page.locator(`[data-opp]:has-text("${p.n}")`).first();
   const txt = (await row.count()) ? await row.textContent() : '';
-  if (t && txt.includes(t.n) && txt.includes(t.says.slice(0, 24))) named.push(p.n);
+  // EVERY CLAUSE, not just the first. Five grounds do two things, and a check
+  // that read one sentence would pass a screen showing half a ground -- which is
+  // the same defect as the card row that dropped a line in silence.
+  const clauses = groundSays(t);
+  if (t && txt.includes(t.n) && clauses.length && clauses.every(c => txt.includes(c)))
+    named.push(`${p.n} (${clauses.length})`);
 }
 if (withGround.length && named.length === withGround.length)
   ok(`every map with terrain says so before the draft (${named.join(', ')})`);

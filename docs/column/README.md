@@ -2776,3 +2776,68 @@ Ultra Armor on eight and Amabie on the bare one. A ground that changes the numbe
 ground that changes the draft. What would change it is a card whose strength is not about
 reach at all — which points at the roster rather than at the maps, and that is Sam's to
 spend.
+
+---
+
+# Telling the player what the ground does, and drawing it as itself
+
+Two of Sam's, and they are the same problem from two ends: a rule the player cannot read is
+a rule the player does not have.
+
+## The sentence is derived now, not typed
+
+Every ground carried a `says` string sitting beside the numbers it described — which is a
+number written twice, and the copy is always the half that goes stale. This repository has
+shipped that defect twice already: an upkeep bill quoting one vassal's cost for a whole
+bench, and a card selling kit that lasts "the rest of the run" for an engine that redrafts
+every match. Both read perfectly.
+
+`groundSays(g)` generates the clauses from the fields. **Change `cap: 24` and the screen says
+24 in the same breath**; there is no second place to forget.
+
+**One clause a property, not one sentence a ground.** Five of the nine now do two things, and
+the run-on line they had become is where a player stops reading:
+
+> **The terrace cut**
+> Nothing shoots further than 24.
+> The cut walls refuse 45% of fire from beyond 12.
+
+It appears in three places: the **chooser**, before any card is taken; the **opponent sheet**,
+behind the header, mid-match; and the ground's **name in the top bar**, because the chooser is
+a screen you pass through once before a match that runs nine rounds.
+
+Two things fixed while writing the generator, both caught by reading its output rather than
+its source: *"the plating refuse"* did not agree, so every `what` is plural now and one verb
+is always right — cheaper than a flag nobody will remember to set on the tenth ground — and
+the capitalisation worked only because every noun so far begins "the".
+
+**And the guard now checks every clause.** It read one sentence before, which would have
+passed a screen showing half a ground — the same defect as the card row that dropped a line
+in silence. It prints the clause count per opponent: *Hale (2), Vex (2), Adran Vale (2)*.
+
+## The floors already looked right. The terrain did not.
+
+Worth correcting plainly: the scenes were never bare. Every one is built from its own
+sentence in the novel — Eden's two avenues meeting, the nine mismatched plates of the Raven's
+Claw, the war room's table with the galaxy over it. **What did not look like anything was the
+terrain painted on top of them**, which was one green wash and a dashed edge whatever the
+ground was, so a market, a defile and a ship's deck were the same rectangle in three colours.
+
+Each band draws its own material now:
+
+| ground | drawn as |
+|---|---|
+| The market of markets | stalls in rows with awnings over them, and the lanes between |
+| The terrace cut | the two walls of the cut, with the grade lines cut into them |
+| The salvaged decks | mismatched plates bolted across the deck, none of them lining up |
+| The stage and towers | the stage in the middle and a tower to either side |
+| Burning stubble | the crop rows, still there and still alight |
+
+All of it sits under 0.16 opacity and none of it is larger than a marker, because the rule for
+that file has not changed: **nothing decorative may compete with a counter.**
+
+**A range cap draws nothing, and that is not an omission.** It has no region — it shortens
+every weapon everywhere — so there is no edge to show, and shading the whole board would say
+"this part is different" about a rule with no parts. Four grounds are caps and one is bare;
+for those five the bar and the panel are the whole of it, which is why the two halves of this
+were done together.

@@ -13,7 +13,7 @@
 
 import { BY_ID, RULES, PERSONAS, UPGRADE, DRAFT, SPECIALS, SHOP, RUN,
          BY_BOOST, BY_KIT, BY_ORDER, SABOTAGE, COIN, BUILD, TICK, BY_MAP,
-         TERRAIN } from './data.js';
+         TERRAIN, groundSays } from './data.js';
 import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId,
          earn, stock, spend, upgradeable, specialsFor, kitFor, ordersFor, boosterOffer,
          offerSize, picksFor, pickTokens, bonusPicks,
@@ -101,6 +101,22 @@ let revealTimer = null;
  *  you are facing rather than a roll, and it is knowable before the first pick.
  *  One derivation, read by the resolver, the renderer and the text. */
 export const terrainOf = opp => (PERSONAS[opp] && BY_MAP[PERSONAS[opp].map] || {}).terrain || null;
+
+/** THE GROUND, AS A PANEL RATHER THAN A SENTENCE.
+ *
+ *  Five of the nine grounds now do two things, and the single line they used to
+ *  carry had become the kind of run-on a player stops reading -- which would
+ *  make the whole "terrain is visible before the draft" decision worthless,
+ *  because a rule nobody reads is a rule nobody has.
+ *
+ *  One clause a property, each generated from the number it describes, so the
+ *  screen cannot say 45% while the resolver uses 55%. */
+const groundPanel = (t, tag = 'p') => {
+  const g = TERRAIN[t];
+  if (!g) return '';
+  const lines = groundSays(g).map(l => `<span class="gl">${l}</span>`).join('');
+  return `<${tag} class="ground"><b>${g.n}</b>${lines}</${tag}>`;
+};
 
 /* ------------------------------------------------------------------- state */
 let S = null;
@@ -572,7 +588,14 @@ function render() {
   el.la.innerHTML = hearts(S.lives[0]);
   el.lb.innerHTML = hearts(S.lives[1]);
   el.cash.textContent = S.money[0] ? coin(S.money[0]) : '';
-  el.who.innerHTML = `Round ${S.round + 1} &middot; ${PERSONAS[S.opp].n} &nbsp;&#9776;`;
+  // THE GROUND IS NAMED IN THE BAR, because it was only readable on the chooser
+  // -- a screen you pass through once, before a match that runs nine rounds. The
+  // name is the reminder; the panel behind this header is the explanation.
+  {
+    const gn = TERRAIN[terrainOf(S.opp)];
+    el.who.innerHTML = `Round ${S.round + 1} &middot; ${PERSONAS[S.opp].n}` +
+      (gn ? ` &middot; <span class="gname">${gn.n}</span>` : '') + ` &nbsp;&#9776;`;
+  }
   paint(board());
   el.cards.innerHTML = '';
   noButton();
@@ -700,8 +723,7 @@ el.who.addEventListener('click', () => {
   const here = BY_MAP[PERSONAS[S.opp].map];
   const d = sheet(`<h1>${PERSONAS[S.opp].n}</h1>
     <p class="where"><b>${PERSONAS[S.opp].f}</b> &middot; ${here ? here.n : ''}</p>
-    ${here && here.terrain && TERRAIN[here.terrain]
-      ? `<p class="ground"><b>${TERRAIN[here.terrain].n}</b> &middot; ${TERRAIN[here.terrain].says}</p>` : ''}
+    ${groundPanel(here && here.terrain)}
     ${here ? `<q class="mapq">${here.q}</q>` : ''}
     <p>Round ${S.round + 1}. ${S.lives[0]} ${S.lives[0] === 1 ? 'life' : 'lives'} to
        ${S.lives[1]}, ${armyFrom(S.army[0]).cards.length} cards to
@@ -751,9 +773,7 @@ function menu() {
         // draft is a coin flip, and a board you can see turns the draft into
         // "answer this ground" instead of "answer these three cards". It is on
         // the chooser because that is the last screen before a card is taken.
-        BY_MAP[p.map] && BY_MAP[p.map].terrain && TERRAIN[BY_MAP[p.map].terrain]
-          ? `<br><b class="ground">${TERRAIN[BY_MAP[p.map].terrain].n}: ${
-             TERRAIN[BY_MAP[p.map].terrain].says}</b>` : ''}</i></button>`).join('')}
+        groundPanel(BY_MAP[p.map] && BY_MAP[p.map].terrain, 'span')}</i></button>`).join('')}
     <h2>Reference</h2>
     <button class="pick" id="roster"><b>The roster</b><i>All twelve cards, what they do,
       and which lines are the author's.</i></button>
