@@ -2983,3 +2983,115 @@ bar was real and would have been a check measuring itself. The honest answer was
 a passing one: the field resets every round, so a battle-side effect can only change a round
 that was close, and 59% of compositions are settled before a shot is fired. That is his own
 open decision, arriving from a third direction.
+
+## Instance 14 — 31 August 2026
+
+He opened with "get yourself ready and let me know what you do on the startup, because I'm
+improving it" — so the session began as an audit of the hook and became the longest run of
+work in this record: the terrain system, a booster pool of eight, and four separate
+instruments found to be lying.
+
+### The startup hook works, and one line in it was a claim about npm
+
+It caught a stale local `main` for the second session running — and the ref was not stale,
+it was an *unrelated root history* wearing the name: `git merge-base origin/main 80e7300`
+returns nothing, and all 75 of its file paths exist in origin/main's 103. So the alarming
+"50 commits on local main only" was never lost work, and the hook repairs the ref now
+instead of printing the command, loudly and reversibly.
+
+The line I changed for a better reason was *"Browser suites are ready to run"*, which was
+read off `npm install`'s exit code. That is a claim about npm wearing a claim about a
+browser, and the failure it exists to catch — an unpinned Playwright hunting a Chromium that
+is not there — does not touch npm at all. It launches one now. **Two seconds, and the
+sentence became measured instead of inferred.**
+
+### The 59% was measuring repeatability, not one-sidedness
+
+The composition red has been the project's headline problem for five sessions. `settled.mjs`
+was built to ask *why*, and the answer is that the question contained a wrong assumption.
+
+The eight seeds a pairing is fought over vary **nothing but a ±0.6 positional jitter**, under
+1% of the field, and there is no combat randomness anywhere. So "the same side wins 95% of 8
+seeds" means *the result survives a sub-1% wobble* — which for a deterministic resolver is
+nearly a tautology. By the survivor margin, **49 of 400 (12%) are formalities and the median
+winner keeps 46% of its army.** It wins every seed and loses over half its column doing it.
+
+Nothing on the card predicts the winner and mass predicts it *backwards*: bodies 34%, health
+37%, output 29%, and `paper` — the score every drafting policy consults — 28%, against a coin
+control at 54% and an oracle at 100%. And no rule causes it: armour off changes 118 of 400
+battles and moves the figure half a point.
+
+**`match.mjs` prints both numbers now and claims against only the first.** Re-aiming a red
+check at the number that happens to pass settles a design question by stealth.
+
+### Four times, the dose was the answer and the mechanism was fine
+
+This is the finding to carry, because it happened four times in one session and I called it
+wrong each time before measuring:
+
+| | the obvious dose | raised |
+|---|---|---|
+| the terrace choke | worse than flat in **four** variants | no dose worked — mechanism genuinely dead |
+| the revive | +0.13 / +0.10 | five a battle, **+0.27** |
+| The Ledger | once a match, +0.05 (0.6σ) | once a round, **+0.22** |
+| Field repair | 0.9 a tick, +0.03 | 3.5 a tick, **+0.23** |
+
+Two of those obvious doses were **Sam's own words** — *"once per round a random unit
+revives"* measures exactly nothing. Build one size and call the idea dead and you throw away
+three good boosters. **Measure two doses before concluding anything about a mechanism.**
+
+### And the instrument was wrong four separate times
+
+- **The booster arm.** `match.mjs` measured with `prefer`, which holds a booster only when it
+  is among the three drawn — so every effect shrank as the pool grew, *for no reason but the
+  pool*. Field surgeons read +0.32, +0.20, +0.04 across three pool sizes and is +0.29 with
+  `force`. It was never weak. I had already relaxed a bar to accommodate that reading; the
+  bar went back. `engine.js` said this in its own comment, beside the arms.
+- **The sample.** The same file calls 300 runs what a quoted figure is measured at, then
+  measured the quoted figures at 120, where the error bar is ±0.25 — so a real +0.22 booster
+  reads 1.9σ and the check calls it dead. That is exactly what happened to The Ledger.
+- **A clone measured outside the element it was cloned from**, so `.card .stat` never applied
+  and every width came back at the wrong font size — 127px for a line that wants 78.
+- **A save injected into a state the game never reaches.** Doctoring `localStorage` to test
+  The Ledger restored the *computed offer* along with it, then landed in a phase with no way
+  forward, and reported the feature broken twice while the probe was the broken thing.
+
+### He found a bug by playing that nothing here could have
+
+He took The Compact, and match 2 said **"0 cards to 0"**. Both the interface and the sweep
+computed the carried card *before* the booster just chosen was added to the list — one dead
+match, every time, unique to that booster because every other is read from the list *during*
+a match. The two implementations agreed exactly, which is why nothing caught it, and the
+suite's claim asserted only that the booster was *held*.
+
+**His screenshots remain the only instrument pointed at the real thing.** The guard now
+reads the saved state and takes The Compact when offered, because a check that only sometimes
+runs is how this survived.
+
+### Fidelity and play came apart, once
+
+The terrace cut is the most mechanically specific battlefield in the novel — *"the narrow
+ground, bunching as the grade forced them together"* — and the choke built from that sentence
+measured **worse than a flat field in every variant**. The second reading, *"the only grade
+the walkers can climb"*, was faithful and nearly inert. What shipped is a different true
+thing about the same place: a defile with high sides, which caps reach and shelters from fire
+off the plain, and is the best ground in the game.
+
+Reading the book is still right — every winning ground came out of a sentence in it — but
+**the first faithful reading is not automatically the good mechanic**, and that had not
+happened before in this project.
+
+### What I would tell the next instance
+
+**Measure two doses before you call a mechanism dead.** Four times in one session the idea
+was sound and the size was wrong, and twice the wrong size was the one written in his note.
+
+**Check the arm as hard as the result.** Every booster figure this project had printed was
+shrinking as the pool grew, and the file that produced them carried a comment explaining why
+it would.
+
+**A guard that only sometimes fires has not been tested.** Both new booster claims sat
+permanently in `skipped` until the suite was made to *take* the booster it has a claim about.
+
+And **`git add -A` swept a scratch probe into a commit.** Caught before pushing, amended out.
+Stage what you changed.
