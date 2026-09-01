@@ -93,6 +93,8 @@ node test/interaction.mjs
 ```
 
 `test/` also holds the suites that are about the repository rather than the ledger.
+`test/version.mjs` checks a document against the code it describes — the Column's head
+section named a build nine versions old for as long as nobody read both files at once.
 `test/offline.mjs` is the one that spans projects: everything published under `docs/`
 shares one origin and one service worker, so it asserts that each app still opens with
 no signal and that shipping one of them does not delete another's saved files. Run it

@@ -25,10 +25,11 @@ Sam owns every decision here. Where a choice is still open it says so rather tha
 
 ## Where it stands
 
-`BUILD` is `column-v22` in `data.js`. The service worker that carries it is
-`grandiose-v96` in `docs/sw.js` — one cache for all three published apps, so **shipping a
+`BUILD` is `column-v31` in `data.js`. The service worker that carries it is
+`grandiose-v105` in `docs/sw.js` — one cache for all three published apps, so **shipping a
 change here bumps Grandiose's version too**, and `test/offline.mjs` fails if the two ever
-disagree.
+disagree. **`test/version.mjs` fails if the two lines above disagree with either file**,
+because this section went nine builds stale saying `column-v22` and nothing noticed.
 
 **A match.** Five lives. Three picks a round, each a blind simultaneous commitment
 revealed before the next; three cards offered a pick. A round ends when one army is wiped
@@ -40,16 +41,17 @@ least durable first inside a band.
 winner also takes **one credit a surviving body**, which is the only rule in the game that
 pays for winning *cleanly*. The market sells what the draft cannot: a named card (₡21), a
 level on a card you choose (₡18), a life (₡44), a wider offer next round (₡14), a piece of
-kit that lasts the run (₡30), sabotage on a card the opponent holds (₡26), a one-shot
+kit that lasts **the match** (₡30), sabotage on a card the opponent holds (₡26), a one-shot
 order for next round (₡11–₡20), and **one of three special units** (₡70–₡90, one of each a
 side, never dealt by the draft).
 
-**A run.** Match after match against `vex → hale → harlow → leader → varan`, the army
+**A run.** Match after match against
+`vex → neurex → overseer → hale → leader → harlow → varan → vale → purifier`, the army
 redrafted every time and the **credits and the lives carried**. The opponent starts each
 match with ₡18 a match already survived and gains an extra pick a round every third match.
 After each match survived you take **one booster of three offered**; the opponent takes one
-at random. The pool is three, so the whole of it is on screen and the decision is the order
-you take them in.
+at random, **from the same pool of eight** — which is why a stronger pool is also a harder
+opponent.
 
 **The roster is fifteen cards** — twelve the draft deals, three the market sells. Every
 line on every card is the author's; one unit, the Deflector, was invented for the game and
@@ -57,18 +59,20 @@ says so on its own card.
 
 | what | measured | by |
 |---|---|---|
-| single-type pairings settled 95/5 | 86% — counters are decisive, as intended | `test/matchup.mjs` |
-| mixed nine-card armies settled 95/5 | **59%** — but only 12% are formalities | `test/match.mjs`, `test/settled.mjs` |
-| alternation, worst persona table | 49–59%, neither snowball nor oscillator | `test/match.mjs` |
-| bodies a side at the end | 34–38, legible on a portrait phone | `test/match.mjs` |
+| single-type pairings settled 95/5 | 86% of 132 — counters are decisive, as intended | `test/matchup.mjs` |
+| mixed nine-card armies settled 95/5 | **59%** (234 of 400) — but only 12% are formalities | `test/match.mjs`, `test/settled.mjs` |
+| alternation, worst persona table | 61.3% ±1.4, neither snowball nor oscillator | `test/match.mjs` |
+| bodies a side at the end | 30–38, legible on a portrait phone | `test/match.mjs` |
 | battles unresolved at the tick ceiling | 0% | `test/match.mjs` |
-| a floor player against each persona | Vex 88%, Hale 82%, Harlow 55%, Leader 71%, Varan 30% | `test/match.mjs` |
-| throwing the opening round | **+4.3pt** over 15,000 paired matches, worst +10.9pt vs Harlow | `test/match.mjs` |
-| boosters worth more than taking none | **all three**, isolated | `test/match.mjs` |
+| a floor player down the ladder | Vex 88.0, Neurex 84.0, Overseer 84.0, Hale 81.5, Leader 70.5, Harlow 54.5, Varan 29.5, Vale 15.0, Purifier 1.5 | `test/match.mjs`, 200 matches a table |
+| throwing the opening round | **+3.9pt** over 1,080 paired matches, worst +10.8pt vs overseer | `test/match.mjs` |
+| boosters worth more than taking none | **7 of 8** — The Ledger is the one that does not | `test/match.mjs`, 300 runs an arm |
 
-**One of those is red, and it is now measured rather than merely counted.** 59% of mixed
-compositions are settled 95/5; his answer has been battlefield variety rather than softer
-counters, and the mechanism is unspecified and deliberately not guessed at.
+**Two of those are red, and both are open decisions rather than tuning misses.**
+
+**The composition red.** 59% of mixed compositions are settled 95/5; his answer has been
+battlefield variety rather than softer counters, and the mechanism is unspecified and
+deliberately not guessed at.
 
 **But the 59% is not what it has been read as.** `test/settled.mjs` reproduces the exact
 fixture — the same 234 of 400 pairings — and finds that the eight seeds vary nothing but a
@@ -76,28 +80,28 @@ sub-1% positional jitter, so "decided 95/5" measures whether a result is *repeat
 whether it is *one-sided*. By the survivor margin, **49 of 400 (12%) are formalities and
 the median winner keeps 46% of its army.** No rule of the resolver causes it: armour off
 moves the figure 0.5pt, and nothing makes these battles closer. **And there is room inside
-a battle** — upgrading **one card of the loser's nine** takes a third of the decided
-pairings out of decided, which falsifies the standing reason for the dead battle-side
-boosters without touching the measurements behind them. `match.mjs` prints both numbers and
-claims against only the 95/5 one; **what the game should be held to is his call**, and the
-check has deliberately not been re-aimed. See *The 59% is measuring repeatability, not
+a battle** — one extra body from the first tick rescues 44% of the decided pairings, which
+falsified the standing reason for the dead battle-side boosters and is what the three
+battle-side ones below were built on. `match.mjs` prints both numbers and claims against
+only the 95/5 one; **what the game should be held to is his call**, and the check has
+deliberately not been re-aimed. See *The 59% is measuring repeatability, not
 one-sidedness* below.
 
-**Boosters.** Three, and for the first time they are the same size as each other:
-the Compact **+0.30**, Field surgeons **+0.32**, the Vanguard **+0.32**, all clear of a
-do-nothing control at better than 2σ and none clear of each other. See *The pool that
-finally has no prize and no filler* below. A fourth pick, Veterans, The Vanguard —
-isolated against a run that takes none, +0.44 (9.2σ), +0.85 (15.8σ) and +0.20 (4.2σ). Five
-others measured between +0.05 and +0.09, inside noise, and were cut. See *The pool is three
-because a run is 1.4 matches* below: the finding is not about which boosters, it is that a
-run is too short for one to compound.
+**Boosters.** Eight, measured at 300 runs an arm against a run that takes none: Veterans
+**+1.73 (19.7σ)**, Escape pods +0.49, The Compact +0.44, Field repair +0.37, The Vanguard
++0.34, Absorbed +0.29, Field surgeons +0.25, **The Ledger +0.10 (1.4σ)**. One prize and six
+in a band, which is the shape a random three-of-eight wants.
 
-**And all three now reach the phone**, which is new and was not true of The Vanguard for as
-long as it has existed — see *The booster that was only in the sweep* below.
+**The Ledger red.** It measured +0.22 at 2.8σ in a pool of five and +0.10 at 1.4σ in a pool
+of eight — the control moved with it, because the opponent draws from the same eight. Three
+answers, all his: raise its dose again, cut it and ship seven, or keep it as the weakest of
+eight and let a three-card offer decide how often it matters. **It has not been quietly
+buffed to pass.** See *Three battle-side boosters, and the dose was the answer a fourth
+time* below.
 
 **Also open:** **merging** — design point 4, specified and never built — and whether the
 opponent gets back the strength its shopper rewrite cost it. Throwing the opening round
-still pays +4.3pt and is still legitimate, by his ruling, until he has played the game.
+still pays +3.9pt and is still legitimate, by his ruling, until he has played the game.
 Nothing else in this document is open, whatever an older heading says.
 
 ## Why "The Column"
@@ -674,6 +678,7 @@ precache down with it, and **every app lost its offline files**, not just this o
 ```
 node docs/column/test/matchup.mjs                       # the unit graph
 node docs/column/test/match.mjs [matches]               # the match structure
+node test/version.mjs                                   # this document's head section vs the code
 PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node docs/column/test/play.mjs    # the page
 PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node docs/column/test/look.mjs    # the three looks
 PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node test/offline.mjs             # all three apps offline
