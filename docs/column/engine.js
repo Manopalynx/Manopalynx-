@@ -245,6 +245,14 @@ function deploy(picks, side, rand) {
         // a renderer that wants to draw one marker per card instead of one per
         // body does, and grouping by position afterwards would be a guess.
         id, s: u, side, i: out.length, c: ci,
+        // THE SAME SHAPE THE TICK FRAME HANDS OUT. The renderer is given
+        // deployment() directly during the draft and onTick frames during the
+        // battle, and only the frame carried `lvl` -- so the level chevrons on a
+        // counter appeared once the fighting started and were absent for the
+        // whole of the draft, which is exactly when a player is deciding what to
+        // add to what they already hold. Read by the screen only; the resolver
+        // takes its level from `s`.
+        lvl: u.lvl || 0,
         // Where this BODY stands within its own squad.
         x: cx + (k - (n - 1) / 2) * SQUAD_SPREAD + (rand() - 0.5) * 1.2,
         y: (dropped

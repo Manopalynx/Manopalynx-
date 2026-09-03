@@ -14,7 +14,7 @@
 import { BY_ID, RULES, PERSONAS, UPGRADE, DRAFT, SPECIALS, SHOP, RUN,
          BY_BOOST, BY_KIT, BY_ORDER, SABOTAGE, COIN, BUILD, TICK, BY_MAP,
          TERRAIN, groundSays } from './data.js';
-import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId,
+import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId, specFor,
          earn, stock, spend, upgradeable, specialsFor, kitFor, ordersFor, boosterOffer,
          offerSize, offerFor, picksFor, pickTokens, bonusPicks,
          rampFor, mends, carried } from './engine.js';
@@ -535,7 +535,7 @@ const AIM = { big: 'the biggest thing it can reach', back: 'whatever stands furt
 function abilities(u) {
   const a = [];
   if (u.dmg) a.push([`${u.rng > 4 ? `Shoots ${Math.round(u.rng)} away` : 'Fights in reach'}`,
-    `${u.dmg} damage every ${secs(u.rate)}, at ${AIM[u.tgt] || AIM.near}.`]);
+    `${num(u.dmg)} damage every ${secs(u.rate)}, at ${AIM[u.tgt] || AIM.near}.`]);
   else a.push(['Never attacks', 'It carries no weapon at all — it is simply expensive to stand near.']);
   if (u.move === 'seek') a.push(['Seeks',
     `Leaves the line and crosses the field for ${AIM[u.tgt] || AIM.near}, at ${u.spd} a tick.`]);
@@ -544,15 +544,15 @@ function abilities(u) {
   if (u.splash) a.push(['Splash',
     `Every hit also catches anything within ${u.splash} of the target, for half.`]);
   if (u.dot) a.push(['Burns',
-    `A hit leaves ${u.dot} a tick for ${secs(u.dotT)}, and burning is not reduced by armour.`]);
+    `A hit leaves ${num(u.dot, 1)} a tick for ${secs(u.dotT)}, and burning is not reduced by armour.`]);
   if (u.aura) a.push(['Aura',
-    `Everything within ${u.auraR} takes ${u.aura} a tick. No attack, no target, nothing to block.`]);
+    `Everything within ${u.auraR} takes ${num(u.aura, 1)} a tick. No attack, no target, nothing to block.`]);
   if (u.defl) a.push(['Shielded',
     `Refuses ${Math.round(u.defl * 100)}% of damage from anything shooting past 4 — and only that. Slow things pass straight through.`]);
   if (u.boom) a.push(['Detonates',
-    `When it dies it takes ${u.boom.d} off everything within ${u.boom.r}.`]);
+    `When it dies it takes ${num(u.boom.d)} off everything within ${u.boom.r}.`]);
   if (u.arm) a.push(['Armour',
-    `${u.arm} off every hit that lands, to a floor of 1. Burning ignores it.`]);
+    `${num(u.arm)} off every hit that lands, to a floor of 1. Burning ignores it.`]);
   return a;
 }
 const abilityList = u => abilities(u)
@@ -571,8 +571,27 @@ const dps = u => Math.round(u.dmg * 10 / u.rate) * (u.count || 1);
 // wrapped, and the box that stops a tall card moving the battlefield would have
 // eaten the second line without a word. The body count is on the tag line below,
 // where the weight class already is, so nothing is lost by shortening this.
-const statLine = u => `${u.hp * (u.count || 1)} hp &middot; ` +
+// EVERY SCALED FIGURE GOES THROUGH HERE. A base card carries clean integers, so
+// for as long as the screen read the base row nothing needed rounding. The
+// moment it reads specFor() it is reading `hp * (1 + 0.35 * lvl)` in floating
+// point, and a level 3 Volt Battery's aura is 3.0749999999999997 -- which would
+// have printed, in full, on a phone. Whole numbers for the big ones, one decimal
+// for the small, and a trailing `.0` stripped so an upgraded aura reads `2`
+// rather than `2.0` beside a base one reading `1.5`.
+const num = (v, dp = 0) => String(+(+v).toFixed(dp));
+const statLine = u => `${num(u.hp * (u.count || 1))} hp &middot; ` +
   (u.dmg ? `${dps(u)} dps` : 'no attack');
+// WHAT AN UPGRADE GIVES *THIS* CARD, derived from the same fields specFor()
+// scales rather than typed once for all fifteen. The line said "+35% hp &
+// damage" on every card -- including the Volt Battery, whose own stat line says
+// "no attack" because its damage is an aura that needs no attack. A player
+// reading those two sentences together correctly concludes the upgrade is half
+// wasted on it, and it is not: the aura is exactly the thing that grows.
+// Two terms, because `.stat` is a 12px box with overflow:hidden and a third
+// term wraps it into a silent clip -- that is note 4, and it has bitten twice.
+const upChannel = u => u.dmg ? 'damage' : u.aura ? 'aura'
+  : u.dot ? 'burn' : u.boom ? 'detonation' : 'damage';
+const upSays = u => `+${(UPGRADE.step * 100) | 0}% hp &amp; ${upChannel(u)}`;
 // The card's tag line: what it is, how many, how it moves, and the two traits
 // that make it itself. Movement is stated for BOTH kinds -- "marches" is not the
 // absence of "seeks", and a card silent about moving teaches nothing.
@@ -586,8 +605,13 @@ const art = (id, px, colour = '#3a2f1e', w = 0.62) =>
   `<svg width="${px}" height="${px}" viewBox="-6 -6 12 12">${glyph(id, 0, 0, 5, colour, w, true)}</svg>`;
 
 function cardFace(tok, i) {
-  const up = isUp(tok), id = tokId(tok), u = BY_ID[id];
-  const lvl = (armyFrom(S.army[0]).up[id] || 0) + 1;
+  const up = isUp(tok), id = tokId(tok), base = BY_ID[id];
+  const held = armyFrom(S.army[0]).up[id] || 0;
+  // The card as YOU hold it. A card you have not upgraded returns the base row
+  // untouched, so nothing moves for a card at level 0 -- specFor returns the
+  // very same object when there is no level, no kit, no order and no sabotage.
+  const u = specFor(id, held);
+  const lvl = held + 1;
   const copies = armyFrom(S.army[0]).cards.filter(x => x === id).length;
   const b = document.createElement('button');
   b.className = 'card' + (up ? ' up' : '');
@@ -599,7 +623,7 @@ function cardFace(tok, i) {
     // that holds two, clipped in silence the moment the lines got fixed heights.
     ? `<span class="art up">${art(id, 32)}<span class="chev">&#9650;</span></span>` +
       `<b>${u.n} UP!</b>` +
-      `<span class="stat">+${(UPGRADE.step * 100) | 0}% hp &amp; damage</span>` +
+      `<span class="stat">${upSays(base)}</span>` +
       `<span class="hint">level ${lvl} of ${UPGRADE.max}</span>` +
       `<span class="held">${copies} on the field</span>`
     : `<span class="art">${art(id, 32)}</span>` +
@@ -749,7 +773,12 @@ el.field.addEventListener('click', e => {
   if (!S) return;
   const g = e.target.closest && e.target.closest('g[data-id]');
   if (!g) { S.inspect = null; el.info.className = ''; paint(board()); return; }
-  const u = BY_ID[g.dataset.id];
+  // AT THE LEVEL IT IS. Every figure below -- the stat line and every ability
+  // sentence -- used to be read off the base card, so a level 3 Volt Battery
+  // said its aura was 1.5 while the resolver was running it at 2.06. specFor is
+  // the only place the upgrade rule lives; the screen has to ask it too, or the
+  // rule exists twice and the second copy is the one the player reads.
+  const u = specFor(g.dataset.id, +g.dataset.lvl || 0);
   S.inspect = g.dataset.key;
   // OVER the field, not in the deck. Four lines of answer in the status line
   // resized the deck, and resizing the deck moves the battlefield -- the same

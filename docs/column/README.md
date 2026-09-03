@@ -25,8 +25,8 @@ Sam owns every decision here. Where a choice is still open it says so rather tha
 
 ## Where it stands
 
-`BUILD` is `column-v31` in `data.js`. The service worker that carries it is
-`grandiose-v105` in `docs/sw.js` — one cache for all three published apps, so **shipping a
+`BUILD` is `column-v32` in `data.js`. The service worker that carries it is
+`grandiose-v106` in `docs/sw.js` — one cache for all three published apps, so **shipping a
 change here bumps Grandiose's version too**, and `test/offline.mjs` fails if the two ever
 disagree. **`test/version.mjs` fails if the two lines above disagree with either file**,
 because this section went nine builds stale saying `column-v22` and nothing noticed.

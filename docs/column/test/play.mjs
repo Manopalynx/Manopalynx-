@@ -26,8 +26,9 @@ import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve as rp, extname, join } from 'path';
 import { chromium } from 'playwright';
-import { BOOSTS, RULES, PERSONAS, MAPS, BY_MAP, TERRAIN, groundSays, DRAFT } from '../data.js';
-import { bonusPicks, POLICIES } from '../engine.js';
+import { BOOSTS, RULES, PERSONAS, MAPS, BY_MAP, TERRAIN, groundSays, DRAFT, BY_ID, SPECIALS } from '../data.js';
+import { bonusPicks, POLICIES, specFor } from '../engine.js';
+import { draw } from '../render.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DOCS = rp(HERE, '..', '..');
@@ -98,6 +99,50 @@ let failed = 0, ran = 0;
 const skipped = [];
 const ok = m => { ran++; console.log(` ok   ${m}`); };
 const bad = (m, why) => { ran++; failed++; console.log(`FAIL  ${m}`); (why || []).forEach(w => w && console.log(`        · ${w}`)); };
+
+/* ------------------------------- the strength bar, against the whole card ----- */
+// 9 of the 15 cards field more than one body, and the bar under a counter used
+// to divide by the ceiling of the bodies STILL STANDING. Both halves fell as
+// bodies died, so the ratio stayed pinned: a Crawler Swarm down to its last body
+// drew exactly the bar of an untouched one, and the only thing that moved was a
+// 2.3pt digit. Nothing threw and nothing looked wrong -- the bar was full, which
+// is what a full bar looks like.
+//
+// READ OUT OF THE DRAWN SVG, not recomputed. A check that redoes the renderer's
+// arithmetic agrees with the renderer by construction and would have passed on
+// the defect; this parses the two rects the renderer actually emitted -- the
+// black track and the coloured fill -- and takes their ratio, which is the thing
+// a player's eye takes.
+{
+  const barOf = live => {
+    const m = [...draw(live).matchAll(/<rect x="[-0-9.]+" y="[-0-9.]+" width="([0-9.]+)" height="0\.9"/g)];
+    return m.length < 2 ? null : parseFloat(m[1][1]) / parseFloat(m[0][1]);
+  };
+  const wrong = [];
+  for (const u of [...DRAFT, ...SPECIALS]) {
+    const body = hp => ({ side: 0, c: 3, id: u.id, x: 10, y: 10, hp, max: u.hp, lvl: 0 });
+    // Every survivor count, each body untouched: the bar must read the share of
+    // the card still on its feet.
+    for (let alive = u.count; alive >= 1; alive--) {
+      const got = barOf(Array.from({ length: alive }, () => body(u.hp)));
+      const want = alive / u.count;
+      if (got === null || Math.abs(got - want) > 0.01)
+        wrong.push(`${u.n} at ${alive}/${u.count} bodies drew ${(got * 100).toFixed(0)}%, not ${(want * 100).toFixed(0)}%`);
+    }
+    // And health and body count have to COMPOSE, or the bar is honest about one
+    // of them and silent about the other.
+    if (u.count > 1) {
+      const half = barOf(Array.from({ length: u.count - 1 }, () => body(u.hp / 2)));
+      const want = (u.count - 1) / u.count / 2;
+      if (half === null || Math.abs(half - want) > 0.01)
+        wrong.push(`${u.n} with ${u.count - 1} bodies at half health drew ${(half * 100).toFixed(0)}%, not ${(want * 100).toFixed(0)}%`);
+    }
+  }
+  const multi = [...DRAFT, ...SPECIALS].filter(u => u.count > 1).length;
+  if (!wrong.length)
+    ok(`the strength bar measures the whole card, not the survivors (${multi} of ${DRAFT.length + SPECIALS.length} cards field more than one body)`);
+  else bad('the strength bar measures the whole card, not the survivors', wrong.slice(0, 4));
+}
 
 /* ------------------------------------- does a booster reach the player at all */
 // TWO HALVES OF ONE QUESTION, and the second half is how The Vanguard shipped
@@ -1043,6 +1088,66 @@ else bad("the loser's bonus is the engine's number", [
   `no booster: ${plain.solos} bonus picks, expected ${wantPlain} — ${plain.prompts.join(' | ')}`,
   `The Vanguard: ${vanguard.solos}, expected ${wantVan} — ${vanguard.prompts.join(' | ')}`,
   [...plain.errs, ...vanguard.errs].join('; ') || null]);
+
+/* ------------------- an upgraded card says what it does AT ITS LEVEL ---------- */
+// `specFor()` is the ONLY place the upgrade rule lives, and for as long as the
+// interface existed it never called it once. Every figure on screen -- the stat
+// line, every ability sentence, the field inspector -- was read straight off the
+// base row, so a level 3 Volt Battery told the player its aura was 1.5 while the
+// resolver ran it at 3.07. Nothing threw. The card was not blank or wrong-looking;
+// it was a correct sentence about a different card.
+//
+// SEEDED, because reaching a specific card at a specific level by playing is not
+// something a suite can arrange -- the page seeds each match from the clock. And
+// driven through the REAL PANEL rather than by calling the formatter: the defect
+// was not in the sentence, it was in which object the sentence was handed.
+async function inspectAtLevel(id, lvl) {
+  const c = await browser.newContext({ viewport: { width: 393, height: 852 } });
+  const p = await c.newPage();
+  const errs = [];
+  p.on('pageerror', e => errs.push(e.message.split('\n')[0]));
+  await p.goto(base + '/column/index.html', { waitUntil: 'load' });
+  // `up:<id>` is the engine's own upgrade token -- armyFrom() counts them -- so
+  // the army below holds one <id> at level `lvl`.
+  const army = [id, ...Array.from({ length: lvl }, () => `up:${id}`), 'walker'];
+  await p.evaluate(s => localStorage.setItem('column-save', s), JSON.stringify({
+    v: 1, opp: 'harlow', seed: 424242, draw: 0,
+    army: [army, ['brute', 'ultra', 'swarm']],
+    round: 2, loser: null, lives: [4, 4], money: [0, 0],
+    perRound: [3, 3], boosts: [[], []], run: null, bonusDone: 0,
+    pending: [[], []], wide: [0, 0],
+    phase: 'pick', pickNo: 0, bonus: 0, solo: false,
+    offer: ['walker', 'line', 'acid'], mine: null, theirs: null, inspect: null
+  }));
+  await p.reload({ waitUntil: 'load' });
+  await p.click('#resume');
+  await p.waitForSelector(`#field g[data-id="${id}"]`, { timeout: 5000 });
+  const drawnLvl = await p.getAttribute(`#field g[data-id="${id}"]`, 'data-lvl');
+  await p.locator(`#field g[data-id="${id}"]`).first().click();
+  const text = (await p.textContent('#info')) || '';
+  await c.close();
+  return { text, drawnLvl, errs };
+}
+{
+  const LVL = 3, ID = 'volt';                 // the card whose damage is not an attack
+  const base = BY_ID[ID], up = specFor(ID, LVL);
+  const shown = await inspectAtLevel(ID, LVL);
+  const has = v => shown.text.includes(v);
+  // The levelled aura must be on screen and the base one must not, which is the
+  // pair that tells "it asked specFor" apart from "it happened to say a number".
+  const wantAura = String(+(+up.aura).toFixed(1));
+  const baseAura = String(+(+base.aura).toFixed(1));
+  const why = [
+    +shown.drawnLvl === LVL ? null : `the counter reports level ${shown.drawnLvl}, not ${LVL}`,
+    has(wantAura) ? null : `the panel never says the levelled aura ${wantAura}`,
+    has(baseAura) ? `the panel still says the base aura ${baseAura}` : null,
+    /\d\.\d{4,}/.test(shown.text) ? `a raw float reached the screen: ${(shown.text.match(/[\d.]*\d\.\d{4,}/) || [])[0]}` : null,
+    shown.errs.join('; ') || null
+  ].filter(Boolean);
+  if (!why.length)
+    ok(`an upgraded card states its own figures — ${base.n} at level ${LVL} reads aura ${wantAura}, not ${baseAura}`);
+  else bad('an upgraded card states its own figures', why);
+}
 
 await browser.close();
 server.close();

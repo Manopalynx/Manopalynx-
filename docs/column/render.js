@@ -57,7 +57,13 @@ export function groupByCard(live) {
   const by = new Map();
   for (const u of live) {
     const k = u.side + ':' + u.c;
-    const g = by.get(k) || { key: k, id: u.id, side: u.side, lvl: u.lvl || 0, x: 0, y: 0, hp: 0, max: 0, n: 0 };
+    const g = by.get(k) || { key: k, id: u.id, side: u.side, lvl: u.lvl || 0, x: 0, y: 0, hp: 0, max: 0, per: 0, n: 0 };
+    // `per` is ONE body's ceiling, and it is the whole reason the bar can be
+    // honest. `max` sums over the bodies still standing, so it falls as they
+    // die and the ratio stays pinned near full -- a three-body card down to its
+    // last body drew exactly the bar of an untouched one. Every body of a card
+    // shares a spec, so any one of them gives the ceiling for all three.
+    g.per = u.max;
     g.x += u.x; g.y += u.y; g.hp += u.hp; g.max += u.max; g.n++;
     by.set(k, g);
   }
@@ -84,7 +90,12 @@ export function draw(live, opt = {}) {
     // with negative health -- and a strength bar of width -2.1 is not a small
     // visual slip, it is an SVG error every frame and a bar that vanishes a tick
     // before the counter does.
-    const hurt = Math.max(0, Math.min(1, g.hp / g.max));
+    // AGAINST THE CARD'S FULL COMPLEMENT, not against the survivors. This bar
+    // says "how much of this card is left", which is what its own note below
+    // claims it is for -- and 9 of the 15 cards have more than one body, so for
+    // two thirds of the roster the old ratio answered a question nobody asked.
+    const full = spec.count * g.per || g.max;
+    const hurt = Math.max(0, Math.min(1, g.hp / full));
     // TOOK A HIT THIS FRAME. A white rim and a half-unit shake, both driven by
     // the resolver's own log rather than by anything the screen guessed: if a
     // marker flinches, something in the battle actually landed on it.
@@ -104,7 +115,11 @@ export function draw(live, opt = {}) {
     // data-x/data-y are the renderer saying where it put this counter. A tap
     // target, and the only honest way for a check to ask whether your army is
     // drawn at the bottom of the field.
+    // data-lvl so a tap can ask the card what it does AT THE LEVEL IT IS, rather
+    // than what its base row says. Without it the inspector had no way to know,
+    // and read every upgraded unit's figures off the unupgraded card.
     return `<g data-key="${g.key}" data-id="${g.id}" data-side="${g.side}"` +
+      ` data-lvl="${g.lvl}"` +
       ` data-x="${g.x.toFixed(2)}" data-y="${g.y.toFixed(2)}"` +
       (shake ? ` transform="translate(${shake} 0)"` : '') + `>` + ring +
       landed + (hit ? shape(spec.w, g.x, g.y, s + 1.2, 'none', '#ffffff', 0) : '') +
