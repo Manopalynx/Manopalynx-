@@ -14,7 +14,7 @@
 import { BY_ID, RULES, PERSONAS, UPGRADE, MERGE, DRAFT, SPECIALS, SHOP, RUN,
          BY_BOOST, BY_KIT, BY_ORDER, SABOTAGE, COIN, BUILD, TICK, BY_MAP,
          TERRAIN, groundSays } from './data.js';
-import { rng, offer, resolve, deployment, formation, fielded, POLICIES, armyFrom, isUp, isMg, tokId, specFor,
+import { rng, offer, resolve, deployment, formation, fielded, POLICIES, armyFrom, isUp, isMg, tokId, specFor, UP_TAG,
          earn, stock, spend, upgradeable, specialsFor, kitFor, ordersFor, boosterOffer,
          offerSize, offerFor, picksFor, pickTokens, bonusPicks,
          rampFor, mends, carried, ledgerCard, routeOffer, routeRank } from './engine.js';
@@ -170,7 +170,8 @@ function newMatch(opp, run) {
   // not is the shape of the money pump -- an action with only a human caller.
   if (ledgerCard(boosts[1])) {
     const all = DRAFT.map(u => u.id);
-    S.army[1].push(all[POLICIES[opp](all, S.army[1].slice(), S.army[0].slice())]);
+    const theirs = all[POLICIES[opp](all, S.army[1].slice(), S.army[0].slice())];
+    S.army[1].push(...pickTokens(boosts[1], theirs), UP_TAG + theirs);
   }
   rebuild();
   // WRITTEN BEFORE THE FIRST SCREEN, not after it. `render()` is what normally
@@ -307,7 +308,7 @@ function namePick(ledger) {
   }).join('');
   const d = sheet(`<h1>Name a card</h1>
     <p>${ledger
-      ? 'The Ledger: one card of your choosing, before the match begins and on top of every pick you are owed. It joins your column where its role puts it, like any other.'
+      ? 'The Ledger: one card of your choosing, before the match begins and on top of every pick you are owed. It arrives already upgraded once, and joins your column where its role puts it.'
       : 'Any card in the roster, named rather than offered.'}</p>
     ${rows}`);
   d.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => {
@@ -315,7 +316,11 @@ function namePick(ledger) {
     if (ledger) {
       // AN ADDITION, NOT A PICK. It goes straight onto the column and the round
       // then starts as it always would -- `commit` would spend a pick on it.
-      S.army[0].push(list[+b.dataset.pick]);
+      // BLOODED, and through pickTokens so Veterans still applies on top -- the
+      // engine does exactly this at its own call site and the two must not
+      // disagree about what a Ledger card turns into.
+      const named = list[+b.dataset.pick];
+      S.army[0].push(...pickTokens(S.boosts[0], named), UP_TAG + named);
       S.ledgerDue = false;
       rebuild(); save();
       return startRound();
@@ -660,7 +665,12 @@ function cardFace(tok, i) {
   // overflow:hidden that clips in silence.
   b.innerHTML = mgTok
     ? `<span class="art up">${art(id, 32)}<span class="chev">&#10022;</span></span>` +
-      `<b>${u.n} MERGE</b>` +
+      // THE SAME MARK THE COUNTER CARRIES, not the word. "Crawler Swarm MERGE"
+      // is three pixels too long for the name box at a four-card offer, and that
+      // box is overflow:hidden -- the longest card name is the one that finds it.
+      // The glyph is shorter than "UP!" and it teaches the field mark at the same
+      // time: this is the pick, that is what it makes.
+      `<b>${u.n} &#10022;</b>` +
       // THE SAME LENGTHS AS THE UPGRADE FACE, which is the one that fits. The
       // first version read "two become one at 2.4x" and "bigger, and fewer to
       // hit"; the stat line overflowed its 12px box by 11px and the held line was

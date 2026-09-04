@@ -1006,21 +1006,31 @@ export const mends = boosts => has(boosts, 'surgeons');
 /** The card a side carries forward, as pick tokens. Empty when it carries none. */
 export function carried(boosts, picks) {
   if (!has(boosts, 'compact')) return [];
-  const { cards, up } = armyFrom(picks);
+  const { cards, up, mg } = armyFrom(picks);
   if (!cards.length) return [];
-  // THE MOST VALUABLE SINGLE COPY, LEVEL INCLUDED. `power()` reads the card as
-  // PRINTED, so a Walker upgraded three times scored exactly the same as a fresh
-  // one and the Compact carried off whatever was biggest on paper instead --
-  // which for a light card is the square law, not the investment. The whole point
-  // of carrying one card is carrying the one you spent picks on.
+  // THE MOST VALUABLE SINGLE CARD, LEVEL AND MERGE INCLUDED. `power()` read the
+  // card as PRINTED, so a Walker upgraded three times scored exactly the same as
+  // a fresh one and the Compact carried off whatever was biggest on paper
+  // instead -- which for a light card is the square law, not the investment. The
+  // whole point of carrying one card is carrying the one you spent picks on.
+  //
+  // A MERGE IS THE SAME FAULT ONE LAYER DOWN, and it arrived with note 27. This
+  // scored every card unmerged, so holding a merged Line Infantry at 516 health a
+  // body and a plain Crawler Swarm at 155, it carried the SWARM -- the square law
+  // again, beating three picks of investment. And if it did carry the merged card
+  // it handed back a plain one. Chosen off the FIELDED column now, and a merged
+  // card is carried as what it is: two copies and the merge that made them one,
+  // which is three tokens and still exactly one card on the field.
+  const list = fielded(cards, mg);
+  if (!list.length) return [];
   let best = null, bs = -Infinity;
-  for (const id of new Set(cards)) {
-    const u = specFor(id, up[id] || 0);
+  for (const e of list) {
+    const u = specFor(e.id, up[e.id] || 0, null, null, null, e.merged);
     const v = paper(u, u.count || 1);
-    if (v > bs) { bs = v; best = id; }
+    if (v > bs) { bs = v; best = e; }
   }
-  const out = [best];
-  for (let k = 0; k < (up[best] || 0); k++) out.push(UP_TAG + best);
+  const out = best.merged ? [best.id, best.id, MG_TAG + best.id] : [best.id];
+  for (let k = 0; k < (up[best.id] || 0); k++) out.push(UP_TAG + best.id);
   return out;
 }
 // A round you lose buys two picks instead of one. The loser's bonus is already
@@ -1336,7 +1346,14 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
   for (const s of [0, 1]) {
     if (!ledgerCard(boosts[s])) continue;
     const all = DRAFT.map(u => u.id);
-    army[s].push(all[policy[s](all, army[s].slice(), army[1 - s].slice())]);
+    const id = all[policy[s](all, army[s].slice(), army[1 - s].slice())];
+    // AND IT ARRIVES BLOODED. As a plain extra card this measured +0.22 (3.2σ) on
+    // the fixed ladder and +0.12 (1.7σ) once the route shortened the run -- the
+    // booster did not get worse, the run got shorter, and it was the marginal one
+    // when it did. A level is the smallest honest step up that keeps the booster's
+    // identity: still one card, still named, still the market's 21-credit purchase
+    // made free and early, now worth what a pick spent on it would have been.
+    army[s].push(...pickTokens(boosts[s], id), UP_TAG + id);
   }
 
   for (let r = 0; r < RULES.maxRounds && lives[0] > 0 && lives[1] > 0; r++) {

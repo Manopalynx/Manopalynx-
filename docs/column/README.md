@@ -25,8 +25,8 @@ Sam owns every decision here. Where a choice is still open it says so rather tha
 
 ## Where it stands
 
-`BUILD` is `column-v35` in `data.js`. The service worker that carries it is
-`grandiose-v109` in `docs/sw.js` — one cache for all three published apps, so **shipping a
+`BUILD` is `column-v36` in `data.js`. The service worker that carries it is
+`grandiose-v110` in `docs/sw.js` — one cache for all three published apps, so **shipping a
 change here bumps Grandiose's version too**, and `test/offline.mjs` fails if the two ever
 disagree. **`test/version.mjs` fails if the two lines above disagree with either file**,
 because this section went nine builds stale saying `column-v22` and nothing noticed.
@@ -70,7 +70,7 @@ says so on its own card.
 | battles unresolved at the tick ceiling | 0% | `test/match.mjs` |
 | a floor player down the ladder | Vex 88.0, Neurex 84.0, Overseer 84.0, Hale 81.5, Leader 70.5, Harlow 54.5, Varan 29.5, Vale 15.0, Purifier 1.5 | `test/match.mjs`, 200 matches a table |
 | throwing the opening round | **+0.8pt** over 1,080 paired matches, worst +5.0pt vs leader — merging all but ended it | `test/match.mjs` |
-| boosters worth more than taking none | **7 of 8** — The Ledger at 1.7σ since the route shortened the run | `test/match.mjs`, 300 runs an arm |
+| boosters worth more than taking none | **all 8**, +0.20 to +1.36 | `test/match.mjs`, 300 runs an arm |
 
 **Nothing in that table is red.** Both of the reds this document carried for five sessions
 were answered in the same session, and neither by relaxing a bar.
@@ -3445,3 +3445,87 @@ dose was measured in battles rather than read off a formula.
 
 `match.mjs` reads **9 of 10**, and it is The Ledger at **+0.12 (1.7σ)** — unchanged by any
 of this and unchanged since the route shortened the run. **It has not been buffed to pass.**
+
+---
+
+# Three decisions Sam handed over, and one of them was a defect he found by asking
+
+He asked how merging works — whether a merged unit merges again, whether the same card can
+be merged more than once — and then delegated what was left of the open decisions. The
+questions turned out to be worth more than the decisions.
+
+## What merging actually does, answered from the code
+
+| drafted | fielded |
+|---|---|
+| 2 copies + 1 merge | one merged card |
+| 3 copies + 1 merge | one merged, one plain |
+| 4 copies + 2 merges | **two merged cards** |
+| 1 copy + 1 merge | one plain card — the merge does nothing rather than throwing |
+
+**A merged card never merges again.** Merging is a yes or no, not a level: two merges make
+two merged cards, never one at 5.76×. The offer enforces it — a merge is only offered while
+**two unspent copies** are standing, so with two copies already merged it stops being
+offered and starts again once two more are drafted.
+
+**Merges and upgrades stack multiplicatively**, and an upgrade applies to every copy of a
+card. Three Line Infantry, one merge and one upgrade fields a merged card at 697 health a
+body beside a plain one at 290, from a base of 215.
+
+## The Compact was carrying the wrong card, and it is the same fault twice
+
+`carried()` scored every card as **printed**. Its own comment records this being fixed once
+for levels — *"a Walker upgraded three times scored exactly the same as a fresh one and the
+Compact carried off whatever was biggest on paper instead."* Merging gave it a second way to
+be wrong, and it had it: holding a **merged Line Infantry at 516 health a body** and a plain
+**Crawler Swarm at 155**, it carried the swarm. The square law again, beating three picks of
+investment. And if it did carry the merged card, it handed back a plain one.
+
+It reads the fielded column now, and a merged card is carried as what it is — two copies and
+the merge that made them one, three tokens and still exactly one card on the field.
+
+**That fix alone took The Compact from +0.29 to +0.53 (6.9σ)**, which is a measure of how
+much the defect had been quietly costing.
+
+## The Ledger, re-dosed rather than cut
+
+It measured +0.22 (3.2σ) as a plain extra card and fell to +0.12 (1.7σ) when the route
+shortened the run. **The booster did not get worse; the run got shorter, and it was the
+marginal one when it did.** The named card arrives **already upgraded once** now — the
+smallest honest step that keeps its identity, still one card, still named, still the
+market's ₡21 purchase made free and early. **+0.23 (3.2σ)**, and `match.mjs` is back to
+**10 of 10**.
+
+| | matches | against the control |
+|---|---|---|
+| Veterans | 2.86 | +1.36 (15.4σ) |
+| The Compact | 2.03 | +0.53 (6.9σ) |
+| Absorbed | 1.93 | +0.43 (5.9σ) |
+| Escape pods | 1.84 | +0.34 (4.6σ) |
+| Field repair | 1.75 | +0.25 (3.6σ) |
+| The Ledger | 1.73 | +0.23 (3.2σ) |
+| Field surgeons | 1.71 | +0.21 (3.0σ) |
+| The Vanguard | 1.70 | +0.20 (2.9σ) |
+
+## Escape pods was left alone, and the reason is about the harness
+
+The worry was that it flattens the Fireship. The obvious test — does holding pods change how
+often a Fireship is drafted — came back at **−0.1pt**, and that figure is **worthless**:
+**no policy in this file takes a boosts argument.** Every seat drafts identically whatever
+it is carrying, so a seat *cannot* respond to holding pods and the measurement could only
+ever have returned nothing.
+
+That is worth stating on its own, because it is a limit on every figure here: **booster and
+card interactions are invisible to this harness.** A real player would draft differently
+holding Escape pods; no seat in it does.
+
+So the dose is unchanged. It measures in band on the metric the pool is actually held to
+(+0.34, 4.6σ), and the only evidence against it is a battle-level figure the run metric
+cannot see. **Re-dosing on a number that is not trusted would be tuning to the wrong thing.**
+
+## And the card row found the name box this time
+
+"Crawler Swarm MERGE" is three pixels too long for the name box at a four-card offer, which
+is `overflow:hidden`. The longest card name is the one that finds it. The face carries the
+same **◈** the counter does now — shorter than "UP!", and it teaches the field mark at the
+same time: this is the pick, that is what it makes.

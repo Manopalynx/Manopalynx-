@@ -32,7 +32,7 @@
 // Must match BUILD in data.js exactly -- test/build.test.mjs asserts it, because
 // the menu shows BUILD and it would be worse than useless if it named a build
 // the cache was not actually serving.
-const CACHE = 'grandiose-v109';
+const CACHE = 'grandiose-v110';
 
 // Previous builds of THIS app and nothing else on the origin. Derived from CACHE
 // so the two cannot drift, which is the fault the name was written to avoid.

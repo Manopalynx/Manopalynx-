@@ -30,7 +30,7 @@ import { BOOSTS, RULES, PERSONAS, MAPS, BY_MAP, TERRAIN, groundSays, DRAFT, BY_I
          RUN, BATTLE, MERGE, UPGRADE } from '../data.js';
 const RUN_ORDER = RUN.order;
 import { bonusPicks, POLICIES, specFor, resolve, TAKEN_C, ledgerCard, armyFrom, playMatch,
-         playRun, routeOffer, routeRank, rng, ROUTES, fielded, formation, offer, deployment } from '../engine.js';
+         playRun, routeOffer, routeRank, rng, ROUTES, fielded, formation, offer, deployment, carried } from '../engine.js';
 import { draw, effects, groupByCard } from '../render.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -207,6 +207,40 @@ const bad = (m, why) => { ran++; failed++; console.log(`FAIL  ${m}`); (why || []
   if (!why.length)
     ok(`The Ledger adds exactly one card, to both sides — ${mine[0]} to ${mine[1]} in a single round`);
   else bad('The Ledger adds exactly one card, to both sides', why);
+}
+
+/* ------------------- The Compact carries what you spent picks on -------------- */
+// It picks the most valuable single card in the column and marches it into the
+// next match. Twice now it has scored cards as PRINTED and carried the wrong one:
+// first it ignored levels, so a Walker upgraded three times scored the same as a
+// fresh one; then note 27 gave it a second way to be wrong, and it ignored merges.
+//
+// The square law is what makes this bite rather than a rounding error -- `paper`
+// goes as count squared, so an unmerged light card outscores a merged heavy one
+// on printed numbers even when the merged card is several times the investment.
+{
+  const why = [];
+  // A merged Line Infantry is three picks of investment and 516 health a body; a
+  // plain Crawler Swarm is one pick and 155. It used to carry the swarm.
+  const k = carried(['compact'], ['line', 'line', 'mg:line', 'swarm']);
+  const a = armyFrom(k);
+  const list = fielded(a.cards, a.mg);
+  if (!k.includes('line')) why.push(`carried ${JSON.stringify(k)} rather than the merged card`);
+  if (list.length !== 1) why.push(`carried ${list.length} cards, and The Compact carries one`);
+  if (!list.some(e => e.merged)) why.push('the merged card was carried as a plain one, losing the merge');
+
+  // And a level still survives, alongside the merge.
+  const k2 = carried(['compact'], ['walker', 'walker', 'mg:walker', 'up:walker']);
+  const a2 = armyFrom(k2), l2 = fielded(a2.cards, a2.mg);
+  if (!(l2.length === 1 && l2[0].merged && a2.up.walker === 1))
+    why.push(`a merged and levelled card came back as ${l2.length} card(s), merged=${l2[0] && l2[0].merged}, level ${a2.up.walker}`);
+
+  // Nothing carried when the booster is not held, which is the whole rule.
+  if (carried([], ['line', 'line', 'mg:line']).length) why.push('cards carried without The Compact');
+
+  if (!why.length)
+    ok(`The Compact carries the card you invested in — a merged Line Infantry over a plain Crawler Swarm, still merged and still levelled`);
+  else bad('The Compact carries the card you invested in', why);
 }
 
 /* ------------------------------------ a merge spends a copy and doubles down --- */

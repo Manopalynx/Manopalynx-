@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v35';
+export const BUILD = 'column-v36';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -579,7 +579,7 @@ export const BOOSTS = [
   // problem is which cards win; this is the other axis -- not more, but chosen.
   // AN EXTRA CARD, not a substituted pick -- Sam's replacement, and the old text
   // described the old booster exactly while the engine had stopped doing it.
-  { id: 'ledger',   n: 'The Ledger',     d: 'One card of your choosing joins your column before each match, on top of every pick you are owed.' },
+  { id: 'ledger',   n: 'The Ledger',     d: 'One card of your choosing joins your column before each match, already upgraded once and on top of every pick you are owed.' },
   // THE THREE BATTLE-SIDE ONES. They are worth trying because settled.mjs
   // falsified the reason they were thought impossible: one extra body from the
   // first tick rescues 44% of the pairings that were "decided", so there is
