@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v33';
+export const BUILD = 'column-v34';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -383,6 +383,20 @@ export const BY_ORDER = Object.fromEntries(ORDERS.map(k => [k.id, k]));
 export const RUN = {
   ramp: 18,        // credits the opponent starts with, per match already survived
   pickEvery: 3,    // matches between the opponent gaining an extra pick each round
+  // THREE OFFERED, AND YOU MUST BEAT ALL NINE -- Sam's note 26. The run was a
+  // fixed sequence; it is a route now, chosen three at a time out of whoever is
+  // left. Shuffling the whole ladder was measured first and halved the run (1.81
+  // matches to 0.96, a third of runs ending at the first match) because the order
+  // is the difficulty curve and a shuffle can open on the Purifiers. Choosing
+  // keeps the curve in the player's hands instead of taking it away: order is
+  // worth a factor of ten -- easiest-first 1.81 against hardest-first 0.18 --
+  // which makes the route the largest single decision in the game.
+  //
+  // FINISHING MEANS ALL NINE, and it is meant to be nearly out of reach: the best
+  // seat in the harness has reached 8. That is Sam's call and it is the book's --
+  // the Neurex do not negotiate, do not tire and do not stop, so a run ends in
+  // how far you got rather than in a victory screen.
+  offeredOpponents: 3,
   // NINE OPPONENTS, six factions, in rising order of what a floor player scores
   // against them. It was five; Sam's note 18 added four and the run got longer
   // with them, which lands on top of note 19 rather than beside it.
@@ -511,7 +525,12 @@ export const BATTLE = {
   // were measured. Read ONCE at the top of resolve() so a sweep can set it
   // between arms without any battle reading a value that moved under it.
   captureHome: true,             // true: it walks back to your line. false: it stands where it fell
-  pods:     { r: 12, d: 60 }     // the detonation a body leaves if it has none of its own
+  // HALF A FIRESHIP'S, DERIVED. It was 60 beside a Fireship carrying 120, which
+  // is the same figure written twice and agreeing by luck -- and the dose is the
+  // thing most likely to move. Sam's note 28. The RADIUS stays its own number and
+  // deliberately smaller: a booster that matched the specialist's reach as well as
+  // its rule would leave the card with nothing of its own.
+  pods:     { r: 12, d: BY_ID.fireship.boom.d / 2 }
 };
 
 export const BOOSTS = [

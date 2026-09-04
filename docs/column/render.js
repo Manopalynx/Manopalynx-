@@ -429,9 +429,21 @@ export function effects(events, byKey) {
       // is right for a Fireship -- the one card that detonates by itself -- and
       // silently wrong for every body detonating because its side holds Escape
       // pods. Eleven detonations in a battle drew nothing.
-      svg += `<circle class="fx" cx="${a.x.toFixed(1)}" cy="${flipY(a.y).toFixed(1)}" ` +
-             `r="${ev.r || (BY_ID[a.id].boom || {}).r || 12}" fill="#ffd479" fill-opacity="0.22" ` +
-             `stroke="#ffd479" stroke-width="0.5" stroke-opacity="0.85"/>`;
+      // TWO DETONATIONS, DRAWN AS TWO THINGS -- Sam's note 28. A Fireship's is the
+      // card's own and the biggest blast on the field: a filled gold disc. A pod
+      // is the booster's, smaller and on every body you own, so it is a thin ring
+      // with nothing inside it -- a rigged hull going up rather than a bomb going
+      // off. Told apart by which card it came from, so a Fireship holding pods
+      // still reads as the Fireship.
+      const own = !!(BY_ID[a.id] && BY_ID[a.id].boom);
+      const r = ev.r || (own ? BY_ID[a.id].boom.r : 12);
+      svg += own
+        ? `<circle class="fx" cx="${a.x.toFixed(1)}" cy="${flipY(a.y).toFixed(1)}" ` +
+          `r="${r}" fill="#ffd479" fill-opacity="0.22" ` +
+          `stroke="#ffd479" stroke-width="0.5" stroke-opacity="0.85"/>`
+        : `<circle class="fx" cx="${a.x.toFixed(1)}" cy="${flipY(a.y).toFixed(1)}" ` +
+          `r="${r}" fill="none" stroke="#9fe8ff" stroke-width="0.35" ` +
+          `stroke-opacity="0.8" stroke-dasharray="1.6 1.1"/>`;
 
     } else if (ev.e === 'took' && a) {
       // A CAPTURE. The body is already drawn in its new owner's colour by the

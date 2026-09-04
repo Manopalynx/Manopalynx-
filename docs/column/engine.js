@@ -506,11 +506,23 @@ export function resolve(a, b, seed, keepLog = false, onTick = null, terrain = nu
       }
     }
     for (const u of boomed) {
-      // A CARD'S OWN DETONATION IF IT HAS ONE, the booster's otherwise -- the
-      // Fireship keeps being the Fireship rather than being overwritten by a
-      // booster, which is the only reading that leaves the card's identity
-      // intact.
-      const blast = u.s.boom || BATTLE.pods;
+      // A CARD'S OWN DETONATION PLUS THE BOOSTER'S, not one or the other.
+      //
+      // It used to be `u.s.boom || BATTLE.pods`, which left the Fireship its own
+      // blast and added nothing -- so holding Escape pods made the one card whose
+      // whole identity is detonating on death WORTHLESS to draft: measured over
+      // 400 pairings, a Fireship is worth +8.5pt without pods and nothing at all
+      // with them, because its bodies would have detonated anyway and what is
+      // left is a card with 4 damage and 175 health.
+      //
+      // Sam's note 28: the booster now rewards the specialist instead of erasing
+      // it. The radius stays the card's own, so a Fireship is still the biggest
+      // blast on the field rather than the most frequent.
+      const own = u.s.boom;
+      const blast = pods[u.side]
+        ? { r: (own || BATTLE.pods).r, d: (own ? own.d : 0) + BATTLE.pods.d }
+        : own;
+      if (!blast) continue;
       for (const e of units) {
         if (e.alive && e.side !== u.side && dist(u, e) <= blast.r) {
           e.hp -= Math.max(1, blast.d - (e.s.arm || 0));
@@ -523,7 +535,11 @@ export function resolve(a, b, seed, keepLog = false, onTick = null, terrain = nu
       // Escape pods, so the second-strongest booster in the pool drew nothing at
       // all unless a Fireship happened to be in the army. Logging what was used
       // also stops the blast being a rule written in two files.
-      if (keepLog) events.push({ e: 'boom', a: u.i * 2 + u.side, r: blast.r });
+      // BOTH HALVES OF THE BLAST THAT WAS ACTUALLY APPLIED. The radius is what the
+      // renderer draws; the damage is what a check needs to tell a Fireship
+      // holding Escape pods from one that is not, and without it a guard can only
+      // compare radii -- which are identical either way.
+      if (keepLog) events.push({ e: 'boom', a: u.i * 2 + u.side, r: blast.r, d: blast.d });
     }
 
     if (keepLog && events.length) log.push({ t, ev: events });
@@ -1302,13 +1318,18 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
 const ACE_BOOSTS = ['compact', 'surgeons', 'vanguard'];
 
 export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = null,
-                          shop = ['ai', 'ai'], boost = null, force = null } = {}) {
+                          shop = ['ai', 'ai'], boost = null, force = null,
+                          route = 'easy' } = {}) {
   const rand = rng((seed * 7717 + 3) >>> 0);
   const matches = [];
   const boosts = [[], []];
   let money = 0, lives = RULES.lives, kept = [];
+  const beaten = [];
   for (let n = 0; n < max; n++) {
-    const opp = RUN.order[n % RUN.order.length];
+    // ALL NINE IS FINISHING. The loop ends when there is nobody left to offer.
+    const offer = routeOffer(rand, beaten);
+    if (!offer.length) break;
+    const opp = (ROUTES[route] || ROUTES.easy)(offer);
     const r = playMatch({
       a, b: opp, seed: (seed * 131 + n) >>> 0,
       money: [money, rampFor(boosts[0], n)],
@@ -1320,8 +1341,10 @@ export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = nu
     });
     const won = r.winner === 0;
     matches.push({ n, opp, won, rounds: r.rounds.length, cards: r.army[0].length,
+                   offer, rank: routeRank(opp),
                    livesIn: RUN.carryLives ? lives : RULES.lives, livesOut: r.lives[0] });
     if (!won) break;
+    beaten.push(opp);
     money = r.money[0];
     lives = r.lives[0];
     // THE COMPACT: one card of the column you finished with marches into the next
@@ -1381,8 +1404,36 @@ export function playRun({ a = 'house', seed = 1, max = 40, take = 0, prefer = nu
     if (theirs.length) boosts[1].push(theirs[0]);
     kept = carried(boosts[0], r.army[0]);
   }
-  return { survived: matches.filter(m => m.won).length, matches, money, boosts, lives };
+  return { survived: matches.filter(m => m.won).length, matches, money, boosts, lives,
+           beaten, finished: beaten.length === RUN.order.length };
 }
+
+/*  THE ROUTE -- three of whoever is left, and one place, because the interface
+ *  and the sweep have to agree about what was offered. A booster that shaped the
+ *  offer and was implemented twice is exactly how The Vanguard shipped doing
+ *  nothing on the phone while the sweep priced it at +0.18. */
+export function routeOffer(rand, beaten, n = RUN.offeredOpponents) {
+  const pool = RUN.order.filter(id => !beaten.includes(id));
+  const out = [];
+  for (let i = 0; i < n && pool.length; i++)
+    out.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
+  return out;
+}
+/*  HOW HARD, 1 to 9, DERIVED FROM THE ORDER RATHER THAN TYPED BESIDE IT.
+ *  `RUN.order` is already sorted by measured floor win rate and says so, so the
+ *  position IS the difficulty and the two cannot disagree. A number written twice
+ *  will, and the second copy is usually the one on screen. */
+export const routeRank = id => RUN.order.indexOf(id) + 1;
+
+/*  WHICH OF THE THREE A SEAT TAKES. Separate from the draft policies because it
+ *  is a different question -- not "what card is strong" but "what do I spend my
+ *  lives on first" -- and because it is the arm a measurement varies. */
+export const ROUTES = {
+  easy:  offer => offer.reduce((b, id) => routeRank(id) < routeRank(b) ? id : b, offer[0]),
+  hard:  offer => offer.reduce((b, id) => routeRank(id) > routeRank(b) ? id : b, offer[0]),
+  // The offer is already drawn at random, so taking the first is taking one blind.
+  blind: offer => offer[0]
+};
 
 export function boosterOffer(rand, held, n = RUN.offered) {
   // `named:walker` is `named` already taken, so held-ness is a prefix test too.

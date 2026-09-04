@@ -26,8 +26,11 @@ import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve as rp, extname, join } from 'path';
 import { chromium } from 'playwright';
-import { BOOSTS, RULES, PERSONAS, MAPS, BY_MAP, TERRAIN, groundSays, DRAFT, BY_ID, SPECIALS } from '../data.js';
-import { bonusPicks, POLICIES, specFor, resolve, TAKEN_C, ledgerCard, armyFrom, playMatch } from '../engine.js';
+import { BOOSTS, RULES, PERSONAS, MAPS, BY_MAP, TERRAIN, groundSays, DRAFT, BY_ID, SPECIALS,
+         RUN, BATTLE } from '../data.js';
+const RUN_ORDER = RUN.order;
+import { bonusPicks, POLICIES, specFor, resolve, TAKEN_C, ledgerCard, armyFrom, playMatch,
+         playRun, routeOffer, routeRank, rng, ROUTES } from '../engine.js';
 import { draw, effects, groupByCard } from '../render.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -204,6 +207,111 @@ const bad = (m, why) => { ran++; failed++; console.log(`FAIL  ${m}`); (why || []
   if (!why.length)
     ok(`The Ledger adds exactly one card, to both sides — ${mine[0]} to ${mine[1]} in a single round`);
   else bad('The Ledger adds exactly one card, to both sides', why);
+}
+
+/* --------------------------------- the route, and finishing means all nine ---- */
+// Sam's note 26. The run was a fixed sequence and is a route now: three of
+// whoever is left, chosen, and you must beat all nine.
+//
+// SHUFFLING WAS MEASURED FIRST AND FAILED -- 1.81 matches to 0.96, a third of
+// runs ending at the first opponent -- because the order IS the difficulty curve
+// and a random one can open on the Purifiers. So the properties that matter are
+// that the offer never repeats somebody you have beaten, that it always offers
+// three while three remain, and that a run ends when there is nobody left rather
+// than by looping the list forever.
+{
+  const why = [];
+  // 1. The offer never contains somebody already beaten, and is three while three remain.
+  const r = rng(4242);
+  // NOT `bad`. The first version of this check named its counter `bad`, which
+  // shadows the failure reporter declared above it -- so the guard printed fine
+  // while passing and threw "bad is not a function" the moment it had something
+  // to report. A check that crashes instead of failing is worse than no check,
+  // and only a mutation run finds it.
+  let wrong = 0, sizes = new Set();
+  for (let trial = 0; trial < 200; trial++) {
+    const beaten = RUN_ORDER.slice(0, trial % 8);
+    const offer = routeOffer(r, beaten);
+    sizes.add(offer.length);
+    if (offer.some(id => beaten.includes(id))) wrong++;
+    if (new Set(offer).size !== offer.length) wrong++;
+  }
+  if (wrong) why.push(`${wrong} offers contained a repeat or somebody already beaten`);
+  if (!sizes.has(3)) why.push(`never offered three — sizes seen: ${[...sizes].join(', ')}`);
+
+  // 2. A whole run never fights the same opponent twice, and stops at nine.
+  let dupes = 0, over = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const run = playRun({ a: 'counter', seed, take: -1 });
+    const ids = run.matches.map(m => m.opp);
+    if (new Set(ids).size !== ids.length) dupes++;
+    if (ids.length > RUN_ORDER.length) over++;
+  }
+  if (dupes) why.push(`${dupes} of 60 runs met the same opponent twice`);
+  if (over) why.push(`${over} of 60 runs ran past the ninth opponent`);
+
+  // 3. Difficulty is DERIVED from the order, so the number on screen cannot
+  //    disagree with the ladder it came from.
+  const ranks = RUN_ORDER.map(routeRank);
+  if (ranks.join(',') !== RUN_ORDER.map((_, i) => i + 1).join(','))
+    why.push(`routeRank does not follow RUN.order: ${ranks.join(',')}`);
+
+  // 4. The route arms differ, or choosing is not a decision. This is the whole
+  //    point of the change and the reason a shuffle was rejected.
+  const arm = route => {
+    let t = 0;
+    for (let seed = 1; seed <= 40; seed++) t += playRun({ a: 'counter', seed, take: -1, route }).survived;
+    return t / 40;
+  };
+  const easy = arm('easy'), hard = arm('hard');
+  if (!(easy > hard * 1.5))
+    why.push(`taking the easiest first (${easy.toFixed(2)}) is not clearly better than the hardest (${hard.toFixed(2)}) — the route is not a decision`);
+
+  if (!why.length)
+    ok(`the route offers three of the unbeaten and ends at ${RUN_ORDER.length} — easiest-first ${easy.toFixed(2)} matches against hardest-first ${hard.toFixed(2)}`);
+  else bad('the route offers three of the unbeaten', why);
+}
+
+/* ---------------------------- a pod blast is the booster's, and it stacks ----- */
+// Sam's note 28. Escape pods used to REPLACE a card's own detonation, so holding
+// it made the Fireship -- the one card whose identity is detonating on death --
+// worth nothing to draft. It adds now, and the two are drawn as different things.
+{
+  const ARMY = ['fireship', 'line', 'walker', 'brute', 'deflector', 'volt', 'acid', 'neurite', 'ultra'];
+  // THE DAMAGE, NOT JUST THE RADIUS. The first version of this check compared
+  // which radii appeared, and passed when the stacking was reverted to the old
+  // `own || pods` -- because a Fireship keeps its own radius either way and the
+  // other bodies still detonate at the pod radius. It could not see the one thing
+  // it exists to check. The blast the resolver actually applied is on the event
+  // now, so the assertion is the number rather than a proxy for it.
+  const blasts = boosts => {
+    const r = resolve(ARMY, ARMY, 12345, true, null, null, boosts);
+    const out = {};
+    for (const f of r.log) for (const ev of f.ev) if (ev.e === 'boom') {
+      const k = `${ev.r}/${ev.d}`;
+      out[k] = (out[k] || 0) + 1;
+    }
+    return out;
+  };
+  const fire = BY_ID.fireship.boom;
+  const alone = blasts(null), withPods = blasts([['pods'], []]);
+  const own = `${fire.r}/${fire.d}`;                       // a Fireship, no booster
+  const stacked = `${fire.r}/${fire.d + BATTLE.pods.d}`;   // a Fireship holding pods
+  const pod = `${BATTLE.pods.r}/${BATTLE.pods.d}`;         // anything else holding pods
+  const why = [
+    BATTLE.pods.d * 2 === fire.d ? null
+      : `pods (${BATTLE.pods.d}) is not half a Fireship's (${fire.d}) — the two numbers have drifted`,
+    alone[own] > 0 ? null : `the Fireship did not detonate at ${own} without the booster`,
+    withPods[stacked] > 0 ? null
+      : `no Fireship detonated at ${stacked} — the booster is replacing its blast instead of adding to it`,
+    withPods[own] === undefined ? null
+      : `${withPods[own]} Fireship blasts still came out at ${own} while holding pods`,
+    withPods[pod] > 0 ? null : `no ordinary body detonated at ${pod}, so the booster reached nothing`,
+    alone[pod] === undefined ? null : 'bodies detonated at the pod blast without the booster'
+  ].filter(Boolean);
+  if (!why.length)
+    ok(`Escape pods adds to a card's own detonation — Fireships at ${stacked} rather than ${own}, everything else at ${pod}`);
+  else bad("Escape pods adds to a card's own detonation", why);
 }
 
 /* ------------------------------- the strength bar, against the whole card ----- */
@@ -950,6 +1058,22 @@ await page.screenshot({ path: png('play.png') });
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: 'load' });
   await page.click('#run');
+  // A RUN OPENS ON THE ROUTE NOW -- Sam's note 26. Three of the nine are offered
+  // and one has to be chosen before there is a match at all, so the suite takes
+  // the first and asserts on the way past that the sheet is what it should be:
+  // three opponents, each stating how hard it is out of nine.
+  {
+    await page.waitForSelector('.sheet [data-go]', { timeout: 5000 });
+    const offered = await page.locator('.sheet [data-go]').count();
+    const text = await page.textContent('.sheet');
+    const rank = /hardest \d+ of 9/.test(text);
+    if (offered === RUN.offeredOpponents && rank)
+      ok(`a run opens on the route — ${offered} opponents offered, each with its place in the nine`);
+    else bad('a run opens on the route', [
+      `offered ${offered}, expected ${RUN.offeredOpponents}`,
+      rank ? null : 'no opponent stated how hard it is out of nine']);
+    await page.locator('.sheet [data-go]').first().click();
+  }
 
   let ended = false, lastLives = null;
   for (let guard = 0; guard < 400 && !ended; guard++) {
@@ -1027,7 +1151,20 @@ await page.screenshot({ path: png('play.png') });
     const compactOffered = took === 'compact';
 
     const stated = await page.evaluate(() => (document.querySelector('.sheet') || {}).textContent || '');
-    await page.click('#on');
+    // TAKING A BOOSTER LEADS STRAIGHT TO THE ROUTE NOW. There is no "March on"
+    // button any more: the next screen is the three opponents, and the run does
+    // not advance until one is taken.
+    await page.waitForSelector('.sheet [data-go]', { timeout: 5000 });
+    const route2 = await page.locator('.sheet [data-go]').count();
+    const beatenOffered = await page.evaluate(o => {
+      const s = JSON.parse(localStorage.getItem('column-save') || 'null');
+      return s && s.run ? (s.run.beaten || []).some(id => o.includes(id)) : false;
+    }, await page.locator('.sheet [data-go]').evaluateAll(bs => bs.map(b => b.dataset.go)));
+    if (route2 >= 1 && !beatenOffered)
+      ok(`the route offers again between matches — ${route2} opponents, none already beaten`);
+    else bad('the route offers again between matches', [
+      `offered ${route2}`, beatenOffered ? 'an opponent already beaten was offered again' : null]);
+    await page.locator('.sheet [data-go]').first().click();
     // THE LEDGER OPENS A SHEET BEFORE MATCH 2'S FIRST PICK, because its card is
     // named rather than drawn. A run holding it stops here until one is chosen, so
     // the suite names one -- and measures the booster while it is doing it, which

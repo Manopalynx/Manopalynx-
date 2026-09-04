@@ -25,8 +25,8 @@ Sam owns every decision here. Where a choice is still open it says so rather tha
 
 ## Where it stands
 
-`BUILD` is `column-v33` in `data.js`. The service worker that carries it is
-`grandiose-v107` in `docs/sw.js` — one cache for all three published apps, so **shipping a
+`BUILD` is `column-v34` in `data.js`. The service worker that carries it is
+`grandiose-v108` in `docs/sw.js` — one cache for all three published apps, so **shipping a
 change here bumps Grandiose's version too**, and `test/offline.mjs` fails if the two ever
 disagree. **`test/version.mjs` fails if the two lines above disagree with either file**,
 because this section went nine builds stale saying `column-v22` and nothing noticed.
@@ -45,8 +45,12 @@ kit that lasts **the match** (₡30), sabotage on a card the opponent holds (₡
 order for next round (₡11–₡20), and **one of three special units** (₡70–₡90, one of each a
 side, never dealt by the draft).
 
-**A run.** Match after match against
-`vex → neurex → overseer → hale → leader → harlow → varan → vale → purifier`, the army
+**A run.** A **route** rather than a sequence: three of the nine you have not beaten are
+offered, you choose one, and **finishing means beating all nine** — which is meant to be
+nearly out of reach, because the war is not winnable and the run is how far you got. The
+nine are `vex`, `neurex`, `overseer`, `hale`, `leader`, `harlow`, `varan`, `vale` and
+`purifier`, and that order is still the measured difficulty ranking — it is what the route
+screen prints as *hardest N of 9*, derived rather than typed beside it. The army is
 redrafted every time and the **credits and the lives carried**. The opponent starts each
 match with ₡18 a match already survived and gains an extra pick a round every third match.
 After each match survived you take **one booster of three offered**; the opponent takes one
@@ -66,7 +70,7 @@ says so on its own card.
 | battles unresolved at the tick ceiling | 0% | `test/match.mjs` |
 | a floor player down the ladder | Vex 88.0, Neurex 84.0, Overseer 84.0, Hale 81.5, Leader 70.5, Harlow 54.5, Varan 29.5, Vale 15.0, Purifier 1.5 | `test/match.mjs`, 200 matches a table |
 | throwing the opening round | **+3.9pt** over 1,080 paired matches, worst +10.8pt vs overseer | `test/match.mjs` |
-| boosters worth more than taking none | **all 8**, +0.22 to +1.59 | `test/match.mjs`, 300 runs an arm |
+| boosters worth more than taking none | **7 of 8** — The Ledger at 1.7σ since the route shortened the run | `test/match.mjs`, 300 runs an arm |
 
 **Nothing in that table is red.** Both of the reds this document carried for five sessions
 were answered in the same session, and neither by relaxing a bar.
@@ -3215,3 +3219,132 @@ purchases unequal. `lives:[1,1]` forces exactly one round because whoever loses 
 zero. And the first collision test asked whether a counter held two different *ids*, which
 missed the case that actually happens — your Line Infantry absorbing a captured Line
 Infantry, same id, six bodies in a counter built for three.
+
+---
+
+# The run is a route now, and it re-opened the booster red
+
+Sam's notes 26 and 28. Note 27 — merging — is designed and measured but not built; the
+reason is at the foot of this section.
+
+## Shuffling the ladder was measured first, and it halves the run
+
+His note asked for a random order each playthrough. Measured at 300 runs an arm:
+
+| | matches survived | lost match 1 |
+|---|---|---|
+| the fixed ladder | **1.81** ±0.05 | 5% |
+| shuffled in tiers of three | 1.74 ±0.05 | 8% |
+| **fully shuffled** | **0.96** ±0.05 | **33%** |
+
+`RUN.order` is not an arbitrary list — it is sorted by measured floor win rate and ends on
+the Purifiers, whom a floor player beats 1.5% of the time. A shuffle can open there, so a
+third of runs end at the first match. **The order is the difficulty curve**, and shuffling
+deletes it.
+
+## So the order is chosen instead, and it is the biggest decision in the game
+
+Three of whoever is left, and you must beat all nine. **Route choice is worth a factor of
+ten:**
+
+| | matches survived |
+|---|---|
+| easiest first | **1.81** |
+| hardest first | **0.18** |
+
+Against a booster pool where everything sits between +0.22 and +0.39. Nothing else in this
+game moves a run that far — which means the largest lever the player has was, until now,
+not theirs to pull.
+
+**Finishing means all nine and is meant to be nearly out of reach.** Over 300 runs the
+counter seat's best is 4; the ace-plays-the-market seat has reached 8. That is Sam's call
+and it is the book's: the Neurex do not negotiate, do not tire and do not stop, so a run
+ends in how far you got rather than in a victory screen. It also answers the fourth item on
+this document's own open list — *"the shape of an ending has not been designed"* — by
+deciding there isn't one.
+
+**Difficulty on screen is derived, not typed.** `routeRank` is the position in the order the
+engine already keeps sorted, so *hardest 7 of 9* cannot disagree with the ladder it came
+from.
+
+## And it re-opened the red, which is stated rather than fixed
+
+A route is harder than a perfectly sorted ladder, because you cannot always be offered the
+easiest. The control fell from **1.81 to 1.65**, and almost every booster shrank with it:
+
+| | fixed ladder | route |
+|---|---|---|
+| Veterans | +1.59 | +1.33 |
+| Escape pods | +0.39 | +0.34 |
+| The Compact | +0.38 | +0.29 |
+| Field repair | +0.35 | +0.25 |
+| Absorbed | +0.30 | +0.30 |
+| The Vanguard | +0.32 | +0.22 |
+| Field surgeons | +0.23 | +0.22 |
+| **The Ledger** | **+0.22 (3.2σ)** | **+0.13 (1.7σ)** |
+
+**A shorter run compresses every booster**, and the marginal one falls below the bar.
+`match.mjs` reads 9 of 10 again. **The Ledger has not been buffed to pass** — which of
+cutting it, re-dosing it, or accepting a shorter run's arithmetic is a design decision, and
+it is his.
+
+It is also the third time this session that the run metric has turned out to have less
+resolution than it looks: Escape pods is +32.3pt inside a battle and +0.34 across a run, a
+capture is +28.8pt and +0.30, and route choice is worth ten times either while the pool it
+is measured against spans 0.17.
+
+## Escape pods rewards the Fireship instead of erasing it
+
+`pods.d` is **derived as half the Fireship's detonation** now rather than being 60 written
+beside 120 and agreeing by luck. The radius stays its own, smaller number on purpose: a
+booster that matched the specialist's reach as well as its rule would leave the card with
+nothing of its own.
+
+And the blast **adds** rather than replacing. It was `u.s.boom || BATTLE.pods`, which left a
+Fireship its own detonation and gave it nothing — so holding pods made the one card whose
+identity is detonating on death worth **+8.5pt without the booster and nothing with it**. A
+Fireship holding pods now goes off for 180 at radius 15.
+
+**The honest measurement is that this did not restore the card**, and the reason is worth
+recording: pods takes the win rate to 78.5%, so a win-rate metric has almost no room left
+and reads the Fireship at ±0.3pt either way. On survivors — a finer instrument — it does
+show: enemy bodies left fall from 1.14 to 0.96. **The redundancy is not really the stacking
+rule, it is that pods is strong enough to make everything beside it marginal.** Whether that
+dose is right is open.
+
+The two detonations are drawn as different things now: a Fireship's is the filled gold disc
+it always was, a pod is a thin dashed ring — a rigged hull going up rather than a bomb going
+off.
+
+## Merging is measured and not built, and the measurement is why
+
+Sam's note 27, specified as: two copies of a card combine into one carrying both their
+health and both their damage. **His own condition — "only if it turns out not to put you in
+a worse situation" — is exactly what fails.**
+
+Against doing nothing with the same material, merging wins on **every card in the roster**,
++7.1pt on average. But a merge costs a **pick**, and against the other two things a pick can
+buy it is the worst option on all twelve:
+
+| holding two copies, one pick buys | wins |
+|---|---|
+| upgrade both (+35% each) | **64.7%** |
+| add a third copy | **62.9%** |
+| merge at double | **55.4%** |
+
+The reason is arithmetic rather than design. An upgrade leaves you **2 cards at 1.35× — 2.7
+cards' worth of strength**; a merge at double leaves you **1 card holding 2.0**. It is the
+least strength *and* the fewest bodies, so nothing recommends it.
+
+**The dose is the answer, and the window is narrow.** Cards where merge beats both
+alternatives: **0 of 12 at 2.0×, 3 at 2.3×, 5 at 2.4×, 6 at 2.5×, 10 at 2.7×, 12 at 3.2×.**
+A pick that is always right is a tax on not taking it, so the target is a handful rather
+than all of them: **2.4× is the chosen dose**, where merging is right on five cards and
+wrong on the rest — including the Fireship, whose value is detonations per death, and the
+Amabie, which wants more shots rather than bigger ones.
+
+It is not built because it is not a small change. A merged card is a fielded card that is
+not one of the drafted ones, and `formation()` returns **indices into the draft** which
+`popKeys()` maps to deployment slots — so changing what a fielded card is touches the
+deployment, the offer, the ring that lands on a committed pick, and the card face. That is
+surgery, and it is worth its own turn rather than the end of one.

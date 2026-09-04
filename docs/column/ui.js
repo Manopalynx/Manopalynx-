@@ -17,7 +17,7 @@ import { BY_ID, RULES, PERSONAS, UPGRADE, DRAFT, SPECIALS, SHOP, RUN,
 import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId, specFor,
          earn, stock, spend, upgradeable, specialsFor, kitFor, ordersFor, boosterOffer,
          offerSize, offerFor, picksFor, pickTokens, bonusPicks,
-         rampFor, mends, carried, ledgerCard } from './engine.js';
+         rampFor, mends, carried, ledgerCard, routeOffer, routeRank } from './engine.js';
 import { draw, effects, auras, ground, SIDE, shape } from './render.js';
 import { glyph } from './glyphs.js';
 
@@ -149,7 +149,10 @@ function newMatch(opp, run) {
     money: [run ? run.credits : 0, rampFor(boosts[0], n)],
     perRound: [picksFor(boosts[0], 0), picksFor(boosts[1], Math.floor(n / RUN.pickEvery))],
     boosts,
-    run: run ? { n, seed: run.seed } : null,
+    // `beaten` IS PART OF THE RUN, not derivable from `n`: the route is chosen, so
+    // two runs of the same length can have met different opponents. Stored, or a
+    // reload would offer somebody you have already beaten.
+    run: run ? { n, seed: run.seed, beaten: (run.beaten || []).slice() } : null,
     // Bought for the coming round and spent by fighting it: orders a side gave
     // itself, and sabotage the other side paid to put on it.
     pending: [[], []],
@@ -880,8 +883,11 @@ function menu() {
     b.onclick = () => { document.querySelectorAll('.sheet').forEach(x => x.remove()); newMatch(b.dataset.opp); });
   d.querySelector('#run').onclick = () => {
     document.querySelectorAll('.sheet').forEach(x => x.remove());
-    newMatch(RUN.order[0], { n: 0, credits: 0, lives: RULES.lives, boosts: [[], []],
-                             seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0 });
+    // THE FIRST OPPONENT IS CHOSEN TOO. A run that starts on a fixed one and only
+    // then begins offering would teach the wrong thing on the screen that matters
+    // most -- the first decision is the one with the fewest lives behind it.
+    routeSheet({ n: 0, credits: 0, lives: RULES.lives, boosts: [[], []], beaten: [],
+                 seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0 });
   };
   const r = d.querySelector('#resume');
   // A match saved mid-reveal has no timer waiting to advance it -- the timer
@@ -1111,25 +1117,35 @@ function over() {
     const theirs = boosterOffer(rng((run.seed * 7717 + run.n + 1013) >>> 0), boosts[1]);
     if (theirs.length) boosts[1].push(theirs[0]);
 
-    const carryOn = () => {
-      document.querySelectorAll('.sheet').forEach(x => x.remove());
-      newMatch(RUN.order[nextN % RUN.order.length],
-               { n: nextN, credits, lives, boosts, seed: run.seed,
-                 keep: carried(boosts[0], finishedArmy) });
-    };
+    const beaten = ((run.beaten || []).concat(S.opp));
 
     const onward = () => {
       document.querySelectorAll('.sheet').forEach(x => x.remove());
-      const d2 = sheet(`<h1>Match ${nextN}</h1>
-        ${held(boosts[0], 'Yours')}${held(boosts[1], 'Theirs')}
-        ${nextMatchNote(nextN, lives, boosts)}
-        <button class="pick" id="on"><b>March on</b></button>
-        <button class="pick" id="stop"><b>End the run here</b><i>Best so far: ${bestRun()} matches.</i></button>`);
-      d2.querySelector('#on').onclick = carryOn;
-      d2.querySelector('#stop').onclick = () => {
-        document.querySelectorAll('.sheet').forEach(x => x.remove());
-        S = null; paint([]); menu();
-      };
+      // ALL NINE IS FINISHING, and there is nobody left to offer.
+      if (beaten.length >= RUN.order.length) {
+        const d3 = sheet(`<h1>The column holds</h1>
+          <p>Nine opponents, all of them beaten. Nobody in this project's harness has
+             done it — the best seat measured reached eight.</p>
+          <p>The war is not won and was never winnable; you simply were not the one
+             who broke. Carry on and they keep coming, at the strength they have
+             reached.</p>
+          <button class="pick" id="on2"><b>Carry on</b><i>The ladder begins again, and they do not reset.</i></button>
+          <button class="pick" id="stop2"><b>Stop here</b></button>`, true);
+        d3.querySelector('#on2').onclick = () => {
+          document.querySelectorAll('.sheet').forEach(x => x.remove());
+          // Beaten is cleared so the route has somebody to offer; the ramp is
+          // driven by `n`, which is not, so they come back harder.
+          routeSheet({ n: nextN, credits, lives, boosts, seed: run.seed, beaten: [],
+                       keep: carried(boosts[0], finishedArmy) });
+        };
+        d3.querySelector('#stop2').onclick = () => {
+          document.querySelectorAll('.sheet').forEach(x => x.remove());
+          S = null; paint([]); menu();
+        };
+        return;
+      }
+      routeSheet({ n: nextN, credits, lives, boosts, seed: run.seed, beaten,
+                   keep: carried(boosts[0], finishedArmy) });
     };
 
     const d = sheet(`<h1>Match ${run.n + 1} survived</h1>
@@ -1190,18 +1206,54 @@ function over() {
 // the answer was five, and said nothing at all for the first two matches, where
 // the ramp is zero and the booster is not. One function decides how many picks a
 // side gets, and this asks it.
-function nextMatchNote(n, lives, boosts) {
-  const opp = PERSONAS[RUN.order[n % RUN.order.length]];
-  const picks = picksFor(boosts[1], Math.floor(n / RUN.pickEvery));
-  const here = BY_MAP[opp.map];
-  return `<h2>Next: ${opp.n}</h2>
-    <p class="where"><b>${opp.f}</b>${here ? ` &middot; ${here.n}` : ''}</p>
-    ${here ? `<q class="mapq">${here.q}</q>` : ''}
-    <p>${opp.d}</p>
-    <p>They begin with <b>${coin(rampFor(boosts[0], n))}</b>${picks > RULES.picksPerRound
-      ? ` and draft <b>${picks}</b> cards a round` : ''}, at
-      full strength. You go in on <b>${lives} ${lives === 1 ? 'life' : 'lives'}</b>.</p>`;
+/*  THE ROUTE -- Sam's note 26. Three of whoever is left, and the choice is the
+ *  largest single decision in the game: over 300 runs, taking the easiest first
+ *  survives 1.81 matches and taking the hardest first survives 0.18, against a
+ *  booster pool where everything sits between +0.22 and +0.39.
+ *
+ *  SHUFFLING WAS MEASURED FIRST AND FAILED. A random order halves the run --
+ *  0.96 matches, a third of them ending at the first opponent -- because the
+ *  order IS the difficulty curve and a shuffle can open on the Purifiers.
+ *  Choosing hands the curve to the player instead of taking it away.
+ *
+ *  SEEDED OFF THE RUN, like the booster offer, so the same run offers the same
+ *  three however many times it is reloaded.
+ *
+ *  DIFFICULTY IS DERIVED, never typed: `routeRank` is the position in the order
+ *  the engine already keeps sorted by measured floor win rate, so the number on
+ *  screen cannot disagree with the ladder it came from. */
+function routeSheet(run) {
+  const offer = routeOffer(rng((run.seed * 7717 + run.n + 5077) >>> 0), run.beaten || []);
+  const left = RUN.order.length - (run.beaten || []).length;
+  const rows = offer.map(id => {
+    const p = PERSONAS[id], here = BY_MAP[p.map], rank = routeRank(id);
+    return `<button class="pick" data-go="${id}">
+      <b>${p.n}</b>
+      <i><b>${p.f}</b> &middot; hardest ${rank} of ${RUN.order.length}${here ? ` &middot; ${here.n}` : ''}</i>
+      <i>${p.d}</i>
+      ${here ? groundPanel(here.terrain, 'span') : ''}</button>`;
+  }).join('');
+  const d = sheet(`<h1>${run.n === 0 ? 'Choose where to begin' : `Match ${run.n + 1}`}</h1>
+    <p>Three of the ${left} you have not beaten. You must beat all
+       ${RUN.order.length} to finish, and the ones you leave will be waiting when
+       the ramp is higher — that is the whole of the decision.</p>
+    <p>Whoever you take begins with <b>${coin(rampFor(run.boosts[0], run.n))}</b>${
+      picksFor(run.boosts[1], Math.floor(run.n / RUN.pickEvery)) > RULES.picksPerRound
+        ? ` and drafts <b>${picksFor(run.boosts[1], Math.floor(run.n / RUN.pickEvery))}</b> cards a round` : ''
+      }, at full strength. You go in on <b>${run.lives} ${run.lives === 1 ? 'life' : 'lives'}</b>.</p>
+    ${rows}
+    ${run.n > 0 ? `<button class="pick" id="stopRun"><b>End the run here</b><i>Best so far: ${bestRun()} matches.</i></button>` : ''}`);
+  d.querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.sheet').forEach(x => x.remove());
+    newMatch(b.dataset.go, run);
+  });
+  const stop = d.querySelector('#stopRun');
+  if (stop) stop.onclick = () => {
+    document.querySelectorAll('.sheet').forEach(x => x.remove());
+    S = null; paint([]); menu();
+  };
 }
+
 
 // What a side is carrying. Named on the screen, because a booster you cannot see
 // is a rule change you did not agree to.
