@@ -78,6 +78,19 @@ export function groupByCard(live) {
  *                          flash: Set of card keys that took a hit this frame,
  *                          pop:   Set of card keys just committed in the draft }
  */
+// Sized off the counter it belongs to, so six pips under an Adarnas and three
+// under a swarm both sit inside the mark's own width and no pip is ever wider
+// than the gap between two of them.
+const pips = (g, spec, s, c) => {
+  if (spec.count < 2) return '';
+  const gap = Math.min(1.0, (s * 2) / spec.count), r = Math.min(0.34, gap * 0.34);
+  const x0 = g.x - (gap * (spec.count - 1)) / 2, y = g.y + s + 2.6;
+  return Array.from({ length: spec.count }, (_, i) =>
+    `<circle cx="${(x0 + i * gap).toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}"
+       fill="${i < g.n ? c.line : 'none'}" stroke="${c.line}" stroke-width="0.22"
+       stroke-opacity="${i < g.n ? 1 : 0.45}"/>`).join('');
+};
+
 export function draw(live, opt = {}) {
   const flash = opt.flash || new Set();
   const pop = opt.pop || new Set();
@@ -134,9 +147,20 @@ export function draw(live, opt = {}) {
       // has already said which class it is -- and the roster is exactly four
       // heavy, four medium, four light.
       glyph(g.id, g.x, g.y, s * 0.62, c.ink, 1.15) +
-      (spec.count > 1
-        ? `<text x="${g.x + s + 0.4}" y="${g.y - s + 1.8}" font-size="2.3" fill="${c.line}"
-             font-family="system-ui,sans-serif">${g.n}</text>` : '') +
+      // A PIP A BODY, filled while it stands and hollow once it is gone -- Sam's
+      // note 23, chosen off treat-bodies.png out of five treatments drawn at true
+      // phone scale. The two that put a shape per body inside the counter cost
+      // more than they paid: a light counter is about 23pt across, and three
+      // sub-shapes plus a glyph big enough to carry identity do not fit in it.
+      // Identity is by glyph -- twelve hues are not tellable apart on a phone and
+      // twelve drawings are -- so a treatment that crowds the glyph trades the
+      // thing that works for the thing being tried.
+      //
+      // Under the bar rather than on the counter, so the two readings compose
+      // rather than compete: the BAR is how much health this card has left, the
+      // PIPS are how many bodies it is spread across. A digit said the same thing
+      // and had to be read; a gap in a row of pips is seen.
+      pips(g, spec, s, c) +
       (g.lvl
         ? `<text x="${g.x - s - 0.6}" y="${g.y + 1.1}" text-anchor="end" font-size="2.6" fill="#ffd479"
              font-family="system-ui,sans-serif">${'▲'.repeat(g.lvl)}</text>` : '') +
@@ -400,10 +424,26 @@ export function effects(events, byKey) {
       }
       flash.add(b.side + ':' + b.c);
 
-    } else if (ev.e === 'boom' && a && BY_ID[a.id].boom) {
+    } else if (ev.e === 'boom' && a) {
+      // THE EVENT'S OWN RADIUS. This used to read the blast off the card, which
+      // is right for a Fireship -- the one card that detonates by itself -- and
+      // silently wrong for every body detonating because its side holds Escape
+      // pods. Eleven detonations in a battle drew nothing.
       svg += `<circle class="fx" cx="${a.x.toFixed(1)}" cy="${flipY(a.y).toFixed(1)}" ` +
-             `r="${BY_ID[a.id].boom.r}" fill="#ffd479" fill-opacity="0.22" ` +
+             `r="${ev.r || (BY_ID[a.id].boom || {}).r || 12}" fill="#ffd479" fill-opacity="0.22" ` +
              `stroke="#ffd479" stroke-width="0.5" stroke-opacity="0.85"/>`;
+
+    } else if (ev.e === 'took' && a) {
+      // A CAPTURE. The body is already drawn in its new owner's colour by the
+      // time this paints -- the counter's side changed, and colour is side --
+      // so what this adds is the moment: a ring closing on the place it stood
+      // up. Sam's note 24, and the reason it needs one at all is that a body
+      // vanishing mid-field and reappearing at the far line with no event
+      // joining the two reads as a rendering fault rather than as a rule.
+      const c = SIDE[a.side].line;
+      svg += `<circle class="fx" cx="${a.x.toFixed(1)}" cy="${flipY(a.y).toFixed(1)}" ` +
+             `r="5.5" fill="${c}" fill-opacity="0.16" stroke="${c}" ` +
+             `stroke-width="0.6" stroke-opacity="0.95"/>`;
     }
   }
   return { svg, flash };

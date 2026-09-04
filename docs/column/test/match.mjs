@@ -510,10 +510,32 @@ else bad('the field stays legible on a phone', [
 
 // Sam's principle: decisive LOCAL counters, but rarely a single decisive counter
 // to a whole composition. matchup.mjs checks the first half; this is the second.
-if (decisive / total < 0.40) ok(`compositions are contested — only ${(decisive / total * 100).toFixed(0)}% of mixed armies settle 95/5`);
+//
+// CLAIMED AGAINST THE SURVIVOR MARGIN, and the 95/5 figure is still printed above
+// because it is worth watching -- it is Sam's decision, taken after five sessions
+// of this check failing on the wrong quantity.
+//
+// The eight seeds vary NOTHING but a positional jitter of +/-0.6 field units,
+// under 1% of the field's width: no to-hit roll, no damage spread, no initiative.
+// So "the same side wins 95% of 8 seeds" means the result survives a sub-1%
+// wobble, which for a deterministic resolver is very nearly a tautology. That is
+// a measure of REPEATABILITY, and it had been read as one of ONE-SIDEDNESS for
+// five sessions. settled.mjs separated them: of the 234 decided pairings the
+// median winner keeps 46% of its army, and one extra body from the first tick
+// rescues 44% of them. Those are hard-fought battles, not formalities.
+//
+// A formality is the thing the old failure text described -- "the battle is a
+// formality" -- so that is what this now measures: decided AND the winner walked
+// away with most of its army. The bar is the same 40% the 95/5 line used, which
+// is deliberately not a bar tuned to pass: at 12% it has three times the room it
+// needs, and it goes red the moment battles genuinely become walkovers.
+if (formality / total < 0.40)
+  ok(`compositions are contested — ${(formality / total * 100).toFixed(0)}% are formalities ` +
+     `(${(decisive / total * 100).toFixed(0)}% settle 95/5, which measures repeatability rather than one-sidedness)`);
 else bad('compositions are contested', [
-  `${(decisive / total * 100).toFixed(0)}% of mixed nine-card armies settle 95/5`,
-  'a composition decided as hard as a single matchup means the battle is a formality'
+  `${(formality / total * 100).toFixed(0)}% of mixed nine-card armies are formalities — decided, and the winner kept over 60% of its army`,
+  `for scale, ${(decisive / total * 100).toFixed(0)}% settle 95/5, but that figure measures whether a result is repeatable`,
+  'a battle whose winner walks away intact was decided by the draft rather than by the fight'
 ]);
 
 // Sam's point 6, stated as the thing he actually asked for: the same extra card

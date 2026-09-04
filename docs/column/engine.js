@@ -41,6 +41,11 @@ export function rng(seed) {
 // before upgrades existed, which is why every earlier test still means what it
 // meant.
 export const UP_TAG = 'up:';
+// The offset a captured body's card index is moved by, so it can never share a
+// renderer key with one of its new owner's own cards. A match is 5 lives at 3
+// picks a round and about 7 rounds, so an army is tens of cards and not hundreds;
+// 1000 is two orders clear of anything reachable and test/play.mjs asserts it.
+export const TAKEN_C = 1000;
 export const EQ_TAG = 'eq:';
 export const SAB_TAG = 'sab:';
 export const ORD_TAG = 'ord:';
@@ -346,6 +351,9 @@ export function resolve(a, b, seed, keepLog = false, onTick = null, terrain = nu
   // is also the fix for the suspected reason the old revive died, which acted at
   // a random place and time while every dose that worked was persistent.
   const absorb = [0, 1].map(s => (has(bst[s], 'absorbed') ? BATTLE.absorbed : 0));
+  // READ ONCE, here, so no battle can see this move underneath it. It is the arm
+  // switch for the placement measurement and the shipped value is the default.
+  const captureHome = BATTLE.captureHome;
   const units = deployment(a, b, seed);
   // WHERE EACH BODY STARTED, captured before a tick runs, because that is where
   // an absorbed one comes back to.
@@ -454,12 +462,39 @@ export function resolve(a, b, seed, keepLog = false, onTick = null, terrain = nu
     const boomed = [];
     for (const u of live) {
       if (u.hp <= 0 && u.alive) {
-        // ABSORBED: taken back rather than lost. Once a battle a side, at the
-        // line it started on, whole.
-        if (absorb[u.side] > 0) {
-          absorb[u.side]--;
-          u.hp = u.max; u.x = u.ox; u.y = u.oy; u.cd = 0; u.dot = 0; u.dotT = 0;
-          if (keepLog) events.push({ e: 'back', a: u.i * 2 + u.side });
+        // ABSORBED: TAKEN, not given back. The side that killed this body stands
+        // it up again on its own line -- Sam's note 30, and the Neurex's stated
+        // method: "We do not form alliances. Alliance presumes two parties
+        // persisting. We absorb. We consume."
+        //
+        // It keeps its own card and its own level, because what makes a capture
+        // worth anything is which card you took -- and because the novel's whole
+        // point about conversion is that the taken thing is still recognisably
+        // itself: "it was still recognizably his city underneath, which was the
+        // unbearable part."
+        const captor = 1 - u.side;
+        if (absorb[captor] > 0 && !u.taken) {
+          absorb[captor]--;
+          // ONCE. Without this a body can be traded back and forth between two
+          // sides that both hold the booster, and a rule that can fire on the
+          // same body repeatedly is a rule whose dose is not what the constant
+          // says it is.
+          u.taken = true;
+          u.side = captor;
+          // THE CARD INDEX MUST STOP COLLIDING. `c` counts cards within one
+          // side's army, so their card 3 and your card 3 are both `3` -- and the
+          // renderer groups counters by `side + ':' + c`. A captured body joining
+          // your side with its index intact merges into YOUR third card: one
+          // marker, two different cards, positions averaged between them and
+          // whichever glyph was seen first. Offset out of the range any army can
+          // reach and the collision cannot happen.
+          u.c += TAKEN_C;
+          u.hp = u.max; u.cd = 0; u.dot = 0; u.dotT = 0;
+          // Where it stands up. Mirrored to the captor's half rather than moved
+          // to a fixed spot, so a body taken from their flank arrives on the
+          // matching flank of yours and the deployment keeps its shape.
+          if (captureHome) { u.x = u.ox; u.y = FIELD.d - u.oy; }
+          if (keepLog) events.push({ e: 'took', a: u.i * 2 + u.side });
           continue;
         }
         u.alive = false;
@@ -482,7 +517,13 @@ export function resolve(a, b, seed, keepLog = false, onTick = null, terrain = nu
           if (e.hp <= 0) e.alive = false;
         }
       }
-      if (keepLog) events.push({ e: 'boom', a: u.i * 2 + u.side });
+      // THE RADIUS THAT WAS ACTUALLY APPLIED, carried on the event. The renderer
+      // used to look the blast up on the CARD -- `BY_ID[a.id].boom` -- which is
+      // right for a Fireship and wrong for every body detonating because of
+      // Escape pods, so the second-strongest booster in the pool drew nothing at
+      // all unless a Fireship happened to be in the army. Logging what was used
+      // also stops the blast being a rule written in two files.
+      if (keepLog) events.push({ e: 'boom', a: u.i * 2 + u.side, r: blast.r });
     }
 
     if (keepLog && events.length) log.push({ t, ev: events });
@@ -792,10 +833,27 @@ export const offerSize = (boosts, wide) => RULES.offer + wide;
  *  the much larger thing a comment here predicted it would be. The idea was
  *  sound and the dose was wrong, which is the third time tonight that has been
  *  the answer. */
-export function offerFor(rand, boosts, wide, picks, first) {
-  if (first && has(boosts, 'ledger')) return DRAFT.map(u => u.id);
+export function offerFor(rand, boosts, wide, picks) {
   return offer(rand, offerSize(boosts, wide), picks);
 }
+/*  THE LEDGER, and it is an EXTRA card now rather than a substituted pick.
+ *
+ *  It used to name the first pick of each round -- the card you were taking
+ *  anyway, chosen instead of drawn. That is CERTAINTY and nothing else, and
+ *  certainty measured near zero twice: +0.05 (0.6 sigma) once a match, +0.22
+ *  (2.8 sigma) once a round, and +0.10 (1.4 sigma) once the pool grew to eight
+ *  and the opponent drew from it too. The dose was not the problem. At one named
+ *  pick a round you were already choosing about a third of a twenty-one pick
+ *  army by name, and the next dose up is two thirds -- which is not a stronger
+ *  booster, it is the end of the draft, and the draft is the game's whole frame.
+ *
+ *  Sam's replacement moves it onto the axis the old one never touched: an extra
+ *  card, not a swapped one. The market already sells exactly this for 21 credits
+ *  and does not open until round 3, so what this hands you is that purchase, free,
+ *  two rounds early -- against an opponent the run screen has already named, which
+ *  makes it the only booster in the pool whose value depends on reading the
+ *  situation rather than on a flat multiplier. */
+export const ledgerCard = boosts => has(boosts, 'ledger');
 export const picksFor = (boosts, extra) => RULES.picksPerRound + extra;
 // How often the market opens for a side. One place, because the interface and
 // the sweep both need it and a cadence written twice is a cadence that disagrees.
@@ -1137,6 +1195,17 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
   const rounds = [];
   let loser = null;                      // who opens with the bonus pick
 
+  // THE LEDGER'S CARD, before a shot is fired and before the first offer is
+  // drawn. Both sides, because the opponent draws from the same pool of eight
+  // and a player action no opponent has is exactly how the money pump survived
+  // every sweep. It is named off the WHOLE roster by the side's own policy --
+  // the same call a pick uses, so a seat that drafts well names well.
+  for (const s of [0, 1]) {
+    if (!ledgerCard(boosts[s])) continue;
+    const all = DRAFT.map(u => u.id);
+    army[s].push(all[policy[s](all, army[s].slice(), army[1 - s].slice())]);
+  }
+
   for (let r = 0; r < RULES.maxRounds && lives[0] > 0 && lives[1] > 0; r++) {
     // The loser's extra pick, taken alone and in the open. It is the Leader's
     // doctrine as a rule: a round you lose pays for the round after it.
@@ -1157,13 +1226,12 @@ export function playMatch({ a = 'house', b = 'varan', seed = 1,
       const seen = [army[0].slice(), army[1].slice()];
       // A side that has run out of picks takes none, and draws nothing off the
       // stream -- so a seeded run replays whatever the pick counts are.
-      const first = p === 0;              // The Ledger: the first pick of a ROUND
       if (p < perRound[0]) {
-        const c = offerFor(rand, boosts[0], wide[0], seen[0], first);
+        const c = offerFor(rand, boosts[0], wide[0], seen[0]);
         army[0].push(...pickTokens(boosts[0], c[policy[0](c, seen[0], seen[1])]));
       }
       if (p < perRound[1]) {
-        const c = offerFor(rand, boosts[1], wide[1], seen[1], first);
+        const c = offerFor(rand, boosts[1], wide[1], seen[1]);
         army[1].push(...pickTokens(boosts[1], c[policy[1](c, seen[1], seen[0])]));
       }
     }

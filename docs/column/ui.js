@@ -17,7 +17,7 @@ import { BY_ID, RULES, PERSONAS, UPGRADE, DRAFT, SPECIALS, SHOP, RUN,
 import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId, specFor,
          earn, stock, spend, upgradeable, specialsFor, kitFor, ordersFor, boosterOffer,
          offerSize, offerFor, picksFor, pickTokens, bonusPicks,
-         rampFor, mends, carried } from './engine.js';
+         rampFor, mends, carried, ledgerCard } from './engine.js';
 import { draw, effects, auras, ground, SIDE, shape } from './render.js';
 import { glyph } from './glyphs.js';
 
@@ -100,21 +100,6 @@ let revealTimer = null;
  *  His note 20: terrain is FIXED PER MAP, so it is a property of the opponent
  *  you are facing rather than a roll, and it is knowable before the first pick.
  *  One derivation, read by the resolver, the renderer and the text. */
-/** THE FIRST PICK OF A ROUND, which is when The Ledger fires. Once a MATCH was
- *  built first and measured +0.05 at 0.6 sigma -- one free pick in twenty-one is
- *  nothing. Once a round is +0.22 at 2.8 sigma, the same size as The Vanguard.
- *
- *  IT DOES NOT READ `S.solo`, and that is the whole of a bug this file caught in
- *  its own new code. The first version did -- and `S.solo = false` is assigned
- *  AFTER the offer is built, so it was reading the previous round's value and the
- *  booster never fired. A live reference read after a later step has mutated it
- *  is the defect this record already carried twice; this was the third.
- *
- *  A bonus pick passes `false` at its own call site instead. That is exact
- *  rather than inferred: a bonus pick only exists after a round has been lost,
- *  so it can never be the first pick of a match. */
-const firstOfRound = () => S && S.pickNo === 0;
-
 export const terrainOf = opp => (PERSONAS[opp] && BY_MAP[PERSONAS[opp].map] || {}).terrain || null;
 
 /** THE GROUND, AS A PANEL RATHER THAN A SENTENCE.
@@ -170,9 +155,27 @@ function newMatch(opp, run) {
     pending: [[], []],
     wide: [0, 0],
     phase: 'pick', pickNo: 0, bonus: null,
+    // THE LEDGER'S EXTRA CARD, still owed. Stored rather than derived, because a
+    // match saved between the sheet opening and a card being named has to resume
+    // still owing it -- and because `ledgerCard(boosts)` is true for the whole
+    // match, so deriving it would hand out a card every round.
+    ledgerDue: ledgerCard(boosts[0]),
     offer: [], mine: null, theirs: null, inspect: null
   };
+  // THEIRS IS TAKEN HERE, before a shot and before the first offer, by the same
+  // policy call the engine uses. A booster the player has and the opponent does
+  // not is the shape of the money pump -- an action with only a human caller.
+  if (ledgerCard(boosts[1])) {
+    const all = DRAFT.map(u => u.id);
+    S.army[1].push(all[POLICIES[opp](all, S.army[1].slice(), S.army[0].slice())]);
+  }
   rebuild();
+  // WRITTEN BEFORE THE FIRST SCREEN, not after it. `render()` is what normally
+  // saves, and The Ledger's sheet returns out of startRound() before any render
+  // happens -- so a match closed while that sheet was open came back as the
+  // PREVIOUS match, with the booster spent and the card never named. A match
+  // exists the moment it is dealt; the save has to agree.
+  save();
   startRound();
 }
 
@@ -213,6 +216,10 @@ function load() {
 
 /* ----------------------------------------------------------- the round loop */
 function startRound() {
+  // BEFORE ANYTHING ELSE, and only once a match. The card is an addition rather
+  // than a pick, so it must not consume one -- `next()` is not called until a
+  // card has been named.
+  if (S.ledgerDue) return namePick(true);
   S.pickNo = 0;
   S.bonus = S.loser;            // only the loser of the last round gets one
   // HOW MANY of them is the ENGINE's answer, not a shape in this file. It was
@@ -251,7 +258,7 @@ function next() {
     return reveal(popKeys(1, tok));
   }
   if (S.bonus === 0) {                       // your extra pick, taken alone
-    S.offer = offerFor(rand, S.boosts[0], S.wide[0], S.army[0], false);
+    S.offer = offerFor(rand, S.boosts[0], S.wide[0], S.army[0]);
     S.solo = true; S.phase = 'pick';
     return render();
   }
@@ -260,16 +267,16 @@ function next() {
   // ramp has to be watchable, not just felt.
   if (S.pickNo < Math.max(S.perRound[0], S.perRound[1])) {
     if (S.pickNo >= S.perRound[0]) {
-      const c = offerFor(rand, S.boosts[1], S.wide[1], S.army[1], firstOfRound());
+      const c = offerFor(rand, S.boosts[1], S.wide[1], S.army[1]);
       const tok = c[POLICIES[S.opp](c, S.army[1].slice(), S.army[0].slice())];
       S.army[1].push(...pickTokens(S.boosts[1], tok));
       S.pickNo++;
       S.mine = null; S.theirs = tok;
       return reveal(popKeys(1, tok));
     }
-    S.offer = offerFor(rand, S.boosts[0], S.wide[0], S.army[0], firstOfRound());
+    S.offer = offerFor(rand, S.boosts[0], S.wide[0], S.army[0]);
     S.withThem = S.pickNo < S.perRound[1];
-    if (S.withThem) S.oppOffer = offerFor(rand, S.boosts[1], S.wide[1], S.army[1], firstOfRound());
+    if (S.withThem) S.oppOffer = offerFor(rand, S.boosts[1], S.wide[1], S.army[1]);
     S.solo = false; S.phase = 'pick';
     return render();
   }
@@ -280,8 +287,12 @@ function next() {
 /** THE LEDGER'S SHEET. The roster's own row, made tappable -- the same drawing
  *  the field uses beside the same stat line, because a card named here has to be
  *  recognisable as the counter it becomes. */
-function namePick() {
-  const rows = S.offer.map((tok, i) => {
+function namePick(ledger) {
+  // TWO CALLERS, ONE SHEET. `ledger` names the extra card a match opens with and
+  // appends it; without it the sheet is the old wide-offer path. Both index the
+  // same list, so a card named here is the card that arrives either way.
+  const list = ledger ? DRAFT.map(u => u.id) : S.offer;
+  const rows = list.map((tok, i) => {
     const u = BY_ID[tokId(tok)];
     const sz = { heavy: 3.7, medium: 3.2, light: 2.9 }[u.w];
     return `<button class="pick shopRow tall" data-pick="${i}">
@@ -292,11 +303,20 @@ function namePick() {
     </button>`;
   }).join('');
   const d = sheet(`<h1>Name a card</h1>
-    <p>The Ledger: your first pick of the match is any card in the roster, named
-       rather than offered. It joins your column where its role puts it, like any other.</p>
+    <p>${ledger
+      ? 'The Ledger: one card of your choosing, before the match begins and on top of every pick you are owed. It joins your column where its role puts it, like any other.'
+      : 'Any card in the roster, named rather than offered.'}</p>
     ${rows}`);
   d.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => {
     d.remove();
+    if (ledger) {
+      // AN ADDITION, NOT A PICK. It goes straight onto the column and the round
+      // then starts as it always would -- `commit` would spend a pick on it.
+      S.army[0].push(list[+b.dataset.pick]);
+      S.ledgerDue = false;
+      rebuild(); save();
+      return startRound();
+    }
     commit(+b.dataset.pick);
   });
 }
@@ -675,25 +695,15 @@ function render() {
     el.sub.innerHTML = S.solo
       ? `You lost the round, so ${bonus > 1 ? 'these are' : 'this one is'} yours alone &middot; ${size} cards to ${theirs}`
       : `${size} cards to ${theirs} &middot; they are choosing at the same time`;
-    // THE LEDGER'S OFFER IS THE WHOLE ROSTER, which is twelve cards and will not
-    // go in a row built for three. The row is fixed at 132px because the deck is
-    // a flex sibling of the battlefield, and twelve cards in it would be 24px
-    // each -- the note about the stat line clipping at FOUR is two screens up.
-    //
-    // So the row carries one button and the choosing happens on a sheet, where
-    // there is room to read a card before naming it. `commit(i)` indexes
-    // `S.offer` either way, so the two paths are the same pick.
-    if (S.offer.length > offerSize(S.boosts[0], 1)) {
-      el.sub.innerHTML = `Name any of the ${S.offer.length} &middot; ${size} cards to ${theirs}` +
-        (S.withThem ? ' &middot; they are choosing at the same time' : '');
-      const b = document.createElement('button');
-      b.className = 'card ledgerAll';
-      b.innerHTML = '<b>Name any card</b><span class="hint">The Ledger &middot; the whole roster is yours to choose from</span>';
-      b.onclick = namePick;
-      el.cards.appendChild(b);
-    } else {
-      S.offer.forEach((tok, i) => el.cards.appendChild(cardFace(tok, i)));
-    }
+    // THE OFFER IS NEVER THE WHOLE ROSTER ANY MORE. The Ledger used to rewrite
+    // it to twelve cards, which is why this branched to a one-button row and a
+    // sheet -- a row fixed at 132px would have given each of twelve cards 24px.
+    // The Ledger is an extra card at the start of the match now and does not
+    // touch the offer at all, so `S.offer.length` can no longer exceed the
+    // widened size and the branch was unreachable. The sheet it called is still
+    // there and still the way that card is named; only the dead route to it is
+    // gone.
+    S.offer.forEach((tok, i) => el.cards.appendChild(cardFace(tok, i)));
   }
 
   if (S.phase === 'revealed') {

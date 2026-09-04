@@ -27,8 +27,8 @@ import { fileURLToPath } from 'url';
 import { dirname, resolve as rp, extname, join } from 'path';
 import { chromium } from 'playwright';
 import { BOOSTS, RULES, PERSONAS, MAPS, BY_MAP, TERRAIN, groundSays, DRAFT, BY_ID, SPECIALS } from '../data.js';
-import { bonusPicks, POLICIES, specFor } from '../engine.js';
-import { draw } from '../render.js';
+import { bonusPicks, POLICIES, specFor, resolve, TAKEN_C, ledgerCard, armyFrom, playMatch } from '../engine.js';
+import { draw, effects, groupByCard } from '../render.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DOCS = rp(HERE, '..', '..');
@@ -99,6 +99,112 @@ let failed = 0, ran = 0;
 const skipped = [];
 const ok = m => { ran++; console.log(` ok   ${m}`); };
 const bad = (m, why) => { ran++; failed++; console.log(`FAIL  ${m}`); (why || []).forEach(w => w && console.log(`        · ${w}`)); };
+
+/* ------------------------------- a capture is drawn, and does not merge -------- */
+// Sam's notes 24 and 30. Absorbed takes one of THEIR bodies and stands it up on
+// your side, and two things about that could fail in silence.
+//
+// FIRST, THE RENDERER'S KEY. Counters are grouped by `side + ':' + cardIndex`,
+// and `c` counts cards within one side's army -- so their card 3 and your card 3
+// are both `3`. A captured body joining your side with its index intact merges
+// into YOUR third card: one marker for two different cards, positions averaged
+// between them, and a counter holding more bodies than its card can field. That
+// is what `TAKEN_C` exists to prevent, and it is asserted here rather than
+// trusted -- with the offset removed this test finds over-full counters.
+//
+// SECOND, THE EVENT. Every battle-side booster logs an event nothing drew: the
+// old revive's went unhandled entirely, and Escape pods' detonations were drawn
+// only when `BY_ID[card].boom` was truthy -- true for a Fireship, false for every
+// body detonating because of the booster. Eleven blasts a battle reached the log
+// and none of them reached the screen.
+{
+  const ARMY = ['swarm', 'line', 'walker', 'brute', 'deflector', 'volt', 'acid', 'neurite', 'ultra'];
+  const events = (boosts, kind) => {
+    const r = resolve(ARMY, ARMY, 12345, true, null, null, boosts);
+    let n = 0;
+    for (const f of r.log) for (const ev of f.ev) if (ev.e === kind) n++;
+    return n;
+  };
+  const took = events([['absorbed'], []], 'took');
+  const booms = events([['pods'], []], 'boom');
+  const podCards = ARMY.filter(id => BY_ID[id].boom).length;
+
+  // Both branches must be REACHED by the renderer, and the pod one is checked on
+  // an army with no card that detonates by itself -- the exact case the old
+  // condition dropped.
+  const drawn = (boosts, kinds) => {
+    const r = resolve(ARMY, ARMY, 12345, true, null, null, boosts);
+    let seen = 0, total = 0;
+    for (const f of r.log) {
+      const evs = f.ev.filter(ev => kinds.includes(ev.e));
+      if (!evs.length) continue;
+      const byKey = new Map(evs.map(ev => [ev.a, { id: 'swarm', side: 0, c: 1, x: 10, y: 10 }]));
+      total += evs.length;
+      seen += (effects(evs, byKey).svg.match(/<circle class="fx"/g) || []).length;
+    }
+    return { seen, total };
+  };
+  const capDraw = drawn([['absorbed'], []], ['took']);
+  const podDraw = drawn([['pods'], []], ['boom']);
+
+  // And no counter may ever hold more bodies than its card fields.
+  let overfull = 0, mixed = 0, frames = 0;
+  resolve(ARMY, ARMY, 12345, false, (t, live) => {
+    frames++;
+    for (const g of groupByCard(live)) {
+      if (g.n > (BY_ID[g.id].count || 1)) overfull++;
+      if (new Set(live.filter(u => u.side + ':' + u.c === g.key).map(u => u.id)).size > 1) mixed++;
+    }
+  }, null, [['absorbed'], ['absorbed']]);
+
+  const why = [
+    took > 0 ? null : 'Absorbed logged no capture at all',
+    booms > 0 ? null : 'Escape pods logged no detonation at all',
+    podCards === 0 ? null : `the fixture army contains ${podCards} card(s) that detonate by themselves, so this cannot test the booster's own blast`,
+    capDraw.seen === capDraw.total ? null : `${capDraw.total - capDraw.seen} of ${capDraw.total} captures drew nothing`,
+    podDraw.seen === podDraw.total ? null : `${podDraw.total - podDraw.seen} of ${podDraw.total} pod detonations drew nothing`,
+    overfull ? `${overfull} counters held more bodies than their card fields — a captured body merged into one of its captor's own` : null,
+    mixed ? `${mixed} counters held two different cards` : null
+  ].filter(Boolean);
+  if (!why.length)
+    ok(`a capture is drawn and keeps its own counter — ${took} taken, ${booms} pod blasts, all drawn, ${frames} frames with no merge`);
+  else bad('a capture is drawn and keeps its own counter', why);
+}
+
+/* --------------------------- The Ledger adds a card rather than swapping one -- */
+// It used to name the first pick of a round: the card you were taking anyway,
+// chosen instead of drawn. Now it is an EXTRA card before the match starts. The
+// difference is the whole of the change, and a match runs a different number of
+// rounds with it than without, so army size at the END cannot measure it. A
+// single-round match can: same seat, same seed, one round, one extra card.
+// TWO WRONG INSTRUMENTS BEFORE THIS ONE, and both failed the same way: an army
+// grows from picks, bonus picks and bought cards, so anything that changes how a
+// match unfolds changes its size for reasons that are not this booster.
+// `lives:[1,99]` does not force one round -- it ends the match when YOU lose one,
+// and a round you win just plays another. Matching on round COUNT does not work
+// either, because equal rounds still means unequal bonus picks and purchases.
+//
+// `lives:[1,1]` forces exactly one round: whoever loses it reaches zero and the
+// loop stops. Round one has no bonus pick (nobody has lost yet) and no market
+// (it opens every third), so the army is the picks plus whatever the booster
+// added, and the comparison is exact rather than statistical.
+{
+  const cards = (side, boosts) => armyFrom(playMatch({
+    a: 'counter', b: 'harlow', seed: 5, shop: ['ai', 'ai'], lives: [1, 1],
+    boosts: side === 0 ? [boosts, []] : [[], boosts] }).army[side]).cards.length;
+  const mine = [cards(0, []), cards(0, ['ledger'])];
+  // The opponent must get it too: a player action no opponent has is the shape of
+  // the money pump, which survived every sweep for exactly that reason.
+  const theirs = [cards(1, []), cards(1, ['ledger'])];
+  const why = [
+    mine[1] === mine[0] + 1 ? null : `your army: ${mine[0]} without, ${mine[1]} with — expected exactly one more`,
+    theirs[1] === theirs[0] + 1 ? null : `their army: ${theirs[0]} without, ${theirs[1]} with — the opponent does not get it`,
+    ledgerCard(['ledger']) && !ledgerCard([]) ? null : 'ledgerCard() does not read the booster'
+  ].filter(Boolean);
+  if (!why.length)
+    ok(`The Ledger adds exactly one card, to both sides — ${mine[0]} to ${mine[1]} in a single round`);
+  else bad('The Ledger adds exactly one card, to both sides', why);
+}
 
 /* ------------------------------- the strength bar, against the whole card ----- */
 // 9 of the 15 cards field more than one body, and the bar under a counter used
@@ -922,6 +1028,27 @@ await page.screenshot({ path: png('play.png') });
 
     const stated = await page.evaluate(() => (document.querySelector('.sheet') || {}).textContent || '');
     await page.click('#on');
+    // THE LEDGER OPENS A SHEET BEFORE MATCH 2'S FIRST PICK, because its card is
+    // named rather than drawn. A run holding it stops here until one is chosen, so
+    // the suite names one -- and measures the booster while it is doing it, which
+    // is the only moment this is observable on the real page. Without the click
+    // the match never starts and four unrelated claims read null.
+    let ledger = null;
+    if (took === 'ledger') {
+      await page.waitForSelector('.sheet [data-pick]', { timeout: 5000 });
+      const before = await page.evaluate(() => {
+        const s = JSON.parse(localStorage.getItem('column-save') || 'null');
+        return s && { cards: s.army[0].length, pickNo: s.pickNo, due: s.ledgerDue };
+      });
+      const listed = await page.locator('.sheet [data-pick]').count();
+      await page.locator('.sheet [data-pick]').first().click();
+      await page.waitForTimeout(400);
+      const after = await page.evaluate(() => {
+        const s = JSON.parse(localStorage.getItem('column-save') || 'null');
+        return s && { cards: s.army[0].length, pickNo: s.pickNo, due: s.ledgerDue };
+      });
+      ledger = { before, after, listed };
+    }
     const two = await page.evaluate(() => {
       const s = JSON.parse(localStorage.getItem('column-save') || 'null');
       return s && { n: s.run && s.run.n, money: s.money, per: s.perRound,
@@ -953,28 +1080,28 @@ await page.screenshot({ path: png('play.png') });
     // THE LEDGER, on the real first pick of the real next match. It replaces the
     // card row with one button, so the row's count stops meaning what it meant --
     // which is why `offer` and `ledger` are reported separately by the probe.
+    // RE-AIMED AT THE BOOSTER IT IS NOW. It used to assert that the first pick of
+    // a match offered the whole roster instead of three cards -- a SUBSTITUTED
+    // pick. The Ledger is an EXTRA card before the match starts, so the old claim
+    // tested a path that no longer exists, and a check left pointing at a design
+    // that has been replaced passes or fails for reasons unrelated to the game.
+    //
+    // The two halves that matter: the card ARRIVES (the army grows by one) and it
+    // COSTS NOTHING (no pick is spent, so the round still opens on pick 0).
     if (took === 'ledger') {
-      const st = await page.evaluate(() => ({
-        row: !!document.querySelector('#cards .ledgerAll'),
-        cards: document.querySelectorAll('#cards .card').length,
-      }));
-      let listed = 0, grew = false;
-      if (st.row) {
-        await page.locator('#cards .ledgerAll').click();
-        listed = await page.locator('.sheet [data-pick]').count();
-        await page.locator('.sheet [data-pick]').nth(Math.min(4, Math.max(0, listed - 1))).click();
-        await page.waitForTimeout(400);
-        grew = await page.evaluate(() => {
-          const s = JSON.parse(localStorage.getItem('column-save') || 'null');
-          return !!(s && s.army && s.army[0].length >= 1);
-        });
-      }
-      if (st.row && listed === DRAFT.length && grew)
-        ok(`The Ledger names any card — the whole roster of ${listed} on the first pick, and it arrives`);
-      else bad('The Ledger names any card', [
-        `row shown ${st.row}, cards in the row ${st.cards}, listed ${listed} of ${DRAFT.length}, arrived ${grew}`,
-        'the first pick of a match is the whole roster or the booster does nothing']);
-    } else skipped.push('The Ledger names any card');
+      const { before, after, listed } = ledger || {};
+      const why = [
+        listed === DRAFT.length ? null : `the sheet listed ${listed} cards, not the roster's ${DRAFT.length}`,
+        before && before.due ? null : 'the save did not record a Ledger card as owed',
+        before && after && after.cards === before.cards + 1
+          ? null : `the army went from ${before && before.cards} to ${after && after.cards} — expected exactly one more`,
+        after && after.pickNo === 0 ? null : `it spent a pick — pickNo is ${after && after.pickNo}, expected 0`,
+        after && !after.due ? null : 'the card is still marked owed, so it would be handed out again'
+      ].filter(Boolean);
+      if (!why.length)
+        ok(`The Ledger adds a named card and spends no pick — ${listed} offered, army ${before.cards} to ${after.cards}`);
+      else bad('The Ledger adds a named card and spends no pick', why);
+    } else skipped.push('The Ledger adds a named card and spends no pick');
 
     // LIVES CARRY, AND ONLY THE MARKET RESTORES THEM. If they reset, the whole
     // point of the credit decision goes with them.
@@ -1123,7 +1250,21 @@ async function inspectAtLevel(id, lvl) {
   await p.click('#resume');
   await p.waitForSelector(`#field g[data-id="${id}"]`, { timeout: 5000 });
   const drawnLvl = await p.getAttribute(`#field g[data-id="${id}"]`, 'data-lvl');
-  await p.locator(`#field g[data-id="${id}"]`).first().click();
+  // TAPPED WHERE THE RENDERER SAYS IT PUT THE COUNTER. Clicking the <g> aims at
+  // its bounding-box centre, which since the pips and the level chevrons joined it
+  // is not necessarily on anything hittable -- and `force: true` would skip the
+  // hit-testing that just found two layers eating taps. data-x/data-y exist for
+  // exactly this, so they are converted through the SVG's own screen matrix and
+  // the click goes through the real event path.
+  const pt = await p.evaluate(sel => {
+    const g = document.querySelector(sel), svg = document.getElementById('field');
+    const m = svg.getScreenCTM();
+    const v = svg.createSVGPoint();
+    v.x = +g.dataset.x; v.y = +g.dataset.y;
+    const o = v.matrixTransform(m);
+    return { x: o.x, y: o.y };
+  }, `#field g[data-id="${id}"]`);
+  await p.mouse.click(pt.x, pt.y);
   const text = (await p.textContent('#info')) || '';
   await c.close();
   return { text, drawnLvl, errs };

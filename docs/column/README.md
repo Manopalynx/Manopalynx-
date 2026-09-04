@@ -25,8 +25,8 @@ Sam owns every decision here. Where a choice is still open it says so rather tha
 
 ## Where it stands
 
-`BUILD` is `column-v32` in `data.js`. The service worker that carries it is
-`grandiose-v106` in `docs/sw.js` — one cache for all three published apps, so **shipping a
+`BUILD` is `column-v33` in `data.js`. The service worker that carries it is
+`grandiose-v107` in `docs/sw.js` — one cache for all three published apps, so **shipping a
 change here bumps Grandiose's version too**, and `test/offline.mjs` fails if the two ever
 disagree. **`test/version.mjs` fails if the two lines above disagree with either file**,
 because this section went nine builds stale saying `column-v22` and nothing noticed.
@@ -60,44 +60,45 @@ says so on its own card.
 | what | measured | by |
 |---|---|---|
 | single-type pairings settled 95/5 | 86% of 132 — counters are decisive, as intended | `test/matchup.mjs` |
-| mixed nine-card armies settled 95/5 | **59%** (234 of 400) — but only 12% are formalities | `test/match.mjs`, `test/settled.mjs` |
+| mixed nine-card armies that are formalities | **12%** (49 of 400) — 59% settle 95/5, which measures repeatability | `test/match.mjs`, `test/settled.mjs` |
 | alternation, worst persona table | 61.3% ±1.4, neither snowball nor oscillator | `test/match.mjs` |
 | bodies a side at the end | 30–38, legible on a portrait phone | `test/match.mjs` |
 | battles unresolved at the tick ceiling | 0% | `test/match.mjs` |
 | a floor player down the ladder | Vex 88.0, Neurex 84.0, Overseer 84.0, Hale 81.5, Leader 70.5, Harlow 54.5, Varan 29.5, Vale 15.0, Purifier 1.5 | `test/match.mjs`, 200 matches a table |
 | throwing the opening round | **+3.9pt** over 1,080 paired matches, worst +10.8pt vs overseer | `test/match.mjs` |
-| boosters worth more than taking none | **7 of 8** — The Ledger is the one that does not | `test/match.mjs`, 300 runs an arm |
+| boosters worth more than taking none | **all 8**, +0.22 to +1.59 | `test/match.mjs`, 300 runs an arm |
 
-**Two of those are red, and both are open decisions rather than tuning misses.**
+**Nothing in that table is red.** Both of the reds this document carried for five sessions
+were answered in the same session, and neither by relaxing a bar.
 
-**The composition red.** 59% of mixed compositions are settled 95/5; his answer has been
-battlefield variety rather than softer counters, and the mechanism is unspecified and
-deliberately not guessed at.
-
-**But the 59% is not what it has been read as.** `test/settled.mjs` reproduces the exact
-fixture — the same 234 of 400 pairings — and finds that the eight seeds vary nothing but a
-sub-1% positional jitter, so "decided 95/5" measures whether a result is *repeatable*, not
-whether it is *one-sided*. By the survivor margin, **49 of 400 (12%) are formalities and
-the median winner keeps 46% of its army.** No rule of the resolver causes it: armour off
-moves the figure 0.5pt, and nothing makes these battles closer. **And there is room inside
-a battle** — one extra body from the first tick rescues 44% of the decided pairings, which
-falsified the standing reason for the dead battle-side boosters and is what the three
-battle-side ones below were built on. `match.mjs` prints both numbers and claims against
-only the 95/5 one; **what the game should be held to is his call**, and the check has
-deliberately not been re-aimed. See *The 59% is measuring repeatability, not
-one-sidedness* below.
+**The composition red was the check pointing at the wrong quantity, and it is now aimed at
+the right one — Sam's decision.** `test/settled.mjs` reproduces the exact fixture — the same
+234 of 400 pairings — and finds that the eight seeds vary nothing but a sub-1% positional
+jitter, so "decided 95/5" measures whether a result is *repeatable*, not whether it is
+*one-sided*. By the survivor margin, **49 of 400 (12%) are formalities and the median winner
+keeps 46% of its army.** No rule of the resolver causes it: armour off moves the figure
+0.5pt. **And there is room inside a battle** — one extra body from the first tick rescues
+44% of the decided pairings, which falsified the standing reason for the dead battle-side
+boosters and is what the three battle-side ones were built on. `match.mjs` now claims
+against the survivor margin — the thing its own failure text always described — and still
+prints the 95/5 figure beside it, because it is a good tripwire for the resolver becoming
+less deterministic than intended. The bar is the same 40% the old line used, so it was not
+tuned to pass. See *The 59% is measuring repeatability, not one-sidedness* below.
 
 **Boosters.** Eight, measured at 300 runs an arm against a run that takes none: Veterans
-**+1.73 (19.7σ)**, Escape pods +0.49, The Compact +0.44, Field repair +0.37, The Vanguard
-+0.34, Absorbed +0.29, Field surgeons +0.25, **The Ledger +0.10 (1.4σ)**. One prize and six
-in a band, which is the shape a random three-of-eight wants.
+**+1.59 (18.9σ)**, Escape pods +0.39, The Compact +0.38, Field repair +0.35, The Vanguard
++0.32, Absorbed +0.30, Field surgeons +0.23, The Ledger +0.22. **One prize and seven in a
+band from +0.22 to +0.39** — the shape a random three-of-eight wants, where the question
+stops being *which is best* and becomes *which of these three do I want*.
 
-**The Ledger red.** It measured +0.22 at 2.8σ in a pool of five and +0.10 at 1.4σ in a pool
-of eight — the control moved with it, because the opponent draws from the same eight. Three
-answers, all his: raise its dose again, cut it and ship seven, or keep it as the weakest of
-eight and let a three-card offer decide how often it matters. **It has not been quietly
-buffed to pass.** See *Three battle-side boosters, and the dose was the answer a fourth
-time* below.
+**The Ledger red was answered by replacing the booster, not by re-dosing it.** At one named
+pick a round it was already choosing about a third of a twenty-one pick army by name and
+buying +0.10 (1.4σ) — and the next dose up is two thirds, which is not a stronger booster
+but the end of the draft. Sam's replacement moves it onto the axis the old one never
+touched: an extra card rather than a swapped one, named before each match against an
+opponent the run screen has already told you about. **+0.22 (3.2σ)**, and the pool has no
+dead option for the first time. See *A capture, an extra card, and a tap that closed the
+panel it was reaching for* below.
 
 **Also open:** **merging** — design point 4, specified and never built — and whether the
 opponent gets back the strength its shopper rewrite cost it. Throwing the opening round
@@ -3065,3 +3066,152 @@ stops clearing. Three answers, all Sam's: raise its dose again, cut it and ship 
 keep it as the weakest of eight and let a three-card offer decide how often it matters.
 
 **It has not been quietly buffed to pass.**
+
+---
+
+# A capture, an extra card, and a tap that closed the panel it was reaching for
+
+Sam's notes 23, 24, 25 and 30, and the two reds this file has carried for five sessions.
+Every note turned out to have a defect underneath it, and two of the three worst things
+found here were not on his list at all.
+
+## The screen did not know about levels, and the bar did not know about bodies
+
+`specFor()` is the only place the upgrade rule lives, and **`ui.js` never called it once**.
+The stat line, every ability sentence and the field inspector were read straight off the
+base card, so a level 3 Volt Battery told the player its aura was 1.5 while the resolver
+ran it at 3.07. Not a blank and not a broken sentence — **a correct sentence about a
+different card.**
+
+The strength bar had the matching fault. It divided by the ceiling of the bodies *still
+standing*, so both halves fell together as bodies died and the ratio stayed pinned: a
+Crawler Swarm on its last body drew exactly the bar of an untouched one, and the only thing
+that moved was a 2.3pt digit. **9 of the 15 cards field more than one body** — every medium,
+every light, and the Adarnas at six.
+
+Three things fell out of fixing them, and the third is the one worth keeping:
+
+- The upgrade card said `+35% hp & damage` on all fifteen, including the one card whose own
+  stat line says `no attack`. It is derived from the fields `specFor` actually scales now.
+- Levelled figures are floating point where base figures are clean integers, so the panel
+  would have printed `3.0749999999999997`. Every scaled figure goes through one formatter.
+- **`board()` hands the renderer `deployment()` during the draft and tick frames during the
+  battle, and only the frame carried `lvl`.** So the level chevrons appeared once fighting
+  started and were absent for the whole draft — exactly when you are deciding what to add to
+  what you hold. Found by the new check, not by looking.
+
+## Five treatments, and the most literal one measured worst
+
+Note 23 asked for a card to show its losses in its own body. Drawn five ways at true phone
+scale in `test/treatments.mjs`, the way one-counter-per-card was chosen out of `look.mjs`.
+
+**The moment is chosen by measurement** — the tick with the most cards at part strength.
+A frame where nothing has died cannot show the difference between any of these, which is
+exactly why `look.png` could never have contained the bar defect above.
+
+Sam's own suggestion, a small shape per body, **cost more than it paid and not because of
+the implementation**: a light counter is about 23pt across, and three sub-shapes plus a
+glyph big enough to carry identity do not fit in it. Identity is by glyph because twelve
+hues are not tellable apart on a phone. At one body left it draws a mark indistinguishable
+from a small single-body card. **Pips won** — a pip a body under the bar, the counter
+untouched, so the two readings compose: the bar is how much health, the pips are how many
+bodies.
+
+## Absorbed is a capture now, and the fiction was already on Sam's side
+
+Note 30. The old booster restored *your* dying body; it now takes *theirs* as it falls and
+stands it up whole on your line, keeping its own card and its own level.
+
+**The code had been citing the wrong passage.** It justified the revive with the pod chamber
+— *"alive, preserved, filed"* — which describes **storage**; nothing in that room gets up.
+The passage that describes a taken thing *acting* is the city being digested: *"It was not
+destruction; destruction he had a decade of grammar for. **This was conversion.**"* The
+booster was named for consumption and built as first aid.
+
+**The prediction here was wrong and it is worth recording.** A capture is one body off them
+and one onto you, and `settled.mjs` prices +2 bodies at four and a half times the
+won-outright rate of +1 — so the expectation was a large overshoot needing the dose cut from
+five. Measured:
+
+| | matches survived | against the control |
+|---|---|---|
+| capture, walks home | 2.10 | **+0.30 (4.1σ)** |
+| capture, stays where it fell | 2.06 | +0.25 (3.4σ) |
+| *the revive it replaced* | *2.10* | *+0.29 (3.8σ)* |
+
+**Identical to the thing it replaced**, and the two placements are inside noise of each
+other. The dose did not need touching.
+
+The reason is the more useful finding. **Inside a single battle the capture is enormous**:
+over the same 400 pairings it takes side 0 from 54.0% to 82.8%, flipping **31% of
+outcomes** — a +28.8pt swing. Across a run it is worth +0.30 matches. So *matches survived*
+compresses a battle-level effect of that size into the same band as everything else, which
+is either the ladder outrunning any single edge or the metric having less resolution than
+its error bars suggest. **Worth knowing before the next booster is priced on it.**
+
+## Two things the capture broke, and one of them silently
+
+**The renderer groups counters by `side + ':' + cardIndex`, and `c` counts cards within one
+side's army** — so their card 3 and your card 3 are both `3`. A captured body joining your
+side with its index intact **merges into your third card**: one marker for two cards,
+positions averaged between them, and a counter holding more bodies than its card can field.
+`TAKEN_C` offsets it out of range, and the check asserts it — with the offset removed the
+suite finds over-full counters immediately.
+
+**And every battle-side booster was invisible.** The renderer handles two event kinds. The
+old revive's event was never drawn at all, and Escape pods' detonations were drawn only when
+`BY_ID[card].boom` was truthy — true for a Fireship, false for every body detonating because
+of the booster. **Eleven blasts a battle reached the log and none reached the screen**, on
+the second-strongest booster in the pool. The engine logs the radius it actually applied
+now, so the blast is not a rule written in two files.
+
+## The Ledger: replaced rather than re-dosed
+
+It named the first pick of each round — the card you were taking anyway, chosen instead of
+drawn. That is certainty and nothing else, and certainty measured +0.05, then +0.22, then
++0.10 as the pool grew and the opponent drew from it too.
+
+**The dose was never the problem.** At one named pick a round you were already choosing
+about a third of a twenty-one pick army by name, and the next dose up is two thirds — not a
+stronger booster, the end of the draft.
+
+Sam's replacement is an **extra** card rather than a swapped one, named before each match.
+The market already sells exactly this for ₡21 and does not open until round 3, so it is that
+purchase free and two rounds early — against an opponent the run screen has already named,
+which makes it the only booster whose value depends on reading the situation. **+0.22
+(3.2σ)**, and the pool has no dead option for the first time.
+
+## The tap that closed the panel it was reaching for
+
+Found because a check could not click a Volt Battery, and it is the best thing in this
+section. **`.aura` and `.fx` had no CSS at all**, so neither was pointer-transparent. An
+aura is drawn 18 field units across — wider than the counter at its centre and wider than
+several of its neighbours — and neither layer sits inside a `g[data-id]`. So a tap landing
+on one found no counter and **cleared the inspection instead of opening it**: near a Volt
+Battery, a thumb that missed the marker by a millimetre closed the panel it was reaching
+for. Nothing threw. The panel simply did not appear.
+
+The aura was only the first interceptor. The ground paints a half-field tint with no class
+on it at all. The whole field is transparent to a tap now and only what is *inside* a
+counter takes one.
+
+**And a match could be lost by closing the app at the wrong moment.** `render()` is what
+writes the save, and The Ledger's naming sheet returns out of `startRound()` before any
+render happens — so a match closed while that sheet was open came back as the *previous*
+match, with the booster spent and the card never named. A match exists the moment it is
+dealt; the save agrees now.
+
+## Both reds are gone, and neither by relaxing a bar
+
+`match.mjs` reads **10 of 10**. The booster pool has no dead option at 300 runs an arm. And
+the composition check is aimed at the survivor margin — *the thing its own failure text
+always described* — at the same 40% bar the old 95/5 line used, with the 95/5 figure still
+printed beside it as a tripwire for the resolver becoming less deterministic than intended.
+
+**Three checks in this session were wrong before the code was.** The Ledger guard was
+written twice on bad instruments — `lives:[1,99]` does not force one round, it ends the
+match when *you* lose one; and matching on round *count* still leaves bonus picks and market
+purchases unequal. `lives:[1,1]` forces exactly one round because whoever loses it reaches
+zero. And the first collision test asked whether a counter held two different *ids*, which
+missed the case that actually happens — your Line Infantry absorbing a captured Line
+Infantry, same id, six bodies in a counter built for three.

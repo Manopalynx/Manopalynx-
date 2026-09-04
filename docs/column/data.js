@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v32';
+export const BUILD = 'column-v33';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -492,7 +492,25 @@ export const BATTLE = {
   // wrong size rather than the wrong idea. Five is what puts it beside the rest
   // of the pool instead of below it.
   repair:   3.5,                 // health a tick, to a body under half, both sides
-  absorbed: 5,                   // bodies taken back a battle, at the line, whole
+  // ABSORBED IS A CAPTURE NOW, not a revive -- Sam's note 30. It takes one of
+  // THEIR bodies when it falls and stands it up on your side, whole. The novel
+  // is unambiguous about which of the two the Neurex do: the pod chamber is
+  // storage -- "alive, preserved, filed" -- and nothing in that room gets up,
+  // while the passage that describes a taken thing ACTING is the city being
+  // digested: "It was not destruction... This was conversion." The booster was
+  // named for consumption and built as first aid.
+  //
+  // A capture is roughly DOUBLE the swing of a revive -- one body off them and
+  // one onto you -- and settled.mjs already priced that: the loser winning
+  // outright goes 5% at +1 body to 23% at +2. So the count below is measured
+  // downward from the revive's five rather than inherited from it.
+  absorbed: 5,                   // bodies taken off them a battle, whole
+  // WHERE A TAKEN BODY STANDS UP, and it is the difference between the booster
+  // working and being dead on arrival: left where it fell it is alone inside
+  // their formation and may not swing once. Sam's lean was home and both arms
+  // were measured. Read ONCE at the top of resolve() so a sweep can set it
+  // between arms without any battle reading a value that moved under it.
+  captureHome: true,             // true: it walks back to your line. false: it stands where it fell
   pods:     { r: 12, d: 60 }     // the detonation a body leaves if it has none of its own
 };
 
@@ -508,13 +526,19 @@ export const BOOSTS = [
   // REPLACES WIDER MUSTER, which measured dead four separate times on two seats
   // (+0.08, -0.15, -0.38, +0.03). More cards offered does not help when the
   // problem is which cards win; this is the other axis -- not more, but chosen.
-  { id: 'ledger',   n: 'The Ledger',     d: 'Your first pick of each round is any card in the roster, named rather than offered.' },
+  // AN EXTRA CARD, not a substituted pick -- Sam's replacement, and the old text
+  // described the old booster exactly while the engine had stopped doing it.
+  { id: 'ledger',   n: 'The Ledger',     d: 'One card of your choosing joins your column before each match, on top of every pick you are owed.' },
   // THE THREE BATTLE-SIDE ONES. They are worth trying because settled.mjs
   // falsified the reason they were thought impossible: one extra body from the
   // first tick rescues 44% of the pairings that were "decided", so there is
   // room in a battle. All three are PERSISTENT AND EVERYWHERE, which is what
   // the old revive was not -- it acted once, at a random place and time.
-  { id: 'absorbed', n: 'Absorbed',       d: 'Five of your bodies a battle are taken back — each returned to your line, whole.' },
+  // THE NUMBER IS READ, NOT TYPED. It said "Five" beside a constant that says 5,
+  // which is the same figure written twice in one file -- and the dose is the
+  // thing most likely to move, so the copy is the half that would have gone
+  // stale. The card is a capture now: their body, not yours back.
+  { id: 'absorbed', n: 'Absorbed',       d: `Their bodies are taken as they fall — ${BATTLE.absorbed} a battle, each standing up whole on your line to fight for you.` },
   { id: 'repair',   n: 'Field repair',   d: 'Your wounded bodies mend a little every moment, up to half their health.' },
   { id: 'pods',     n: 'Escape pods',    d: 'Every body of yours is rigged: it detonates where it falls.' }
 ];

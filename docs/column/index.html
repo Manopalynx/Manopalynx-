@@ -37,6 +37,20 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
 /* -------------------------------------------------------------- the field */
 #fieldWrap{flex:1 1 auto;position:relative;min-height:0;background:#0e1620}
 #field{position:absolute;inset:0;width:100%;height:100%;display:block}
+/* THE DECORATION MUST NOT EAT A TAP. An aura is drawn 18 field units across --
+   wider than the counter at its centre and wider than several of its neighbours
+   -- and shots, splashes and detonations are painted over the field too. Neither
+   layer sits inside a `g[data-id]`, so a tap landing on one found no counter and
+   CLEARED the inspection instead of opening it: near a Volt Battery, a thumb that
+   missed the marker by a millimetre closed the panel it was reaching for. Nothing
+   threw and nothing looked wrong -- the panel simply did not appear. Found by a
+   check that could not click a Volt Battery -- and the aura was only the first
+   interceptor it found; the ground paints a half-field tint with no class on it
+   at all. So the whole field is transparent to a tap by default and only what is
+   INSIDE a counter takes one. The handler already reads `closest('g[data-id]')`,
+   so hitting a counter's shape or its glyph resolves to the same counter. */
+#field *{pointer-events:none}
+#field g[data-id] *{pointer-events:auto}
 #toast{position:absolute;left:0;right:0;top:8px;text-align:center;pointer-events:none;
   font-size:12.5px;letter-spacing:.6px;color:var(--ink);text-shadow:0 1px 3px #000;
   opacity:0;transition:opacity .25s}
@@ -192,9 +206,6 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
 /* THE LEDGER'S ROW. One button where three cards would be, so the deck keeps its
    132px and the battlefield does not move. It reads as a card rather than as a
    control because that is what it stands in for. */
-.card.ledgerAll{justify-content:center;gap:6px}
-.card.ledgerAll b{font-size:13px;height:auto}
-.card.ledgerAll .hint{height:auto;font-size:10px;padding:0 10px;line-height:1.3}
 /* Fixed height, like everything else down here. An EMPTY button is twenty-two
    pixels shorter than one with a word in it, and hiding it with visibility keeps
    its box but not its content -- so the deck still changed size between a pick
