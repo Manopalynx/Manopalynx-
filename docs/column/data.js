@@ -20,7 +20,7 @@
 // like the book and appears in it zero times, and the correction to that
 // over-corrected into telling him five of his own sentences were mine.
 
-export const BUILD = 'column-v34';
+export const BUILD = 'column-v35';
 
 /* ------------------------------------------------------------- the battlefield */
 // Portrait. The armies start at opposite ends of a field deeper than it is wide,
@@ -114,6 +114,38 @@ export const UPGRADE = {
   step: 0.35,     // +35% health and damage per level
   max: 3,         // levels above base
   chance: 0.5     // how often an eligible offered card arrives as an upgrade
+};
+
+/* ------------------------------------------------------------------- merging */
+// Sam's note 27, and design point 4 -- specified in the very first design and
+// unbuilt for the whole of this project's life.
+//
+// Two copies of a card become ONE carrying both, so the bodies halve and each is
+// worth far more. That is the axis the game has been short of: nine grounds and
+// five mechanisms were measured and only REACH ever worked, because everything
+// tried scaled an advantage that already existed. Merging asks a different
+// question -- fewer and tougher against more and softer -- which is the game's
+// own stated counter mechanism, since AOE punishes light cards precisely because
+// three bodies stand close enough to share a blast.
+//
+// THE DOSE IS MEASURED AND IT IS NOT DOUBLE, which is what Sam specified and
+// what his own condition ruled out. At exactly 2.0x a merge is the WORST thing a
+// pick can buy on all twelve cards -- upgrade 64.7%, add a third 62.9%, merge
+// 55.4% -- and the reason is arithmetic: an upgrade leaves 2 cards at 1.35x,
+// which is 2.7 cards' worth, while a merge at double leaves 1 card holding 2.0.
+// Least strength AND fewest bodies recommends nothing.
+//
+// Cards where merging beats BOTH alternatives, 300 pairings a card:
+//
+//   2.0x  0 of 12      2.4x  5 of 12      2.7x  10 of 12      3.2x  12 of 12
+//
+// 2.4x is chosen because a pick that is always right is a tax on not taking it.
+// At this dose merging is right on five cards and wrong on the rest -- wrong on
+// the Fireship, whose value is detonations per death and who therefore wants
+// bodies, and on the Amabie, which wants more shots rather than bigger ones.
+export const MERGE = {
+  step: 2.4,      // what one merged card carries, against one unmerged copy
+  chance: 0.4     // how often an eligible offered card arrives as a merge
 };
 
 export const UNITS = [

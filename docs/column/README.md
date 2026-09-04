@@ -25,8 +25,8 @@ Sam owns every decision here. Where a choice is still open it says so rather tha
 
 ## Where it stands
 
-`BUILD` is `column-v34` in `data.js`. The service worker that carries it is
-`grandiose-v108` in `docs/sw.js` — one cache for all three published apps, so **shipping a
+`BUILD` is `column-v35` in `data.js`. The service worker that carries it is
+`grandiose-v109` in `docs/sw.js` — one cache for all three published apps, so **shipping a
 change here bumps Grandiose's version too**, and `test/offline.mjs` fails if the two ever
 disagree. **`test/version.mjs` fails if the two lines above disagree with either file**,
 because this section went nine builds stale saying `column-v22` and nothing noticed.
@@ -64,12 +64,12 @@ says so on its own card.
 | what | measured | by |
 |---|---|---|
 | single-type pairings settled 95/5 | 86% of 132 — counters are decisive, as intended | `test/matchup.mjs` |
-| mixed nine-card armies that are formalities | **12%** (49 of 400) — 59% settle 95/5, which measures repeatability | `test/match.mjs`, `test/settled.mjs` |
+| mixed nine-card armies that are formalities | **7%** — 55% settle 95/5, which measures repeatability | `test/match.mjs`, `test/settled.mjs` |
 | alternation, worst persona table | 61.3% ±1.4, neither snowball nor oscillator | `test/match.mjs` |
 | bodies a side at the end | 30–38, legible on a portrait phone | `test/match.mjs` |
 | battles unresolved at the tick ceiling | 0% | `test/match.mjs` |
 | a floor player down the ladder | Vex 88.0, Neurex 84.0, Overseer 84.0, Hale 81.5, Leader 70.5, Harlow 54.5, Varan 29.5, Vale 15.0, Purifier 1.5 | `test/match.mjs`, 200 matches a table |
-| throwing the opening round | **+3.9pt** over 1,080 paired matches, worst +10.8pt vs overseer | `test/match.mjs` |
+| throwing the opening round | **+0.8pt** over 1,080 paired matches, worst +5.0pt vs leader — merging all but ended it | `test/match.mjs` |
 | boosters worth more than taking none | **7 of 8** — The Ledger at 1.7σ since the route shortened the run | `test/match.mjs`, 300 runs an arm |
 
 **Nothing in that table is red.** Both of the reds this document carried for five sessions
@@ -3348,3 +3348,100 @@ not one of the drafted ones, and `formation()` returns **indices into the draft*
 `popKeys()` maps to deployment slots — so changing what a fielded card is touches the
 deployment, the offer, the ring that lands on a committed pick, and the card face. That is
 surgery, and it is worth its own turn rather than the end of one.
+
+---
+
+# Merging, and it did more than add a third kind of pick
+
+Sam's note 27 and design point 4 — specified in the very first design of this game and
+unbuilt for the whole of its life until now. Two copies of a card become one carrying
+**2.4×**, so the bodies halve and each is worth far more.
+
+## The dose is the design, and his own condition ruled out the obvious one
+
+His spec was that the two combine and gain each other's health and damage — exactly double.
+Measured against the other things one pick can buy, that is **the worst option on all twelve
+cards**:
+
+| holding two copies, one pick buys | wins |
+|---|---|
+| upgrade both (+35% each) | **64.7%** |
+| add a third copy | **62.9%** |
+| merge at double | **55.4%** |
+
+The reason is arithmetic. An upgrade leaves **2 cards at 1.35× — 2.7 cards' worth**; a merge
+at double leaves **1 card holding 2.0**. Least strength *and* fewest bodies recommends
+nothing, which is precisely the "worse situation" his note asked to be checked for.
+
+Cards where merging beats both alternatives, 300 pairings a card:
+
+| 2.0× | 2.3× | **2.4×** | 2.7× | 3.2× |
+|---|---|---|---|---|
+| 0 of 12 | 3 of 12 | **5 of 12** | 10 of 12 | 12 of 12 |
+
+**2.4× is chosen because a pick that is always right is a tax on not taking it.** At this
+dose merging is right on five cards and wrong on the rest — wrong on the Fireship, whose
+value is detonations per death and who therefore wants bodies, and on the Amabie, which
+wants more shots rather than bigger ones.
+
+## And it moved two figures nothing else had
+
+| | before | after |
+|---|---|---|
+| formalities | 12% | **7%** |
+| settled 95/5 | 59% | 55% |
+| **throwing the opening round** | **+3.9pt** | **+0.8pt** |
+| worst case for throwing | +10.8pt vs overseer | +5.0pt vs leader |
+
+**Throwing the opening round has all but stopped paying.** That figure has stood since
+upgrades were built and has been listed as open ever since — *"still legitimate, by his
+ruling, until he has played the game."* A merge gives duplicate copies somewhere to go, so
+banking picks early is no longer close to dominant. Nothing aimed at throwing; it fell out
+of giving the draft a third thing to do.
+
+Compositions are more contested too, which is the game's oldest problem moving in the right
+direction for the first time from the roster rather than from the ground.
+
+## Merges are taken, which is not the same as merges working
+
+**5.8% of a counter seat's picks and 3.4% of a floor seat's.** The better seat takes more of
+them, which is the right direction — a merge is a judgement rather than a default. A pick
+type that is offered and never chosen is a rule that never fires, and it would have passed
+every other check in this file while being invisible in play, so it is asserted.
+
+## What it broke, and two of the three were silent
+
+**The fielded column is not the drafted one any more**, and everything that lays out a
+column had to be moved onto `fielded()`. Three things read tokens and did not know about a
+third kind:
+
+- **`label()`** read `BY_ID[tok]` for anything that was not an upgrade, which is `undefined`
+  for `mg:line`. The first reveal after a merge threw, the reveal never finished, and the
+  match stopped with both sides alive. **Nothing said so; the screen simply stayed.**
+- **`gain()`** — the one function every persona reads — did the same, so the first opponent
+  offered a merge threw outright.
+- **`counterScore()`** did not throw, and that is worse. It fell through to the
+  reinforcement branch and built a trio out of three `mg:` tokens — an army of no cards at
+  all — so the strongest policy in the file scored every merge as a free loss and would
+  never have taken one. **A pick type only the player can take is the same defect as an
+  action only a human button calls**, which is how the money pump survived every sweep.
+
+And the card face was clipped twice, in both directions: the stat line overflowed its 12px
+box by 11px and the held line was cut by 6px at a four-card offer. Both boxes are
+`overflow:hidden`. Caught by the guard that exists for exactly that, and the copy now
+mirrors the upgrade face, which fits.
+
+## A correction to a comment in this repository
+
+`gain()` was given a comment saying a merge is worth a negative amount on paper. **That is
+wrong and it was mine.** `paper` goes as count squared, so halving the bodies divides by
+four — but health *and* damage each take the dose, so the product rises by 2.4², and the net
+is **1.44× at this dose and exactly neutral at 2.0×**. The comment now says so, and says why
+it disagrees with the resolver: paper cannot see that fewer bodies means fewer things
+shooting, less frontage and a shorter life on the field. That gap is the whole reason the
+dose was measured in battles rather than read off a formula.
+
+## What is still red
+
+`match.mjs` reads **9 of 10**, and it is The Ledger at **+0.12 (1.7σ)** — unchanged by any
+of this and unchanged since the route shortened the run. **It has not been buffed to pass.**

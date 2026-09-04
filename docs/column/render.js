@@ -57,7 +57,8 @@ export function groupByCard(live) {
   const by = new Map();
   for (const u of live) {
     const k = u.side + ':' + u.c;
-    const g = by.get(k) || { key: k, id: u.id, side: u.side, lvl: u.lvl || 0, x: 0, y: 0, hp: 0, max: 0, per: 0, n: 0 };
+    const g = by.get(k) || { key: k, id: u.id, side: u.side, lvl: u.lvl || 0,
+                             merged: !!u.merged, x: 0, y: 0, hp: 0, max: 0, per: 0, n: 0 };
     // `per` is ONE body's ceiling, and it is the whole reason the bar can be
     // honest. `max` sums over the bodies still standing, so it falls as they
     // die and the ratio stays pinned near full -- a three-body card down to its
@@ -132,7 +133,7 @@ export function draw(live, opt = {}) {
     // than what its base row says. Without it the inspector had no way to know,
     // and read every upgraded unit's figures off the unupgraded card.
     return `<g data-key="${g.key}" data-id="${g.id}" data-side="${g.side}"` +
-      ` data-lvl="${g.lvl}"` +
+      ` data-lvl="${g.lvl}"${g.merged ? ' data-merged="1"' : ''}` +
       ` data-x="${g.x.toFixed(2)}" data-y="${g.y.toFixed(2)}"` +
       (shake ? ` transform="translate(${shake} 0)"` : '') + `>` + ring +
       landed + (hit ? shape(spec.w, g.x, g.y, s + 1.2, 'none', '#ffffff', 0) : '') +
@@ -161,6 +162,13 @@ export function draw(live, opt = {}) {
       // PIPS are how many bodies it is spread across. A digit said the same thing
       // and had to be read; a gap in a row of pips is seen.
       pips(g, spec, s, c) +
+      // A MERGED CARD IS MARKED, or it is indistinguishable from an unmerged one:
+      // the same glyph, the same body count, and a bar measured against its own
+      // maximum either way. Opposite corner to the level chevrons so a card that
+      // is both says both.
+      (g.merged
+        ? `<text x="${g.x + s + 0.3}" y="${g.y + s + 0.2}" font-size="2.8" fill="#d9b8ff"
+             font-family="system-ui,sans-serif">&#10022;</text>` : '') +
       (g.lvl
         ? `<text x="${g.x - s - 0.6}" y="${g.y + 1.1}" text-anchor="end" font-size="2.6" fill="#ffd479"
              font-family="system-ui,sans-serif">${'▲'.repeat(g.lvl)}</text>` : '') +

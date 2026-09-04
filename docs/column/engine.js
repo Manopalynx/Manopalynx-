@@ -15,7 +15,7 @@
 // would give whichever side was iterated first a systematic opening strike, and
 // nothing about the game would look wrong.
 
-import { UNITS, DRAFT, SPECIALS, BY_ID, FIELD, MAX_TICKS, RULES, UPGRADE, SHOP, RUN,
+import { UNITS, DRAFT, SPECIALS, BY_ID, FIELD, MAX_TICKS, RULES, UPGRADE, MERGE, SHOP, RUN,
          BOOSTS, KIT, ORDERS, SABOTAGE, BY_KIT, BY_ORDER, TERRAIN, BATTLE } from './data.js';
 
 /* ------------------------------------------------------------------------ rng */
@@ -49,8 +49,14 @@ export const TAKEN_C = 1000;
 export const EQ_TAG = 'eq:';
 export const SAB_TAG = 'sab:';
 export const ORD_TAG = 'ord:';
+// A MERGE, and it is a third kind of pick rather than a variant of an upgrade:
+// an upgrade makes every copy stronger and keeps them all, a merge spends one to
+// make another far stronger. Sam's note 27.
+export const MG_TAG = 'mg:';
 export const isUp = tok => tok.startsWith(UP_TAG);
-export const tokId = tok => (isUp(tok) ? tok.slice(UP_TAG.length) : tok);
+export const isMg = tok => tok.startsWith(MG_TAG);
+export const tokId = tok =>
+  isUp(tok) ? tok.slice(UP_TAG.length) : isMg(tok) ? tok.slice(MG_TAG.length) : tok;
 
 /**
  * A draft, read. Four kinds of token and one function that knows all four, so
@@ -60,15 +66,16 @@ export const tokId = tok => (isUp(tok) ? tok.slice(UP_TAG.length) : tok);
  * list, because that is where it takes effect.
  */
 export function armyFrom(picks) {
-  const cards = [], up = {}, eq = new Set(), ord = new Set(), sab = new Set();
+  const cards = [], up = {}, mg = {}, eq = new Set(), ord = new Set(), sab = new Set();
   for (const p of picks) {
     if (p.startsWith(UP_TAG)) { const id = p.slice(UP_TAG.length); up[id] = Math.min(UPGRADE.max, (up[id] || 0) + 1); }
+    else if (p.startsWith(MG_TAG)) { const id = p.slice(MG_TAG.length); mg[id] = (mg[id] || 0) + 1; }
     else if (p.startsWith(EQ_TAG)) eq.add(p.slice(EQ_TAG.length));
     else if (p.startsWith(ORD_TAG)) ord.add(p.slice(ORD_TAG.length));
     else if (p.startsWith(SAB_TAG)) sab.add(p.slice(SAB_TAG.length));
     else cards.push(p);
   }
-  return { cards, up, eq, ord, sab };
+  return { cards, up, mg, eq, ord, sab };
 }
 
 // The effective stats of a card at a level, and the ONLY place the upgrade rule
@@ -81,12 +88,16 @@ export function armyFrom(picks) {
 const KIT_N = { plate: 10, sights: 8, drill: 70 };
 const ORD_N = { march: 2, marchSeek: 1.4, volley: 0.75 };
 
-export function specFor(id, lvl, eq, ord, sab) {
+export function specFor(id, lvl, eq, ord, sab, merged) {
   const u = BY_ID[id];
   const kit = eq && eq.size, orders = ord && ord.size, hit = sab && sab.has(id);
-  if (!lvl && !kit && !orders && !hit) return u;
-  const k = 1 + UPGRADE.step * Math.min(lvl || 0, UPGRADE.max);
-  const s = { ...u, lvl: lvl || 0, hp: u.hp * k, dmg: u.dmg * k };
+  if (!lvl && !kit && !orders && !hit && !merged) return u;
+  // A MERGE MULTIPLIES THE SAME CHANNELS AN UPGRADE DOES and stacks with it, so a
+  // merged card you have also levelled carries both. Count is untouched: the
+  // bodies are halved by there being one card where there were two, not by the
+  // card fielding fewer.
+  const k = (1 + UPGRADE.step * Math.min(lvl || 0, UPGRADE.max)) * (merged ? MERGE.step : 1);
+  const s = { ...u, lvl: lvl || 0, merged: !!merged, hp: u.hp * k, dmg: u.dmg * k };
   if (u.dot) s.dot = u.dot * k;
   if (u.aura) s.aura = u.aura * k;
   if (u.boom) s.boom = { r: u.boom.r, d: u.boom.d * k };
@@ -211,9 +222,50 @@ const bulk = u => u.hp * (u.count || 1);
  * @param {string[]} cards  card ids in draft order
  * @returns {number[]} draft indices, rear rank first
  */
-export function formation(cards) {
-  return cards.map((_, i) => i).sort((a, b) => {
-    const A = BY_ID[cards[a]], B = BY_ID[cards[b]];
+/**
+ * THE COLUMN AS IT ACTUALLY STANDS -- the drafted cards with merges applied.
+ *
+ * A merge spends one copy to make another carry both, so the fielded list is not
+ * the drafted list any more and everything that lays out a column has to read
+ * this rather than `cards`. The FIRST copies of a merged id become the merged
+ * ones and the next are consumed, so draft order survives for whatever is left
+ * and the ring that lands on a committed pick still finds it.
+ *
+ * A merge with fewer than two copies behind it does nothing at all rather than
+ * throwing or eating the only copy -- an army can reach that state by having the
+ * card sabotaged out from under a merge already taken.
+ *
+ * @param {string[]} cards  card ids in draft order, from armyFrom
+ * @param {object}   mg     merges per id, from armyFrom
+ * @returns {{id:string, merged:boolean}[]} in draft order
+ */
+export function fielded(cards, mg = {}) {
+  const want = {}, made = {}, eaten = {};
+  for (const id of Object.keys(mg))
+    want[id] = Math.min(mg[id], Math.floor(cards.filter(x => x === id).length / 2));
+  const out = [];
+  for (const id of cards) {
+    if ((made[id] || 0) < (want[id] || 0)) { made[id] = (made[id] || 0) + 1; out.push({ id, merged: true }); }
+    else if ((eaten[id] || 0) < (want[id] || 0)) eaten[id] = (eaten[id] || 0) + 1;
+    else out.push({ id, merged: false });
+  }
+  return out;
+}
+
+// The spec a LAYOUT needs: merged cards are heavier, so they stand further back
+// within their band. Reach is untouched by a merge, so the band is not.
+const layoutSpec = e => {
+  const u = BY_ID[e.id];
+  return e.merged ? { ...u, hp: u.hp * MERGE.step } : u;
+};
+
+/**
+ * Deployment order, as INDICES INTO THE FIELDED LIST.
+ * @param {{id:string, merged:boolean}[]} list  from fielded()
+ */
+export function formation(list) {
+  return list.map((_, i) => i).sort((a, b) => {
+    const A = layoutSpec(list[a]), B = layoutSpec(list[b]);
     // Draft order breaks a tie, so two identical cards deploy in the order they
     // were picked and the same army always lays out the same way.
     return band(A) - band(B) || bulk(A) - bulk(B) || a - b;
@@ -221,8 +273,11 @@ export function formation(cards) {
 }
 
 function deploy(picks, side, rand) {
-  const { cards: drafted, up, eq, ord, sab } = armyFrom(picks);
-  const cards = formation(drafted).map(i => drafted[i]);
+  const { cards: drafted, up, mg, eq, ord, sab } = armyFrom(picks);
+  // THE FIELDED COLUMN, not the drafted one: a merge spends a copy, so these are
+  // two different lists and everything below lays out the one that stands.
+  const list = fielded(drafted, mg);
+  const cards = formation(list).map(i => list[i]);
   // A DROP LANDS AT THE LINE OF CONTACT rather than marching to it. The Adarnas
   // "dropped through smoke the whole way down"; the rest of the column walks.
   const CONTACT_ROW = FIELD.d / 2 - 12;
@@ -231,8 +286,13 @@ function deploy(picks, side, rand) {
   // end up at a different level from its squadmate.
   const spec = {};
   const out = [];
-  cards.forEach((id, ci) => {
-    const u = spec[id] || (spec[id] = specFor(id, up[id] || 0, eq, ord, sab));
+  cards.forEach((entry, ci) => {
+    const id = entry.id;
+    // KEYED ON MERGED-NESS TOO. One spec object per card type was the rule, and a
+    // merged copy and a plain one of the same id are two types now -- sharing the
+    // object would have given every body of both whichever was computed first.
+    const key = id + (entry.merged ? '#m' : '');
+    const u = spec[key] || (spec[key] = specFor(id, up[id] || 0, eq, ord, sab, entry.merged));
     const n = u.count || 1;
     const rank = Math.floor(ci / PER_RANK);
     const col = ci % PER_RANK;
@@ -258,6 +318,12 @@ function deploy(picks, side, rand) {
         // add to what they already hold. Read by the screen only; the resolver
         // takes its level from `s`.
         lvl: u.lvl || 0,
+        // AND WHETHER IT IS A MERGED CARD. Without this a merged Line Infantry
+        // draws and reads exactly like an unmerged one -- same three bodies, same
+        // glyph, and a strength bar that is a fraction of its OWN maximum either
+        // way, so nothing on screen would distinguish 3 bodies at 516 health from
+        // 3 at 215. That is the level-chevron fault again, in a new rule.
+        merged: !!u.merged,
         // Where this BODY stands within its own squad.
         x: cx + (k - (n - 1) / 2) * SQUAD_SPREAD + (rand() - 0.5) * 1.2,
         y: (dropped
@@ -554,7 +620,8 @@ export function resolve(a, b, seed, keepLog = false, onTick = null, terrain = nu
       // renderer has to reconstruct the encoding to find out which marker a
       // logged hit belongs to, and a second copy of an encoding is a second
       // copy of a rule.
-      id: u.id, side: u.side, c: u.c, lvl: u.s.lvl || 0, k: u.i * 2 + u.side,
+      id: u.id, side: u.side, c: u.c, lvl: u.s.lvl || 0, merged: !!u.s.merged,
+      k: u.i * 2 + u.side,
       x: u.x, y: u.y, hp: u.hp, max: u.max
     })));
   }
@@ -595,7 +662,7 @@ function hurtInto(target, amount, from, add, dealt, ground) {
 // replays exactly; and with no army passed there are no upgrades at all, which
 // is why matchup.mjs and preview.mjs still measure what they measured.
 export function offer(rand, n = RULES.offer, picks = []) {
-  const { cards, up } = armyFrom(picks);
+  const { cards, up, mg } = armyFrom(picks);
   // DRAFT, not UNITS. A special is bought or it is not had -- dealing one as a
   // free pick would put the roster's three biggest cards into a hand that was
   // never paid for, and into the counter graph with them.
@@ -604,7 +671,18 @@ export function offer(rand, n = RULES.offer, picks = []) {
   for (let i = 0; i < n && pool.length; i++) {
     const id = pool.splice(Math.floor(rand() * pool.length), 1)[0];
     const eligible = cards.includes(id) && (up[id] || 0) < UPGRADE.max;
-    out.push(eligible && rand() < UPGRADE.chance ? UP_TAG + id : id);
+    // A MERGE NEEDS TWO COPIES STILL STANDING -- copies already spent by an
+    // earlier merge cannot be spent again, so the test is against what is
+    // FIELDED rather than against what was drafted.
+    const spare = cards.filter(x => x === id).length - 2 * (mg[id] || 0);
+    const canMerge = spare >= 2;
+    // Drawn in one place and in one order, so a seeded match replays exactly.
+    // The upgrade is asked first because it is the older rule and reordering the
+    // draws would move every seeded figure in this folder for no reason.
+    const r1 = rand(), r2 = rand();
+    out.push(eligible && r1 < UPGRADE.chance ? UP_TAG + id
+           : canMerge && r2 < MERGE.chance ? MG_TAG + id
+           : id);
   }
   return out;
 }
@@ -623,6 +701,31 @@ const paper = (u, n) => n * n * u.hp * (u.dmg * 10 / u.rate);
 // field. Every policy that reads a number reads this, so none of them can drift
 // from it -- and none of them needs its own opinion about upgrades.
 export function gain(tok, picks = [], val = paper) {
+  // A MERGE, and it has to be here or no policy can score one. `gain` is the one
+  // function every persona reads, and a bare `BY_ID[tok]` on an `mg:` token is
+  // undefined -- so the first opponent offered a merge threw. A pick type only
+  // the player can take is the same defect as an action only a human button
+  // calls, which is how the money pump survived every sweep.
+  //
+  // Worth what the column GAINS: one card at the merged dose in place of the two
+  // it consumed.
+  //
+  // ON PAPER THAT IS A GAIN, and it is worth knowing why it disagrees with the
+  // battle. `paper` goes as count squared, so halving the bodies divides by four
+  // -- but health AND damage each take the dose, so the product rises by 2.4^2.
+  // Net 1.44x at this dose, and exactly neutral at 2.0x. The resolver says
+  // something else entirely: at 2.0x a merge is the worst pick available on all
+  // twelve cards, and even at 2.4x it is the best on only five. Paper cannot see
+  // that fewer bodies means fewer things shooting, less frontage and a shorter
+  // life on the field, which is why the dose was measured in battles rather than
+  // read off this function.
+  if (isMg(tok)) {
+    const { cards, up, mg } = armyFrom(picks);
+    const id = tokId(tok), lvl = up[id] || 0;
+    if (cards.filter(x => x === id).length - 2 * (mg[id] || 0) < 2) return -Infinity;
+    const c = BY_ID[id].count || 1;
+    return val(specFor(id, lvl, null, null, null, true), c) - val(specFor(id, lvl), 2 * c);
+  }
   if (!isUp(tok)) { const u = BY_ID[tok]; return val(u, u.count || 1); }
   const { cards, up } = armyFrom(picks);
   const id = tokId(tok), lvl = up[id] || 0;
@@ -792,6 +895,20 @@ function fight(mine, theirs) {
   return (r.winner === 0 ? 1000 : 0) - r.left[1] * 10;
 }
 function counterScore(tok, theirs, picks = []) {
+  // A MERGE, and it needs the same DIFFERENTIAL shape the upgrade branch uses.
+  // Falling through to the reinforcement line would have built a trio out of
+  // three `mg:` tokens -- an army of no cards at all -- so the strongest policy
+  // in the file would have scored every merge as a free loss and never taken one.
+  // Not a crash, which is why it needed looking for rather than waiting for.
+  if (isMg(tok)) {
+    const { cards, up, mg } = armyFrom(picks);
+    const id = tokId(tok), lvl = up[id] || 0;
+    if (cards.filter(x => x === id).length - 2 * (mg[id] || 0) < 2) return -Infinity;
+    const levels = Array.from({ length: lvl }, () => UP_TAG + id);
+    const two = [id, id, ...levels];              // the pair as it stands
+    const one = [...two, MG_TAG + id];            // the card they become
+    return (fight(one, theirs) - fight(two, theirs)) + gain(tok, picks) * 1e-9;
+  }
   if (!isUp(tok)) return fight(trio(tok, 0), theirs);
   const { cards, up } = armyFrom(picks);
   const id = tokId(tok), lvl = up[id] || 0;

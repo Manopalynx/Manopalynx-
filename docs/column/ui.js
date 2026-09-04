@@ -11,10 +11,10 @@
 // watch IS what was resolved. It cannot drift, because there is nothing to
 // drift from.
 
-import { BY_ID, RULES, PERSONAS, UPGRADE, DRAFT, SPECIALS, SHOP, RUN,
+import { BY_ID, RULES, PERSONAS, UPGRADE, MERGE, DRAFT, SPECIALS, SHOP, RUN,
          BY_BOOST, BY_KIT, BY_ORDER, SABOTAGE, COIN, BUILD, TICK, BY_MAP,
          TERRAIN, groundSays } from './data.js';
-import { rng, offer, resolve, deployment, formation, POLICIES, armyFrom, isUp, tokId, specFor,
+import { rng, offer, resolve, deployment, formation, fielded, POLICIES, armyFrom, isUp, isMg, tokId, specFor,
          earn, stock, spend, upgradeable, specialsFor, kitFor, ordersFor, boosterOffer,
          offerSize, offerFor, picksFor, pickTokens, bonusPicks,
          rampFor, mends, carried, ledgerCard, routeOffer, routeRank } from './engine.js';
@@ -348,17 +348,33 @@ function commit(i) {
 // UPGRADE adds nothing to the field, so it lights every copy of the card it
 // improved -- which is also the honest picture of what the pick did.
 function popKeys(side, tok) {
-  const cards = armyFrom(S.army[side]).cards;
+  const { cards, mg } = armyFrom(S.army[side]);
+  // THROUGH THE FIELDED COLUMN. A merge spends a copy, so the drafted list and
+  // the one that stands on the field are different lengths -- a ring computed
+  // from draft indices would land on whatever the merge had shifted into that
+  // slot, which is the same fault note 9 fixed for the sort.
+  const list = fielded(cards, mg);
   // THROUGH THE FORMATION, not the draft. A counter's key is where the card
   // DEPLOYS, and since note 9 that is no longer where it was picked -- so a ring
   // computed from draft order landed on whatever the sort had put in that slot,
   // which was reliably whatever stood at the front. One function decides the
   // order, and both the field and this now ask it.
-  const slot = new Map(formation(cards).map((draftIndex, ci) => [draftIndex, ci]));
+  const slot = new Map(formation(list).map((fieldIndex, ci) => [fieldIndex, ci]));
   const at = d => side + ':' + slot.get(d);
-  if (!isUp(tok)) return [at(cards.length - 1)];
   const id = tokId(tok);
-  return cards.map((x, i) => (x === id ? at(i) : null)).filter(Boolean);
+  // A MERGE lights the card it made, which is the one thing on the field that
+  // changed -- the copy it spent is not there to light.
+  if (isMg(tok)) {
+    const i = list.findIndex(e => e.id === id && e.merged);
+    return i < 0 ? [] : [at(i)];
+  }
+  // An UPGRADE adds nothing and lights every copy it improved; a plain card
+  // lights the one that just arrived, which is the last of its id on the field.
+  if (!isUp(tok)) {
+    const i = list.map((e, k) => (e.id === id ? k : -1)).filter(k => k >= 0).pop();
+    return i === undefined ? [] : [at(i)];
+  }
+  return list.map((e, i) => (e.id === id ? at(i) : null)).filter(Boolean);
 }
 
 // Show what was committed, then move on by itself.
@@ -628,7 +644,7 @@ const art = (id, px, colour = '#3a2f1e', w = 0.62) =>
   `<svg width="${px}" height="${px}" viewBox="-6 -6 12 12">${glyph(id, 0, 0, 5, colour, w, true)}</svg>`;
 
 function cardFace(tok, i) {
-  const up = isUp(tok), id = tokId(tok), base = BY_ID[id];
+  const up = isUp(tok), mgTok = isMg(tok), id = tokId(tok), base = BY_ID[id];
   const held = armyFrom(S.army[0]).up[id] || 0;
   // The card as YOU hold it. A card you have not upgraded returns the base row
   // untouched, so nothing moves for a card at level 0 -- specFor returns the
@@ -637,9 +653,23 @@ function cardFace(tok, i) {
   const lvl = held + 1;
   const copies = armyFrom(S.army[0]).cards.filter(x => x === id).length;
   const b = document.createElement('button');
-  b.className = 'card' + (up ? ' up' : '');
+  b.className = 'card' + (up ? ' up' : mgTok ? ' mg' : '');
   b.onclick = () => commit(i);
-  b.innerHTML = up
+  // A MERGE IS ITS OWN FACE, in the same fixed slots as the other two -- a third
+  // layout is a third thing to overflow, and this row is a 132px box with
+  // overflow:hidden that clips in silence.
+  b.innerHTML = mgTok
+    ? `<span class="art up">${art(id, 32)}<span class="chev">&#10022;</span></span>` +
+      `<b>${u.n} MERGE</b>` +
+      // THE SAME LENGTHS AS THE UPGRADE FACE, which is the one that fits. The
+      // first version read "two become one at 2.4x" and "bigger, and fewer to
+      // hit"; the stat line overflowed its 12px box by 11px and the held line was
+      // cut by 6px at a four-card offer. Both boxes are overflow:hidden, so both
+      // would have been lost in silence -- note 4, caught by its own guard.
+      `<span class="stat">${MERGE.step}&times; hp &amp; ${upChannel(base)}</span>` +
+      `<span class="hint">${copies} become ${copies - 1}</span>` +
+      `<span class="held">${copies} on the field</span>`
+    : up
     // THE SAME FIXED SLOTS as a reinforcement, because they are the same box and
     // a second layout is a second thing to overflow. The old face put the effect,
     // the level and the copies in one `hint` -- three lines of content in a box
@@ -759,8 +789,14 @@ function provenance(u) {
   return u.qv ? "the author's line" : 'written for the game';
 }
 
+// THREE KINDS OF TOKEN, THREE LABELS. This read `BY_ID[tok]` for anything that
+// was not an upgrade, which is undefined for a merge -- so the first reveal after
+// a merge was committed threw, the reveal never finished, and the match simply
+// stopped with both sides alive. Nothing said so; the screen just stayed.
 const label = tok => isUp(tok)
   ? `${BY_ID[tokId(tok)].n} UP!`
+  : isMg(tok)
+  ? `${BY_ID[tokId(tok)].n} MERGE`
   : `${BY_ID[tok].n} ×${BY_ID[tok].count}`;
 
 // The button always occupies its space and sometimes has nothing in it. Hiding
@@ -791,7 +827,7 @@ el.field.addEventListener('click', e => {
   // said its aura was 1.5 while the resolver was running it at 2.06. specFor is
   // the only place the upgrade rule lives; the screen has to ask it too, or the
   // rule exists twice and the second copy is the one the player reads.
-  const u = specFor(g.dataset.id, +g.dataset.lvl || 0);
+  const u = specFor(g.dataset.id, +g.dataset.lvl || 0, null, null, null, !!g.dataset.merged);
   S.inspect = g.dataset.key;
   // OVER the field, not in the deck. Four lines of answer in the status line
   // resized the deck, and resizing the deck moves the battlefield -- the same

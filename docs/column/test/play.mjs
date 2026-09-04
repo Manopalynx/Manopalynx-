@@ -27,10 +27,10 @@ import { fileURLToPath } from 'url';
 import { dirname, resolve as rp, extname, join } from 'path';
 import { chromium } from 'playwright';
 import { BOOSTS, RULES, PERSONAS, MAPS, BY_MAP, TERRAIN, groundSays, DRAFT, BY_ID, SPECIALS,
-         RUN, BATTLE } from '../data.js';
+         RUN, BATTLE, MERGE, UPGRADE } from '../data.js';
 const RUN_ORDER = RUN.order;
 import { bonusPicks, POLICIES, specFor, resolve, TAKEN_C, ledgerCard, armyFrom, playMatch,
-         playRun, routeOffer, routeRank, rng, ROUTES } from '../engine.js';
+         playRun, routeOffer, routeRank, rng, ROUTES, fielded, formation, offer, deployment } from '../engine.js';
 import { draw, effects, groupByCard } from '../render.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -207,6 +207,91 @@ const bad = (m, why) => { ran++; failed++; console.log(`FAIL  ${m}`); (why || []
   if (!why.length)
     ok(`The Ledger adds exactly one card, to both sides — ${mine[0]} to ${mine[1]} in a single round`);
   else bad('The Ledger adds exactly one card, to both sides', why);
+}
+
+/* ------------------------------------ a merge spends a copy and doubles down --- */
+// Sam's note 27, design point 4, specified in the first design and unbuilt until
+// now. Two copies become one carrying 2.4x, so the FIELDED column is no longer
+// the drafted one -- and that is where every risk in this change lives.
+//
+// THE DOSE IS MEASURED, not chosen: at exactly double a merge is the worst thing
+// a pick can buy on all twelve cards (upgrade 64.7%, add a third 62.9%, merge
+// 55.4%), because an upgrade leaves 2 cards at 1.35x and a merge at double leaves
+// 1 holding 2.0 -- least strength AND fewest bodies. Merge beats both on 0 of 12
+// cards at 2.0x, 5 at 2.4x, 10 at 2.7x and 12 at 3.2x, and a pick that is always
+// right is a tax, so 2.4x is the one that makes it a decision.
+{
+  const why = [];
+
+  // 1. A merge spends exactly one copy and marks exactly one, and never eats a
+  //    copy that is not there -- an army can lose one to sabotage after merging.
+  const cases = [
+    [['line', 'line', 'mg:line'], 1, 1],
+    [['line', 'line', 'line', 'mg:line'], 2, 1],
+    [['line', 'line', 'line', 'line', 'mg:line', 'mg:line'], 2, 2],
+    [['line', 'mg:line'], 1, 0]                    // only one copy: the merge does nothing
+  ];
+  for (const [picks, wantN, wantMerged] of cases) {
+    const a = armyFrom(picks);
+    const list = fielded(a.cards, a.mg);
+    const merged = list.filter(e => e.merged).length;
+    if (list.length !== wantN || merged !== wantMerged)
+      why.push(`${picks.join('+')} fielded ${list.length} cards with ${merged} merged, expected ${wantN} and ${wantMerged}`);
+  }
+
+  // 2. The bodies halve and each carries the dose -- the whole of the mechanic.
+  const bodies = picks => deployment(picks, ['brute'], 7).filter(u => u.side === 0 && u.id === 'line');
+  const plain = bodies(['line', 'line']), one = bodies(['line', 'line', 'mg:line']);
+  if (!(plain.length === 2 * BY_ID.line.count && one.length === BY_ID.line.count))
+    why.push(`line bodies went ${plain.length} to ${one.length}, expected ${2 * BY_ID.line.count} to ${BY_ID.line.count}`);
+  const want = BY_ID.line.hp * MERGE.step;
+  if (one.length && Math.abs(one[0].max - want) > 0.01)
+    why.push(`a merged body carries ${one[0].max} health, expected ${want}`);
+
+  // 3. It stacks with a level rather than replacing it.
+  const both = specFor('line', 3, null, null, null, true);
+  const wantBoth = BY_ID.line.hp * (1 + UPGRADE.step * UPGRADE.max) * MERGE.step;
+  if (Math.abs(both.hp - wantBoth) > 0.01)
+    why.push(`merged and levelled reads ${both.hp.toFixed(1)}, expected ${wantBoth.toFixed(1)}`);
+
+  // 4. A merge is only ever OFFERED when two copies are actually standing --
+  //    copies already spent cannot be spent twice.
+  let illegal = 0;
+  for (let i = 0; i < 300; i++) {
+    const army = ['line', 'line', 'mg:line', 'acid', 'walker'];      // one line left
+    for (const tok of offer(rng(i * 31 + 7), 3, army))
+      if (tok.startsWith('mg:') && tok.slice(3) === 'line') illegal++;
+  }
+  if (illegal) why.push(`${illegal} merges offered for a card with only one copy left standing`);
+
+  // 5. THE SCREEN KNOWS. A merged card draws and reads identically to an
+  //    unmerged one otherwise -- same glyph, same body count, and a bar measured
+  //    against its own maximum either way.
+  let frame = null;
+  resolve(['line', 'line', 'mg:line', 'acid'], ['brute'], 7, false, (t, live) => { if (t === 1) frame = live; });
+  const g = groupByCard(frame).find(x => x.side === 0 && x.id === 'line');
+  const svg = draw(frame);
+  if (!g || !g.merged) why.push('the renderer was not told the card is merged');
+  if (!/data-merged="1"/.test(svg)) why.push('no counter carries data-merged, so a tap cannot ask');
+  if (!/&#10022;/.test(svg)) why.push('a merged counter draws no mark, so it is indistinguishable on the field');
+
+  // 6. AND IT IS ACTUALLY TAKEN. A pick type that is offered and never chosen is
+  //    a rule that never fires -- it would pass every check above while being
+  //    invisible in play. Measured on real matches rather than on the offer.
+  let mgPicks = 0, allPicks = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const m = playMatch({ a: 'counter', b: 'harlow', seed, shop: ['ai', 'ai'] });
+    for (const t of m.army[0]) {
+      if (t.startsWith('mg:')) mgPicks++;
+      if (t.startsWith('mg:') || t.startsWith('up:') || !t.includes(':')) allPicks++;
+    }
+  }
+  const share = 100 * mgPicks / Math.max(1, allPicks);
+  if (share < 1) why.push(`merges are ${share.toFixed(1)}% of picks — offered but effectively never taken`);
+
+  if (!why.length)
+    ok(`a merge spends a copy and carries ${MERGE.step}× — ${plain.length} bodies become ${one.length} at ${one[0].max} health, and ${share.toFixed(1)}% of picks are merges`);
+  else bad(`a merge spends a copy and carries ${MERGE.step}×`, why);
 }
 
 /* --------------------------------- the route, and finishing means all nine ---- */
@@ -568,8 +653,15 @@ const state = () => page.evaluate(() => {
     // A CARD IS A BARE ID. Every other token carries a prefix and a colon --
     // up:, eq:, ord:, sab: -- and this check restated that rule as "not up:",
     // so the first token kind added after it was counted as a card.
-    cards: s && [s.army[0].filter(t => !t.includes(':')).length,
-                 s.army[1].filter(t => !t.includes(':')).length],
+    // FIELDED, NOT DRAFTED, and since note 27 those are different numbers: a
+    // merge spends one copy to make another carry both, so two bare ids and an
+    // `mg:` token stand on the field as ONE card. The count is bare ids minus
+    // merges. That rule lives in `fielded()` and this is the only place it is
+    // restated -- the guard against the two drifting is the merge check above,
+    // which asserts fielded() directly rather than through a screen.
+    cards: s && [0, 1].map(k =>
+      s.army[k].filter(t => !t.includes(':')).length
+      - s.army[k].filter(t => t.startsWith('mg:')).length),
     markers: document.querySelectorAll('#field g[data-id]').length,
     // Mean vertical position of each side's counters, in field units. The field
     // is 140 deep and the viewBox is untransformed, so these are the engine's
@@ -1150,11 +1242,16 @@ await page.screenshot({ path: png('play.png') });
     await page.locator(took ? `.sheet [data-b="${took}"]` : '.sheet [data-b]').first().click();
     const compactOffered = took === 'compact';
 
-    const stated = await page.evaluate(() => (document.querySelector('.sheet') || {}).textContent || '');
     // TAKING A BOOSTER LEADS STRAIGHT TO THE ROUTE NOW. There is no "March on"
     // button any more: the next screen is the three opponents, and the run does
     // not advance until one is taken.
     await page.waitForSelector('.sheet [data-go]', { timeout: 5000 });
+    // THE ROUTE SHEET IS WHERE THE RAMP IS STATED NOW. It used to be the "March
+    // on" screen, which the route replaced -- so this was read off the booster
+    // sheet, which never said it, and the claim below failed for the wrong
+    // reason. Matched on the FIGURE rather than on a phrase, which cannot drift
+    // when the sentence around it is reworded.
+    const stated = await page.textContent('.sheet');
     const route2 = await page.locator('.sheet [data-go]').count();
     const beatenOffered = await page.evaluate(o => {
       const s = JSON.parse(localStorage.getItem('column-save') || 'null');
@@ -1191,7 +1288,7 @@ await page.screenshot({ path: png('play.png') });
       return s && { n: s.run && s.run.n, money: s.money, per: s.perRound,
                     boosts: s.boosts, lives: s.lives, army: s.army };
     });
-    if (/begin with/i.test(stated) && two && two.n === 1 && two.money[1] >= 18)
+    if (two && stated.includes(String(two.money[1])) && two.n === 1 && two.money[1] >= 18)
       ok(`the ramp is stated and applied — match 2's opponent starts on ${two.money[1]}`);
     else bad('the ramp is stated and applied', [
       `stated ${/begin with/i.test(stated)}, match ${two && two.n}, their purse ${two && two.money[1]}`]);
