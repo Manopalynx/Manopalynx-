@@ -6,8 +6,7 @@
 - **`HISTORY.md`** — the session sections verbatim, **not** imported and not expected
   reading. Open it to chase a citation, or to check whether something is a rediscovery.
 
-**Notation.** `[3,7]` means instances 3 and 7 found it independently here, by measurement;
-more numbers is stronger, and a line with no bracket has no session behind it yet.
+**Notation.** `[3,7]`: instances 3 and 7 each measured it here. No bracket, no session yet.
 
 ---
 
@@ -69,7 +68,7 @@ His, in his words, holding every turn until he changes them.
 ## The division of labour
 
 **He owns architecture and every decision that costs something. You own execution and
-measurement.** That split runs across all three projects, and it is what the standing
+measurement.** That split runs across every project here, and it is what the standing
 instructions are protecting — "discuss before building" is not a courtesy, it is a role
 boundary. `[2,3,7,8]`
 
@@ -178,7 +177,7 @@ the shape mid-turn is the point; writing it up afterwards is not a substitute.
 
 ## Where things are
 
-One branch, `main`, carries three projects sharing no code.
+One branch, `main`, carries five projects sharing no code.
 
 | project | what it is | files | its document |
 |---|---|---|---|
@@ -186,6 +185,7 @@ One branch, `main`, carries three projects sharing no code.
 | **Grandiose** | Monopoly-shaped game set in his novel | `docs/` | `docs/README.md` |
 | **Matchbox** | single-file falling-sand toy with a heat model | `matchbox.html`, `test/matchbox-*.mjs` | `MATCHBOX.md` |
 | **The Column** | drafting autobattler in his novel; playable, published under `docs/` | `docs/column/` | `docs/column/README.md` |
+| **Dusk** | 3D phone shooter, three.js; moved from an artifact, published under `docs/` | `docs/dusk/`, `test/dusk.mjs` | `docs/dusk/README.md` |
 
 **GitHub Pages serves `/docs` from `main`** — hence the folder name, and why the root
 `upliftledger.html` and `matchbox.html` are unpublished; `test/published.mjs` asserts

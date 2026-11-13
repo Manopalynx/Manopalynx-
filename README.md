@@ -15,9 +15,13 @@ Everything is stored in the browser's `localStorage` on the machine you open it 
 >   novel. **Built, published and playable**, at `/Manopalynx-/column/`;
 >   **[docs/column/README.md](docs/column/README.md)** carries its design, its
 >   measured figures and its tests.
+> - `docs/dusk/`, *A small world at dusk* — a 3D phone shooter on three.js, moved here
+>   from a claude.ai artifact and published at `/Manopalynx-/dusk/`.
+>   **[docs/dusk/README.md](docs/dusk/README.md)** carries its settled decisions, its
+>   queue and its test.
 >
 > `workingwithsam.md` is the operating document — how Sam works, the standing
-> instructions, the defect catalogue — and it maps all three. `HISTORY.md` carries the
+> instructions, the defect catalogue — and it maps all of them. `HISTORY.md` carries the
 > session sections it used to hold.
 
 ## Running it
