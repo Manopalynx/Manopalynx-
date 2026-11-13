@@ -238,8 +238,22 @@ if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ -f package.json ]; then
       echo "Test dependencies installed, BUT CHROMIUM WILL NOT LAUNCH. Browser suites"
       echo "will all fail at startup, which reads as a broken repository and is not:"
       echo "  $launch"
-      echo "Check that playwright in package.json is pinned to an exact version with no"
-      echo "caret, then run: PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npm i"
+      # NAME THE MISMATCH instead of guessing at its cause. This message used to
+      # say only "check for a caret", and the one time it fired for real the pin
+      # was exact and correct-as-written: the image had moved to a newer
+      # Chromium and the build the pin wanted was gone. The image ships its own
+      # Playwright, globally, which by construction matches its browser -- so
+      # the version to pin is a thing to read, not to work out.
+      pinned=$(node --input-type=commonjs -p "require('./package.json').dependencies.playwright" 2>/dev/null)
+      wants=$(node --input-type=commonjs -p "require('$(npm root -g 2>/dev/null)/playwright/package.json').version" 2>/dev/null)
+      if [ -n "$wants" ] && [ "$pinned" != "$wants" ]; then
+        echo "package.json pins playwright $pinned; this machine's browser belongs to $wants."
+        echo "The image has moved. Fix: PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npm i --save-exact playwright@$wants"
+        echo "then run the browser suites before committing -- a new Chromium can move a measurement."
+      else
+        echo "The pin (${pinned:-unreadable}) matches the machine's Playwright (${wants:-unreadable}), so this is something else."
+        echo "Check it is exact with no caret, then run: PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npm i"
+      fi
     fi
   else
     echo "npm install FAILED. Browser suites will not run until this is fixed:"

@@ -3,8 +3,8 @@
   "private": true,
   "// type": "Every source file here is an ES module and every test entry point is .mjs; nothing in this repository uses require(). Without this, node reparses each docs/**/*.js it imports and prints MODULE_TYPELESS_PACKAGE_JSON on every suite run -- warning noise in a test log is how a real red goes unread.",
   "type": "module",
-  "description": "Playwright is pinned exactly, not with a caret. The browser suites launch the Chromium already installed at PLAYWRIGHT_BROWSERS_PATH, and each Playwright release only looks for the one build it shipped with. ^1.56.0 resolves to a newer release that hunts for a build that is not there, and every browser suite dies on launch with 'Executable doesn't exist'. Check /opt/pw-browsers/chromium-*/chrome-linux/chrome --version and match it before changing this.",
+  "description": "Playwright is pinned exactly, not with a caret. The browser suites launch the Chromium already installed at PLAYWRIGHT_BROWSERS_PATH, and each Playwright release only looks for the one build it shipped with. A caret resolves to a newer release that hunts for a build that is not there, and every browser suite dies on launch with 'Executable doesn't exist'. The pin goes stale the other way too: the image moved from build 1194 to 1243 and 1.56.0 stopped launching. The version to pin is the image's own global Playwright, and the session-start hook prints it when the two disagree.",
   "dependencies": {
-    "playwright": "1.56.0"
+    "playwright": "1.63.0"
   }
 }

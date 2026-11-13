@@ -13,7 +13,7 @@
 import { chromium } from 'playwright';
 
 const URL = process.env.URL || 'http://127.0.0.1:877/docs/index.html';
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = process.env.CHROME || '/opt/pw-browsers/chromium';   // the alias, not a build number: build 1194 left the image and took these five probes with it
 
 const DEVICES = [
   { name: 'iPhone SE', width: 375, height: 667 },

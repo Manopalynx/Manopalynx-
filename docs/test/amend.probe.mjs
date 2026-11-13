@@ -16,7 +16,7 @@
 import { chromium } from 'playwright';
 
 const URL = process.env.URL || 'http://127.0.0.1:877/docs/index.html';
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = process.env.CHROME || '/opt/pw-browsers/chromium';   // the alias, not a build number: build 1194 left the image and took these five probes with it
 const SAVE_KEY = 'grandiose-ledger-v1';
 
 const DEVICES = [

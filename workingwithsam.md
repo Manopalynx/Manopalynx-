@@ -214,10 +214,10 @@ something off the shelf. The specificity is the point. `[1]`
 
 ### Environment facts that cost a session each
 
-- **Pin Playwright to exactly `1.56.0`, no caret.** `^1.56.0` resolves back to the release
-  that breaks against this environment's Chromium. The symptom — *"Executable doesn't exist
-  at .../chromium_headless_shell-1234"* — reads as a broken repository. Run `npm i`, not
-  `npm i playwright`, with `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`. `[5]`
+- **Playwright is pinned exactly, no caret, to the image's own global version** — a caret
+  outruns this machine's Chromium and a stale pin trails it, and either way the symptom,
+  *"Executable doesn't exist at .../chromium_headless_shell-1234"*, reads as a broken
+  repository. The hook names the version to pin when they disagree; then `npm i`. `[5,15]`
 - **Block `http(s)` in tests** or CDN fetches stall the load event — except the one UI check
   that needs the real webfont, which is wider than the fallback and hid a whole class of
   clipped labels from a green suite. `[1,4]`
