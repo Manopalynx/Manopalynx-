@@ -109,7 +109,9 @@ for (const device of DEVICES) {
   if (/completes Enigma for you/i.test(sheet.text)) pass('and that it closes the set');
   else fail('the set arithmetic is missing from a set-closing sale');
 
-  if (sheet.buttons.length === 2) pass(`two answers offered (${sheet.buttons.join(' / ')})`);
+  // Three, since the sheet gained Counter. This read `length === 2` and went red
+  // on a sheet that was right -- nobody saw, because the probe could not launch.
+  if (sheet.buttons.join(' / ') === 'Accept / Counter / Refuse') pass(`three answers offered (${sheet.buttons.join(' / ')})`);
   else fail(`buttons: ${sheet.buttons.join(' / ')}`);
 
   if (sheet.tap >= 44) pass(`buttons are hittable (${sheet.tap}px)`);

@@ -55,6 +55,10 @@ const b = await page.screenshot();
 if (!a.equals(b)) ok('the picture changes over 1.5s, so the loop is ticking and drawing');
 else bad('the picture changes over 1.5s', 'two screenshots 1.5s apart are byte-identical: the loop is stopped or nothing is being drawn');
 
+// The Sam button does not exist for the eye until the first touch hands over the
+// controls -- before that the page is an orbiting title shot. So touch first.
+await page.mouse.click(196, 426);
+await page.waitForTimeout(300);
 await page.click('#sam');
 await page.waitForTimeout(700);   // the diagnostic line repaints every 400ms while the panel is open
 const diag = await page.textContent('#devDiag');
