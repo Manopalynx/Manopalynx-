@@ -575,7 +575,10 @@ which nothing here can measure.
 **His ruling:** weather has sound, "but background sound". **Mine:** three beds that loop while
 the weather lasts and fade with it: a hiss for rain, softer and duller for snow; wind that swells
 with each gust; a dry crackle for falling ash. Thunder comes low and far off, 0.8 to 2.2 seconds
-after each flash, and rolls for about three. **Fog is silent**: the quiet is the point. The beds
+after each flash, and rolls: about two seconds within a tenth of its peak, fading out over five.
+(As first built it was over in about one and a half, against the "about three" said here; found
+when its check went red one run in a few, because each clap's loudness varies and the check used a
+fixed floor. Both are fixed.) **Fog is silent**: the quiet is the point. The beds
 go out with the effects, so "effects only" keeps them and "silent" stops them, thunder included.
 
 **Measured** by `test/dusk-wxsound.mjs`, with the browser's tap-to-start rule on, as on a phone.
@@ -657,9 +660,35 @@ size and checks nothing spawns in rock, over the edge, or inside a feature. **Th
 collapse** recomputes the shading across the whole map at each of its eight steps; on a map three
 times the size that is a hitch, so it will recompute only the strip that fell.
 
+### Step 1, built (`chapters-1`): the move, at today's size
+
+**Sam: "Sounds good, go for it."** Every five rounds a new arena: the dusk hills, then the ice and
+the lava in random order, round again. The ice's ordinary rounds have the wall standing quiet in
+the middle, whole again whatever fell last time; the lava's have the volcano throwing half the
+walker round's bombs. A chapter's first round names the place in its banner. The Sam panel's boss
+buttons still work: the chapter they jump to becomes that boss's arena. `chapterHold` pins every
+chapter to one arena for the suites, which are about other things; each holds the dusk hills.
+
+**The time of day pauses in the ice and lava chapters**: those landscapes keep their own look (a cold
+dawn, night) for all five rounds. Giving each its own four times is possible, and is his to ask for.
+
+**Capital ships used to patrol only the dusk hills.** They are now lifted, where they need it, to keep
+every hull 10 clear of the ground on its whole circle: on the ice, three of nine, by up to 69, over
+the wall.
+
+**Found on the way: a capital ship has always flown through a hill.** In the dusk hills, as the game
+always was, the fifth ship (from round 6) flies 44 up on a circle that passes 18.5 into a hill once
+every five minutes. The first measurement flew a minute and saw a fifth of each circle; the check
+now walks every ship's whole circle. The lift puts it 9.9 over the hill; the one other dusk ship
+that needs it rises by 1.4, and the rest fly exactly as they did.
+
+**Measured** by `test/dusk-chapter.mjs`: 300 runs open in the dusk hills every time, the second
+chapter is the ice or the lava about half each (164 and 136), every three chapters visit all three,
+none twice running.
+
 ### Built in stages, each merged with its own version, each shown as renders first
 
-1. Chapters: the move every five rounds and the order, at today's size.
+1. ~~Chapters: the move every five rounds and the order, at today's size.~~ Built, above.
 2. Size: every distance following the arena, and the arenas growing.
 3. The ice field's regions.
 4. The lava field's regions.
@@ -702,6 +731,7 @@ DUSK_QUICK=1 node test/dusk-walker.mjs   # its rules without the fights, for mut
 node test/dusk-time.mjs        # the time of day: the cycle, dusk unchanged, each sky its own, and whether enemies still stand out
 node test/dusk-weather.mjs     # the weather: the draw, nothing stacking, how far you see in fog, the wind, lightning, who gets pushed
 node test/dusk-wxsound.mjs     # the weather's sound: nothing before a tap, each bed under the music, thunder after its flash, the sound modes
+node test/dusk-chapter.mjs     # the chapters: the order, one arena a chapter, ordinary rounds on the ice and lava, ships over the ground
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between

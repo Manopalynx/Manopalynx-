@@ -33,7 +33,7 @@ async function run(code) {
   await page.mouse.click(196, 426);
   await page.evaluate(() => window.__t(`
     renderer.render = function () {};
-    wxHold = 'clear'; wxStart(round); // the weather is random; these checks are about other things, so hold it clear
+    chapterHold = 0; wxHold = 'clear'; wxStart(round); // the chapters and the weather vary; these checks are about other things, so hold them: dusk hills, clear
     window.M = { now: performance.now() };
     M.step = function (n, each) { for (var i = 0; i < n; i++) { M.now += 1000 / 30; tick(M.now); if (each && each() === false) break; } };
     M.go = function (n) { bossForce = 'walker'; startRound(n); damage = function () {}; eruptT = 1e9; };   // no eruptions unless a check asks for one
@@ -251,12 +251,7 @@ console.log('\n— the end of it, and what comes after —');
   for (const r of s) console.log(`  ${String(r.round).padStart(5)}   ${String(r.hull).padStart(4)}   ${String(r.knee).padStart(9)}   ${String(r.turrets).padStart(7)}   ${String(r.down).padStart(12)}   ${String(r.bombs).padStart(17)}`);
   check(s[1].hull > s[0].hull && s[2].hull > s[1].hull && s[1].knee > s[0].knee && s[1].turrets > s[0].turrets && s[1].down < s[0].down && s[1].bombs > s[0].bombs, 'harder each time: more core, tougher knees, more turrets, open for less long, more bombs', JSON.stringify(s));
 
-  // Which boss. Sixty runs of five boss rounds.
-  const b = await run(`var first = { dread: 0, wall: 0, walker: 0 }, repeats = 0, seen = {};
-    for (var runN = 0; runN < 60; runN++) { lastBoss = null; var prev = null; for (var q = 0; q < 5; q++) { var k = pickBoss(); if (q === 0) first[k]++; if (k === prev) repeats++; if (q === 1) seen[prev + '>' + k] = 1; prev = k; } }
-    JSON.stringify({ first: first, repeats: repeats, pairs: Object.keys(seen).length })`);
-  check(b.first.dread >= 8 && b.first.wall >= 8 && b.first.walker >= 8, `the first boss of a run can be any of the three  [of 60 runs: dreadnought ${b.first.dread}, ice wall ${b.first.wall}, walker ${b.first.walker}]`, JSON.stringify(b));
-  check(b.repeats === 0 && b.pairs === 6, 'the same boss never comes twice running, and after any one either of the others can follow  [all 6 pairings seen]', JSON.stringify(b));
+  // Which boss comes when is the chapters' business now: test/dusk-chapter.mjs.
 }
 
 // ------------------------------------------------------------ the fight

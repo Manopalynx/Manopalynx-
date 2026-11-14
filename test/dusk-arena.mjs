@@ -31,7 +31,7 @@ await page.addInitScript(() => { window.requestAnimationFrame = () => 0; });
 await page.goto(pathToFileURL(join(dir, 'index.html')).href, { waitUntil: 'load' });
 await page.mouse.click(196, 426);
 const r = JSON.parse(await page.evaluate(() => window.__t(`
-  wxHold = 'clear'; wxStart(round); // the weather is random; these checks are about other things, so hold it clear
+  chapterHold = 0; wxHold = 'clear'; wxStart(round); // the chapters and the weather vary; these checks are about other things, so hold them: dusk hills, clear
   renderer.render = function () {};
   var now = performance.now(); function st(n) { for (var i = 0; i < n; i++) { now += 1000 / 30; tick(now); } }
   st(3); damage = function () {}; arenaHold = true;   // these rounds are ordinary ones played on the ice, which the game itself never does

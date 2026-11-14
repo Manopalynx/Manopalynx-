@@ -32,7 +32,7 @@ await page.addInitScript(() => { window.requestAnimationFrame = () => 0; });
 await page.goto(pathToFileURL(join(dir, 'index.html')).href, { waitUntil: 'load' });
 await page.mouse.click(196, 426);
 const T = c => page.evaluate(code => window.__t(code), c).then(JSON.parse);
-await T(`wxHold = 'clear'; wxStart(round); // the weather is random; these checks are about other things, so hold it clear
+await T(`chapterHold = 0; wxHold = 'clear'; wxStart(round); // the chapters and the weather vary; these checks are about other things, so hold them: dusk hills, clear
   window.M = { now: performance.now() };
   M.step = function (n) { for (var i = 0; i < n; i++) { M.now += 1000 / 30; tick(M.now); } };
   damage = function () {}; '1'`);

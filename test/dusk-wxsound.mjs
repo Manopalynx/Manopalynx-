@@ -34,7 +34,7 @@ const T = c => page.evaluate(code => window.__t(code), c).then(JSON.parse);
 const wait = ms => page.waitForTimeout(ms);
 
 // before anyone has touched the screen: a storm is on and nothing is made
-const before = await T(`renderer.render = function () {}; window.M = { now: performance.now() };
+const before = await T(`renderer.render = function () {}; chapterHold = 0; window.M = { now: performance.now() };
   M.step = function (n) { for (var i = 0; i < n; i++) { M.now += 1000 / 30; tick(M.now); } };
   wxHold = 'storm'; startRound(1); M.step(30); wxBolt(); JSON.stringify({ actx: actx === null, wxs: wxs === null })`);
 check(before.actx && before.wxs, 'before the first tap, in a storm with lightning, no sound is made at all: nothing is even built', JSON.stringify(before));
@@ -86,8 +86,10 @@ for (let i = 0; i < 40; i++) { await T(`M.step(2); '1'`); await wait(75); }
 const quiet = await T(`JSON.stringify({ v: AN.rms(AN.wx) })`);
 await T(`window.TH0 = actx.currentTime; wxBolt(); '1'`);
 const samples = [];
-for (let i = 0; i < 50; i++) { const r = await T(`JSON.stringify({ t: actx.currentTime - TH0, v: AN.rms(AN.wx) })`); samples.push(r); await wait(100); }
-const loud = samples.filter(s => s.v > 1e-3);
+for (let i = 0; i < 70; i++) { const r = await T(`JSON.stringify({ t: actx.currentTime - TH0, v: AN.rms(AN.wx) })`); samples.push(r); await wait(100); }
+// heard while within a tenth of its own peak: each clap is 60 to 100% as loud, and a first version used a fixed floor,
+// so a quiet clap sank under it sooner and the check failed one run in a few
+const peak0 = Math.max(...samples.map(s => s.v)), loud = samples.filter(s => s.v > peak0 / 10);
 const first = loud.length ? loud[0].t : null, last = loud.length ? loud[loud.length - 1].t : null, peak = Math.max(...samples.map(s => s.v));
 console.log(`  thunder: first heard ${first === null ? 'never' : first.toFixed(2) + 's'} after the flash, last at ${last === null ? '–' : last.toFixed(2) + 's'}, peak ${db(peak)}`);
 check(quiet.v < 1e-4 && first !== null && first >= 0.7 && first <= 2.5 && last - first > 1.5, 'thunder comes a second or two after its flash, not with it, and rolls on for a while', JSON.stringify(samples.filter((s, i) => i % 5 === 0)));

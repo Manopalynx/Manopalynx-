@@ -33,6 +33,7 @@ async function run(code, draw) {
   await page.mouse.click(196, 426);
   await page.evaluate(d => window.__t(`
     ${d ? '' : 'renderer.render = function () {};'}
+    chapterHold = 0; // ordinary rounds in the dusk hills: the ice and the lava are asked for by boss round
     window.M = { now: performance.now() };
     M.step = function (n, each) { for (var i = 0; i < n; i++) { M.now += 1000 / 30; tick(M.now); if (each && each() === false) break; } };
     M.go = function (n, w, boss) { wxHold = w; if (boss) bossForce = boss; startRound(n); damage = function () {}; };
@@ -73,7 +74,7 @@ console.log('\n— what each looks like, and that nothing stacks —');
   check(r.fog.fog === 1.3 && r.fog.veil > 0.8 && r.fog.falls === '000', 'fog thickens the haze and veils the far skyline', JSON.stringify(r.fog));
   check(r.rain.falls === '100' && r.storm.falls === '100' && r.rain.hemi < r.clear.hemi && r.storm.hemi < r.rain.hemi, 'rain and storm fall as rain in the dusk world, and darken the light, the storm more', JSON.stringify([r.rain, r.storm]));
   check(r.ice.falls === '010' && r.ice.name === 'Snow' && r.lava.falls === '001' && r.lava.name === 'Ash' && r.lavaFog.name === 'Smoke', 'on the ice it snows, on the lava ash falls, and lava fog is smoke', JSON.stringify([r.ice, r.lava, r.lavaFog]));
-  check(/Round 1 · Storm/.test(r.storm.note) && /Snow/.test(r.ice.note) && !/·/.test(r.clear.note), `the round's banner names the weather  [${r.storm.note}]`, JSON.stringify([r.storm.note, r.ice.note, r.clear.note]));
+  check(/Round 1 · Storm/.test(r.storm.note) && /Snow/.test(r.ice.note) && !/Round 1 ·/.test(r.clear.note), `the round's banner names the weather  [${r.storm.note}]`, JSON.stringify([r.storm.note, r.ice.note, r.clear.note]));
   check(r.again.hemi === r.first.hemi && r.again.sun === r.first.sun && r.again.fog === 1 && r.panel.hemi === r.first.hemi, 'twelve rounds of storm and fog, and the Sam panel cycling it nine times, leave the light exactly as it was', JSON.stringify([r.first, r.again, r.panel]));
 }
 

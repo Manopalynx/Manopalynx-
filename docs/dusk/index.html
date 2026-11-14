@@ -1166,8 +1166,23 @@
     if (v.x > -25 && v.x < -17 && v.y > -3.8 && v.y < 4.2 && az < 6) return true;
     return false;
   }
+  // how high a capital ship flies: its own height, or higher where the ground on its circle demands it. The ships used
+  // to patrol only the dusk hills; the ice wall stands 95 high and both boss landscapes have crags at the rim.
+  // Only as much as it takes to keep the whole hull, bow to stern, clear of the ground everywhere on its circle: in the
+  // dusk hills the nearest any came was 8.6, and one is lifted by about a metre and a half. A first version lifted them
+  // by a generous margin and moved four of the dusk hills' ships for nothing.
+  var SHIP_CLEAR = 10; // aimed at 10 so that 8 holds between the points sampled: at 240 points the wall's jagged crest slipped between them to 7.8
+  function shipFlyAlt(f) {
+    if (f.boss || f.selfMoved) return f.alt;
+    var top = 0;
+    for (var q = 0; q < 720; q++) {
+      var a = q / 720 * 6.283, cx = Math.cos(a) * f.radius, cz = Math.sin(a) * f.radius, tx = -Math.sin(a), tz = Math.cos(a);
+      for (var k = -1; k <= 1; k++) top = Math.max(top, height(cx + tx * k * 28 * f.scale, cz + tz * k * 28 * f.scale));
+    }
+    return Math.max(f.alt, top + SHIP_CLEAR);
+  }
   function reviveShip(f, stay) {
-    f.hp = f.maxHp; f.fall = 0; f.fallV = 0; f.list = 0; f.dying = 0;
+    f.hp = f.maxHp; f.fall = 0; f.fallV = 0; f.list = 0; f.dying = 0; f.flyAlt = shipFlyAlt(f);
     if (!stay) f.angle += Math.PI;
     f.ship.visible = true;
     f.fill.scale.x = 33; f.fill.material.color.set(0xffc880);
@@ -1191,7 +1206,7 @@
           boom(fleetTmp, Math.random() < 0.6);
         }
       }
-      var y = f.alt - f.fall;
+      var y = (f.flyAlt || f.alt) - f.fall;
       f.ship.position.set(x, y, z);
       f.ship.rotation.set(f.list * 0.5, -(f.angle + Math.PI / 2) + dirSign, f.list);
       if (f.dying > 0 && (y < Math.max(height(x, z), 0) + 5 || f.dying > 10)) {
@@ -1521,7 +1536,7 @@
     noteEl.style.display = 'block';
   }
   function respawn() {
-    dead = false; resetUpgrades(); hull = maxHull(); shield = 0; showShield(); sinceHit = 99; lastBoss = null; arenaHold = false; // a new run: its first boss is drawn afresh, and any look-round is over
+    dead = false; resetUpgrades(); hull = maxHull(); shield = 0; showShield(); sinceHit = 99; chOrder = []; arenaHold = false; // a new run: it draws its own order of arenas, and any look-round is over
     shipPos.set(46, PAD_H + 30, 46);
     yaw = Math.atan2(shipPos.x, shipPos.z); pitch = 0; bank = 0; speed = 24;
     basis();
@@ -1730,7 +1745,7 @@
   // standing sections only; a crack can be shot directly from the start, but slower than through the guns beside
   // it; no interceptors; fought on the ice. The first boss of a run is random and the same one never comes twice
   // running. You win by bringing the whole wall down.
-  var wallOn = false, wallSecs = [], wallTier = 1, lastBoss = null, bossForce = null;
+  var wallOn = false, wallSecs = [], wallTier = 1, bossForce = null;
   // GUARD TOWERS AND DRONES. Sam, of icewall-1: "it looks good but it's rather easy", and asked for guard towers at
   // set places around the arena and some drones about. MINE: six towers on a ring out on the plain, a gun on top of
   // each, flak and missile site by turns; they are tougher than the wall's guns, do NOT rebuild, and do not touch
@@ -1749,13 +1764,27 @@
       drones: 4 + 4 * tier                               // 8, 12, 16
     };
   }
-  // which boss this round is: random the first time in a run, then never the same twice running
-  var BOSSES = ['dread', 'wall', 'walker'];
-  function pickBoss() {
-    var pool = BOSSES.filter(function (b) { return b !== lastBoss; }); // any of them the first time, then any but the last
-    var k = bossForce || pool[Math.floor(Math.random() * pool.length)];
-    bossForce = null; lastBoss = k;
-    return k;
+  // ---------- chapters: every five rounds, a new arena ----------
+  // Sam: "every 5 rounds it moves to a new and larger arena", themed on the bosses, with variety; the rest "go with
+  // what you think works best". MINE: a chapter is five rounds, four ordinary and then its boss, in one arena -- the
+  // dusk hills (the dreadnought), the ice field (the wall), the lava field (the walker). The dusk hills first, because
+  // the game is called at dusk, then the ice and the lava in random order, and round again, so the order differs from
+  // the second boss on; never the same arena twice running. Each run draws its own order. (Before chapters, the boss
+  // was drawn at random each time, and the ice and the lava existed only for their boss rounds.)
+  // This step is the move only: every arena is still the size the dusk hills always were.
+  var CH_BOSS = ['dread', 'wall', 'walker'], CH_NAMES = ['The Dusk Hills', 'The Ice Field', 'The Lava Field'];
+  var chOrder = [], chapterHold = null; // chapterHold: one arena for every chapter, for the suites
+  function chapterOf(n) { return Math.floor((n - 1) / 5); }
+  function chapterArena(c) {
+    if (chapterHold !== null) return chapterHold;
+    while (chOrder.length <= c) { var pair = Math.random() < 0.5 ? [1, 2] : [2, 1]; chOrder.push(0, pair[0], pair[1]); }
+    return chOrder[c];
+  }
+  // the Sam panel's boss buttons name a boss: its chapter becomes that boss's arena, and the next is kept different
+  function chapterForce(c, where) {
+    if (chapterHold !== null) return;
+    chapterArena(c + 1); var was = chOrder[c]; chOrder[c] = where;
+    if (chOrder[c + 1] === where) chOrder[c + 1] = was;
   }
   function ensureWall() {
     if (wallSecs.length) return;
@@ -1912,7 +1941,7 @@
   var walker = null, walkF = null, WK_R = 105, WK_SPEED = 9, WK_HIP = 34, WK_L1 = 27, WK_L2 = 41, WK_STRIDE = 15, WK_STEP = 0.5;
   var WK_FALL_AT = 3, WK_CORE = new THREE.Vector3(0, 10.5, 2), WK_BOMB_T = 3.6, WK_BOMB_R = 15, WK_BOMB_DMG = 25, WK_LAVA_DMG = 12;
   var wkA = new THREE.Vector3(), wkB = new THREE.Vector3(), wkC = new THREE.Vector3(), wkUp = new THREE.Vector3(0, 1, 0);
-  var lavaBombs = [], lavaT = 0;
+  var lavaBombs = [], lavaT = 0, lavaErupting = false;
   // GUARD TOWERS AND INTERCEPTORS. Sam, of walker-1: "it's rather easy", and asked for "some ground units properly on
   // watch towers similar to the ice wall and also two interceptors". HIS RULINGS: the towers rebuild; two
   // interceptors, each coming back 20 seconds after it is shot down. MINE: six towers, flak and missile site by turns,
@@ -2197,6 +2226,11 @@
       lavaT -= dt;
       if (lavaT <= 0 && height(shipPos.x, shipPos.z) < 0 && shipPos.y < 3.4) { lavaT = 0.5; boom(shipPos, false); damage(WK_LAVA_DMG); }
     }
+    // the lava chapter's ordinary rounds: the volcano throws half the bombs its boss round will
+    if (arena === 2 && w && !w.on && roundLive) {
+      if (eruptOn > 0 && !lavaErupting) { lavaErupting = true; if (inControl && !dead) lavaVolley(Math.max(2, Math.round(walkerSpec(chapterOf(round) + 1).bombs / 2))); }
+      else if (eruptOn <= 0) lavaErupting = false;
+    }
     if (!w || !w.on) return;
     var f = walkF, fighting = w.fight && f.gone <= 0;
     w.st += dt;
@@ -2382,8 +2416,8 @@
   function nextRound() { startRound(round + 1); roundBanner(); }
   function roundBanner() {
     var b = isBossRound(round);
-    var wn = wxName();
-    banner('Round ' + round + (wn ? ' \u00b7 ' + wn : '') + (!b ? '' : wallOn ? ' \u2014 The Ice Wall. Break its cracks to bring it down.' : walkF && walkF.gone <= 0 ? ' \u2014 The Walker. Shoot out its knees to bring it down.' : ' \u2014 Dreadnought. Destroy the shield generator at its core.'), b ? 5 : 2.5);
+    var wn = wxName(), ch = round % 5 === 1 ? 'Chapter ' + (chapterOf(round) + 1) + ' \u00b7 ' + CH_NAMES[arena] + ' \u2014 ' : ''; // a new chapter names its place
+    banner(ch + 'Round ' + round + (wn ? ' \u00b7 ' + wn : '') + (!b ? '' : wallOn ? ' \u2014 The Ice Wall. Break its cracks to bring it down.' : walkF && walkF.gone <= 0 ? ' \u2014 The Walker. Shoot out its knees to bring it down.' : ' \u2014 Dreadnought. Destroy the shield generator at its core.'), b || ch ? 5 : 2.5);
     sfx(b ? 'boss' : 'round');
   }
   function offerUpgrades() {
@@ -2571,10 +2605,17 @@
     round = n; roundLive = true; nextT = 0;
     // every fifth round is a boss and nothing else; the rounds between carry on counting as before
     var boss = isBossRound(n), ships = boss ? 0 : n, small = boss ? 0 : 5 * n;
-    var kind = boss ? pickBoss() : null;
+    if (n === 1) chOrder = []; // a new run draws a new order
+    var c = chapterOf(n), where = chapterArena(c), kind = null;
+    if (boss) { kind = bossForce || CH_BOSS[where]; bossForce = null; if (CH_BOSS.indexOf(kind) !== where) { where = CH_BOSS.indexOf(kind); chapterForce(c, where); } }
     endWall(); wkTowersOff();
     if (walker && walker.on && !arenaHold) walkerOn(false);
-    if (kind !== 'wall' && kind !== 'walker' && !arenaHold) setArena(0); // the ice belongs to the wall and the lava to the walker; everything else is fought in the dusk world
+    if (!arenaHold) {
+      // the ice stands whole again whenever it comes back, whatever fell the last time
+      if (where === 1 && wallDown.some(function (d) { return d > 0; })) { wallDown = [0, 0, 0, 0]; if (arena === 1) buildTerrain(); }
+      setArena(where);
+    }
+    if (arena === 2) ensureWalker(); // the volcano's bombs live with the walker, and fall in the lava chapter's ordinary rounds too
     tod = todOf(n); applyLook(); // the time of day moves on a step each round
     ensureFleet(Math.max(1, ships)); ensureDrones(small); ensureGround(small);
     for (i = 0; i < fleet.length; i++) {
@@ -3863,10 +3904,10 @@
     if (!actx || muted || actx.state !== 'running' || !wxs || voices >= 32) return;
     var t = actx.currentTime + 0.8 + Math.random() * 1.4, src = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
     src.buffer = aNoise; src.loop = true; src.playbackRate.value = 0.5;
-    f.type = 'lowpass'; f.frequency.setValueAtTime(220, t); f.frequency.exponentialRampToValueAtTime(70, t + 3.5);
+    f.type = 'lowpass'; f.frequency.setValueAtTime(220, t); f.frequency.exponentialRampToValueAtTime(70, t + 5);
     var v = WXS_VOL.thunder * (0.6 + Math.random() * 0.4);
-    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.25); g.gain.setTargetAtTime(v * 0.35, t + 0.5, 0.4); g.gain.exponentialRampToValueAtTime(0.0001, t + 4);
-    src.connect(f); f.connect(g); g.connect(wxs.bus); src.start(t); src.stop(t + 4.1);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.25); g.gain.setTargetAtTime(v * 0.35, t + 0.5, 0.4); g.gain.exponentialRampToValueAtTime(0.0001, t + 6); // it rolls: a first version faded out over 3.5 seconds and was over in about one and a half
+    src.connect(f); f.connect(g); g.connect(wxs.bus); src.start(t); src.stop(t + 6.1);
     voices++; src.onended = function () { voices = Math.max(0, voices - 1); g.disconnect(); };
   }
 
@@ -3904,7 +3945,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'weather-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'chapters-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +

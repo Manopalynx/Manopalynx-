@@ -33,7 +33,7 @@ async function fresh() {
   await page.mouse.click(196, 426);
   await page.evaluate(() => window.__t(`
     renderer.render = function () {};
-    wxHold = 'clear'; wxStart(round); // the weather is random; these checks are about other things, so hold it clear
+    chapterHold = 0; wxHold = 'clear'; wxStart(round); // the chapters and the weather vary; these checks are about other things, so hold them: dusk hills, clear
     window.M = { now: performance.now() };
     M.step = function (n, each) { for (var i = 0; i < n; i++) { M.now += 1000 / 30; tick(M.now); if (each && each() === false) break; } };
     M.census = function () {
@@ -42,7 +42,7 @@ async function fresh() {
         drones: drones.filter(function (d) { return d.alive; }).length, ground: ground.filter(function (g) { return g.alive; }).length,
         left: remaining(), readout: readoutEl.textContent, sent: icWant };
     };
-    pickBoss = function () { lastBoss = 'dread'; return 'dread'; };   // this suite is about the dreadnought; which boss a round draws is dusk-wall.mjs's business
+    // this suite is about the dreadnought: chapterHold = 0 below keeps every chapter in the dusk hills, whose boss it is
     M.step(3); inControl`));
   return page;
 }
