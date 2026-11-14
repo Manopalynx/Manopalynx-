@@ -41,6 +41,7 @@ async function fresh() {
         drones: drones.filter(function (d) { return d.alive; }).length, ground: ground.filter(function (g) { return g.alive; }).length,
         left: remaining(), readout: readoutEl.textContent, sent: icWant };
     };
+    pickBoss = function () { lastBoss = 'dread'; return 'dread'; };   // this suite is about the dreadnought; which boss a round draws is dusk-wall.mjs's business
     M.step(3); inControl`));
   return page;
 }

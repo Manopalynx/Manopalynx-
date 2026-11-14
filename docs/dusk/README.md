@@ -227,45 +227,97 @@ at 30 hits was down two seconds into the round; and `dreadnought-1`'s intercepto
 passing on a fixture that named round 5, then went red on a correct game when round 5 stopped
 sending interceptors from the far fight.
 
-## The ice arena (build `arena-1`): the landscape for the second boss, and no boss yet
+## The ice wall (build `icewall-1`): the second boss
 
-A second landscape behind the same map: a frozen plain with a terraced wall of ice across its
-middle. Reached only from the Sam panel ("Ice arena on/off"), which restarts the current round
-on it. **Nothing in the game's rounds uses it yet.** It is the agreed middle step: the arena
-on its own, so that if something floats or looks wrong it is not tangled up with whether the
-wall fight is any good.
+A wall of ice across the middle of a frozen plain. It stands in four sections, each with a
+crack down both faces and guns on its ledges. Destroy a crack and that section of the wall
+collapses, taking its guns with it. Bring down all four and the round is won.
 
-**How it works.** Everything that stands on the ground asks `height(x, z)`. That name now
-picks between `heightDusk` and `heightIce` by `arena`. `setArena(n)` rebuilds the one terrain
-mesh from it, re-colours haze, sky, lights and water from `ARENAS[n]`, and puts away
-`duskProps` (landing pad, buildings, spire, pylons), which were placed against the dusk
-ground. It does not start a round; the caller does, because everything on the ground has to
-be put down again.
+**Sam's rulings, in his words where quoted** (three autocorrected words put right and
+confirmed with him):
 
-**The wall** (`heightIce`): long axis along x, 95 high with a jagged crest, 160 of it at full
-height and tapering to nothing by 130 out, so it can be flown round. Each face steps down in
-two ledges, at 62 and at 32, each about 15 deep. **The ledges are level on purpose**: a ground
-unit only stands where the ground is level, and `test/dusk-arena.mjs` asserts one can stand
-anywhere along all four.
+- **Bosses are random** "so each run is slightly different".
+- **Armed with every kind of ground unit**: "use them all". Flak and missile sites.
+- **They rebuild.**
+- "the wall boss had a few weak sections where there are cracks that you destroy and
+  destroying units damaged nearby cracks and when a crack is destroyed that section of the
+  wall collapses".
+
+**Fills he agreed** ("Sounds good go for it"):
+
+- **Which boss:** the first of a run is random, and the same one never comes twice running.
+  With two bosses that is alternation from a random start. Difficulty follows the round.
+- **Four sections**, at every tier. **Each crack wears a health ring from the start.**
+- **Guns rebuild after 10 seconds**, on standing sections only.
+- **A crack can be shot directly from the start**, but slower than through the guns beside it.
+- **No interceptors.** **Fought on the ice**, which comes and goes with the round.
+
+**How it works.**
+
+- **The ground really moves.** `heightIce` reads `wallDown[k]`, 0 standing to 1 fallen, for
+  each section. A falling section sinks in eight steps over 1.6 seconds; each step rebuilds
+  only that strip of the terrain mesh (`buildTerrain(x0, x1)`), about 4,000 points of 48,841.
+- **The landscape belongs to the round.** `startRound` puts the ice up for a wall round and
+  dusk back for anything else. `arenaHold` stops it, for the suites.
+- **What is left to do is sections.** In a wall round `remaining()` counts standing sections,
+  because the guns rebuild and so are never "what is left".
+- **A gun's death shakes the cracks:** 25 off its own section's, 10 off each neighbour's
+  (`wallUnitDown`). A direct hit takes 1 at base damage.
+- **Cracks are laid on the faces as the faces are.** The faces wander by a few metres, so each
+  piece is placed by searching for where the ice actually is at that height.
+- **Guns sit on fixed mounts**, two along each ledge on each face of each section: 32.
+
+**The numbers are mine**, in `wallSpec(tier)`:
+
+| round | each crack | guns | a flak gun takes | a missile site takes |
+|---|---|---|---|---|
+| 5 | 200 | 16 | 3 | 4 |
+| 10 | 492 | 24 | 4 | 5 |
+| 15 | 834 | 32 | 5 | 6 |
+
+**Measured** by `test/dusk-wall.mjs`. The stand-in goes for the nearest gun on its side of the
+wall and for a crack when none is up, holding Fire. It never dodges a missile, cannot die, and
+repair is not modelled:
+
+| | wall down in | guns destroyed | hull it lost |
+|---|---|---|---|
+| round 5, no upgrades, guns first | 55s | 20 | 180 of 100, all to missiles |
+| round 5, four upgrades, guns first | 49s | 17 | 92 of 125 |
+| round 5, four upgrades, **cracks only** | 146s | 3 | 402 of 125 |
+| round 10, nine upgrades, guns first | 91s | 31 | 464 of 150 |
+
+Bolts aimed at the middle of a crack with a person's scatter, from 150 out on either face,
+below, level and above: 95 to 99% land on it, worst single case 88%. That check exists because
+the dreadnought shipped with a generator nothing could reach.
+
+**Not settled:**
+
+- **Upgrades barely shorten the guns-first fight** (55s with none, 49s with four): a gun takes
+  three or four hits whatever you carry, so the time goes on flying, not shooting.
+- **The sections tend to fall together at the end** when the guns are worked evenly, because
+  each gun's death also takes 10 off its neighbours' cracks. Working one section brings it
+  down early. Whether that reads as a climax or an anticlimax is his to say.
+- **Missiles are nearly all the cost**, against a stand-in that never dodges one. A person
+  breaks across them.
+- **How the collapse runs on a phone is not measured.** Each of its eight steps rebuilds a
+  strip of ground and recomputes every normal on the mesh.
+- The ordinary capital ships patrol at fixed heights and would fly through the wall. They are
+  never on the ice.
 
 **Three things the first versions got wrong:**
 
-- Straight faces and the dusk world's dark haze rendered the wall as a featureless dark slab.
-  The faces now wander by a few metres so they break into facets, steep ground takes a deeper
-  blue (`steep` in `ARENAS`), ice is lit from below, and the haze is pale.
-- Drones circled through the wall: a drone's height was set from the ground at the middle of
-  its circle, and beside a cliff the middle is on the plain. It is now set from the highest
-  ground anywhere on the circle, in both landscapes.
-- The suite first asserted the dreadnought clears the crest. It does not, and never meets
-  it: the check tested a fight that does not exist, and was removed rather than satisfied.
+- The first render of the wall was a featureless dark slab: straight faces in the dusk world's
+  dark haze. The faces now break into facets, steep ground is a deeper blue, ice is lit from
+  below, and the haze is pale.
+- Drones circled through the wall: a drone's height came from the ground at the middle of its
+  circle. It now comes from the highest ground anywhere on the circle, in both landscapes.
+- The first stand-in ignored the guns and reported a 319-second fight. That measured the wrong
+  route, not the wall.
 
-**Known and left:** the ordinary capital ships patrol at fixed heights and radii and would fly
-through the wall. They are not meant to be here.
+## Further bosses
 
-## Further bosses: his options, none chosen
-
-A range picked at random every five rounds; a range that gets harder in order; a boss with an
-area of its own, "such as a ice wall with turrets all around it". Next: the ice wall fight.
+His options from the start: a range picked at random (chosen), and bosses with areas of their
+own (the wall is the first). Nothing further is designed.
 
 ## Queued, in the agreed order
 
@@ -297,6 +349,7 @@ node test/dusk.mjs             # smoke
 node test/dusk-intercept.mjs   # the interceptors' rules and how they fly
 node test/dusk-boss.mjs        # the dreadnought's rules and how long the fight is
 node test/dusk-arena.mjs       # the ice landscape: nothing floating, nothing buried, and dusk comes back exact
+node test/dusk-wall.mjs        # the ice wall: cracks, guns that rebuild, sections that fall, which boss comes
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between

@@ -253,7 +253,7 @@
 <button type="button" class="sam" id="sam">Sam</button>
 <div class="dev" id="dev"><h2>Upgrades</h2><div class="dev-list" id="devList"></div>
   <h2>Sounds</h2><div class="dev-diag" id="devDiag"></div><div class="dev-snd" id="devSnd"></div>
-  <div class="dev-foot"><button type="button" class="dev-btn" id="devArena">Ice arena on/off</button><button type="button" class="dev-btn" id="devBoss">Next boss round</button><button type="button" class="dev-btn" id="devRaid">Send interceptors</button><button type="button" class="dev-btn" id="devClear">Clear round</button><button type="button" class="dev-btn" id="devClose">Close</button></div></div>
+  <div class="dev-foot"><button type="button" class="dev-btn" id="devWall">Boss: ice wall</button><button type="button" class="dev-btn" id="devBoss">Boss: dreadnought</button><button type="button" class="dev-btn" id="devRaid">Send interceptors</button><button type="button" class="dev-btn" id="devClear">Clear round</button><button type="button" class="dev-btn" id="devClose">Close</button></div></div>
 <!-- /SAM -->
 <div class="fail" id="fail">This device couldn’t start 3D graphics. Try opening the page in Safari or Chrome.</div>
 
@@ -311,8 +311,21 @@
   // Everything in the game that stands on the ground asks height(x, z) where the ground is, so a second landscape is
   // a second function behind that one name, plus the mesh rebuilt from it and the light re-coloured. 0 is the dusk
   // world. 1 is the ice field, with the wall across its middle that Sam's second boss will be fought on.
-  var arena = 0;
+  var arena = 0, arenaHold = false; // arenaHold: leave the landscape alone when a round starts. For looking at one, and for the suites.
   var WALL_LEN = 130, WALL_TOP = 95, WALL_LEDGES = [[62, 11, 26], [32, 29, 44]]; // each ledge: its height, and where it runs from and to, out from the crest
+  // The wall falls in four sections, each 50 along x (the outer two take the tapering ends with them).
+  // wallDown[k] runs 0 (standing) to 1 (rubble); the ground is whatever this says it is, so a section really sinks.
+  var WALL_SECS = 4, WALL_SEC = 50, wallDown = [0, 0, 0, 0];
+  function wallSecOf(x) { return Math.max(0, Math.min(WALL_SECS - 1, Math.floor((x + WALL_SECS * WALL_SEC / 2) / WALL_SEC))); }
+  function wallDownAt(x) {
+    var u = (x + WALL_SECS * WALL_SEC / 2) / WALL_SEC, k = wallSecOf(x), d = wallDown[k], fr = u - Math.floor(u);
+    // a few metres of slope between a standing section and a fallen one, so the mesh is not asked for a sheer step
+    if (u > 0 && u < WALL_SECS) {
+      if (fr < 0.06 && k > 0) d = wallDown[k - 1] + (d - wallDown[k - 1]) * (0.5 + fr / 0.12);
+      else if (fr > 0.94 && k < WALL_SECS - 1) d = d + (wallDown[k + 1] - d) * ((fr - 0.94) / 0.12);
+    }
+    return d;
+  }
   function heightIce(x, z) {
     // a frozen plain with drifts a few metres high, breaking up into peaks at the rim
     var d = Math.sqrt(x * x + z * z);
@@ -324,6 +337,8 @@
     var az = Math.abs(z) + (fbm(x * 0.09 + 1.7, z * 0.09 + 8.3) - 0.5) * 6, ends = 1 - smooth(WALL_LEN - 35, WALL_LEN, Math.abs(x));
     var prof = WALL_TOP - (WALL_TOP - WALL_LEDGES[0][0]) * smooth(8, 11, az) - (WALL_LEDGES[0][0] - WALL_LEDGES[1][0]) * smooth(26, 29, az) - WALL_LEDGES[1][0] * smooth(44, 47, az);
     prof += (1 - smooth(3, 8, az)) * vnoise(x * 0.31, z * 0.31) * 9; // the crest, where nothing stands
+    var dn = wallDownAt(x);
+    if (dn > 0) prof = prof * (1 - 0.9 * dn) + dn * (1 - smooth(40, 50, az)) * vnoise(x * 0.23 + 5, z * 0.23) * 9; // down to a tenth of itself, and broken
     return Math.max(base, prof * ends);
   }
   function height(x, z) { return arena === 1 ? heightIce(x, z) : heightDusk(x, z); }
@@ -362,12 +377,15 @@
   terrainGeo.rotateX(-Math.PI / 2);
   terrainGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(terrainGeo.attributes.position.count * 3), 3));
   scene.add(new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, metalness: 0.0 })));
-  function buildTerrain() {
+  // With a range, only the strip of ground between those x is rebuilt: a wall section falling is 4000 points, not 48,841.
+  function buildTerrain(x0, x1) {
+    var strip = x0 !== undefined;
     var pos = terrainGeo.attributes.position, cols = terrainGeo.attributes.color.array;
     var stops = ARENAS[arena].stops.map(function (st) { return [st[0], new THREE.Color(st[1])]; });
     var c = new THREE.Color();
     for (var i = 0; i < pos.count; i++) {
       var x = pos.getX(i), z = pos.getZ(i);
+      if (strip && (x < x0 || x > x1)) continue;
       var h = height(x, z);
       pos.setY(i, h);
       var hh = h + (hash(x * 0.7, z * 0.7) - 0.5) * 3;
@@ -383,6 +401,7 @@
     if (ARENAS[arena].steep !== undefined) {
       var nrm = terrainGeo.attributes.normal, deep = new THREE.Color(ARENAS[arena].steep);
       for (i = 0; i < pos.count; i++) {
+        if (strip && (pos.getX(i) < x0 || pos.getX(i) > x1)) continue; // the rest already carries its steep colour; doing it twice darkens it
         var st = Math.min(1, (1 - nrm.getY(i)) * 1.5);
         c.setRGB(cols[i * 3], cols[i * 3 + 1], cols[i * 3 + 2]).lerp(deep, st * 0.85);
         cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
@@ -1040,7 +1059,8 @@
       bossPct = Math.ceil(bossF.hp / bossF.maxHp * 100);
       var line = bossF.gen.hp > 0 ? 'Shield generator ' + Math.ceil(bossF.gen.hp / bossF.gen.maxHp * 100) + '%' : 'Dreadnought ' + bossPct + '%';
       if (line !== bossLine) { bossLine = line; readoutEl.innerHTML = 'Round ' + round + '<br>' + line; }
-    } else { bossLine = ''; readoutEl.innerHTML = 'Round ' + round + '<br>' + remaining() + ' to go'; }
+    } else if (wallOn) { bossLine = ''; readoutEl.innerHTML = 'Round ' + round + '<br>Ice wall: ' + wallStanding() + ' of ' + WALL_SECS + ' standing'; }
+    else { bossLine = ''; readoutEl.innerHTML = 'Round ' + round + '<br>' + remaining() + ' to go'; }
   }
   function hitCapital(f, dmg) {
     if (f.dying > 0 || f.gone > 0) return;
@@ -1411,7 +1431,7 @@
     noteEl.style.display = 'block';
   }
   function respawn() {
-    dead = false; resetUpgrades(); hull = maxHull(); shield = 0; showShield(); sinceHit = 99;
+    dead = false; resetUpgrades(); hull = maxHull(); shield = 0; showShield(); sinceHit = 99; lastBoss = null; // a new run: its first boss is drawn afresh
     shipPos.set(46, PAD_H + 30, 46);
     yaw = Math.atan2(shipPos.x, shipPos.z); pitch = 0; bank = 0; speed = 24;
     basis();
@@ -1487,7 +1507,7 @@
     scene.add(g);
     var r = makeRing(type === 'sam' ? 4 : 3);
     return { type: type, group: g, pivot: pivot, lamp: lamp, lampColor: lampColor, mat: mat, ring: r.ring, segs: r.segs,
-      hp: 0, maxHp: type === 'sam' ? 4 : 3, alive: false, cool: 0, burst: 0, burstT: 0, flash: 0, pos: new THREE.Vector3() };
+      hp: 0, maxHp: type === 'sam' ? 4 : 3, baseHp: type === 'sam' ? 4 : 3, alive: false, cool: 0, burst: 0, burstT: 0, flash: 0, pos: new THREE.Vector3(), spot: null, back: 0 };
   }
   function ensureGround(n) {
     while (ground.length < n) ground.push(makeGround(ground.length % 5 < 3 ? 'flak' : 'sam'));
@@ -1506,6 +1526,11 @@
       }
       if (clear) break;
     }
+    setGround(g, x, z);
+  }
+  // puts a unit down at a given spot, whole and ready
+  function setGround(g, x, z) {
+    var h = height(x, z);
     g.group.position.set(x, h - 0.25, z);
     g.pos.set(x, h + 1.9, z);
     g.hp = g.maxHp; g.alive = true; g.group.visible = true; g.ring.visible = false;
@@ -1605,6 +1630,152 @@
     }
   }
 
+  // ---------- the ice wall: the second boss ----------
+  // SAM'S RULINGS. Bosses are picked at random "so each run is slightly different". The wall is armed with every
+  // kind of ground unit ("use them all"), and they rebuild. "the wall boss had a few weak sections where there are
+  // cracks that you destroy and destroying units damaged nearby cracks and when a crack is destroyed that section
+  // of the wall collapses." (His words, with three autocorrected ones put right and confirmed.)
+  // AGREED FILLS: four sections; each crack wears a health ring from the start; units rebuild after 10 seconds, on
+  // standing sections only; a crack can be shot directly from the start, but slower than through the guns beside
+  // it; no interceptors; fought on the ice. The first boss of a run is random and the same one never comes twice
+  // running. You win by bringing the whole wall down.
+  var wallOn = false, wallSecs = [], wallTier = 1, lastBoss = null, bossForce = null;
+  var WALL_REBUILD = 10, WALL_SPLASH = 25, WALL_SPLASH_NEAR = 10, WALL_FALL = 1.6;
+  var wallMat0 = new THREE.MeshBasicMaterial({ color: 0xbff4ff, fog: false });
+  function wallSpec(tier) {
+    return {
+      crackHp: Math.round(200 * Math.pow(tier, 1.3)),   // 200, 490, 830
+      perSec: Math.min(8, 2 + 2 * tier),                 // guns on each section: 4, 6, then all 8 mounts
+      extraHp: tier - 1                                  // each gun takes one more hit per tier
+    };
+  }
+  // which boss this round is: random the first time in a run, then never the same twice running
+  function pickBoss() {
+    var k = bossForce || (lastBoss === null ? (Math.random() < 0.5 ? 'dread' : 'wall') : lastBoss === 'dread' ? 'wall' : 'dread');
+    bossForce = null; lastBoss = k;
+    return k;
+  }
+  function ensureWall() {
+    if (wallSecs.length) return;
+    var was = arena, wd = wallDown.slice();
+    arena = 1; wallDown = [0, 0, 0, 0]; // the cracks are laid against the standing wall, whatever is showing now
+    for (var k = 0; k < WALL_SECS; k++) {
+      var cx = -WALL_SECS * WALL_SEC / 2 + WALL_SEC * (k + 0.5);
+      var sec = { k: k, cx: cx, hp: 0, maxHp: 200, flash: 0, falling: 0, down: false, pts: [], bits: [], face: [new THREE.Vector3(), new THREE.Vector3()], mat: wallMat0.clone() };
+      var grp = new THREE.Group();
+      // THE CRACK: a line of glowing breaks down each face. Each is put where the face actually is at that height,
+      // because the faces wander: a crack laid on a straight line would be half buried and half floating.
+      [1, -1].forEach(function (side, fi) {
+        [[88, 2], [79, -2], [70, 1], [56, -1], [47, 2], [39, -2], [24, 1], [14, -1]].forEach(function (lv) {
+          var x = cx + lv[1] * 1.6, z = 0;
+          for (var a = 0; a < 60; a += 0.25) { if (heightIce(x, side * a) < lv[0]) { z = side * a; break; } }
+          var bit = new THREE.Mesh(new THREE.BoxGeometry(2.4, 8.5, 2.4), sec.mat);
+          bit.position.set(x, lv[0], z + side * 0.4); bit.rotation.z = lv[1] * 0.16;
+          grp.add(bit); sec.bits.push(bit);
+          sec.pts.push(new THREE.Vector3(x, lv[0], z + side * 0.4));
+        });
+        sec.face[fi].set(cx, 50, side * 30); // where its ring floats and where a tracking bolt aims: in front of the middle of that face
+      });
+      grp.visible = false; scene.add(grp); sec.grp = grp;
+      var r = makeRing(5); sec.ring = r.ring; sec.segs = r.segs;
+      // where its guns go: two along each ledge, on each face
+      sec.spots = [];
+      [[1, 18, 'sam'], [-1, 36, 'flak'], [-1, 18, 'sam'], [1, 36, 'flak'], [1, 36, 'sam'], [-1, 18, 'flak'], [-1, 36, 'sam'], [1, 18, 'flak']].forEach(function (sp, i) {
+        sec.spots.push({ x: cx + (i < 4 ? -11 : 11), z: sp[0] * sp[1], type: sp[2], sec: sec });
+      });
+      wallSecs.push(sec);
+    }
+    arena = was; wallDown = wd;
+  }
+  function startWall(tier) {
+    ensureWall();
+    var sp = wallSpec(tier), i, k, used = 0;
+    wallTier = tier; wallOn = true;
+    wallDown = [0, 0, 0, 0];
+    if (arena !== 1) setArena(1); else buildTerrain();
+    ensureGround(Math.ceil(WALL_SECS * sp.perSec / 2) * 5 / 2 + 10); // enough of each kind in the pool
+    var taken = {};
+    for (k = 0; k < WALL_SECS; k++) {
+      var sec = wallSecs[k];
+      sec.maxHp = sp.crackHp; sec.hp = sp.crackHp; sec.flash = 0; sec.falling = 0; sec.down = false;
+      sec.grp.visible = true; sec.mat.color.set(0xbff4ff); paintRing(sec);
+      for (i = 0; i < sp.perSec; i++) {
+        var spot = sec.spots[i], g = null;
+        for (var q = 0; q < ground.length; q++) if (!taken[q] && ground[q].type === spot.type) { g = ground[q]; taken[q] = true; break; }
+        if (!g) continue;
+        g.maxHp = g.baseHp + sp.extraHp; g.spot = spot; g.back = 0;
+        setGround(g, spot.x, spot.z); used++;
+      }
+    }
+    // start out on the plain, facing it
+    shipPos.set(0, 70, 205); yaw = 0; pitch = 0; bank = 0; basis();
+    camera.position.copy(shipPos).addScaledVector(fwdV, -9.5).addScaledVector(upV, 2.6);
+  }
+  function endWall() {
+    if (!wallOn) return;
+    wallOn = false;
+    for (var k = 0; k < wallSecs.length; k++) { wallSecs[k].grp.visible = false; wallSecs[k].ring.visible = false; }
+    for (var i = 0; i < ground.length; i++) { ground[i].spot = null; ground[i].back = 0; ground[i].maxHp = ground[i].baseHp; }
+  }
+  function wallStanding() { var n = 0; for (var k = 0; k < wallSecs.length; k++) if (!wallSecs[k].down && wallSecs[k].falling === 0) n++; return n; }
+  function hitCrack(sec, dmg) {
+    if (sec.down || sec.falling > 0) return;
+    sec.hp -= dmg; sec.flash = 0.2; paintRing(sec);
+    if (sec.hp <= 0) {
+      sec.hp = 0; sec.falling = 0.001; sec.step = 0; sec.ring.visible = false; sec.grp.visible = false;
+      // its guns go with it, and do not come back
+      for (var i = 0; i < ground.length; i++) {
+        var g = ground[i];
+        if (g.spot && g.spot.sec === sec) { if (g.alive) boom(g.pos, true); g.alive = false; g.group.visible = false; g.ring.visible = false; g.spot = null; g.back = 0; }
+      }
+      sfx('capital', sec.face[0]); banner(wallStanding() ? 'A section falls' : 'The wall is down', 2.5);
+      updateReadout();
+    }
+  }
+  // a gun on the wall has just been destroyed: start its clock, and shake the cracks near it
+  function wallUnitDown(g) {
+    if (!g.spot) return;
+    g.back = WALL_REBUILD;
+    var k = g.spot.sec.k;
+    hitCrack(wallSecs[k], WALL_SPLASH);
+    if (k > 0) hitCrack(wallSecs[k - 1], WALL_SPLASH_NEAR);
+    if (k < WALL_SECS - 1) hitCrack(wallSecs[k + 1], WALL_SPLASH_NEAR);
+  }
+  function updateWall(dt) {
+    if (!wallOn) return;
+    var k, i;
+    for (k = 0; k < wallSecs.length; k++) {
+      var sec = wallSecs[k];
+      if (sec.falling > 0) {
+        // the section sinks over a second and a half, in eight steps, with the ground rebuilt under it each time
+        sec.falling += dt;
+        var want = Math.min(8, Math.floor(sec.falling / (WALL_FALL / 8)) + 1);
+        if (want !== sec.step) {
+          sec.step = want; wallDown[k] = want / 8;
+          buildTerrain(sec.cx - WALL_SEC / 2 - (k === 0 ? 40 : 6), sec.cx + WALL_SEC / 2 + (k === WALL_SECS - 1 ? 40 : 6));
+          for (i = 0; i < 3; i++) { fleetTmp.set(sec.cx + (Math.random() - 0.5) * WALL_SEC, 20 + Math.random() * 70 * (1 - wallDown[k]), (Math.random() - 0.5) * 70); boom(fleetTmp, Math.random() < 0.6); }
+        }
+        if (sec.falling >= WALL_FALL) { sec.falling = 0; sec.down = true; updateReadout(); checkRound(); }
+        continue;
+      }
+      if (sec.down) continue;
+      if (sec.flash > 0) sec.flash -= dt;
+      // white-blue while whole, running round to red as it goes; white when struck
+      if (sec.flash > 0) sec.mat.color.set(0xffffff); else sec.mat.color.setHSL(0.52 * sec.hp / sec.maxHp, 0.9, 0.72);
+      // its ring floats off whichever face you are on
+      var fc = sec.face[shipPos.z >= 0 ? 0 : 1];
+      sec.ring.visible = inControl && !dead;
+      if (sec.ring.visible) { sec.ring.position.copy(fc); sec.ring.quaternion.copy(camera.quaternion); sec.ring.scale.setScalar(3.5 * (sec.flash > 0 ? 1 + sec.flash * 0.6 : 1)); }
+    }
+    // guns come back, where there is still a wall to stand on
+    for (i = 0; i < ground.length; i++) {
+      var g = ground[i];
+      if (g.alive || !g.spot || g.back <= 0) continue;
+      g.back -= dt;
+      if (g.back <= 0) { setGround(g, g.spot.x, g.spot.z); g.flash = 0.3; sfx('rebuild', g.pos); }
+    }
+  }
+
   // ---------- upgrades ----------
   var UPGRADES = [
     { id: 'rapid', name: 'Rapid fire', desc: 'Your guns cycle 30% faster.', max: 3 },
@@ -1653,7 +1824,11 @@
     hull = Math.min(maxHull(), hull + n * up.salvage); showHull();
   }
   function nextRound() { startRound(round + 1); roundBanner(); }
-  function roundBanner() { var b = isBossRound(round); banner('Round ' + round + (b ? ' \u2014 Dreadnought. Destroy the shield generator at its core.' : ''), b ? 5 : 2.5); sfx(b ? 'boss' : 'round'); }
+  function roundBanner() {
+    var b = isBossRound(round);
+    banner('Round ' + round + (!b ? '' : wallOn ? ' \u2014 The Ice Wall. Break its cracks to bring it down.' : ' \u2014 Dreadnought. Destroy the shield generator at its core.'), b ? 5 : 2.5);
+    sfx(b ? 'boss' : 'round');
+  }
   function offerUpgrades() {
     var pool = [], i;
     for (i = 0; i < UPGRADES.length; i++) if (up[UPGRADES[i].id] < UPGRADES[i].max) pool.push(UPGRADES[i]);
@@ -1691,6 +1866,7 @@
   try { best = parseInt(localStorage.getItem('small-world-best') || '0', 10) || 0; } catch (e) { best = 0; }
   function remaining() {
     var n = 0, i;
+    if (wallOn) return wallStanding(); // the wall's guns rebuild, so they are never what is left to do: its sections are
     for (i = 0; i < drones.length; i++) if (drones[i].alive) n++;
     for (i = 0; i < ground.length; i++) if (ground[i].alive) n++;
     for (i = 0; i < fleet.length; i++) if (fleet[i].gone <= 0 && fleet[i].dying === 0) n++;
@@ -1702,21 +1878,25 @@
   function startRound(n) {
     var i;
     round = n; roundLive = true; nextT = 0;
-    // every fifth round is the dreadnought and nothing else; the rounds between carry on counting as before
+    // every fifth round is a boss and nothing else; the rounds between carry on counting as before
     var boss = isBossRound(n), ships = boss ? 0 : n, small = boss ? 0 : 5 * n;
+    var kind = boss ? pickBoss() : null;
+    endWall();
+    if (kind !== 'wall' && !arenaHold) setArena(0); // the ice belongs to the wall; everything else is fought at dusk
     ensureFleet(Math.max(1, ships)); ensureDrones(small); ensureGround(small);
     for (i = 0; i < fleet.length; i++) {
       var f = fleet[i];
       if (!f.boss && i < ships) { reviveShip(f, true); f.gone = 0; }
       else { f.gone = Infinity; f.dying = 0; f.ship.visible = false; }
     }
-    if (boss) startBoss(bossTier(n));
+    if (kind === 'dread') startBoss(bossTier(n));
     for (i = 0; i < drones.length; i++) {
       if (i < small) spawnDrone(drones[i]);
       else { drones[i].alive = false; drones[i].mesh.visible = false; }
     }
     for (i = 0; i < ground.length; i++) { ground[i].alive = false; ground[i].group.visible = false; ground[i].ring.visible = false; }
     for (i = 0; i < small; i++) placeGround(ground[i]);
+    if (kind === 'wall') startWall(bossTier(n));
     for (i = 0; i < shots.length; i++) { shots[i].life = 0; shots[i].mesh.visible = false; }
     for (i = 0; i < missiles.length; i++) { missiles[i].life = 0; missiles[i].mesh.visible = false; }
     for (i = 0; i < seekers.length; i++) { seekers[i].life = 0; seekers[i].mesh.visible = false; }
@@ -1853,7 +2033,7 @@
     g.hp -= dmg; g.flash = 0.2; paintRing(g);
     if (g.hp <= 0) {
       salvage(4); g.alive = false; g.group.visible = false; g.ring.visible = false; chainBlast(g.pos, 1);
-      boom(g.pos, true); updateReadout(); checkRound();
+      boom(g.pos, true); if (wallOn) wallUnitDown(g); updateReadout(); checkRound();
     } else boom(at, false);
   }
   function hitTurret(f, t, dmg, at) {
@@ -1873,6 +2053,14 @@
     }
     for (j = 0; j < ground.length; j++) {
       if (ground[j].alive && segDist2(ground[j].pos, a, b) < 14) { hitGround(ground[j], k * dmgMul(), a); return true; }
+    }
+    if (wallOn) {
+      // a crack, before the ice it sits on: the bolt would otherwise be spent on the wall behind it
+      for (j = 0; j < wallSecs.length; j++) {
+        var ws = wallSecs[j];
+        if (ws.down || ws.falling > 0 || Math.abs(b.x - ws.cx) > 14) continue;
+        for (var wq = 0; wq < ws.pts.length; wq++) if (segDist2(ws.pts[wq], a, b) < 49) { boom(a, false); hitCrack(ws, k * dmgMul()); return true; } // generous: a crack is a line of breaks with ice between, and a bolt between two of them should still count
+      }
     }
     if (b.y < Math.max(height(b.x, b.z), 0)) { boom(a, false); return true; }
     for (j = 0; j < fleet.length; j++) {
@@ -1903,6 +2091,7 @@
     if (k === 2) { if (!o.alive) return false; out.copy(o.pos); return true; }
     if (k === 3) { if (o.hp <= 0 || f.gone > 0 || f.dying > 0) return false; o.pivot.getWorldPosition(out); return true; } // a turret, or the dreadnought's generator: both have hp and a pivot
     if (k === 4) { if (!o.alive) return false; out.copy(o.pos); return true; }
+    if (k === 5) { if (o.down || o.falling > 0) return false; out.copy(o.face[shipPos.z >= 0 ? 0 : 1]); out.z -= (shipPos.z >= 0 ? 1 : -1) * 3; return true; } // a crack in the ice wall, on the face you are looking at
     return false;
   }
   function pkLook(k, o, f, p) {
@@ -1924,6 +2113,7 @@
     if (trk.k) return trk.k;
     for (i = 0; i < drones.length; i++) if (drones[i].alive) pkLook(1, drones[i], null, drones[i].mesh.position);
     for (i = 0; i < ground.length; i++) if (ground[i].alive) pkLook(2, ground[i], null, ground[i].pos);
+    if (wallOn) for (i = 0; i < wallSecs.length; i++) if (!wallSecs[i].down && wallSecs[i].falling === 0) pkLook(5, wallSecs[i], null, wallSecs[i].face[shipPos.z >= 0 ? 0 : 1]);
     for (i = 0; i < fleet.length; i++) {
       var f = fleet[i];
       if (f.gone > 0 || f.dying > 0 || f.ship.position.distanceTo(from) > range + 45 * f.scale) continue;
@@ -2450,7 +2640,7 @@
   function icHide(ic) { ic.alive = false; ic.g.visible = false; if (ic.shown) { ic.shown = false; ic.mark.style.display = 'none'; } }
   function icReset(n) {
     for (var i = 0; i < ics.length; i++) icHide(ics[i]);
-    icWant = isBossRound(n) ? 0 : icCount(n); icPeelT = icWant ? 4 : -1; // in a boss round they come out of its bays instead
+    icWant = isBossRound(n) ? 0 : icCount(n); icPeelT = icWant ? 4 : -1; // none fly in for a boss: the dreadnought launches its own, and the wall has none
   }
   // round over, or you are down: whoever is left turns for the far fight
   function icLeave() {
@@ -2958,7 +3148,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'arena-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'icewall-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +
@@ -3000,14 +3190,9 @@
     devShow(false);
     updateReadout(); checkRound();
   });
-  document.getElementById('devArena').addEventListener('click', function () {
-    // a look at the ice and its wall. The current round starts again on it, because everything on the ground has to be put back down
-    devShow(false); setArena(arena === 1 ? 0 : 1); startRound(round); banner(arena === 1 ? 'The ice field' : 'Dusk', 2.5);
-  });
-  document.getElementById('devBoss').addEventListener('click', function () {
-    // straight to the next round that is a multiple of five, so each tier can be tried without playing up to it
-    devShow(false); startRound(Math.floor(round / 5) * 5 + 5); roundBanner();
-  });
+  // straight to the next round that is a multiple of five, with the boss named, so each can be tried at each tier
+  document.getElementById('devWall').addEventListener('click', function () { devShow(false); bossForce = 'wall'; startRound(Math.floor(round / 5) * 5 + 5); roundBanner(); });
+  document.getElementById('devBoss').addEventListener('click', function () { devShow(false); bossForce = 'dread'; startRound(Math.floor(round / 5) * 5 + 5); roundBanner(); });
   document.getElementById('devRaid').addEventListener('click', function () {
     // two of them, now, whatever the round: so the flying can be judged without playing to round 3
     for (var i = 0; i < ics.length; i++) icHide(ics[i]);
@@ -3032,6 +3217,7 @@
     updateCapitals(dt);
     updateDrones(dt);
     updateGround(dt);
+    updateWall(dt);
     updateMissiles(dt);
     updateRounds(dt);
 

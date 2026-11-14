@@ -33,7 +33,7 @@ await page.mouse.click(196, 426);
 const r = JSON.parse(await page.evaluate(() => window.__t(`
   renderer.render = function () {};
   var now = performance.now(); function st(n) { for (var i = 0; i < n; i++) { now += 1000 / 30; tick(now); } }
-  st(3); damage = function () {};
+  st(3); damage = function () {}; arenaHold = true;   // these rounds are ordinary ones played on the ice, which the game itself never does
   var pos = terrainGeo.attributes.position, col = terrainGeo.attributes.color.array;
   function survey() {
     var o = { verts: pos.count, meshOff: 0, worst: 0, r: 0, b: 0, top: -1e9 };
