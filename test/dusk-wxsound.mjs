@@ -34,7 +34,7 @@ const T = c => page.evaluate(code => window.__t(code), c).then(JSON.parse);
 const wait = ms => page.waitForTimeout(ms);
 
 // before anyone has touched the screen: a storm is on and nothing is made
-const before = await T(`renderer.render = function () {}; chapterHold = 0; window.M = { now: performance.now() };
+const before = await T(`renderer.render = function () {}; chapterHold = 0; scaleHold = 1; window.M = { now: performance.now() };
   M.step = function (n) { for (var i = 0; i < n; i++) { M.now += 1000 / 30; tick(M.now); } };
   wxHold = 'storm'; startRound(1); M.step(30); wxBolt(); JSON.stringify({ actx: actx === null, wxs: wxs === null })`);
 check(before.actx && before.wxs, 'before the first tap, in a storm with lightning, no sound is made at all: nothing is even built', JSON.stringify(before));

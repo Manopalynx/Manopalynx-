@@ -33,7 +33,7 @@ async function run(code, draw) {
   await page.mouse.click(196, 426);
   await page.evaluate(d => window.__t(`
     ${d ? '' : 'renderer.render = function () {};'}
-    chapterHold = 0; // ordinary rounds in the dusk hills: the ice and the lava are asked for by boss round
+    chapterHold = 0; scaleHold = 1; // ordinary rounds in the dusk hills, at today's size: the ice and the lava are asked for by boss round
     window.M = { now: performance.now() };
     M.step = function (n, each) { for (var i = 0; i < n; i++) { M.now += 1000 / 30; tick(M.now); if (each && each() === false) break; } };
     M.go = function (n, w, boss) { wxHold = w; if (boss) bossForce = boss; startRound(n); damage = function () {}; };

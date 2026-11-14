@@ -33,7 +33,7 @@ async function run(code) {
   await page.goto(pathToFileURL(join(dir, 'index.html')).href, { waitUntil: 'load' });
   await page.mouse.click(196, 426);
   await page.evaluate(() => window.__t(`
-    renderer.render = function () {}; wxHold = 'clear';
+    renderer.render = function () {}; wxHold = 'clear'; scaleHold = 1; // the size is dusk-size.mjs's business
     window.M = { now: performance.now() };
     M.step = function (n, each) { for (var i = 0; i < n; i++) { M.now += 1000 / 30; tick(M.now); if (each && each() === false) break; } };
     damage = function () {}; 1`));

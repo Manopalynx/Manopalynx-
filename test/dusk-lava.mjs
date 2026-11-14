@@ -31,7 +31,7 @@ await page.addInitScript(() => { window.requestAnimationFrame = () => 0; });
 await page.goto(pathToFileURL(join(dir, 'index.html')).href, { waitUntil: 'load' });
 await page.mouse.click(196, 426);
 const r = JSON.parse(await page.evaluate(() => window.__t(`
-  chapterHold = 0; wxHold = 'clear'; wxStart(round); // the chapters and the weather vary; these checks are about other things, so hold them: dusk hills, clear
+  chapterHold = 0; scaleHold = 1; wxHold = 'clear'; wxStart(round); // the chapters and the weather vary; these checks are about other things, so hold them: dusk hills, clear
   renderer.render = function () {};
   var now = performance.now(); function st(n, each) { for (var i = 0; i < n; i++) { now += 1000 / 30; tick(now); if (each) each(); } }
   st(3); damage = function () {};

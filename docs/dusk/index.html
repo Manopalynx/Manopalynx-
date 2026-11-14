@@ -285,6 +285,15 @@
 
   // ---------- terrain maths ----------
   var SIZE = 520, SEG = 220, HALF = SIZE / 2;
+  // THE ARENA'S SCALE. Sam: each chapter's arena "new and larger" as the enemy numbers grow. MINE: big enough to keep
+  // the spacing round 4 has, by the last ordinary round of the chapter, and no bigger from chapter 4 on. Round n has 11n
+  // enemies, so the area goes with (5c + 4) / 4 and the width with its root: 1, 1.5, 1.87, 2.18. The ground keeps its
+  // detail (one point every 2.36), so it has more points, not coarser ones. What scales with it: the ground and its edge,
+  // where things spawn, the capital ships' circles, the crags at the rim, the far ridges, the volcano, the far fight and
+  // the weather's veil. What does not: the bosses and everything tuned round them, which stand in the middle.
+  var SCALE = 1, scaleHold = null; // scaleHold: one size for every chapter, for the suites
+  function scaleOf(c) { return Math.sqrt((5 * Math.min(c, 3) + 4) / 4); }
+  var EDGE = 222, SPAWN = 205; // where the ship turns itself for home, and how far out things are put, at scale 1
   var PAD_H = 6;
 
   function hash(x, z) {
@@ -329,7 +338,7 @@
   function heightIce(x, z) {
     // a frozen plain with drifts a few metres high, breaking up into peaks at the rim
     var d = Math.sqrt(x * x + z * z);
-    var base = 2 + fbm(x * 0.03 + 11.1, z * 0.03 + 4.4) * 9 + smooth(170, 250, d) * (20 + fbm(x * 0.02 + 7.3, z * 0.02 + 3.1) * 60);
+    var base = 2 + fbm(x * 0.03 + 11.1, z * 0.03 + 4.4) * 9 + smooth(170, 250, d / SCALE) * (20 + fbm(x * 0.02 + 7.3, z * 0.02 + 3.1) * 60);
     // THE WALL: a ridge across the middle, long axis along x, stepped down either side in two flat ledges.
     // The ledges are flat on purpose: things stand on ground only where it is level.
     // The faces wander in and out by a few metres so they break into facets like a glacier front, and the crest is
@@ -348,7 +357,7 @@
     var n = fbm(x * 0.013 + 21.4, z * 0.013 + 6.9);
     var ch = 1 - Math.abs(2 * fbm(x * 0.017 + 2.2, z * 0.017 + 40.1) - 1);   // 1 along the channels
     var h = (n - 0.42) * 46 + 7 - smooth(0.72, 0.95, ch) * 16;                // rock a few metres up, channels cut down through it
-    h += smooth(175, 255, d) * (18 + fbm(x * 0.02 + 9.1, z * 0.02 + 1.3) * 70); // crags at the rim
+    h += smooth(175, 255, d / SCALE) * (18 + fbm(x * 0.02 + 9.1, z * 0.02 + 1.3) * 70); // crags at the rim, which moves out with the arena
     return h;
   }
   function height(x, z) { return arena === 1 ? heightIce(x, z) : arena === 2 ? heightLava(x, z) : heightDusk(x, z); }
@@ -415,18 +424,27 @@
   var terrainGeo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
   terrainGeo.rotateX(-Math.PI / 2);
   terrainGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(terrainGeo.attributes.position.count * 3), 3));
-  scene.add(new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, metalness: 0.0 })));
+  var groundMesh = new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, metalness: 0.0 }));
+  scene.add(groundMesh);
   // With a range, only the strip of ground between those x is rebuilt: a wall section falling is 4000 points, not 48,841.
-  function buildTerrain(x0, x1) {
-    var strip = x0 !== undefined;
-    var pos = terrainGeo.attributes.position, cols = terrainGeo.attributes.color.array;
+  // With a patch (x0..x1, and z0..z1 if given), only the points inside it are rebuilt, found by their place in the grid
+  // rather than by looking at every point: a falling section of the ice wall changes the ground only across its own
+  // width and the wall's depth, so it rebuilds that patch, the same size on any size of map.
+  function buildTerrain(x0, x1, z0, z1) {
+    var strip = x0 !== undefined, row = GSEG + 1, half = SIZE * SCALE / 2;
+    var pos = terrainGeo.attributes.position, cols = terrainGeo.attributes.color.array, hs = terrainH;
+    var c0 = 0, c1 = GSEG, r0 = 0, r1 = GSEG;
+    if (strip) {
+      c0 = Math.max(0, Math.ceil((x0 + half) / CELL - 1e-6)); c1 = Math.min(GSEG, Math.floor((x1 + half) / CELL + 1e-6));
+      if (z0 !== undefined) { r0 = Math.max(0, Math.ceil((z0 + half) / CELL - 1e-6)); r1 = Math.min(GSEG, Math.floor((z1 + half) / CELL + 1e-6)); }
+    }
     var stops = ARENAS[arena].stops.map(function (st) { return [st[0], new THREE.Color(st[1])]; });
-    var c = new THREE.Color();
-    for (var i = 0; i < pos.count; i++) {
+    var c = new THREE.Color(), r, q, i;
+    for (r = r0; r <= r1; r++) for (q = c0; q <= c1; q++) {
+      i = r * row + q;
       var x = pos.getX(i), z = pos.getZ(i);
-      if (strip && (x < x0 || x > x1)) continue;
       var h = height(x, z);
-      pos.setY(i, h);
+      pos.setY(i, h); hs[i] = h;
       var hh = h + (hash(x * 0.7, z * 0.7) - 0.5) * 3;
       var k = 0;
       while (k < stops.length - 2 && hh > stops[k + 1][0]) k++;
@@ -435,20 +453,43 @@
       cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
     }
     pos.needsUpdate = true;
-    terrainGeo.computeVertexNormals(); terrainGeo.computeBoundingSphere();
-    // where an arena asks for it, steep ground takes a deeper colour: white ledges, blue faces
+    if (!strip) terrainGeo.computeBoundingSphere();
+    // Where an arena asks for it, steep ground takes a deeper colour: white ledges, blue faces. How steep is read from
+    // the heights either side, not from the mesh's normals: the ground is drawn flat-shaded, so the normals served only
+    // this, and recomputing them took the whole mesh every time, 19 ms at full size here, at each of the ice wall's
+    // eight collapse steps. A patch reads its neighbours' heights from the last build, which the caller keeps right by
+    // making the patch reach past wherever the ground changes.
     if (ARENAS[arena].steep !== undefined) {
-      var nrm = terrainGeo.attributes.normal, deep = new THREE.Color(ARENAS[arena].steep);
-      for (i = 0; i < pos.count; i++) {
-        if (strip && (pos.getX(i) < x0 || pos.getX(i) > x1)) continue; // the rest already carries its steep colour; doing it twice darkens it
-        var st = Math.min(1, (1 - nrm.getY(i)) * 1.5);
+      var deep = new THREE.Color(ARENAS[arena].steep);
+      for (r = r0; r <= r1; r++) for (q = c0; q <= c1; q++) {
+        i = r * row + q;
+        var gx = (hs[q < GSEG ? i + 1 : i] - hs[q > 0 ? i - 1 : i]) / (CELL * (q > 0 && q < GSEG ? 2 : 1));
+        var gz = (hs[r < GSEG ? i + row : i] - hs[r > 0 ? i - row : i]) / (CELL * (r > 0 && r < GSEG ? 2 : 1));
+        var st = Math.min(1, (1 - 1 / Math.sqrt(1 + gx * gx + gz * gz)) * 1.5);
         c.setRGB(cols[i * 3], cols[i * 3 + 1], cols[i * 3 + 2]).lerp(deep, st * 0.85);
         cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
       }
     }
     terrainGeo.attributes.color.needsUpdate = true;
   }
+  var GSEG = SEG, CELL = SIZE / SEG, terrainH = new Float32Array(terrainGeo.attributes.position.count);
   buildTerrain();
+  // A new size: a new mesh, the same detail, and everything outside the map moved out to match. The caller rebuilds the
+  // ground on it (setArena, or buildTerrain if the landscape is the same).
+  function setScale(sc) {
+    if (sc === SCALE) return false;
+    SCALE = sc; GSEG = Math.round(SEG * sc);
+    var g = new THREE.PlaneGeometry(SIZE * sc, SIZE * sc, GSEG, GSEG);
+    g.rotateX(-Math.PI / 2);
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3), 3));
+    groundMesh.geometry.dispose(); groundMesh.geometry = g; terrainGeo = g; CELL = SIZE * sc / GSEG;
+    terrainH = new Float32Array(g.attributes.position.count);
+    for (var i = 0; i < ridgeCones.length; i++) { var rc = ridgeCones[i]; rc.position.set(rc.userData.x * sc, rc.position.y, rc.userData.z * sc); rc.scale.set(sc, 1, sc); } // further out and broader, not taller: the far fight flies over them
+    placeVolcano();
+    DOG_C.set(DOG_C0.x * sc, DOG_C0.y, DOG_C0.z * sc);
+    wxVeil.scale.setScalar(sc);
+    return true;
+  }
   // Changes the landscape and nothing else. Whatever stands on the ground was placed against the old one, so the
   // caller starts a round afterwards; this does not, because a round is not always what the caller wants next.
   // the look now. In the dusk hills, the time of day. On the ice and the lava, their own look in their boss rounds
@@ -487,7 +528,7 @@
     arena = n;
     applyLook();
     // the volcano stands beyond the map at dusk and on the ice; for the lava field it comes right up to the rim
-    volcGroup.position.copy(n === 2 ? VOLC_NEAR : VOLC_FAR); embers.position.copy(volcGroup.position);
+    placeVolcano();
     duskProps.visible = n === 0; // the landing pad, its buildings and spire, and the pylons in the hills: all placed against the dusk ground
     buildTerrain();
   }
@@ -577,8 +618,15 @@
 
   // ---------- far away, beyond the map ----------
   var farShips = [], tracers = [], flashes = [], meteors = [];
-  var embers, emberVel, crater, eruptT = 12, eruptOn = 0, ridgeMats = [];
+  var embers, emberVel, crater, eruptT = 12, eruptOn = 0, ridgeMats = [], ridgeCones = [];
   var VOLC = new THREE.Vector3(540, 0, -450), VOLC_TOP = 196;
+  // the volcano grows and moves out with the arena, about the map's centre, so it keeps its shape and where its flank
+  // meets the edge; the embers go with it. The far one beyond the dusk hills and the ice, the near one at the lava's rim.
+  function placeVolcano() {
+    volcGroup.scale.setScalar(SCALE); embers.scale.setScalar(SCALE);
+    volcGroup.position.copy(arena === 2 ? VOLC_NEAR : VOLC_FAR).multiplyScalar(SCALE); embers.position.copy(volcGroup.position);
+  }
+  function volcTop(out) { return out.set(VOLC.x, VOLC_TOP, VOLC.z).multiplyScalar(SCALE).add(volcGroup.position); } // the crater, in the world
   var volcGroup = new THREE.Group(), VOLC_FAR = new THREE.Vector3(0, 0, 0), VOLC_NEAR = new THREE.Vector3(-230, 0, 130); // NEAR puts its centre at (310, -320): its flank comes down to the edge of the arena
   scene.add(volcGroup);
   (function () {
@@ -591,7 +639,7 @@
       var r = 430 + hash(i, 3.1) * 240, h = 28 + hash(i, 8.8) * 70;
       var cone = new THREE.Mesh(new THREE.ConeGeometry(h * (1.3 + hash(i, 6.4) * 1.3), h, 5), r > 550 ? farM : near);
       cone.position.set(Math.cos(a) * r, h / 2 - 6, Math.sin(a) * r);
-      cone.rotation.y = hash(i, 2.9) * 3;
+      cone.rotation.y = hash(i, 2.9) * 3; cone.userData.x = cone.position.x; cone.userData.z = cone.position.z; ridgeCones.push(cone);
       scene.add(cone);
     }
     // a volcano on the horizon
@@ -1193,7 +1241,7 @@
     if (f.boss || f.selfMoved) return f.alt;
     var top = 0;
     for (var q = 0; q < 720; q++) {
-      var a = q / 720 * 6.283, cx = Math.cos(a) * f.radius, cz = Math.sin(a) * f.radius, tx = -Math.sin(a), tz = Math.cos(a);
+      var a = q / 720 * 6.283, cx = Math.cos(a) * f.radius * SCALE, cz = Math.sin(a) * f.radius * SCALE, tx = -Math.sin(a), tz = Math.cos(a);
       for (var k = -1; k <= 1; k++) top = Math.max(top, height(cx + tx * k * 28 * f.scale, cz + tz * k * 28 * f.scale));
     }
     return Math.max(f.alt, top + SHIP_CLEAR);
@@ -1210,7 +1258,7 @@
       if (f.gone > 0 || f.selfMoved) return;
       f.angle += f.speed * dt * (f.dying > 0 ? 0.5 : 1);
       var dirSign = f.speed >= 0 ? 0 : Math.PI;
-      var x = Math.cos(f.angle) * f.radius, z = Math.sin(f.angle) * f.radius;
+      var x = Math.cos(f.angle) * f.radius * SCALE, z = Math.sin(f.angle) * f.radius * SCALE; // wider circles in a wider arena
       if (f.dying > 0) {
         // going down: listing, falling, fires breaking out along the hull
         f.dying += dt; f.fallV += 7 * dt; f.fall += f.fallV * dt; f.list += dt * 0.15;
@@ -1424,7 +1472,7 @@
     }
   }
   function spawnDrone(d) {
-    var a = Math.random() * 6.283, r = 45 + Math.random() * 160;
+    var a = Math.random() * 6.283, r = 45 + Math.random() * (SPAWN * SCALE - 45);
     var cx = Math.cos(a) * r, cz = Math.sin(a) * r;
     d.r = 6 + Math.random() * 14;
     // above the highest ground anywhere on its circle, not only at the middle of it: beside a cliff the middle can be
@@ -1637,7 +1685,7 @@
   function placeGround(g) {
     var x = 0, z = 0, h = 0;
     for (var tries = 0; tries < 60; tries++) {
-      var a = Math.random() * 6.283, r = 50 + Math.random() * 155;
+      var a = Math.random() * 6.283, r = 50 + Math.random() * (SPAWN * SCALE - 50);
       x = Math.cos(a) * r; z = Math.sin(a) * r; h = height(x, z);
       if (h < 2.5) continue;
       if (Math.abs(height(x + 3, z) - h) > 2.2 || Math.abs(height(x, z + 3) - h) > 2.2) continue;
@@ -1923,7 +1971,7 @@
         var want = Math.min(8, Math.floor(sec.falling / (WALL_FALL / 8)) + 1);
         if (want !== sec.step) {
           sec.step = want; wallDown[k] = want / 8;
-          buildTerrain(sec.cx - WALL_SEC / 2 - (k === 0 ? 40 : 6), sec.cx + WALL_SEC / 2 + (k === WALL_SECS - 1 ? 40 : 6));
+          buildTerrain(sec.cx - WALL_SEC / 2 - (k === 0 ? 40 : 6), sec.cx + WALL_SEC / 2 + (k === WALL_SECS - 1 ? 40 : 6), -70, 70); // the wall's faces wander to about 60 out
           for (i = 0; i < 3; i++) { fleetTmp.set(sec.cx + (Math.random() - 0.5) * WALL_SEC, 20 + Math.random() * 70 * (1 - wallDown[k]), (Math.random() - 0.5) * 70); boom(fleetTmp, Math.random() < 0.6); }
         }
         if (sec.falling >= WALL_FALL) { sec.falling = 0; sec.down = true; updateReadout(); checkRound(); }
@@ -2206,12 +2254,12 @@
     for (var i = 0, sent = 0; i < lavaBombs.length && sent < n; i++) {
       var bm = lavaBombs[i];
       if (bm.t >= 0) continue;
-      bm.from.set(VOLC.x + volcGroup.position.x, VOLC_TOP, VOLC.z + volcGroup.position.z);
+      volcTop(bm.from);
       // round where you will be when it lands, so standing still under one is a choice
       var a = Math.random() * 6.283, r = sent === 0 ? 0 : 18 + Math.random() * 55;
       bm.to.copy(shipPos).addScaledVector(fwdV, speed * WK_BOMB_T * 0.8);
       bm.to.x += Math.cos(a) * r; bm.to.z += Math.sin(a) * r;
-      var d = Math.sqrt(bm.to.x * bm.to.x + bm.to.z * bm.to.z); if (d > 210) { bm.to.x *= 210 / d; bm.to.z *= 210 / d; }
+      var d = Math.sqrt(bm.to.x * bm.to.x + bm.to.z * bm.to.z); var bmax = (SPAWN + 5) * SCALE; if (d > bmax) { bm.to.x *= bmax / d; bm.to.z *= bmax / d; }
       bm.to.y = wkGround(bm.to.x, bm.to.z);
       bm.t = 0; bm.mesh.visible = bm.mark.visible = bm.beam.visible = true;
       bm.mark.position.set(bm.to.x, bm.to.y + 0.6, bm.to.z); bm.beam.position.set(bm.to.x, bm.to.y + 35, bm.to.z);
@@ -2628,9 +2676,11 @@
     endWall(); wkTowersOff();
     if (walker && walker.on && !arenaHold) walkerOn(false);
     if (!arenaHold) {
+      var grew = setScale(scaleHold || scaleOf(c)); // each chapter's arena its own size
       // the ice stands whole again whenever it comes back, whatever fell the last time
-      if (where === 1 && wallDown.some(function (d) { return d > 0; })) { wallDown = [0, 0, 0, 0]; if (arena === 1) buildTerrain(); }
-      setArena(where);
+      var mend = where === 1 && wallDown.some(function (d) { return d > 0; });
+      if (mend) wallDown = [0, 0, 0, 0];
+      if (where !== arena) setArena(where); else if (grew || mend) { buildTerrain(); placeVolcano(); }
     }
     if (arena === 2) ensureWalker(); // the volcano's bombs live with the walker, and fall in the lava chapter's ordinary rounds too
     tod = todOf(n); applyLook(); // the time of day moves on a step each round
@@ -3172,7 +3222,7 @@
 
   // ---------- the dogfight beyond the map: your squadron against their interceptors ----------
   // It sits past the edge you can fly to, towards the sunset, so it is scenery for now.
-  var DOG_C = new THREE.Vector3(-312, 196, -352), DOG_R = 85, DOG_H = 40, DOG_SCALE = 2.4, DOG_FLOOR = 136; // the floor clears the mountain ring
+  var DOG_C0 = new THREE.Vector3(-312, 196, -352), DOG_C = DOG_C0.clone(), DOG_R = 85, DOG_H = 40, DOG_SCALE = 2.4, DOG_FLOOR = 136; // the floor clears the mountain ring
   var DOG_SPEED = 54, DOG_TURN = 1.5, DOG_SHOT = 270;
   var dogs = [], dogShots = [], dogFlashes = [];
   var dgA = new THREE.Vector3(), dgB = new THREE.Vector3();
@@ -3962,7 +4012,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'chapters-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'chapters-3', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +
@@ -4068,7 +4118,7 @@
 
       // near the edge of the map the ship turns itself for home
       var dc = Math.sqrt(shipPos.x * shipPos.x + shipPos.z * shipPos.z);
-      if (dc > 222) {
+      if (dc > EDGE * SCALE) {
         var home = Math.atan2(shipPos.x, shipPos.z);
         var diff = Math.atan2(Math.sin(home - yaw), Math.cos(home - yaw));
         yaw += diff * Math.min(1, dt * 1.8);
@@ -4078,7 +4128,7 @@
       basis();
       shipPos.addScaledVector(fwdV, speed * dt).addScaledVector(rightV, s * 15 * dt);
       // the storm's wind; never further out past the edge, where the ship is already turning itself home
-      if (wind.x || wind.z) { var wo = (shipPos.x * wind.x + shipPos.z * wind.z) / Math.max(1, dc); if (dc < 222 || wo < 0) shipPos.addScaledVector(wind, dt); }
+      if (wind.x || wind.z) { var wo = (shipPos.x * wind.x + shipPos.z * wind.z) / Math.max(1, dc); if (dc < EDGE * SCALE || wo < 0) shipPos.addScaledVector(wind, dt); }
 
       var ground = Math.max(height(shipPos.x, shipPos.z), 0) + 1.7;
       if (shipPos.y < ground) { shipPos.y = ground; if (pitch < 0.08) pitch = Math.min(0.08, pitch + dt * 2.4); }

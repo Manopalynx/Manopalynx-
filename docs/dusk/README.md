@@ -710,10 +710,49 @@ that needs it rises by 1.4, and the rest fly exactly as they did.
 chapter is the ice or the lava about half each (164 and 136), every three chapters visit all three,
 none twice running.
 
+### Step 2, built (`chapters-3`): the arenas grow
+
+Each chapter's arena is scaled to keep the room each enemy has in round 4, by the chapter's last
+ordinary round, and stops growing at chapter 4. Round n has 11n enemies, so the width goes with
+the root of (5c + 4) / 4: **1, 1.5, 1.87, 2.18**. Scaled with it: the ground (same detail, more
+points), its edge, where things are put, the capital ships' circles, the crags at the ice's and the
+lava's rims, the far ridges (further out and broader, not taller, because the far fight flies over
+them), the volcano (about the map's centre, keeping its shape), the far fight and the weather's veil.
+Not scaled: the bosses and everything tuned round them, which stand in the middle. `scaleHold` pins
+the size for the suites, which hold today's.
+
+**Measured** by `test/dusk-size.mjs`:
+
+| chapter | width you can fly | ground points | a round's start, here |
+|---|---|---|---|
+| 1 | 444 | 48,841 | 18 ms |
+| 2 | 666 | 109,561 | 207 ms |
+| 3 | 831 | 170,569 | 266 ms |
+| 4 and on | 968 | 230,400 | 348 ms |
+
+**The plan's figures were low.** It said about 650, 770 and 880 across and 155,000 points at full
+size: it had grown the spawning ring where it should have grown the edge. The measured cost is half
+as much again in points, a third of a second at a chapter's start here, behind the upgrade cards.
+His phone is the measure that matters, and nothing here can take it.
+
+**The ice wall's collapse** rebuilds only the patch where the ground moves: the section's width by
+the wall's depth, found by its place in the grid. Each of its eight steps used to recompute the whole
+mesh's normals (19 ms at full size here, for steepness the flat-shaded ground used for nothing else)
+and to rebuild a strip the full depth of the map (23 ms). Now steepness comes from the heights either
+side, and **a step takes 3.1 ms at full size**, against a whole rebuild's 360. The ground it leaves
+is exactly, to the last bit, what a whole rebuild makes. Two of the suite's checks were wrong on the
+way: one asked a step for only a quarter of a whole rebuild and passed with the normals still
+recomputed; one timed a rebuild through a wrapper that dropped the patch's depth.
+
+Every landscape at three sizes: every ground unit on rock and inside the edge, every drone's circle
+clear of the ground, every capital ship's hull 8 clear on its whole circle, enemies spread out to the
+edge of where things are put, the far ridges and the far fight beyond the edge. A new run comes back
+to today's map exactly, not one coordinate different.
+
 ### Built in stages, each merged with its own version, each shown as renders first
 
 1. ~~Chapters: the move every five rounds and the order, at today's size.~~ Built, above.
-2. Size: every distance following the arena, and the arenas growing.
+2. ~~Size: every distance following the arena, and the arenas growing.~~ Built, above.
 3. The ice field's regions.
 4. The lava field's regions.
 5. The dusk hills at full size, for the second time round.
@@ -756,6 +795,7 @@ node test/dusk-time.mjs        # the time of day: the cycle, dusk unchanged, eac
 node test/dusk-weather.mjs     # the weather: the draw, nothing stacking, how far you see in fog, the wind, lightning, who gets pushed
 node test/dusk-wxsound.mjs     # the weather's sound: nothing before a tap, each bed under the music, thunder after its flash, the sound modes
 node test/dusk-chapter.mjs     # the chapters: the order, one arena a chapter, ordinary rounds on the ice and lava, ships over the ground
+node test/dusk-size.mjs        # the arenas' sizes: the spacing, the ground at every size, nothing in the wrong place, the wall's strips
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between

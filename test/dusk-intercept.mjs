@@ -41,7 +41,7 @@ async function fresh() {
   await page.mouse.click(196, 426);                                              // first touch: take the controls
   await page.evaluate(() => window.__t(`
     renderer.render = function () {};
-    chapterHold = 0; wxHold = 'clear'; wxStart(round); // the chapters and the weather vary; these checks are about other things, so hold them: dusk hills, clear
+    chapterHold = 0; scaleHold = 1; wxHold = 'clear'; wxStart(round); // the chapters and the weather vary; these checks are about other things, so hold them: dusk hills, clear
     window.M = { now: performance.now() };
     M.step = function (n, each) { for (var i = 0; i < n; i++) { M.now += 1000 / 30; tick(M.now); if (each) each(); } };
     M.quiet = function () {
