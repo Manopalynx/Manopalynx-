@@ -253,7 +253,7 @@
 <button type="button" class="sam" id="sam">Sam</button>
 <div class="dev" id="dev"><h2>Upgrades</h2><div class="dev-list" id="devList"></div>
   <h2>Sounds</h2><div class="dev-diag" id="devDiag"></div><div class="dev-snd" id="devSnd"></div>
-  <div class="dev-foot"><button type="button" class="dev-btn" id="devBoss">Next boss round</button><button type="button" class="dev-btn" id="devRaid">Send interceptors</button><button type="button" class="dev-btn" id="devClear">Clear round</button><button type="button" class="dev-btn" id="devClose">Close</button></div></div>
+  <div class="dev-foot"><button type="button" class="dev-btn" id="devArena">Ice arena on/off</button><button type="button" class="dev-btn" id="devBoss">Next boss round</button><button type="button" class="dev-btn" id="devRaid">Send interceptors</button><button type="button" class="dev-btn" id="devClear">Clear round</button><button type="button" class="dev-btn" id="devClose">Close</button></div></div>
 <!-- /SAM -->
 <div class="fail" id="fail">This device couldn’t start 3D graphics. Try opening the page in Safari or Chrome.</div>
 
@@ -307,7 +307,27 @@
     t = Math.min(1, Math.max(0, (t - a) / (b - a)));
     return t * t * (3 - 2 * t);
   }
-  function height(x, z) {
+  // ---------- arenas: the same map, a different landscape ----------
+  // Everything in the game that stands on the ground asks height(x, z) where the ground is, so a second landscape is
+  // a second function behind that one name, plus the mesh rebuilt from it and the light re-coloured. 0 is the dusk
+  // world. 1 is the ice field, with the wall across its middle that Sam's second boss will be fought on.
+  var arena = 0;
+  var WALL_LEN = 130, WALL_TOP = 95, WALL_LEDGES = [[62, 11, 26], [32, 29, 44]]; // each ledge: its height, and where it runs from and to, out from the crest
+  function heightIce(x, z) {
+    // a frozen plain with drifts a few metres high, breaking up into peaks at the rim
+    var d = Math.sqrt(x * x + z * z);
+    var base = 2 + fbm(x * 0.03 + 11.1, z * 0.03 + 4.4) * 9 + smooth(170, 250, d) * (20 + fbm(x * 0.02 + 7.3, z * 0.02 + 3.1) * 60);
+    // THE WALL: a ridge across the middle, long axis along x, stepped down either side in two flat ledges.
+    // The ledges are flat on purpose: things stand on ground only where it is level.
+    // The faces wander in and out by a few metres so they break into facets like a glacier front, and the crest is
+    // jagged; the ledges keep their height exactly. A first version with straight faces rendered as a plastic slab.
+    var az = Math.abs(z) + (fbm(x * 0.09 + 1.7, z * 0.09 + 8.3) - 0.5) * 6, ends = 1 - smooth(WALL_LEN - 35, WALL_LEN, Math.abs(x));
+    var prof = WALL_TOP - (WALL_TOP - WALL_LEDGES[0][0]) * smooth(8, 11, az) - (WALL_LEDGES[0][0] - WALL_LEDGES[1][0]) * smooth(26, 29, az) - WALL_LEDGES[1][0] * smooth(44, 47, az);
+    prof += (1 - smooth(3, 8, az)) * vnoise(x * 0.31, z * 0.31) * 9; // the crest, where nothing stands
+    return Math.max(base, prof * ends);
+  }
+  function height(x, z) { return arena === 1 ? heightIce(x, z) : heightDusk(x, z); }
+  function heightDusk(x, z) {
     var n = fbm(x * 0.011 + 3.7, z * 0.011 + 9.2);
     var r = 1 - Math.abs(2 * fbm(x * 0.021 + 51.3, z * 0.021 + 17.9) - 1);
     var h = n * n * 92 + r * r * 15 - 21;
@@ -328,22 +348,23 @@
   var sun = new THREE.DirectionalLight(0xffc49a, 1.15);
   sun.position.set(-0.55, 0.32, -0.62);
   scene.add(sun);
-  scene.add(new THREE.HemisphereLight(0x7a78ff, 0x24121c, 0.6));
+  var hemi = new THREE.HemisphereLight(0x7a78ff, 0x24121c, 0.6);
+  scene.add(hemi);
 
-  // terrain
-  (function () {
-    var geo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
-    geo.rotateX(-Math.PI / 2);
-    var pos = geo.attributes.position;
-    var cols = new Float32Array(pos.count * 3);
-    var stops = [
-      [-30, new THREE.Color(0x1b1f2c)],
-      [1.5, new THREE.Color(0x2c2a3d)],
-      [10, new THREE.Color(0x44345a)],
-      [24, new THREE.Color(0x8a4a3e)],
-      [38, new THREE.Color(0xc98f6b)],
-      [60, new THREE.Color(0xeadccd)]
-    ];
+  // terrain: one mesh, rebuilt from height() whenever the arena changes
+  var ARENAS = [
+    { haze: 0x3a2040, zenith: 0x060716, sun: 0xffc49a, sky: 0x7a78ff, ground: 0x24121c, water: 0x0e5566, glow: 0x0a3540,
+      stops: [[-30, 0x1b1f2c], [1.5, 0x2c2a3d], [10, 0x44345a], [24, 0x8a4a3e], [38, 0xc98f6b], [60, 0xeadccd]] },
+    { haze: 0x6a9cc0, zenith: 0x040b18, sun: 0xe6f3ff, sky: 0xa8d4ff, ground: 0x5d8fa8, hemiK: 1.0, steep: 0x2f78a8, water: 0x0b2f44, glow: 0x082230, // ice throws light back up, so a face in shadow is still pale
+      stops: [[-30, 0x0b1d2e], [1.5, 0x1f4560], [9, 0x4f8fb0], [30, 0x8fc6e0], [60, 0xcdeaf7], [96, 0xffffff]] }
+  ];
+  var terrainGeo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
+  terrainGeo.rotateX(-Math.PI / 2);
+  terrainGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(terrainGeo.attributes.position.count * 3), 3));
+  scene.add(new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, metalness: 0.0 })));
+  function buildTerrain() {
+    var pos = terrainGeo.attributes.position, cols = terrainGeo.attributes.color.array;
+    var stops = ARENAS[arena].stops.map(function (st) { return [st[0], new THREE.Color(st[1])]; });
     var c = new THREE.Color();
     for (var i = 0; i < pos.count; i++) {
       var x = pos.getX(i), z = pos.getZ(i);
@@ -356,11 +377,32 @@
       c.copy(stops[k][1]).lerp(stops[k + 1][1], t);
       cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
     }
-    geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-    geo.computeVertexNormals();
-    var mat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, metalness: 0.0 });
-    scene.add(new THREE.Mesh(geo, mat));
-  })();
+    pos.needsUpdate = true;
+    terrainGeo.computeVertexNormals(); terrainGeo.computeBoundingSphere();
+    // where an arena asks for it, steep ground takes a deeper colour: white ledges, blue faces
+    if (ARENAS[arena].steep !== undefined) {
+      var nrm = terrainGeo.attributes.normal, deep = new THREE.Color(ARENAS[arena].steep);
+      for (i = 0; i < pos.count; i++) {
+        var st = Math.min(1, (1 - nrm.getY(i)) * 1.5);
+        c.setRGB(cols[i * 3], cols[i * 3 + 1], cols[i * 3 + 2]).lerp(deep, st * 0.85);
+        cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
+      }
+    }
+    terrainGeo.attributes.color.needsUpdate = true;
+  }
+  buildTerrain();
+  // Changes the landscape and nothing else. Whatever stands on the ground was placed against the old one, so the
+  // caller starts a round afterwards; this does not, because a round is not always what the caller wants next.
+  function setArena(n) {
+    if (n === arena) return;
+    arena = n;
+    var A = ARENAS[n];
+    scene.fog.color.set(A.haze); scene.background.set(A.zenith);
+    sun.color.set(A.sun); hemi.color.set(A.sky); hemi.groundColor.set(A.ground); hemi.intensity = A.hemiK || 0.6;
+    water.material.color.set(A.water); water.material.emissive.set(A.glow);
+    duskProps.visible = n === 0; // the landing pad, its buildings and spire, and the pylons in the hills: all placed against the dusk ground
+    buildTerrain();
+  }
 
   // water
   var water = new THREE.Mesh(
@@ -642,6 +684,7 @@
   var glowMat = new THREE.MeshBasicMaterial({ color: 0xffc880 });
   var wallMat = new THREE.MeshStandardMaterial({ color: 0x343848, roughness: 0.8, metalness: 0.3, flatShading: true });
   var spireTop = new THREE.Vector3(0, PAD_H + 35, 0);
+  var duskProps = new THREE.Group(); scene.add(duskProps);
 
   (function () {
     var post = new THREE.Group();
@@ -673,7 +716,7 @@
     var lamp = new THREE.PointLight(0xffb070, 1.3, 90, 2);
     lamp.position.set(-2, PAD_H + 9, 0);
     post.add(lamp);
-    scene.add(post);
+    duskProps.add(post);
 
     // lonely marker pylons out in the hills
     var pyMat = new THREE.MeshStandardMaterial({ color: 0x2a2d3a, roughness: 0.9, flatShading: true });
@@ -683,8 +726,8 @@
       if (h < 1) continue;
       var py = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.4, 9, 5), pyMat);
       py.position.set(x, h + 4.5, z);
-      scene.add(py);
-      blinker(scene, x, h + 9.4, z, 0x8fe9ff, 0.45, 1.1 + hash(i, 2.2));
+      duskProps.add(py);
+      blinker(duskProps, x, h + 9.4, z, 0x8fe9ff, 0.45, 1.1 + hash(i, 2.2));
     }
   })();
 
@@ -1255,8 +1298,12 @@
   function spawnDrone(d) {
     var a = Math.random() * 6.283, r = 45 + Math.random() * 160;
     var cx = Math.cos(a) * r, cz = Math.sin(a) * r;
-    d.c.set(cx, Math.max(height(cx, cz), 0) + 16 + Math.random() * 38, cz);
     d.r = 6 + Math.random() * 14;
+    // above the highest ground anywhere on its circle, not only at the middle of it: beside a cliff the middle can be
+    // on the plain and the circle inside the rock
+    var top = Math.max(height(cx, cz), 0);
+    for (var q = 0; q < 8; q++) top = Math.max(top, height(cx + Math.cos(q * 0.785) * d.r, cz + Math.sin(q * 0.785) * d.r));
+    d.c.set(cx, top + 16 + Math.random() * 38, cz);
     d.w = (0.25 + Math.random() * 0.4) * (Math.random() < 0.5 ? -1 : 1);
     d.ph = Math.random() * 6.283;
     d.alive = true; d.mesh.visible = true;
@@ -2911,7 +2958,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'dreadnought-4', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'arena-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +
@@ -2952,6 +2999,10 @@
     for (i = 0; i < fleet.length; i++) if (fleet[i].gone <= 0) { fleet[i].gone = Infinity; fleet[i].dying = 0; fleet[i].ship.visible = false; }
     devShow(false);
     updateReadout(); checkRound();
+  });
+  document.getElementById('devArena').addEventListener('click', function () {
+    // a look at the ice and its wall. The current round starts again on it, because everything on the ground has to be put back down
+    devShow(false); setArena(arena === 1 ? 0 : 1); startRound(round); banner(arena === 1 ? 'The ice field' : 'Dusk', 2.5);
   });
   document.getElementById('devBoss').addEventListener('click', function () {
     // straight to the next round that is a multiple of five, so each tier can be tried without playing up to it

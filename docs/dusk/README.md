@@ -227,15 +227,45 @@ at 30 hits was down two seconds into the round; and `dreadnought-1`'s intercepto
 passing on a fixture that named round 5, then went red on a correct game when round 5 stopped
 sending interceptors from the far fight.
 
+## The ice arena (build `arena-1`): the landscape for the second boss, and no boss yet
+
+A second landscape behind the same map: a frozen plain with a terraced wall of ice across its
+middle. Reached only from the Sam panel ("Ice arena on/off"), which restarts the current round
+on it. **Nothing in the game's rounds uses it yet.** It is the agreed middle step: the arena
+on its own, so that if something floats or looks wrong it is not tangled up with whether the
+wall fight is any good.
+
+**How it works.** Everything that stands on the ground asks `height(x, z)`. That name now
+picks between `heightDusk` and `heightIce` by `arena`. `setArena(n)` rebuilds the one terrain
+mesh from it, re-colours haze, sky, lights and water from `ARENAS[n]`, and puts away
+`duskProps` (landing pad, buildings, spire, pylons), which were placed against the dusk
+ground. It does not start a round; the caller does, because everything on the ground has to
+be put down again.
+
+**The wall** (`heightIce`): long axis along x, 95 high with a jagged crest, 160 of it at full
+height and tapering to nothing by 130 out, so it can be flown round. Each face steps down in
+two ledges, at 62 and at 32, each about 15 deep. **The ledges are level on purpose**: a ground
+unit only stands where the ground is level, and `test/dusk-arena.mjs` asserts one can stand
+anywhere along all four.
+
+**Three things the first versions got wrong:**
+
+- Straight faces and the dusk world's dark haze rendered the wall as a featureless dark slab.
+  The faces now wander by a few metres so they break into facets, steep ground takes a deeper
+  blue (`steep` in `ARENAS`), ice is lit from below, and the haze is pale.
+- Drones circled through the wall: a drone's height was set from the ground at the middle of
+  its circle, and beside a cliff the middle is on the plain. It is now set from the highest
+  ground anywhere on the circle, in both landscapes.
+- The suite first asserted the dreadnought clears the crest. It does not, and never meets
+  it: the check tested a fight that does not exist, and was removed rather than satisfied.
+
+**Known and left:** the ordinary capital ships patrol at fixed heights and radii and would fly
+through the wall. They are not meant to be here.
+
 ## Further bosses: his options, none chosen
 
 A range picked at random every five rounds; a range that gets harder in order; a boss with an
-area of its own, "such as a ice wall with turrets all around it". Agreed order of work after
-the dreadnought: the arena swap on its own, then the ice wall.
-
-What the code says about cost, read not measured: the landscape is one `height(x, z)`
-function with 16 callers and one mesh built from it once, and ground units already sit
-wherever `height` puts them, so a second landscape is a contained change.
+area of its own, "such as a ice wall with turrets all around it". Next: the ice wall fight.
 
 ## Queued, in the agreed order
 
@@ -266,6 +296,7 @@ Also noted: once interceptors exist, invulnerable wingmen will look odd.
 node test/dusk.mjs             # smoke
 node test/dusk-intercept.mjs   # the interceptors' rules and how they fly
 node test/dusk-boss.mjs        # the dreadnought's rules and how long the fight is
+node test/dusk-arena.mjs       # the ice landscape: nothing floating, nothing buried, and dusk comes back exact
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between
