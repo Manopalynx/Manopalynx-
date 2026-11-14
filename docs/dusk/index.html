@@ -1640,6 +1640,7 @@
       g.ring.visible = show;
       if (show) { g.ring.position.copy(g.pos); g.ring.quaternion.copy(camera.quaternion); }
       if (!inControl || dead) continue;
+      if (!roundLive && wkTowerGun(g)) continue; // the walker is down: its towers stand down with it
       if (dist > (g.type === 'sam' ? 210 : 125)) continue;
       g.pivot.lookAt(shipPos);
       if (g.type === 'flak') {
@@ -1849,6 +1850,42 @@
   var WK_FALL_AT = 3, WK_CORE = new THREE.Vector3(0, 10.5, 2), WK_BOMB_T = 3.6, WK_BOMB_R = 15, WK_BOMB_DMG = 25, WK_LAVA_DMG = 12;
   var wkA = new THREE.Vector3(), wkB = new THREE.Vector3(), wkC = new THREE.Vector3(), wkUp = new THREE.Vector3(0, 1, 0);
   var lavaBombs = [], lavaT = 0;
+  // GUARD TOWERS AND INTERCEPTORS. Sam, of walker-1: "it's rather easy", and asked for "some ground units properly on
+  // watch towers similar to the ice wall and also two interceptors". HIS RULINGS: the towers rebuild; two
+  // interceptors, each coming back 20 seconds after it is shot down. MINE: six towers, flak and missile site by turns,
+  // as tough as the wall's tower guns, back 10 seconds after they fall like every other gun that rebuilds; not
+  // counted, because the walker is what has to die. They stand on rock at least 160 out: its feet reach 150, and the
+  // ring's east-south-east quarter is all lava channel, so the spacing follows the rock rather than the clock.
+  var WK_TOWERS = [[160, 0], [85, 136], [-23, 160], [-158, 28], [-136, -110], [-24, -174]], WK_TOWER_H = 28, WK_TOWER_BACK = 10;
+  var WK_IC = 2, WK_IC_BACK = 20, WK_IC_FIRST = 6;
+  var wkProps = new THREE.Group(), wkTowerSpots = [];
+  wkProps.visible = false; scene.add(wkProps);
+  function ensureWkTowers() {
+    if (wkTowerSpots.length) return;
+    // basalt, with a hot seam up one side and a glowing rim to the deck, so it reads against black rock in red haze
+    var shaftMat = new THREE.MeshStandardMaterial({ color: 0x3a3036, emissive: 0x1a0a06, roughness: 0.8, metalness: 0.2, flatShading: true });
+    var seamMat = new THREE.MeshBasicMaterial({ color: 0xff6a2a, fog: false });
+    WK_TOWERS.forEach(function (tw, i) {
+      var h = heightLava(tw[0], tw[1]);
+      var shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 3.8, WK_TOWER_H + 6, 6), shaftMat);
+      shaft.position.set(tw[0], h + WK_TOWER_H / 2 - 3, tw[1]); wkProps.add(shaft);
+      var seam = new THREE.Mesh(new THREE.BoxGeometry(0.7, WK_TOWER_H - 4, 0.7), seamMat);
+      seam.position.set(tw[0] + 2.7, h + WK_TOWER_H / 2 - 2, tw[1]); seam.rotation.z = 0.06; wkProps.add(seam);
+      var deck = new THREE.Mesh(new THREE.CylinderGeometry(4.8, 3.4, 1.4, 6), shaftMat);
+      deck.position.set(tw[0], h + WK_TOWER_H - 0.5, tw[1]); wkProps.add(deck);
+      var rim = new THREE.Mesh(new THREE.CylinderGeometry(4.9, 4.9, 0.3, 6), seamMat);
+      rim.position.set(tw[0], h + WK_TOWER_H - 1.3, tw[1]); wkProps.add(rim);
+      wkTowerSpots.push({ x: tw[0], z: tw[1], type: i % 2 ? 'sam' : 'flak', tower: true, walker: true });
+    });
+  }
+  function wkTowerGun(g) { return !!(g.tower && g.tower.walker); }
+  // put a tower's gun back on top of it, whole
+  function wkTowerSet(g) { setGround(g, g.tower.x, g.tower.z); g.group.position.y += WK_TOWER_H; g.pos.y += WK_TOWER_H; }
+  // the round is over or another has begun: the towers go with the lava field, and their guns are ordinary again
+  function wkTowersOff() {
+    wkProps.visible = false;
+    for (var i = 0; i < ground.length; i++) if (wkTowerGun(ground[i])) { ground[i].tower = null; ground[i].back = 0; ground[i].maxHp = ground[i].baseHp; }
+  }
   function walkerSpec(tier) {
     return {
       hull: Math.round(18 * Math.pow(tier, 1.5)) * 100,   // 1800, 5100, 9400: what its core takes; about three falls at round 5
@@ -1857,7 +1894,8 @@
       turretHp: 8 + 3 * (tier - 1),
       fireK: Math.max(0.4, 1 / (1 + 0.25 * (tier - 1))),
       down: Math.max(6, 11 - tier),                       // seconds its core stays open: 10, 9, 8
-      bombs: 2 + 2 * tier                                 // per eruption: 4, 6, 8
+      bombs: 2 + 2 * tier,                                // per eruption: 4, 6, 8
+      towerHp: 3 + tier                                   // on top of what its kind takes, as on the ice: a tower's flak gun takes 7 the first time
     };
   }
   function wkGround(x, z) { return Math.max(height(x, z), 0); } // it wades: a foot in a channel stands on the lava's surface
@@ -1994,6 +2032,17 @@
     }
     for (i = 0; i < walker.legs.length; i++) { walker.legs[i].maxHp = sp.kneeHp; walker.legs[i].hp = sp.kneeHp; paintRing(walker.legs[i]); }
     f.coreAim.hp = 0;
+    // a gun on top of each tower
+    ensureWkTowers(); wkProps.visible = true; ensureGround(10); // ten in the pool is six flak and four missile sites
+    var taken = {};
+    for (i = 0; i < wkTowerSpots.length; i++) {
+      var ts = wkTowerSpots[i], tg = null;
+      for (var q = 0; q < ground.length; q++) if (!taken[q] && !ground[q].alive && ground[q].type === ts.type) { tg = ground[q]; taken[q] = true; break; }
+      if (!tg) continue;
+      tg.maxHp = tg.baseHp + sp.towerHp; tg.spot = null; tg.tower = ts; tg.back = 0;
+      wkTowerSet(tg);
+    }
+    walker.icT = [WK_IC_FIRST, WK_IC_FIRST]; walker.icSent = 0;
     eruptT = Math.min(eruptT, 9); // the first eruption comes soon, so the bombs are met early
     shipPos.set(0, 62, 30); yaw = Math.atan2(shipPos.x - walker.pos.x, shipPos.z - walker.pos.z); pitch = 0; bank = 0; basis();
     camera.position.copy(shipPos).addScaledVector(fwdV, -9.5).addScaledVector(upV, 2.6);
@@ -2180,6 +2229,24 @@
     if (w.core.visible) { w.coreFlash = Math.max(0, (w.coreFlash || 0) - dt); w.coreMat.color.set(w.coreFlash > 0 ? 0xffffff : 0xffe08a); w.core.scale.setScalar(1 + Math.sin(time * 9) * 0.08); }
     if (!fighting) return;
     rebuildTurrets(f, dt);
+    // the towers' guns come back
+    for (i = 0; i < ground.length; i++) {
+      var g = ground[i];
+      if (g.alive || !wkTowerGun(g) || g.back <= 0) continue;
+      g.back -= dt;
+      if (g.back <= 0) { wkTowerSet(g); g.flash = 0.3; sfx('rebuild', g.pos); }
+    }
+    // two interceptors, each back 20 seconds after it is shot down (Sam). The first two come in a few seconds after
+    // the start. While one is up its clock stands at 20, so it runs only once it is gone.
+    if (inControl && !dead && roundLive) {
+      var sent = 0;
+      for (i = 0; i < WK_IC; i++) {
+        if (ics[i].alive) { w.icT[i] = WK_IC_BACK; continue; }
+        w.icT[i] -= dt;
+        if (w.icT[i] <= 0) { icPeel(ics[i]); w.icT[i] = WK_IC_BACK; sent++; }
+      }
+      if (sent) { sfx('raid'); if (!w.icSent) banner('Interceptors inbound', 2.5); w.icSent += sent; }
+    }
     // the volcano: when it goes up, bombs come down
     if (eruptT > 16) eruptT = 16;
     if (eruptOn > 0 && !w.erupting) { w.erupting = true; if (inControl && !dead) lavaVolley(w.spec.bombs); }
@@ -2195,7 +2262,7 @@
       for (i = 0; i < ground.length; i++) { ground[i].alive = false; ground[i].group.visible = false; ground[i].ring.visible = false; }
       for (i = 0; i < fleet.length; i++) { fleet[i].gone = Infinity; fleet[i].dying = 0; fleet[i].ship.visible = false; }
       for (i = 0; i < ics.length; i++) icHide(ics[i]);
-      icPeelT = -1; endWall();
+      icPeelT = -1; endWall(); wkTowersOff();
       walkerOn(true);
       shipPos.set(0, 60, 30); yaw = Math.atan2(shipPos.x - walker.pos.x, shipPos.z - walker.pos.z); pitch = 0; basis();
       readoutEl.innerHTML = 'The lava field<br>a look, not a fight';
@@ -2294,7 +2361,7 @@
     var n = 0, i;
     if (wallOn) return wallStanding(); // the wall's guns rebuild, so they are never what is left to do: its sections are
     for (i = 0; i < drones.length; i++) if (drones[i].alive) n++;
-    for (i = 0; i < ground.length; i++) if (ground[i].alive) n++;
+    for (i = 0; i < ground.length; i++) if (ground[i].alive && !wkTowerGun(ground[i])) n++; // the walker's tower guns rebuild, so they are never what is left to do
     for (i = 0; i < fleet.length; i++) if (fleet[i].gone <= 0 && fleet[i].dying === 0) n++;
     return n;
   }
@@ -2307,7 +2374,7 @@
     // every fifth round is a boss and nothing else; the rounds between carry on counting as before
     var boss = isBossRound(n), ships = boss ? 0 : n, small = boss ? 0 : 5 * n;
     var kind = boss ? pickBoss() : null;
-    endWall();
+    endWall(); wkTowersOff();
     if (walker && walker.on && !arenaHold) walkerOn(false);
     if (kind !== 'wall' && kind !== 'walker' && !arenaHold) setArena(0); // the ice belongs to the wall and the lava to the walker; everything else is fought at dusk
     ensureFleet(Math.max(1, ships)); ensureDrones(small); ensureGround(small);
@@ -2461,7 +2528,7 @@
     g.hp -= dmg; g.flash = 0.2; paintRing(g);
     if (g.hp <= 0) {
       salvage(4); g.alive = false; g.group.visible = false; g.ring.visible = false; chainBlast(g.pos, 1);
-      boom(g.pos, true); if (wallOn) wallUnitDown(g); updateReadout(); checkRound();
+      boom(g.pos, true); if (wallOn) wallUnitDown(g); else if (wkTowerGun(g)) g.back = WK_TOWER_BACK; updateReadout(); checkRound();
     } else boom(at, false);
   }
   function hitTurret(f, t, dmg, at) {
@@ -3252,7 +3319,7 @@
       d2 = drones[i].mesh.position.distanceToSquared(shipPos);
       if (d2 < best) { best = d2; tgt = drones[i].mesh.position; }
     }
-    for (i = 0; i < ground.length; i++) if (ground[i].alive) {
+    for (i = 0; i < ground.length; i++) if (ground[i].alive && !wkTowerGun(ground[i])) { // point at the walker, not at a tower
       d2 = ground[i].pos.distanceToSquared(shipPos);
       if (d2 < best) { best = d2; tgt = ground[i].pos; }
     }
@@ -3580,7 +3647,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'walker-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'walker-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +

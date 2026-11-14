@@ -327,7 +327,7 @@ the dreadnought shipped with a generator nothing could reach.
 - The first stand-in ignored the guns and reported a 319-second fight. That measured the wrong
   route, not the wall.
 
-## The walker (build `walker-1`): the third boss
+## The walker (build `walker-2`): the third boss
 
 Sam: "would we be able to add a new massive lava zone by the volcano with a massive walking
 enemy spider tank looking thing?"; to the design, "Go with your ideas"; to the place and the walk,
@@ -359,6 +359,20 @@ sets of three legs strictly take turns. How it walks is asserted by `test/dusk-l
 - **Which boss**: any of the three first in a run, then any but the last. 60 runs: dreadnought
   20, ice wall 17, walker 23 first; all six pairings seen.
 
+**Guard towers and interceptors (`walker-2`).** Sam, of `walker-1`: "rather easy", and asked for
+"some ground units properly on watch towers similar to the ice wall and also two interceptors".
+**His rulings:** the towers **rebuild**; **two interceptors, each back 20 seconds after it is shot
+down**, so never more than two. **Mine, open to him:** six towers, flak and missile site by turns,
+their guns taking 7 and 8 hits the first time as the wall's tower guns do; back **10 seconds** after
+they fall, like every other gun that rebuilds; the first two interceptors **6 seconds** in, out of
+the far fight; **neither is counted**, the walker is what has to die; once it is destroyed the towers
+stand down and no more interceptors come.
+
+The towers stand on rock **at least 160 out**. Its feet reach 150, and over two laps none comes
+nearer a tower's middle than about 10. **The ring's east-south-east quarter is all lava channel**,
+150 to 185 out, so the towers follow the rock rather than the clock: at 0°, 58°, 98°, 170°, 219°
+and 264°, leaving the lava side open.
+
 | round | core | each knee | turrets | seconds open | bombs an eruption |
 |---|---|---|---|---|---|
 | 5 | 1800 | 30 | 4 | 10 | 4 |
@@ -366,13 +380,35 @@ sets of three legs strictly take turns. How it walks is asserted by `test/dusk-l
 | 15 | 9400 | 125 | 6 | 8 | 8 |
 
 **Measured** by `test/dusk-walker.mjs`, with a stand-in that flies at the nearest knee, and at the
-core when open, holding Fire. It never dodges, cannot die, and repair is not modelled:
+core when open, holding Fire. It never dodges, never aims at an interceptor, cannot die, and repair
+is not modelled. Each hit is put down to its source by its size, which differs for every source here.
 
-| | destroyed in | it fell at | hull it lost |
-|---|---|---|---|
-| round 5, no upgrades | 257s | 71, 186, 256s | 665 of 100 |
-| round 5, four upgrades | 44s | 16, 43s | 88 of 125 |
-| round 10, nine upgrades | 42s | 16, 40s | 128 of 150 |
+| | destroyed in | hull lost, `walker-1` | `walker-2` | of which towers | interceptors |
+|---|---|---|---|---|---|
+| round 5, no upgrades | 257 to 473s | 699 to 1025 of 100 | about 1700 to 2600 | about half | 40 to 90 |
+| round 5, four upgrades, three runs | 44s every time | 64 to 112 of 125 | **238 to 276** | 106 to 130 | 10 to 30 |
+| round 5, four upgrades, **each tower once first** | 101s every time | – | 335 to 397 | 160 to 204 | 0 to 10 |
+| round 10, nine upgrades | 42s | 128 of 150 | 222 | 78 | 0 |
+
+**Runs differ.** The guns' timing is random, and in the long fight that decides how many falls it
+takes: five no-upgrade runs of `walker-1` gave 257, 300, 300, 393 and 393 seconds. This document
+quoted the first as the figure. The short fights now run three times and are quoted as a range.
+
+**What that says, read plainly:**
+
+- **It is no longer easy, by this measure.** With four upgrades it now costs about twice the hull you
+  have; the dreadnought's figure on the same terms is 194 of 125. The stand-in would be dead about
+  halfway through. A person dodges, mends and carries other cards, so this is a ceiling, as before.
+- **Shooting the towers does not pay.** They are back in ten seconds, so the stand-in that takes
+  each one down first spends a minute more under the walker's turrets and loses more, not less. The
+  best play is to ignore them and take what they send. On the ice the towers stayed down, so there
+  clearing them paid. If he wants clearing a side to buy a breather, a longer rebuild is the lever.
+- **The interceptors barely fire at this stand-in**: 3 to 12 shots a fight, though two are up 80 to
+  100% of the time. It circles under the walker, and they fire only while on your screen: the case
+  the interceptors section already notes is barely shot at. A person who flies straight at the
+  walker will meet them head-on far more.
+- **The fight is no shorter or longer.** Nothing added touches the knees or the core: 44s with four
+  upgrades, as before. What changed is only what it costs.
 
 Bolts aimed at a knee with a clear line reach it 87% of the time level, 93 to 100% from above;
 at the open core, 79% from a shallow 5° and 100% from 20° up.
@@ -387,9 +423,16 @@ at the open core, 79% from a shallow 5° and 100% from 20° up.
   start brought that to 88.
 - Two of the suite's own checks were wrong first time: one counted bolts that had rock between
   gun and knee as misses, and one started its stopwatch after the core had opened.
+- `walker-2`'s checks, four wrong first time and found by breaking the game on purpose: a "towers
+  first" stand-in that never finished, because towers that rebuild are never all down; an
+  expectation that interceptors fire in every fight, which this stand-in does not give them; the
+  knee check turning flaky because a tower gun stood in some of its lines of fire; and a "towers
+  stand down" check whose two-second window was too short for a gun to fire either way, so
+  deleting the code passed it. It now holds you off a flak tower and needs shots before and none
+  after.
 
 **Not settled:** a player with no upgrades, as the Sam panel's boss buttons give, faces a
-four-minute fight. Whether a person stands under a bomb mark is not something a stand-in that
+four- to eight-minute fight, and with the towers it is not survivable by any measure here. Whether a person stands under a bomb mark is not something a stand-in that
 never dodges can say. The footfall and eruption sounds are unheard by anyone but him.
 
 ## Queued, in the agreed order
@@ -424,7 +467,8 @@ node test/dusk-boss.mjs        # the dreadnought's rules and how long the fight 
 node test/dusk-arena.mjs       # the ice landscape: nothing floating, nothing buried, and dusk comes back exact
 node test/dusk-wall.mjs        # the ice wall: cracks, guns that rebuild, sections that fall, which boss comes
 node test/dusk-lava.mjs        # the lava field, and the walker's every footfall for 150 seconds
-node test/dusk-walker.mjs      # the walker's fight: knees, the fall, the core, bombs, lava, which boss comes
+node test/dusk-walker.mjs      # the walker's fight: knees, the fall, the core, bombs, lava, towers, interceptors, which boss comes
+DUSK_QUICK=1 node test/dusk-walker.mjs   # its rules without the fights, for mutation runs: a minute instead of several
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between

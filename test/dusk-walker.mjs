@@ -50,13 +50,14 @@ console.log('\n— the round —');
 {
   const r = await run(`M.go(5); var f = walkF, o = {};
     o.arena = arena; o.left = remaining(); o.readout = readoutEl.textContent; o.note = (roundBanner(), noteEl.textContent);
-    o.others = drones.filter(function (d) { return d.alive; }).length + ground.filter(function (g) { return g.alive; }).length + fleet.filter(function (x) { return x.gone <= 0 && x !== f; }).length + icWant;
+    o.others = drones.filter(function (d) { return d.alive; }).length + ground.filter(function (g) { return g.alive && !wkTowerGun(g); }).length + fleet.filter(function (x) { return x.gone <= 0 && x !== f; }).length + icWant;
+    o.towerGuns = ground.filter(function (g) { return g.alive && wkTowerGun(g); }).length;
     o.turrets = f.turrets.filter(function (t) { return t.hp > 0; }).length; o.knees = walker.legs.map(function (l) { return l.hp; }).join();
     var hp = f.hp; hitCapital(f, 500); o.armoured = f.hp === hp; o.ship = shipPos.y - Math.max(height(shipPos.x, shipPos.z), 0); o.first = fleet[0].boss === true;
     o.vol = Math.round(Math.sqrt(Math.pow(VOLC.x + volcGroup.position.x, 2) + Math.pow(VOLC.z + volcGroup.position.z, 2)));
     JSON.stringify(o)`);
   check(r.arena === 2 && r.vol < 480, 'it is fought on the lava field, under the volcano', JSON.stringify(r));
-  check(r.left === 1 && r.others === 0 && /Walker 100%/.test(r.readout), `it is the walker alone  [${r.readout.replace(/Round \d+/, '').trim()}]`, JSON.stringify(r));
+  check(r.left === 1 && r.others === 0 && r.towerGuns === 6 && /Walker 100%/.test(r.readout), `the walker and the six guns on its towers, and only the walker is counted  [${r.readout.replace(/Round \d+/, '').trim()}]`, JSON.stringify(r));
   check(/Walker/.test(r.note) && /knees/.test(r.note), 'the banner says what to shoot', r.note);
   check(r.armoured, 'its plate cannot be shot through: 500 at the hull does nothing', JSON.stringify(r));
   check(r.turrets === walkerSpec1.turrets && r.knees === Array(6).fill(walkerSpec1.kneeHp).join(), `${walkerSpec1.turrets} turrets and six knees of ${walkerSpec1.kneeHp} the first time`, JSON.stringify(r));
@@ -66,7 +67,8 @@ console.log('\n— the round —');
 console.log('\n— can it be hit where you aim —');
 {
   // The dreadnought shipped with a generator nothing could reach. So: bolts with a person's scatter, from every side.
-  const los = await run(`M.go(5); M.step(90); var out = { knee: {}, core: {} }, hk = hitKnee;
+  // the tower guns stand in some of these lines, and a bolt that hits one is not a miss on the knee: take them away
+  const los = await run(`M.go(5); ground.forEach(function (g) { if (wkTowerGun(g)) { g.alive = false; g.group.visible = false; g.back = 0; } }); M.step(90); var out = { knee: {}, core: {} }, hk = hitKnee;
     out.blocked = {};
     [0, 20, 40].forEach(function (elev) { var hits = 0, n = 0, blocked = 0; hitKnee = function () { hits++; };
       walker.legs.forEach(function (lg) { for (var q = 0; q < 16; q++) { var az = q / 16 * 6.283, e = elev * Math.PI / 180, c = lg.kneeAt;
@@ -162,6 +164,76 @@ console.log('\n— turrets, bombs and lava —');
   check(t.lava >= 2 && t.lavaHigh === 0 && t.rock === 0, `skimming the lava burns, about twice a second; flying over it or skimming rock does not  [${t.lava} burns in two seconds]`, JSON.stringify(t));
 }
 
+console.log('\n— the towers and the interceptors —');
+{
+  // Sam, of walker-1: "rather easy". Guns on watch towers that rebuild, and two interceptors back 20 seconds after each is lost.
+  const tw = await run(`M.go(5); var o = { towers: [] };
+    ground.filter(wkTowerGun).forEach(function (g) {
+      var x = g.tower.x, z = g.tower.z, lo = 1e9;
+      for (var q = 0; q < 12; q++) { var b = q / 12 * 6.283; for (var rad = 0; rad <= 6; rad += 3) lo = Math.min(lo, heightLava(x + Math.cos(b) * rad, z + Math.sin(b) * rad)); }
+      o.towers.push({ type: g.type, hp: g.maxHp, alive: g.alive && g.group.visible, lift: +(g.pos.y - heightLava(x, z)).toFixed(2), r: Math.round(Math.hypot(x, z)), rock: +lo.toFixed(1) });
+    });
+    o.props = wkProps.visible;
+    // its feet and knees, over 150 seconds of walking: how near any comes to a tower
+    var near = 1e9; M.park(); M.step(30 * 150, function () { walker.legs.forEach(function (l) { wkTowerSpots.forEach(function (t) { near = Math.min(near, Math.hypot(l.foot.x - t.x, l.foot.z - t.z), Math.hypot(l.kneeAt.x - t.x, l.kneeAt.z - t.z)); }); }); });
+    o.near = +near.toFixed(1); o.laps = +(walker.ang / 6.283).toFixed(2);
+    JSON.stringify(o)`);
+  const T = tw.towers;
+  check(tw.props && T.length === 6 && T.every(t => t.alive) && T.filter(t => t.type === 'flak').length === 3 && T.every(t => t.hp === (t.type === 'flak' ? 7 : 8)),
+    'six towers, a gun on each, flak and missile sites by turns, taking 7 and 8 the first time', JSON.stringify(T));
+  check(T.every(t => Math.abs(t.lift - 29.9) < 0.01), 'every gun is up on top of its tower, not on the ground beside it', JSON.stringify(T.map(t => t.lift)));
+  check(T.every(t => t.rock > 1), `every tower stands on rock: no lava within 6 of its foot  [lowest rock ${Math.min(...T.map(t => t.rock))}]`, JSON.stringify(T.map(t => t.rock)));
+  check(T.every(t => t.r >= 158) && tw.near > 9.5, `the walker never walks through one: its nearest foot or knee in ${tw.laps} laps comes ${tw.near} from a tower's middle`, JSON.stringify(tw));
+
+  const rb = await run(`M.go(5); M.park(); M.step(30); var g = ground.filter(function (x) { return wkTowerGun(x) && x.type === 'flak'; })[0], o = {}, hp = walkF.hp, n = 0;
+    while (g.alive && n < 99) { hitGround(g, 1, g.pos); n++; } o.hits = n; o.left = remaining(); o.hull = walkF.hp === hp;
+    M.step(30 * 9); o.at9 = g.alive; M.step(45); o.at10 = g.alive && g.hp === g.maxHp && g.group.visible;
+    o.lift = +(g.pos.y - heightLava(g.tower.x, g.tower.z)).toFixed(2); o.same = g.pos.x === g.tower.x && g.pos.z === g.tower.z;
+    JSON.stringify(o)`);
+  check(rb.hits === 7 && rb.left === 1 && rb.hull && !rb.at9 && rb.at10 && Math.abs(rb.lift - 29.9) < 0.01 && rb.same,
+    "a tower's flak gun takes 7, is not counted, costs the walker nothing, and is back on its tower ten seconds later: not at nine", JSON.stringify(rb));
+
+  // can a tower's gun be hit where you aim: bolts with a person's scatter from every side, level and from above
+  const los = await run(`M.go(5); M.park(); M.step(30); var out = {}, hg = hitGround, hits = 0;
+    hitGround = function () { hits++; };
+    [0, 20, 40].forEach(function (elev) { var n = 0, blocked = 0; hits = 0;
+      ground.filter(wkTowerGun).forEach(function (g) { for (var q = 0; q < 16; q++) { var az = q / 16 * 6.283, e = elev * Math.PI / 180, c = g.pos;
+        var from = new THREE.Vector3(c.x + Math.cos(az) * Math.cos(e) * 120, c.y + Math.sin(e) * 120, c.z + Math.sin(az) * Math.cos(e) * 120);
+        var rock = false; for (var u = 0.02; u < 0.97; u += 0.01) { if (Math.max(height(from.x + (c.x - from.x) * u, from.z + (c.z - from.z) * u), 0) > from.y + (c.y - from.y) * u) { rock = true; break; } }
+        if (rock) { blocked++; continue; }
+        var dir = c.clone().sub(from).normalize(); dir.x += (Math.random() - 0.5) * 0.03; dir.y += (Math.random() - 0.5) * 0.03; dir.z += (Math.random() - 0.5) * 0.03; dir.normalize();
+        trk.k = 0; launchBolt(from, dir); n++; for (var w = 0; w < 30; w++) updateBolts(1 / 30); } });
+      out[elev] = [Math.round(100 * hits / n), blocked]; });
+    hitGround = hg; JSON.stringify(out)`);
+  console.log('  bolts aimed at a tower gun with a clear line that reach it:   ' + Object.keys(los).map(e => `+${e}°: ${los[e][0]}% (${los[e][1]} of 96 behind rock)`).join('   '));
+  check(Object.values(los).every(v => v[0] >= 80), 'a tower gun can be hit from any side, level and from above', JSON.stringify(los));
+
+  const ic = await run(`M.go(5); M.park(); var o = {}, up = function () { return ics.filter(function (x) { return x.alive && x.mode !== 3; }).length; };
+    M.step(30 * 5); o.at5 = up(); M.step(36); o.at6 = up(); o.note = noteEl.textContent; var most = 0;
+    M.step(30 * 30, function () { most = Math.max(most, up()); }); o.most = most; o.left = remaining();
+    var a = ics.filter(function (x) { return x.alive; })[0]; hitInterceptor(a, 99, a.pos); o.after = up();
+    M.step(30 * 19); o.at19 = up(); M.step(36); o.at20 = up();
+    ics.forEach(function (x) { if (x.alive) hitInterceptor(x, 99, x.pos); }); o.none = up(); M.step(30 * 19); o.both19 = up(); M.step(36); o.both20 = up();
+    // the round ends: they turn for home, none come after them, and the towers stand down. Held 80 off a flak tower,
+    // inside its reach, for five seconds before and three after (the cards come up soon after): it must fire in the
+    // first and not in the second. A burst comes every 2.4 to 3.8 seconds, so five always holds one.
+    var fired = 0, fs = flakShoot, lm = launchMissile, ft = ground.filter(function (g) { return wkTowerGun(g) && g.type === 'flak'; })[0];
+    flakShoot = function (g, d) { if (wkTowerGun(g)) fired++; return fs(g, d); }; launchMissile = function (g) { if (wkTowerGun(g)) fired++; return lm(g); };
+    var hold = function () { shipPos.set(ft.tower.x - 80 * Math.sign(ft.tower.x || 1), ft.pos.y + 20, ft.tower.z); };
+    M.step(150, hold); o.firedLive = fired;
+    walker.legs.slice(0, 3).forEach(function (l) { hitKnee(l, 1e6, l.kneeAt); }); M.step(40); walkF.armour = false; hitCapital(walkF, walkF.hp + 1); walkF.armour = true;
+    o.live = roundLive; fired = 0; var after = 0; M.step(90, function () { hold(); after = Math.max(after, up()); }); o.afterEnd = after; o.fired = fired; o.inControl = inControl;
+    // and the next round has no towers
+    startRound(6); o.next = { props: wkProps.visible, marked: ground.filter(wkTowerGun).length };
+    JSON.stringify(o)`);
+  check(ic.at5 === 0 && ic.at6 === 2 && /Interceptor/.test(ic.note), 'two interceptors come in six seconds after the start, and the banner says so', JSON.stringify(ic));
+  check(ic.most === 2 && ic.left === 1, 'never more than two, and they are not counted', JSON.stringify(ic));
+  check(ic.after === 1 && ic.at19 === 1 && ic.at20 === 2, 'one shot down is back 20 seconds later: not at 19', JSON.stringify(ic));
+  check(ic.none === 0 && ic.both19 === 0 && ic.both20 === 2, 'both shot down, both are back 20 seconds later', JSON.stringify(ic));
+  check(!ic.live && ic.inControl && ic.afterEnd === 0 && ic.firedLive > 0 && ic.fired === 0, `once the walker is destroyed no interceptor comes for you and the towers stop firing  [a flak tower 80 off: ${ic.firedLive} shots in five seconds before, ${ic.fired} in three after]`, JSON.stringify(ic));
+  check(!ic.next.props && ic.next.marked === 0, 'the next round has no towers, and their guns are ordinary units again', JSON.stringify(ic.next));
+}
+
 console.log('\n— the end of it, and what comes after —');
 {
   const e = await run(`M.go(5); M.park(); M.step(30); M.fell(); var f = walkF, w = walker, o = {};
@@ -188,16 +260,26 @@ console.log('\n— the end of it, and what comes after —');
 
 // ------------------------------------------------------------ the fight
 // A stand-in that flies at the nearest live knee, and at the core when it is open, holding Fire. It never dodges a
-// bomb or a turret, cannot die, and repair is not modelled: a ceiling on the cost.
-async function fight(round, ups, label) {
+// bomb or a turret, cannot die, and repair is not modelled: a ceiling on the cost. With towersFirst it goes for the
+// nearest tower gun standing before anything on the walker. It never aims at an interceptor; it hits one only when
+// one crosses its fire. Each hit is put down to what dealt it by its size, which is different for every source here.
+async function fight(round, ups, label, towersFirst, limit) {
   const r = await run(`${ups} bossForce = 'walker'; startRound(${round}); hull = maxHull();
-    var R = { lost: 0, by: { turrets: 0, bombs: 0, lava: 0, ram: 0 }, secs: null, falls: [] }, t0 = time, away = false, w = walker, f = walkF, last = 'walk';
-    damage = function (n) { R.lost += n; R.by[n === 25 ? 'bombs' : n === 12 ? 'lava' : n === 15 ? 'ram' : 'turrets'] += n; };
-    M.step(30 * 420, function () {
+    var R = { lost: 0, by: { turrets: 0, towers: 0, interceptors: 0, bombs: 0, lava: 0, ram: 0, other: 0 }, secs: null, falls: [] }, t0 = time, away = false, w = walker, f = walkF, last = 'walk';
+    var SRC = { 8: 'turrets', 6: 'towers', 20: 'towers', 10: 'interceptors', 25: 'bombs', 12: 'lava', 15: 'ram' };
+    damage = function (n) { R.lost += n; R.by[SRC[n] || 'other'] += n; };
+    R.icShots = 0; R.icKills = 0; R.icUp = 0; var sf = sfx, hi = hitInterceptor, cleared = {};
+    sfx = function (name, at) { if (name === 'ishot') R.icShots++; return sf(name, at); };
+    hitInterceptor = function (ic, d, at) { hi(ic, d, at); if (!ic.alive) R.icKills++; };
+    M.step(30 * ${limit || 420}, function () {
       if (!roundLive) { R.secs = +(time - t0).toFixed(1); return false; }
       if (w.state === 'down' && last !== 'down') R.falls.push(+(time - t0).toFixed(0)); last = w.state;
       var tgt = null, bd = 1e9;
-      if (w.state === 'down') { f.ship.updateMatrixWorld(); tgt = f.ship.localToWorld(WK_CORE.clone()); bd = tgt.distanceTo(shipPos); }
+      ground.forEach(function (g) { if (wkTowerGun(g) && !g.alive) cleared[g.tower.x] = 1; });
+      if (ics[0].alive || ics[1].alive) R.icUp += 1 / 30;
+      // towers first: each tower's gun once, then the walker. They rebuild, so 'until none is standing' never ends.
+      if (${!!towersFirst}) ground.forEach(function (g) { if (!g.alive || !wkTowerGun(g) || cleared[g.tower.x]) return; var d = g.pos.distanceTo(shipPos); if (d < bd) { bd = d; tgt = g.pos.clone(); } });
+      if (tgt) {} else if (w.state === 'down') { f.ship.updateMatrixWorld(); tgt = f.ship.localToWorld(WK_CORE.clone()); bd = tgt.distanceTo(shipPos); }
       else w.legs.forEach(function (l) { if (l.dead) return; var d = l.kneeAt.distanceTo(shipPos); if (d < bd) { bd = d; tgt = l.kneeAt.clone(); } });
       if (!tgt) return;
       if (bd < 45) away = true; else if (bd > 150) away = false;
@@ -207,16 +289,32 @@ async function fight(round, ups, label) {
       keys.fire = true;
     });
     R.left = Math.round(100 * f.hp / f.maxHp); R.maxHull = maxHull(); JSON.stringify(R)`);
-  console.log(`  ${label.padEnd(34)} ${(r.secs === null ? 'not destroyed in 420s, ' + r.left + '% left' : 'destroyed in ' + r.secs + 's').padEnd(34)} it fell at ${(r.falls.join(', ') || '–').padEnd(22)}s   ${r.lost} hull lost of ${r.maxHull}: turrets ${r.by.turrets}, bombs ${r.by.bombs}, lava ${r.by.lava}, ramming ${r.by.ram}`);
+  console.log(`  ${label.padEnd(34)} ${(r.secs === null ? `not destroyed in ${limit || 420}s, ` + r.left + '% left' : 'destroyed in ' + r.secs + 's').padEnd(34)} it fell at ${(r.falls.join(', ') || '–').padEnd(22)}s   ${r.lost} hull lost of ${r.maxHull}: turrets ${r.by.turrets}, towers ${r.by.towers}, interceptors ${r.by.interceptors}, bombs ${r.by.bombs}, lava ${r.by.lava}, ramming ${r.by.ram}${r.by.other ? ', other ' + r.by.other : ''}; interceptors fired ${r.icShots}, ${r.icKills} shot down, one or more up ${Math.round(r.icUp)}s`);
   return r;
 }
+if (process.env.DUSK_QUICK) { // the rules only, for mutation runs: the fights take minutes
+  check(allErrors.length === 0, 'nothing threw anywhere in this suite', allErrors);
+  await browser.close(); console.log(`\n${passed} passed, ${failed} failed  (DUSK_QUICK: the fights were not run)`); process.exit(failed ? 1 : 0);
+}
 console.log('\n— how long the fight is, and what it costs —');
-const f0 = await fight(5, '', 'round 5, no upgrades');
-const f4 = await fight(5, 'up.rapid = 1; up.cannons = 1; up.heavy = 1; up.plating = 1;', 'round 5, four upgrades');
+// Runs differ: the guns' timing is random, and over a long fight that decides how many falls it takes. walker-1's
+// document quoted one no-upgrade run as 257s; five runs gave 257, 300, 300, 393, 393. So the short fights run three times.
+const UP4 = 'up.rapid = 1; up.cannons = 1; up.heavy = 1; up.plating = 1;';
+const f0 = await fight(5, '', 'round 5, no upgrades', false, 900);
+const f4s = [];
+for (let i = 1; i <= 3; i++) f4s.push(await fight(5, UP4, `round 5, four upgrades (${i})`));
+const f4t = [];
+for (let i = 1; i <= 3; i++) f4t.push(await fight(5, UP4, `round 5, four, towers first (${i})`, true));
 const f9 = await fight(10, 'up.rapid = 2; up.cannons = 2; up.heavy = 2; up.plating = 2; up.shield = 1;', 'round 10, nine upgrades');
+const f4 = f4s[0];
 check(f0.secs !== null, 'it can be destroyed with no upgrades at all', JSON.stringify(f0));
 check(f4.secs !== null && f4.secs > 20 && f4.falls.length >= 1, 'with four it has to be brought down at least once, and is not over in seconds', JSON.stringify(f4));
 check(f4.lost > 0, 'it hits back', JSON.stringify(f4));
+check(f4s.every(r => r.by.towers > 0) && f4t.every(r => r.secs !== null), 'the towers draw blood, and the walker can still be destroyed with the towers taken first', JSON.stringify(f4s.map(r => r.by)));
+// What the game controls is that two are up. Whether they get to fire depends on the flying: they fire only while on
+// your screen, and this stand-in circles under the walker, which is the case interceptors-2 noted is barely shot at.
+check([...f4s, ...f4t, f9].every(r => r.icUp >= 0.5 * (r.secs - 6)), `interceptors are up for most of every fight  [${[...f4s, ...f4t, f9].map(r => Math.round(100 * r.icUp / (r.secs - 6)) + '%').join(', ')}]`, JSON.stringify([...f4s, ...f4t, f9].map(r => [r.icUp, r.secs])));
+check([f0, ...f4s, ...f4t, f9].every(r => r.by.other === 0), 'every hit taken is put down to a known source', JSON.stringify([f0, ...f4s, ...f4t, f9].map(r => r.by.other)));
 
 check(allErrors.length === 0, 'nothing threw anywhere in this suite', allErrors);
 await browser.close();
