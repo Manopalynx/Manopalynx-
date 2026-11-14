@@ -327,10 +327,55 @@ the dreadnought shipped with a generator nothing could reach.
 - The first stand-in ignored the guns and reported a 319-second fight. That measured the wrong
   route, not the wall.
 
-## Further bosses
+## The lava field and the walker (build `lava-1`): step one of the third boss, no fight yet
 
-His options from the start: a range picked at random (chosen), and bosses with areas of their
-own (the wall is the first). Nothing further is designed.
+Sam: "would we be able to add a new massive lava zone by the volcano with a massive walking
+enemy spider tank looking thing?" and, to the design below, "Go with your ideas". He also said
+**three bosses is enough for now.**
+
+**Step one is the place and the walk.** Reached only from the Sam panel ("Lava field on/off").
+Nothing in it can be fought, won or lost to. The fight is step two, after he has looked,
+because whether a walk looks alive is something only his eye can say.
+
+**The lava field** (`heightLava`, arena 2). Black rock cut by channels that dip below sea
+level. **The sea, recoloured and made to glow, is the lava**, so the rivers and lakes are not
+drawn: they are wherever the ground goes below nought (36% of the field). **The volcano is the
+one that was always on the horizon**, brought up to the rim (`VOLC_NEAR`): its centre is 446
+from the middle, where it was 703. Its streams, crater and embers come with it.
+
+**The walker.** Six legs, a body about the size of a capital ship riding some 34 above its
+feet, walking a circuit of radius 105 at 9 a second: a lap in 73 seconds.
+
+- **Feet stand on the ground as it is.** A foot plants at `max(height, 0)`, so in a channel it
+  wades on the lava's surface. 43% of its route is over lava.
+- **Two bones and a knee per leg**, solved from hip and foot. The knee goes up and out, which
+  is what makes it a spider and not a table.
+- **The gait is two sets of three, strictly taking turns.** Nothing lifts while anything is in
+  the air, and the set that went last waits.
+- **The body looks a length ahead** for rising ground, because it climbs slowly.
+
+**Measured** by `test/dusk-lava.mjs` over 150 seconds, a little over two laps, checked every
+tick (27,000 foot-ticks): no planted foot off the ground or under it; no leg stretched past its
+length or folded short; no knee in the ground; never more than three feet in the air and never
+both sets at once; 56 steps by every leg; never less than 18.8 of room under the belly.
+
+**The first gait was broken and this suite caught it before he saw it.** It let whichever leg
+was furthest behind go next. One set starved the other: some legs took 118 steps and some 22,
+and one foot was left planted 290 behind its hip, with the leg drawn stretched across the map.
+
+**The walker was a shadow with legs** in the first render: dark machine, black rock, red haze.
+It is paler now, lit from within, with glowing knees and a hot seam down each flank.
+
+**Agreed for the fight, not built** (his "go with your ideas" covers these):
+
+- You bring it down **by its legs**: each has a joint with a health ring; the body is armoured.
+- Lose enough legs and **it falls**, exposing a core on its back for a few seconds.
+- **Then it gets back up**: legs repair, it walks on. Each fall costs it a chunk of health.
+- It carries **turrets that rebuild**.
+- **The volcano is the third player**: each eruption throws lava bombs into the arena, landing
+  in marked spots.
+- **The lava hurts** if you touch it.
+- With three bosses, "never the same twice running" becomes a real draw between the other two.
 
 ## Queued, in the agreed order
 
@@ -363,6 +408,7 @@ node test/dusk-intercept.mjs   # the interceptors' rules and how they fly
 node test/dusk-boss.mjs        # the dreadnought's rules and how long the fight is
 node test/dusk-arena.mjs       # the ice landscape: nothing floating, nothing buried, and dusk comes back exact
 node test/dusk-wall.mjs        # the ice wall: cracks, guns that rebuild, sections that fall, which boss comes
+node test/dusk-lava.mjs        # the lava field, and the walker's every footfall for 150 seconds
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between

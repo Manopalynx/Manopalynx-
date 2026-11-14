@@ -253,7 +253,7 @@
 <button type="button" class="sam" id="sam">Sam</button>
 <div class="dev" id="dev"><h2>Upgrades</h2><div class="dev-list" id="devList"></div>
   <h2>Sounds</h2><div class="dev-diag" id="devDiag"></div><div class="dev-snd" id="devSnd"></div>
-  <div class="dev-foot"><button type="button" class="dev-btn" id="devWall">Boss: ice wall</button><button type="button" class="dev-btn" id="devBoss">Boss: dreadnought</button><button type="button" class="dev-btn" id="devRaid">Send interceptors</button><button type="button" class="dev-btn" id="devClear">Clear round</button><button type="button" class="dev-btn" id="devClose">Close</button></div></div>
+  <div class="dev-foot"><button type="button" class="dev-btn" id="devLava">Lava field on/off</button><button type="button" class="dev-btn" id="devWall">Boss: ice wall</button><button type="button" class="dev-btn" id="devBoss">Boss: dreadnought</button><button type="button" class="dev-btn" id="devRaid">Send interceptors</button><button type="button" class="dev-btn" id="devClear">Clear round</button><button type="button" class="dev-btn" id="devClose">Close</button></div></div>
 <!-- /SAM -->
 <div class="fail" id="fail">This device couldn’t start 3D graphics. Try opening the page in Safari or Chrome.</div>
 
@@ -341,7 +341,17 @@
     if (dn > 0) prof = prof * (1 - 0.9 * dn) + dn * (1 - smooth(40, 50, az)) * vnoise(x * 0.23 + 5, z * 0.23) * 9; // down to a tenth of itself, and broken
     return Math.max(base, prof * ends);
   }
-  function height(x, z) { return arena === 1 ? heightIce(x, z) : heightDusk(x, z); }
+  // 2: THE LAVA FIELD. Black rock cut by channels that dip below sea level, and the sea, recoloured, is the lava.
+  // So the rivers and lakes are not drawn: they are wherever this function goes below nought.
+  function heightLava(x, z) {
+    var d = Math.sqrt(x * x + z * z);
+    var n = fbm(x * 0.013 + 21.4, z * 0.013 + 6.9);
+    var ch = 1 - Math.abs(2 * fbm(x * 0.017 + 2.2, z * 0.017 + 40.1) - 1);   // 1 along the channels
+    var h = (n - 0.42) * 46 + 7 - smooth(0.72, 0.95, ch) * 16;                // rock a few metres up, channels cut down through it
+    h += smooth(175, 255, d) * (18 + fbm(x * 0.02 + 9.1, z * 0.02 + 1.3) * 70); // crags at the rim
+    return h;
+  }
+  function height(x, z) { return arena === 1 ? heightIce(x, z) : arena === 2 ? heightLava(x, z) : heightDusk(x, z); }
   function heightDusk(x, z) {
     var n = fbm(x * 0.011 + 3.7, z * 0.011 + 9.2);
     var r = 1 - Math.abs(2 * fbm(x * 0.021 + 51.3, z * 0.021 + 17.9) - 1);
@@ -371,7 +381,10 @@
     { haze: 0x3a2040, zenith: 0x060716, sun: 0xffc49a, sky: 0x7a78ff, ground: 0x24121c, water: 0x0e5566, glow: 0x0a3540,
       stops: [[-30, 0x1b1f2c], [1.5, 0x2c2a3d], [10, 0x44345a], [24, 0x8a4a3e], [38, 0xc98f6b], [60, 0xeadccd]] },
     { haze: 0x6a9cc0, zenith: 0x040b18, sun: 0xe6f3ff, sky: 0xa8d4ff, ground: 0x5d8fa8, hemiK: 1.0, steep: 0x2f78a8, water: 0x0b2f44, glow: 0x082230, // ice throws light back up, so a face in shadow is still pale
-      stops: [[-30, 0x0b1d2e], [1.5, 0x1f4560], [9, 0x4f8fb0], [30, 0x8fc6e0], [60, 0xcdeaf7], [96, 0xffffff]] }
+      stops: [[-30, 0x0b1d2e], [1.5, 0x1f4560], [9, 0x4f8fb0], [30, 0x8fc6e0], [60, 0xcdeaf7], [96, 0xffffff]] },
+    // lava: the ground is lit from below by what runs through it; rock near the lava glows, rock away from it is black
+    { haze: 0x4a1a0c, zenith: 0x0a0406, sun: 0xff9a5a, sky: 0xff8a50, ground: 0xa03a10, hemiK: 0.85, steep: 0x0e0a0c, water: 0xff5a14, glow: 0xff3c00, solid: true,
+      stops: [[-30, 0x7a1e06], [0.5, 0x8a2a0a], [3, 0x2a1512], [14, 0x1c1a1e], [45, 0x3a3034], [96, 0x6a5650]] }
   ];
   var terrainGeo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
   terrainGeo.rotateX(-Math.PI / 2);
@@ -418,7 +431,9 @@
     var A = ARENAS[n];
     scene.fog.color.set(A.haze); scene.background.set(A.zenith);
     sun.color.set(A.sun); hemi.color.set(A.sky); hemi.groundColor.set(A.ground); hemi.intensity = A.hemiK || 0.6;
-    water.material.color.set(A.water); water.material.emissive.set(A.glow);
+    water.material.color.set(A.water); water.material.emissive.set(A.glow); water.material.opacity = A.solid ? 1 : 0.88; water.material.roughness = A.solid ? 0.6 : 0.18; water.material.metalness = A.solid ? 0 : 0.7;
+    // the volcano stands beyond the map at dusk and on the ice; for the lava field it comes right up to the rim
+    volcGroup.position.copy(n === 2 ? VOLC_NEAR : VOLC_FAR); embers.position.copy(volcGroup.position);
     duskProps.visible = n === 0; // the landing pad, its buildings and spire, and the pylons in the hills: all placed against the dusk ground
     buildTerrain();
   }
@@ -503,6 +518,8 @@
   var farShips = [], tracers = [], flashes = [], meteors = [];
   var embers, emberVel, crater, eruptT = 12, eruptOn = 0;
   var VOLC = new THREE.Vector3(540, 0, -450), VOLC_TOP = 196;
+  var volcGroup = new THREE.Group(), VOLC_FAR = new THREE.Vector3(0, 0, 0), VOLC_NEAR = new THREE.Vector3(-230, 0, 130); // NEAR puts its centre at (310, -320): its flank comes down to the edge of the arena
+  scene.add(volcGroup);
   (function () {
     // mountain silhouettes ringing the map
     var near = new THREE.MeshBasicMaterial({ color: 0x2a1733, fog: false });
@@ -518,10 +535,10 @@
     // a volcano on the horizon
     var vol = new THREE.Mesh(new THREE.CylinderGeometry(44, 290, 205, 7), new THREE.MeshBasicMaterial({ color: 0x241329, fog: false }));
     vol.position.set(VOLC.x, 96, VOLC.z);
-    scene.add(vol);
+    volcGroup.add(vol);
     crater = new THREE.Mesh(new THREE.SphereGeometry(40, 12, 8), new THREE.MeshBasicMaterial({ color: 0xff6a3a, fog: false }));
     crater.position.set(VOLC.x, VOLC_TOP, VOLC.z); crater.scale.y = 0.35;
-    scene.add(crater);
+    volcGroup.add(crater);
     // lava running down three of the cone's ridges, lying on the slope
     var lavaMat = new THREE.MeshBasicMaterial({ color: 0xff7a4a, fog: false });
     [[6, 0.58, 6], [5, 0.36, 4.5], [0, 0.27, 4]].forEach(function (L) {
@@ -531,7 +548,7 @@
       var stream = new THREE.Mesh(new THREE.BoxGeometry(L[2], L[2], a.distanceTo(b)), lavaMat);
       stream.position.copy(a).add(b).multiplyScalar(0.5);
       stream.lookAt(b);
-      scene.add(stream);
+      volcGroup.add(stream);
     });
     var EN = 70, arr = new Float32Array(EN * 3);
     emberVel = new Float32Array(EN * 3);
@@ -1431,7 +1448,7 @@
     noteEl.style.display = 'block';
   }
   function respawn() {
-    dead = false; resetUpgrades(); hull = maxHull(); shield = 0; showShield(); sinceHit = 99; lastBoss = null; // a new run: its first boss is drawn afresh
+    dead = false; resetUpgrades(); hull = maxHull(); shield = 0; showShield(); sinceHit = 99; lastBoss = null; arenaHold = false; // a new run: its first boss is drawn afresh, and any look-round is over
     shipPos.set(46, PAD_H + 30, 46);
     yaw = Math.atan2(shipPos.x, shipPos.z); pitch = 0; bank = 0; speed = 24;
     basis();
@@ -1808,6 +1825,163 @@
     }
   }
 
+  // ---------- the walker: the third boss, so far only walking ----------
+  // Sam asked for "a new massive lava zone by the volcano with a massive walking enemy spider tank looking thing",
+  // and then "go with your ideas". MINE: six legs; a body about the size of a capital ship standing some 40 up, so it
+  // can be flown under; it walks a slow circuit of the lava field rather than chasing a ship it could never catch.
+  // THIS IS STEP ONE: the place and the walk, with no fight, reached from the Sam panel. The fight comes after he has
+  // looked at it, because whether a walk looks alive is something only his eye can say.
+  var walker = null, WK_R = 105, WK_SPEED = 9, WK_HIP = 34, WK_L1 = 27, WK_L2 = 41, WK_STRIDE = 15, WK_STEP = 0.5;
+  var wkA = new THREE.Vector3(), wkB = new THREE.Vector3(), wkC = new THREE.Vector3(), wkUp = new THREE.Vector3(0, 1, 0);
+  function wkGround(x, z) { return Math.max(height(x, z), 0); } // it wades: a foot in a channel stands on the lava's surface
+  // lays a unit box along the line from a to b
+  function wkBone(mesh, a, b, thick) {
+    mesh.position.copy(a).add(b).multiplyScalar(0.5);
+    mesh.lookAt(b);
+    mesh.scale.set(thick, thick, a.distanceTo(b));
+  }
+  function ensureWalker() {
+    if (walker) return;
+    // pale and lit from within, with its joints glowing: a dark machine on black rock in red haze was a shadow with legs
+    var hullM = new THREE.MeshStandardMaterial({ color: 0x9a8a84, emissive: 0x3a1a0c, roughness: 0.6, metalness: 0.35, flatShading: true });
+    var darkM = new THREE.MeshStandardMaterial({ color: 0x4a4048, emissive: 0x160a08, roughness: 0.6, metalness: 0.5, flatShading: true });
+    var hotM = new THREE.MeshBasicMaterial({ color: 0xff6a2a, fog: false });
+    var unit = new THREE.BoxGeometry(1, 1, 1);
+    var g = new THREE.Group();
+    function box(w, h, d, x, y, z, m) { var o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m || hullM); o.position.set(x, y, z); g.add(o); return o; }
+    // its own z runs forward, x to its right
+    box(24, 9, 40, 0, 0, 0);                       // the carapace
+    box(18, 5, 30, 0, 6.5, -1, darkM);             // the deck on its back
+    box(14, 6, 12, 0, -1, 25);                     // the head
+    box(9, 2.2, 1.2, 0, -0.5, 31.2, hotM);         // the slit it looks through
+    box(12, 4, 12, 0, -6, -2, darkM);              // the belly housing
+    box(7, 1.6, 7, 0, -8.6, -2, hotM);             // and what glows under it
+    box(5, 7, 5, 0, 11, -8, darkM);                // a stack
+    box(2.4, 1.2, 2.4, 0, 15, -8, hotM);
+    box(0.8, 1.6, 30, 12.2, 1.5, -1, hotM); box(0.8, 1.6, 30, -12.2, 1.5, -1, hotM); // a hot seam down each flank
+    g.visible = false; scene.add(g);
+    var legs = [];
+    [-14, 0, 14].forEach(function (hz, row) {
+      [1, -1].forEach(function (side) {
+        var upper = new THREE.Mesh(unit, hullM), lower = new THREE.Mesh(unit, darkM);
+        var knee = new THREE.Mesh(new THREE.SphereGeometry(3.0, 8, 6), hotM), pad = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 5.4, 2.4, 7), hullM);
+        var shoulder = new THREE.Mesh(new THREE.SphereGeometry(3.6, 8, 6), darkM);
+        [upper, lower, knee, pad, shoulder].forEach(function (m) { m.visible = false; scene.add(m); });
+        legs.push({ side: side, hz: hz, tripod: (row + (side > 0 ? 0 : 1)) % 2, upper: upper, lower: lower, knee: knee, pad: pad, shoulder: shoulder,
+          foot: new THREE.Vector3(), from: new THREE.Vector3(), to: new THREE.Vector3(), t: -1, hip: new THREE.Vector3(), kneeAt: new THREE.Vector3(), steps: 0 });
+      });
+    });
+    walker = { g: g, legs: legs, on: false, ang: 0, pos: new THREE.Vector3(), fwd: new THREE.Vector3(), right: new THREE.Vector3(), y: 0, sway: 0, turn: 0 };
+  }
+  // where a leg wants its foot: out to the side of its hip, and a little ahead when it is about to step there
+  function wkRest(lg, lead, out) {
+    var w = walker;
+    out.copy(w.pos).addScaledVector(w.right, lg.side * 40).addScaledVector(w.fwd, lg.hz * 1.5 + lead);
+    out.y = wkGround(out.x, out.z);
+    return out;
+  }
+  function walkerOn(on) {
+    ensureWalker();
+    var w = walker;
+    w.on = on; w.g.visible = on;
+    for (var i = 0; i < w.legs.length; i++) { var lg = w.legs[i]; lg.upper.visible = lg.lower.visible = lg.knee.visible = lg.pad.visible = lg.shoulder.visible = on; lg.t = -1; lg.steps = 0; }
+    if (!on) return;
+    w.ang = 0.6; w.turn = 0; wkPlace(0);
+    for (i = 0; i < w.legs.length; i++) wkRest(w.legs[i], (w.legs[i].tripod ? 0.5 : -0.5) * WK_STRIDE * 0.5, w.legs[i].foot); // the two tripods start half a stride apart
+    var sum = 0; for (i = 0; i < w.legs.length; i++) sum += w.legs[i].foot.y;
+    w.y = sum / w.legs.length + WK_HIP;
+    wkPose();
+  }
+  // where it is on its circuit, and which way that faces
+  function wkPlace(dt) {
+    var w = walker;
+    w.ang += WK_SPEED / WK_R * dt;
+    w.pos.set(Math.cos(w.ang) * WK_R, 0, Math.sin(w.ang) * WK_R);
+    w.fwd.set(-Math.sin(w.ang), 0, Math.cos(w.ang));
+    w.right.set(-w.fwd.z, 0, w.fwd.x);
+  }
+  function wkPose() {
+    var w = walker, i;
+    w.g.position.set(w.pos.x, w.y + Math.sin(w.sway) * 0.5, w.pos.z);
+    w.g.rotation.set(0, Math.atan2(w.fwd.x, w.fwd.z), Math.sin(w.sway * 0.5) * 0.02);
+    for (i = 0; i < w.legs.length; i++) {
+      var lg = w.legs[i];
+      lg.hip.copy(w.g.position).addScaledVector(w.right, lg.side * 12).addScaledVector(w.fwd, lg.hz);
+      lg.hip.y -= 1.5;
+      // two bones and a knee: the knee goes up and out, which is what makes it a spider and not a table
+      wkA.copy(lg.foot).sub(lg.hip);
+      var len = Math.max(Math.abs(WK_L1 - WK_L2) + 0.5, Math.min(WK_L1 + WK_L2 - 0.5, wkA.length()));
+      wkA.normalize();
+      var along = (WK_L1 * WK_L1 - WK_L2 * WK_L2 + len * len) / (2 * len), rise = Math.sqrt(Math.max(0, WK_L1 * WK_L1 - along * along));
+      wkB.copy(wkUp).addScaledVector(w.right, lg.side * 0.55);
+      wkB.addScaledVector(wkA, -wkB.dot(wkA)).normalize();
+      lg.kneeAt.copy(lg.hip).addScaledVector(wkA, along).addScaledVector(wkB, rise);
+      wkBone(lg.upper, lg.hip, lg.kneeAt, 3.6);
+      wkBone(lg.lower, lg.kneeAt, lg.foot, 2.8);
+      lg.knee.position.copy(lg.kneeAt); lg.shoulder.position.copy(lg.hip);
+      lg.pad.position.copy(lg.foot); lg.pad.position.y += 1.0;
+    }
+  }
+  function updateWalker(dt) {
+    var w = walker, i;
+    if (!w || !w.on) return;
+    wkPlace(dt);
+    w.sway += dt * 2.2;
+    // THE GAIT: two sets of three, strictly taking turns. A first version let whichever leg was furthest behind go
+    // next, and one set starved the other: over 150 seconds some legs took 118 steps and some 22, and one foot was
+    // left planted 290 behind. Now nothing lifts while anything is in the air, and the set that went last waits.
+    var air = false, lag = 0;
+    for (i = 0; i < w.legs.length; i++) {
+      var lg = w.legs[i];
+      if (lg.t >= 0) {
+        // mid-step: across to where it is going, lifted in an arc and never through a rise in between
+        air = true;
+        lg.t += dt / WK_STEP;
+        if (lg.t >= 1) { lg.t = -1; lg.foot.copy(lg.to); lg.steps++; sfx('stomp', lg.foot); }
+        else {
+          var e = lg.t * lg.t * (3 - 2 * lg.t), lift = Math.sin(Math.PI * lg.t) * 9;
+          lg.foot.copy(lg.from).lerp(lg.to, e);
+          lg.foot.y = Math.max(lg.foot.y + lift, wkGround(lg.foot.x, lg.foot.z) + lift * 0.35);
+        }
+      } else if (lg.tripod === w.turn) {
+        wkRest(lg, 0, wkC);
+        lag = Math.max(lag, Math.sqrt((lg.foot.x - wkC.x) * (lg.foot.x - wkC.x) + (lg.foot.z - wkC.z) * (lg.foot.z - wkC.z)));
+      }
+    }
+    if (!air && lag > WK_STRIDE) {
+      for (i = 0; i < w.legs.length; i++) {
+        lg = w.legs[i];
+        if (lg.tripod !== w.turn) continue;
+        lg.from.copy(lg.foot); wkRest(lg, WK_STRIDE * 0.9 + WK_SPEED * WK_STEP, lg.to); lg.t = 0;
+      }
+      w.turn = 1 - w.turn;
+    }
+    // the body rides at a set height over wherever its planted feet are
+    var sum = 0, n = 0;
+    for (i = 0; i < w.legs.length; i++) if (w.legs[i].t < 0) { sum += w.legs[i].foot.y; n++; }
+    // and never lower than clear of the ground straight under it, so a ridge passes beneath the belly
+    // (and it looks a body-length ahead, because it rises slowly and a ridge does not wait)
+    var under = Math.max(wkGround(w.pos.x, w.pos.z), wkGround(w.pos.x + w.fwd.x * 18, w.pos.z + w.fwd.z * 18), wkGround(w.pos.x - w.fwd.x * 14, w.pos.z - w.fwd.z * 14));
+    if (n) w.y += (Math.max(sum / n + WK_HIP, under + 32) - w.y) * Math.min(1, dt * 2.5);
+    wkPose();
+  }
+  // A look at the lava field and the walker, with nothing else in it. Not a round: nothing here can be won or lost to.
+  function lavaPreview(on) {
+    var i;
+    arenaHold = on;
+    if (on) {
+      setArena(2);
+      for (i = 0; i < drones.length; i++) { drones[i].alive = false; drones[i].mesh.visible = false; }
+      for (i = 0; i < ground.length; i++) { ground[i].alive = false; ground[i].group.visible = false; ground[i].ring.visible = false; }
+      for (i = 0; i < fleet.length; i++) { fleet[i].gone = Infinity; fleet[i].dying = 0; fleet[i].ship.visible = false; }
+      for (i = 0; i < ics.length; i++) icHide(ics[i]);
+      icPeelT = -1; endWall();
+      walkerOn(true);
+      shipPos.set(0, 60, 30); yaw = Math.atan2(shipPos.x - walker.pos.x, shipPos.z - walker.pos.z); pitch = 0; basis();
+      readoutEl.innerHTML = 'The lava field<br>a look, not a fight';
+    } else { walkerOn(false); startRound(round); }
+  }
+
   // ---------- upgrades ----------
   var UPGRADES = [
     { id: 'rapid', name: 'Rapid fire', desc: 'Your guns cycle 30% faster.', max: 3 },
@@ -1914,6 +2088,7 @@
     var boss = isBossRound(n), ships = boss ? 0 : n, small = boss ? 0 : 5 * n;
     var kind = boss ? pickBoss() : null;
     endWall();
+    if (walker && walker.on && !arenaHold) walkerOn(false);
     if (kind !== 'wall' && !arenaHold) setArena(0); // the ice belongs to the wall; everything else is fought at dusk
     ensureFleet(Math.max(1, ships)); ensureDrones(small); ensureGround(small);
     for (i = 0; i < fleet.length; i++) {
@@ -2993,6 +3168,7 @@
     ishot:      { label: 'Interceptor shot', heat: 0.12, gap: 0.04, play: function (v, d) { tone('sawtooth', 900, 260, 0.09, 0.13 * v, d); } },
     pass:       { label: 'Interceptor pass', heat: 0.15, gap: 0.3, floor: 0.5, play: function (v, d) { hiss(0.7, 0.6 * v, 'bandpass', 2600, 300, d, 1.2); tone('sawtooth', 240, 90, 0.6, 0.08 * v, d); } },
     boss:       { label: 'Dreadnought arrives', heat: 0.5, gap: 0.5, play: function (v, d) { tone('sawtooth', 55, 55, 1.7, 0.22, d); tone('sawtooth', 82.4, 82.4, 1.7, 0.14, d); tone('sawtooth', 55, 41.2, 1.2, 0.2, d, 1.2); hiss(2.4, 0.25, 'lowpass', 300, 80, d); } },
+    stomp:      { label: 'Walker footfall', heat: 0.04, gap: 0.08, floor: 0.2, play: function (v, d) { tone('sine', 70, 34, 0.32, 0.5 * v, d); hiss(0.18, 0.3 * v, 'lowpass', 500, 90, d); } },
     rebuild:    { label: 'Turret rebuilt', gap: 0.15, floor: 0.35, play: function (v, d) { tone('square', 330, 660, 0.12, 0.07 * v, d); tone('square', 660, 990, 0.1, 0.05 * v, d, 0.1); } },
     pick:       { label: 'Upgrade chosen', gap: 0.1, play: function (v, d) { tone('triangle', 660, 660, 0.16, 0.16, d); tone('triangle', 990, 990, 0.3, 0.16, d, 0.09); } }
   };
@@ -3180,7 +3356,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'icewall-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'lava-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +
@@ -3223,6 +3399,7 @@
     updateReadout(); checkRound();
   });
   // straight to the next round that is a multiple of five, with the boss named, so each can be tried at each tier
+  document.getElementById('devLava').addEventListener('click', function () { devShow(false); lavaPreview(arena !== 2); banner(arena === 2 ? 'The lava field' : 'Round ' + round, 2.5); });
   document.getElementById('devWall').addEventListener('click', function () { devShow(false); bossForce = 'wall'; startRound(Math.floor(round / 5) * 5 + 5); roundBanner(); });
   document.getElementById('devBoss').addEventListener('click', function () { devShow(false); bossForce = 'dread'; startRound(Math.floor(round / 5) * 5 + 5); roundBanner(); });
   document.getElementById('devRaid').addEventListener('click', function () {
@@ -3250,6 +3427,7 @@
     updateDrones(dt);
     updateGround(dt);
     updateWall(dt);
+    updateWalker(dt);
     updateMissiles(dt);
     updateRounds(dt);
 
