@@ -253,7 +253,7 @@
 <button type="button" class="sam" id="sam">Sam</button>
 <div class="dev" id="dev"><h2>Upgrades</h2><div class="dev-list" id="devList"></div>
   <h2>Sounds</h2><div class="dev-diag" id="devDiag"></div><div class="dev-snd" id="devSnd"></div>
-  <div class="dev-foot"><button type="button" class="dev-btn" id="devRaid">Send interceptors</button><button type="button" class="dev-btn" id="devClear">Clear round</button><button type="button" class="dev-btn" id="devClose">Close</button></div></div>
+  <div class="dev-foot"><button type="button" class="dev-btn" id="devBoss">Next boss round</button><button type="button" class="dev-btn" id="devRaid">Send interceptors</button><button type="button" class="dev-btn" id="devClear">Clear round</button><button type="button" class="dev-btn" id="devClose">Close</button></div></div>
 <!-- /SAM -->
 <div class="fail" id="fail">This device couldn’t start 3D graphics. Try opening the page in Safari or Chrome.</div>
 
@@ -729,7 +729,7 @@
   // turrets, hull bars and the fleet itself
   var turretMat = new THREE.MeshStandardMaterial({ color: 0x23262f, roughness: 0.6, metalness: 0.6, flatShading: true });
   var turretLamp = new THREE.MeshBasicMaterial({ color: 0x9dff6a, fog: false });
-  var TURRET_SPOTS = [[14, 3.3, 0], [8, -3.3, 0], [-12, -3.3, 0], [3, 3.3, 0]];
+  var TURRET_SPOTS = [[14, 3.3, 0], [8, -3.3, 0], [-12, -3.3, 0], [3, 3.3, 0], [-14, 3.3, 4.6], [-2, -3.3, -4.2], [15, -3.3, 0]]; // the last three are only ever used by the dreadnought
   function addTurrets(f, n) {
     f.turrets = [];
     for (var i = 0; i < n; i++) {
@@ -759,7 +759,7 @@
       }
       ring.visible = false;
       scene.add(ring);
-      f.turrets.push({ pivot: pivot, ring: ring, segs: segs, lamp: lamp, mat: tm, flash: 0, local: new THREE.Vector3(sp[0], sp[1] + up * 0.9, sp[2]), hp: 5, cool: 1 + Math.random() * 2 });
+      f.turrets.push({ pivot: pivot, ring: ring, segs: segs, lamp: lamp, mat: tm, flash: 0, local: new THREE.Vector3(sp[0], sp[1] + up * 0.9, sp[2]), hp: 5, maxHp: 5, cool: 1 + Math.random() * 2 });
     }
   }
   function addBar(f) {
@@ -779,28 +779,69 @@
   // [scale, patrol radius, altitude, starting angle, speed]
   var SHIP_SPECS = [[0.8, 150, 82, 0.5, 0.018], [0.62, 112, 58, 3.4, -0.02], [1.25, 178, 104, 1.9, 0.014], [0.9, 132, 122, 5.1, -0.016], [0.7, 96, 44, 4.2, 0.022], [1.1, 196, 70, 0.0, -0.013]];
   function ensureFleet(n) {
-    while (fleet.length < n) {
-      var i = fleet.length, sp = SHIP_SPECS[i % SHIP_SPECS.length], lap = Math.floor(i / SHIP_SPECS.length);
+    while (fleet.length - (bossF ? 1 : 0) < n) {
+      var i = fleet.length - (bossF ? 1 : 0), sp = SHIP_SPECS[i % SHIP_SPECS.length], lap = Math.floor(i / SHIP_SPECS.length);
       var f = { ship: makeShip(sp[0]), scale: sp[0], radius: sp[1] - lap * 9, alt: sp[2] + lap * 16, angle: sp[3] + lap * 0.9, speed: sp[4],
         maxHp: Math.round(720 * sp[0]), guns: sp[0] > 1.05 ? 4 : sp[0] > 0.75 ? 3 : 2 };
       f.hp = f.maxHp; f.dying = 0; f.gone = Infinity; f.fall = 0; f.fallV = 0; f.list = 0; f.boomT = 0;
       f.ship.visible = false;
       addTurrets(f, f.guns); addBar(f);
-      fleet.push(f);
+      fleet.splice(i, 0, f);
     }
+  }
+  // ---------- the dreadnought: every fifth round is this ship, alone ----------
+  // Sam's rulings: boss alone; one capital ship at about double size, same rules as the others (shoot the turrets
+  // off, each one lost hurts the hull); harder each time it comes -- more hull, faster guns, and turrets that take
+  // more hits; it brings interceptors on the usual count; the readout shows its hull; the reward is the normal pick.
+  // It is an ordinary entry in `fleet`, so every weapon, the hit test, the turret fire and the sinking already apply.
+  var bossF = null, BOSS_SCALE = 2.2, bossPct = -1;
+  var bossHullMat = new THREE.MeshStandardMaterial({ color: 0x8a5a62, emissive: 0x2a0d12, roughness: 0.6, metalness: 0.4, flatShading: true }); // lit from within a little: a dark hull vanished into the dusk haze at 150
+  function isBossRound(n) { return n % 5 === 0; }
+  function bossTier(n) { return Math.floor(n / 5); } // 1 at round 5, 2 at round 10 ...
+  function bossSpec(tier) {
+    return {
+      // steeply, because your guns grow steeply: measured with every card put into guns, 3600 at round 10 lasted 7 seconds
+      hull: Math.round(40 * Math.pow(tier, 1.5)) * 100,   // 4000, 11300, 20800 ...
+      turrets: Math.min(7, 4 + tier),                 // 5, 6, then 7 from the third time on
+      turretHp: 8 + 3 * (tier - 1),                   // an ordinary turret takes 5
+      fireK: Math.max(0.4, 1 / (1 + 0.25 * (tier - 1))) // the gap between a turret's shots: an ordinary turret's the first time, then 0.8 of it, 0.67 ...
+    };
+  }
+  function ensureBoss() {
+    if (bossF) return;
+    var f = { ship: makeShip(BOSS_SCALE), scale: BOSS_SCALE, radius: 118, alt: 92, angle: 2.4, speed: 0.011, maxHp: 2400, guns: 7, boss: true, reach: 280 };
+    f.ship.traverse(function (m) { if (m.material === hullMat) m.material = bossHullMat; });
+    f.hp = f.maxHp; f.dying = 0; f.gone = Infinity; f.fall = 0; f.fallV = 0; f.list = 0; f.boomT = 0;
+    f.ship.visible = false;
+    addTurrets(f, f.guns); addBar(f);
+    fleet.push(f); bossF = f;
+  }
+  function startBoss(tier) {
+    ensureBoss();
+    var sp = bossSpec(tier), f = bossF;
+    f.maxHp = sp.hull; f.turretHp = sp.turretHp; f.fireK = sp.fireK; f.turretBlow = Math.round(sp.hull * 0.1);
+    reviveShip(f, true); f.gone = 0;
+    // only as many turrets as this tier carries
+    for (var i = 0; i < f.turrets.length; i++) if (i >= sp.turrets) { f.turrets[i].hp = 0; f.turrets[i].pivot.visible = false; }
+    bossPct = -1;
   }
   var ramCool = 0;
   var fleetTmp = new THREE.Vector3(), capTmp = new THREE.Vector3();
 
   function paintRing(t) {
+    // five segments whatever the turret takes: each is a fifth of what it started with
+    var left = Math.ceil(t.hp / t.maxHp * t.segs.length);
     for (var i = 0; i < t.segs.length; i++) {
-      var lit = i < t.hp;
+      var lit = i < left;
       t.segs[i].material.color.set(lit ? 0x9dff6a : 0xff4a3a);
       t.segs[i].material.opacity = lit ? 0.95 : 0.6;
     }
   }
   function updateReadout() {
-    readoutEl.innerHTML = 'Round ' + round + '<br>' + remaining() + ' to go';
+    if (bossF && bossF.gone <= 0) {
+      bossPct = Math.ceil(bossF.hp / bossF.maxHp * 100);
+      readoutEl.innerHTML = 'Round ' + round + '<br>Dreadnought ' + bossPct + '%';
+    } else readoutEl.innerHTML = 'Round ' + round + '<br>' + remaining() + ' to go';
   }
   function hitCapital(f, dmg) {
     if (f.dying > 0 || f.gone > 0) return;
@@ -812,6 +853,7 @@
       chainBlast(f.ship.position, 2.2);
       updateReadout(); checkRound();
     }
+    if (f.boss && Math.ceil(f.hp / f.maxHp * 100) !== bossPct) updateReadout();
     f.fill.scale.x = Math.max(0.001, 33 * f.hp / f.maxHp);
     f.fill.material.color.set(f.hp < f.maxHp * 0.35 ? 0xff7058 : 0xffc880);
   }
@@ -829,7 +871,7 @@
     if (!stay) f.angle += Math.PI;
     f.ship.visible = true;
     f.fill.scale.x = 33; f.fill.material.color.set(0xffc880);
-    for (var i = 0; i < f.turrets.length; i++) { f.turrets[i].hp = 5; f.turrets[i].pivot.visible = true; paintRing(f.turrets[i]); f.turrets[i].cool = 2 + Math.random() * 2; }
+    for (var i = 0; i < f.turrets.length; i++) { f.turrets[i].maxHp = f.turretHp || 5; f.turrets[i].hp = f.turrets[i].maxHp; f.turrets[i].pivot.visible = true; paintRing(f.turrets[i]); f.turrets[i].cool = 2 + Math.random() * 2; }
   }
   function placeFleet(dt) {
     fleet.forEach(function (f) {
@@ -894,25 +936,25 @@
       var dist = f.ship.position.distanceTo(shipPos);
       for (var r = 0; r < f.turrets.length; r++) {
         var tr = f.turrets[r];
-        var show = inControl && tr.hp > 0 && tr.hp < 5 && dist < 240;
+        var show = inControl && tr.hp > 0 && tr.hp < tr.maxHp && dist < 240 * Math.max(1, f.scale * 0.6);
         if (tr.flash > 0) {
           tr.flash -= dt;
           var on = tr.flash > 0;
           tr.lamp.material.color.set(on ? 0xffffff : 0x9dff6a);
           tr.lamp.scale.setScalar(on ? 3 : 1);
           tr.mat.emissive.set(on ? 0xffffff : 0x000000);
-          tr.ring.scale.setScalar(on ? 1 + tr.flash * 2.5 : 1);
+          tr.ring.scale.setScalar((on ? 1 + tr.flash * 2.5 : 1) * Math.max(1, f.scale * 0.8));
         }
         tr.ring.visible = show;
         if (show) { tr.pivot.getWorldPosition(tr.ring.position); tr.ring.quaternion.copy(camera.quaternion); }
       }
-      if (!inControl || dead || dist > 190) continue;
+      if (!inControl || dead || dist > (f.reach || 190)) continue;
       for (var i = 0; i < f.turrets.length; i++) {
         var t = f.turrets[i];
         if (t.hp <= 0) continue;
         t.pivot.lookAt(shipPos);
         t.cool -= dt;
-        if (t.cool <= 0) { turretShoot(t, dist); t.cool = 2.2 + Math.random() * 1.2; }
+        if (t.cool <= 0) { turretShoot(t, dist); t.cool = (2.2 + Math.random() * 1.2) * (f.fireK || 1); }
       }
       // flying into the hull hurts, and it shoves you out
       capTmp.copy(shipPos);
@@ -1399,7 +1441,8 @@
     if (!up.salvage || dead) return;
     hull = Math.min(maxHull(), hull + n * up.salvage); showHull();
   }
-  function nextRound() { startRound(round + 1); banner('Round ' + round, 2.5); sfx('round'); }
+  function nextRound() { startRound(round + 1); roundBanner(); }
+  function roundBanner() { var b = isBossRound(round); banner('Round ' + round + (b ? ' \u2014 Dreadnought' : ''), b ? 3.5 : 2.5); sfx(b ? 'boss' : 'round'); }
   function offerUpgrades() {
     var pool = [], i;
     for (i = 0; i < UPGRADES.length; i++) if (up[UPGRADES[i].id] < UPGRADES[i].max) pool.push(UPGRADES[i]);
@@ -1448,18 +1491,21 @@
   function startRound(n) {
     var i;
     round = n; roundLive = true; nextT = 0;
-    ensureFleet(n); ensureDrones(5 * n); ensureGround(5 * n);
+    // every fifth round is the dreadnought and nothing else; the rounds between carry on counting as before
+    var boss = isBossRound(n), ships = boss ? 0 : n, small = boss ? 0 : 5 * n;
+    ensureFleet(Math.max(1, ships)); ensureDrones(small); ensureGround(small);
     for (i = 0; i < fleet.length; i++) {
       var f = fleet[i];
-      if (i < n) { reviveShip(f, true); f.gone = 0; }
+      if (!f.boss && i < ships) { reviveShip(f, true); f.gone = 0; }
       else { f.gone = Infinity; f.dying = 0; f.ship.visible = false; }
     }
+    if (boss) startBoss(bossTier(n));
     for (i = 0; i < drones.length; i++) {
-      if (i < 5 * n) spawnDrone(drones[i]);
+      if (i < small) spawnDrone(drones[i]);
       else { drones[i].alive = false; drones[i].mesh.visible = false; }
     }
     for (i = 0; i < ground.length; i++) { ground[i].alive = false; ground[i].group.visible = false; ground[i].ring.visible = false; }
-    for (i = 0; i < 5 * n; i++) placeGround(ground[i]);
+    for (i = 0; i < small; i++) placeGround(ground[i]);
     for (i = 0; i < shots.length; i++) { shots[i].life = 0; shots[i].mesh.visible = false; }
     for (i = 0; i < missiles.length; i++) { missiles[i].life = 0; missiles[i].mesh.visible = false; }
     for (i = 0; i < seekers.length; i++) { seekers[i].life = 0; seekers[i].mesh.visible = false; }
@@ -1601,7 +1647,7 @@
   }
   function hitTurret(f, t, dmg, at) {
     t.hp -= dmg; t.flash = 0.2; paintRing(t);
-    if (t.hp <= 0) { t.pivot.visible = false; boom(at, true); t.pivot.getWorldPosition(chTmp); chainBlast(chTmp, 1); hitCapital(f, 60); }
+    if (t.hp <= 0) { t.pivot.visible = false; boom(at, true); t.pivot.getWorldPosition(chTmp); chainBlast(chTmp, 1); hitCapital(f, f.turretBlow || 60); }
     else boom(at, false);
   }
   var stA = new THREE.Vector3(), stB = new THREE.Vector3(), stC = new THREE.Vector3();
@@ -2498,6 +2544,7 @@
     raid:       { label: 'Interceptors inbound', heat: 0.3, gap: 0.5, play: function (v, d) { tone('square', 880, 880, 0.11, 0.11, d); tone('square', 622, 622, 0.11, 0.11, d, 0.14); tone('square', 880, 880, 0.11, 0.11, d, 0.28); tone('square', 622, 622, 0.2, 0.11, d, 0.42); } },
     ishot:      { label: 'Interceptor shot', heat: 0.12, gap: 0.04, play: function (v, d) { tone('sawtooth', 900, 260, 0.09, 0.13 * v, d); } },
     pass:       { label: 'Interceptor pass', heat: 0.15, gap: 0.3, floor: 0.5, play: function (v, d) { hiss(0.7, 0.6 * v, 'bandpass', 2600, 300, d, 1.2); tone('sawtooth', 240, 90, 0.6, 0.08 * v, d); } },
+    boss:       { label: 'Dreadnought arrives', heat: 0.5, gap: 0.5, play: function (v, d) { tone('sawtooth', 55, 55, 1.7, 0.22, d); tone('sawtooth', 82.4, 82.4, 1.7, 0.14, d); tone('sawtooth', 55, 41.2, 1.2, 0.2, d, 1.2); hiss(2.4, 0.25, 'lowpass', 300, 80, d); } },
     pick:       { label: 'Upgrade chosen', gap: 0.1, play: function (v, d) { tone('triangle', 660, 660, 0.16, 0.16, d); tone('triangle', 990, 990, 0.3, 0.16, d, 0.09); } }
   };
   // play a sound; with a position it gets quieter with distance and pans to the side it came from
@@ -2684,7 +2731,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'interceptors-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'dreadnought-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +
@@ -2725,6 +2772,10 @@
     for (i = 0; i < fleet.length; i++) if (fleet[i].gone <= 0) { fleet[i].gone = Infinity; fleet[i].dying = 0; fleet[i].ship.visible = false; }
     devShow(false);
     updateReadout(); checkRound();
+  });
+  document.getElementById('devBoss').addEventListener('click', function () {
+    // straight to the next round that is a multiple of five, so each tier can be tried without playing up to it
+    devShow(false); startRound(Math.floor(round / 5) * 5 + 5); roundBanner();
   });
   document.getElementById('devRaid').addEventListener('click', function () {
     // two of them, now, whatever the round: so the flying can be judged without playing to round 3

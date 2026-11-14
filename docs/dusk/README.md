@@ -122,24 +122,66 @@ both checks red.
 
 None of this says how it feels. That is his to judge on the phone.
 
-## The boss: decided so far, nothing built
+## The dreadnought (build `dreadnought-1`)
 
-Sam's, 14 November 2026:
+Every fifth round is one large ship, alone. **Sam's rulings:**
 
-- **A boss round is the boss alone**, with "a purposely set amount of enemies in certain
-  locations", depending on the boss and on whether bosses get areas of their own.
-- **Dying to a boss is a normal death**, back to round 1. He wants to discuss lives, or an
-  upgrade that gives an extra life, at some point. Not yet discussed.
-- **Whether interceptors appear depends on the boss.**
-- His options for the shape of it, none chosen: a range picked at random every five rounds;
-  a range that gets harder in order; one boss that gets harder; a boss with an area of its
-  own, "such as a ice wall with turrets all around it".
+- **A boss round is the boss alone.** No drones, no ground units, no other ships. (For later
+  bosses: "a purposely set amount of enemies in certain locations", depending on the boss.)
+- **Same rules as any capital ship:** shoot the turrets off, and each one lost hurts the hull.
+- **Harder each time it comes:** more hull, faster guns, and, his addition, **turrets that
+  take more hits to blow up**.
+- **It brings interceptors** on the usual count. For other bosses that "depends on the boss".
+- **The readout shows its hull** instead of "to go".
+- **The reward is the normal pick of three cards.**
+- **Dying to it is a normal death**, back to round 1. He wants to discuss lives, or an
+  upgrade that gives an extra life. Not yet discussed.
+
+**How it is built.** It is an ordinary entry in `fleet`, kept last, made with `makeShip(2.2)`,
+so every weapon, the hit test, the turret fire and the sinking already apply to it. Rounds
+between bosses carry on counting: round 6 has 6 ships.
+
+**The numbers are mine and are the first guess**, in `bossSpec(tier)`:
+
+| round | hull | turrets | hits to blow a turret | hull lost when one goes | gap between a turret's shots |
+|---|---|---|---|---|---|
+| 5 | 4000 | 5 | 8 | 400 | ordinary |
+| 10 | 11300 | 6 | 11 | 1130 | ×0.80 |
+| 15 | 20800 | 7 | 14 | 2080 | ×0.67 |
+
+An ordinary turret takes 5 hits. Each turret lost takes a tenth of the hull, so the turrets
+are worth far more than the same bolts spent on the hull.
+
+**Why the hull climbs so steeply.** Guns grow steeply. With every card put into guns, a
+3600-hull ship at round 10 lasted 7 seconds.
+
+**Measured** by `test/dusk-boss.mjs`, with a stand-in that flies at the nearest turret holding
+Fire, cannot dodge and cannot die:
+
+| | sunk in | hull it lost |
+|---|---|---|
+| round 5, four upgrades all in guns and plating | 44s | 139 of 125 |
+| round 10, nine upgrades | 30s | 108 of 150 |
+
+**Not settled:**
+
+- **That stand-in would have died at round 5**, and dying is back to round 1. It never
+  dodges and repair is not modelled, so this is a ceiling on the cost, not a forecast.
+- **A player whose cards went elsewhere than guns faces the same hull** and a much longer
+  fight. Not measured.
+- **It is dim at range.** The haze takes the colour out of anything 150 away; the hull was
+  lightened once already.
+- Interceptors can fly through its hull.
+
+## Further bosses: his options, none chosen
+
+A range picked at random every five rounds; a range that gets harder in order; a boss with an
+area of its own, "such as a ice wall with turrets all around it". Agreed order of work after
+the dreadnought: the arena swap on its own, then the ice wall.
 
 What the code says about cost, read not measured: the landscape is one `height(x, z)`
 function with 16 callers and one mesh built from it once, and ground units already sit
-wherever `height` puts them, so a second landscape is a contained change. `makeShip(scale)`
-already takes a size, with hull and gun count following from it, so a larger ship is a small
-one.
+wherever `height` puts them, so a second landscape is a contained change.
 
 ## Queued, in the agreed order
 
@@ -147,7 +189,7 @@ one.
 2. Time of day moving on each round.
 3. Ground units grouped into bases.
 4. Canyons for cover.
-5. A boss every fifth round.
+5. ~~A boss every fifth round.~~ Built: the dreadnought, above.
 
 Also noted: once interceptors exist, invulnerable wingmen will look odd.
 
@@ -169,6 +211,7 @@ Also noted: once interceptors exist, invulnerable wingmen will look odd.
 ```
 node test/dusk.mjs             # smoke
 node test/dusk-intercept.mjs   # the interceptors' rules and how they fly
+node test/dusk-boss.mjs        # the dreadnought's rules and how long the fight is
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between
