@@ -227,7 +227,7 @@ at 30 hits was down two seconds into the round; and `dreadnought-1`'s intercepto
 passing on a fixture that named round 5, then went red on a correct game when round 5 stopped
 sending interceptors from the far fight.
 
-## The ice wall (build `icewall-1`): the second boss
+## The ice wall (build `icewall-2`): the second boss
 
 A wall of ice across the middle of a frozen plain. It stands in four sections, each with a
 crack down both faces and guns on its ledges. Destroy a crack and that section of the wall
@@ -242,6 +242,15 @@ confirmed with him):
 - "the wall boss had a few weak sections where there are cracks that you destroy and
   destroying units damaged nearby cracks and when a crack is destroyed that section of the
   wall collapses".
+
+- **Guard towers and drones.** Of `icewall-1`: "It looks good but it's rather easy", and he
+  asked for guard towers at set places around the ice arena and some drones about.
+
+**Mine, on that request, and open to him:** six towers on a ring out on the plain, always in
+the same places, a gun on top of each, flak and missile site by turns. A tower's gun takes 7
+hits the first time against a wall gun's 3 or 4. Towers **do not rebuild** and **do not shake
+the cracks**. Eight drones the first time, then 12, then 16. Neither towers nor drones are
+counted: the wall is still what has to come down.
 
 **Fills he agreed** ("Sounds good go for it"):
 
@@ -279,12 +288,15 @@ confirmed with him):
 wall and for a crack when none is up, holding Fire. It never dodges a missile, cannot die, and
 repair is not modelled:
 
-| | wall down in | guns destroyed | hull it lost |
+| | wall down in | hull it lost, `icewall-1` | with towers and drones |
 |---|---|---|---|
-| round 5, no upgrades, guns first | 55s | 20 | 180 of 100, all to missiles |
-| round 5, four upgrades, guns first | 49s | 17 | 92 of 125 |
-| round 5, four upgrades, **cracks only** | 146s | 3 | 402 of 125 |
-| round 10, nine upgrades, guns first | 91s | 31 | 464 of 150 |
+| round 5, no upgrades, guns first | 55s | 180 of 100 | 398: missiles 340, drones 40, flak 18 |
+| round 5, four upgrades, guns first | 49s | 92 of 125 | 180, all missiles |
+| round 5, four upgrades, **cracks only** | 146s | 402 of 125 | 624 |
+| round 10, nine upgrades, guns first | 91s | 464 of 150 | 608 |
+
+The stand-in never shoots a tower or a drone, so the times do not move and the cost is the
+worst case: everything he added is left alive to fire for the whole fight.
 
 Bolts aimed at the middle of a crack with a person's scatter, from 150 out on either face,
 below, level and above: 95 to 99% land on it, worst single case 88%. That check exists because
@@ -310,7 +322,8 @@ the dreadnought shipped with a generator nothing could reach.
   dark haze. The faces now break into facets, steep ground is a deeper blue, ice is lit from
   below, and the haze is pale.
 - Drones circled through the wall: a drone's height came from the ground at the middle of its
-  circle. It now comes from the highest ground anywhere on the circle, in both landscapes.
+  circle. It now comes from the highest ground anywhere on the circle, in both landscapes,
+  sampled 24 times round: eight could straddle the crest, which is narrower than the gaps.
 - The first stand-in ignored the guns and reported a 319-second fight. That measured the wrong
   route, not the wall.
 

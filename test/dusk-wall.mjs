@@ -36,7 +36,8 @@ async function run(code) {
     window.M = { now: performance.now() };
     M.step = function (n, each) { for (var i = 0; i < n; i++) { M.now += 1000 / 30; tick(M.now); if (each && each() === false) break; } };
     M.wall = function (n) { bossForce = 'wall'; startRound(n); damage = function () {}; };
-    M.guns = function () { return ground.filter(function (g) { return g.alive; }); };
+    M.guns = function () { return ground.filter(function (g) { return g.alive && g.spot; }); };       // the wall's own
+    M.towers = function () { return ground.filter(function (g) { return g.alive && g.tower; }); };
     M.meshOff = function () { var pos = terrainGeo.attributes.position, n = 0; for (var i = 0; i < pos.count; i++) if (Math.abs(pos.getY(i) - height(pos.getX(i), pos.getZ(i))) > 1e-4) n++; return n; };
     M.step(3); M.snap = Array.prototype.slice.call(terrainGeo.attributes.position.array); 1`));
   const r = await page.evaluate(c => window.__t(c), code);
@@ -53,7 +54,7 @@ console.log('\n— the round —');
     o.perSec = [0, 1, 2, 3].map(function (k) { return g.filter(function (x) { return x.spot.sec.k === k; }).length; });
     o.onLedge = g.filter(function (x) { var h = x.pos.y - 1.9; return Math.abs(h - 62) < 0.6 || Math.abs(h - 32) < 0.6; }).length;
     o.level = g.filter(function (x) { var h = height(x.pos.x, x.pos.z); return Math.abs(height(x.pos.x + 3, x.pos.z) - h) < 2.2 && Math.abs(height(x.pos.x, x.pos.z + 3) - h) < 2.2 && Math.abs(height(x.pos.x - 3, x.pos.z) - h) < 2.2; }).length;
-    o.others = fleet.filter(function (f) { return f.gone <= 0; }).length + drones.filter(function (d) { return d.alive; }).length; o.ic = icWant;
+    o.others = fleet.filter(function (f) { return f.gone <= 0; }).length; o.ic = icWant;
     o.rings = wallSecs.filter(function (s) { M.step(1); return s.ring.visible; }).length; o.meshOff = M.meshOff();
     o.ship = shipPos.y - height(shipPos.x, shipPos.z); o.note = (roundBanner(), noteEl.textContent);
     JSON.stringify(o)`);
@@ -63,9 +64,37 @@ console.log('\n— the round —');
   check(r.kinds.flak > 0 && r.kinds.sam > 0, `both kinds of ground unit  [${r.kinds.flak} flak, ${r.kinds.sam} missile sites]`, JSON.stringify(r.kinds));
   check(r.faces.front === 8 && r.faces.back === 8, 'on both faces of the wall  [8 and 8]', JSON.stringify(r.faces));
   check(r.onLedge === r.guns && r.level === r.guns, 'every one stands on a ledge, on level ice', `${r.onLedge} on a ledge, ${r.level} level, of ${r.guns}`);
-  check(r.others === 0 && r.ic === 0, 'nothing else is in the round: no ships, no drones, no interceptors', JSON.stringify(r));
+  check(r.others === 0 && r.ic === 0, 'no capital ships and no interceptors', JSON.stringify(r));
   check(r.rings === 4, 'every crack wears its health ring from the start', `${r.rings} of 4`);
   check(r.ship > 30 && /Ice Wall/.test(r.note) && /cracks/.test(r.note), 'you start clear of the ice, and the banner says what to break', JSON.stringify(r));
+}
+
+console.log('\n— guard towers and drones —');
+{
+  const g = await run(`M.wall(5); var tw = M.towers(), o = {};
+    o.n = tw.length; o.at = tw.map(function (x) { return Math.round(x.pos.x) + ',' + Math.round(x.pos.z); }).sort().join(' ');
+    M.wall(5); o.again = M.towers().map(function (x) { return Math.round(x.pos.x) + ',' + Math.round(x.pos.z); }).sort().join(' ');
+    tw = M.towers();
+    o.onTop = tw.filter(function (x) { return Math.abs(x.pos.y - 1.9 - TOWER_H - height(x.pos.x, x.pos.z)) < 0.01; }).length;
+    o.clearOfWall = tw.filter(function (x) { return Math.abs(x.pos.z) > 60 && Math.sqrt(x.pos.x * x.pos.x + x.pos.z * x.pos.z) < 200; }).length;
+    o.kinds = tw.map(function (x) { return x.type; }).sort().join(' '); o.shafts = wallProps.visible && wallProps.children.length === 12;
+    var d = drones.filter(function (x) { return x.alive; }); o.drones = d.length;
+    o.dronesUnder = d.filter(function (x) { for (var a = 0; a < 6.3; a += 0.2) if (x.c.y - 4 < Math.max(height(x.c.x + Math.cos(a) * x.r, x.c.z + Math.sin(a) * x.r), 0) + 2) return true; return false; }).length;
+    o.left = remaining();
+    var t0 = tw[0], cr = wallSecs.map(function (s) { return s.hp; }).join(), wallGun = M.guns()[0].maxHp, hits = 0;
+    while (t0.alive && hits < 40) { hitGround(t0, 1, t0.pos); hits++; } o.hits = hits; o.wallGun = wallGun; o.cracksSame = cr === wallSecs.map(function (s) { return s.hp; }).join();
+    M.step(30 * 14); o.rebuilt = t0.alive; o.leftAfter = remaining();
+    d.forEach(function (x) { killDrone(x); }); o.liveAfterAll = roundLive;
+    startRound(6); o.propsGone = !wallProps.visible; o.towersLeft = M.towers().length + ground.filter(function (x) { return x.tower; }).length;
+    JSON.stringify(o)`);
+  check(g.n === 6 && g.at === g.again, `six guard towers, in the same places every time  [${g.at}]`, JSON.stringify(g));
+  check(g.onTop === 6 && g.shafts, 'each gun stands on top of its tower, and the towers are drawn', JSON.stringify(g));
+  check(g.clearOfWall === 6, 'they ring the plain, clear of the wall and inside the map', JSON.stringify(g));
+  check(g.kinds === 'flak flak flak sam sam sam', 'flak and missile sites by turns', g.kinds);
+  check(g.hits > g.wallGun && !g.rebuilt && g.cracksSame, `a tower's gun is tougher than the wall's (${g.hits} hits against ${g.wallGun}), stays destroyed, and does not shake the cracks`, JSON.stringify(g));
+  check(g.drones === 8 && g.dronesUnder === 0, `eight drones over the ice, none of them circling through it`, JSON.stringify(g));
+  check(g.left === 4 && g.leftAfter === 4 && g.liveAfterAll, 'neither towers nor drones are what is left to do: the count is still sections', JSON.stringify(g));
+  check(g.propsGone && g.towersLeft === 0, 'and the towers are gone when the round after begins', JSON.stringify(g));
 }
 
 console.log('\n— the cracks —');
@@ -137,7 +166,7 @@ console.log('\n— winning, and what comes after —');
   const w = await run(`M.wall(5); var o = {};
     wallSecs.forEach(function (s, i) { hitCrack(s, s.hp); M.step(60); if (i === 2) o.liveAt3 = roundLive; });
     o.live = roundLive; o.note = noteEl.textContent; o.guns = M.guns().length;
-    startRound(6); o.arena = arena; o.props = duskProps.visible; o.wallOn = wallOn; o.ships = fleet.filter(function (f) { return f.gone <= 0; }).length; o.ground = M.guns().length;
+    startRound(6); o.arena = arena; o.props = duskProps.visible; o.wallOn = wallOn; o.ships = fleet.filter(function (f) { return f.gone <= 0; }).length; o.ground = ground.filter(function (g) { return g.alive; }).length;
     var pos = terrainGeo.attributes.position.array, diff = 0; for (var i = 0; i < pos.length; i++) if (Math.abs(pos[i] - M.snap[i]) > 1e-6) diff++;
     o.diff = diff; o.meshOff = M.meshOff(); o.left = remaining(); o.hp = ground.filter(function (g) { return g.maxHp !== g.baseHp; }).length;
     JSON.stringify(o)`);
@@ -167,16 +196,18 @@ console.log('\n— winning, and what comes after —');
 // A stand-in that plays the way the wall is meant to be played: on its side of the wall it goes for the nearest gun,
 // and for a crack when no gun is up; over the top and round again. It never dodges a missile, cannot die, and repair
 // is not modelled, so the cost is a ceiling. A second stand-in that ignores the guns shows what that route is worth.
+// It only ever goes for the WALL's guns: the towers and drones are left alone to shoot, which is the worst case for cost.
 async function fight(round, ups, label, gunsFirst) {
   const r = await run(`${ups} bossForce = 'wall'; startRound(${round}); hull = maxHull();
     var R = { lost: 0, by: { flak: 0, missiles: 0 }, secs: null, falls: [], guns: 0 }, t0 = time, away = false, last = 4;
-    damage = function (n) { R.lost += n; R.by[n === 20 ? 'missiles' : 'flak'] += n; };
+    R.by.drones = 0;
+    damage = function (n) { R.lost += n; R.by[n === 20 ? 'missiles' : n === 10 ? 'drones' : 'flak'] += n; };
     var hg = hitGround; hitGround = function (g, d, at) { var was = g.alive; hg(g, d, at); if (was && !g.alive) R.guns++; };
     M.step(30 * 420, function () {
       if (!roundLive) { R.secs = +(time - t0).toFixed(1); return false; }
       var st = wallStanding(); if (st !== last) { R.falls.push(+(time - t0).toFixed(0)); last = st; }
       var tgt = null, bd = 1e9;
-      if (${gunsFirst}) ground.forEach(function (g) { if (!g.alive || (g.pos.z >= 0) !== (shipPos.z >= 0)) return; var d = g.pos.distanceTo(shipPos); if (d < bd) { bd = d; tgt = g.pos.clone(); } });
+      if (${gunsFirst}) ground.forEach(function (g) { if (!g.alive || !g.spot || (g.pos.z >= 0) !== (shipPos.z >= 0)) return; var d = g.pos.distanceTo(shipPos); if (d < bd) { bd = d; tgt = g.pos.clone(); } });
       if (!tgt) wallSecs.forEach(function (s) { if (s.down || s.falling > 0) return; var p = s.face[shipPos.z >= 0 ? 0 : 1].clone(); p.z -= (shipPos.z >= 0 ? 1 : -1) * 22; var d = p.distanceTo(shipPos); if (d < bd) { bd = d; tgt = p; } });
       if (!tgt) return;
       if (bd < 55) away = true; else if (bd > 190) away = false;
@@ -186,7 +217,7 @@ async function fight(round, ups, label, gunsFirst) {
       keys.fire = true;
     });
     R.standing = wallStanding(); R.maxHull = maxHull(); JSON.stringify(R)`);
-  console.log(`  ${label.padEnd(40)} ${(r.secs === null ? 'not down in 420s, ' + r.standing + ' standing' : 'down in ' + r.secs + 's').padEnd(30)} sections fell at ${(r.falls.join(', ') || '–').padEnd(18)}s   guns destroyed ${String(r.guns).padStart(3)}   ${r.lost} hull lost of ${r.maxHull}: flak ${r.by.flak}, missiles ${r.by.missiles}`);
+  console.log(`  ${label.padEnd(40)} ${(r.secs === null ? 'not down in 420s, ' + r.standing + ' standing' : 'down in ' + r.secs + 's').padEnd(30)} sections fell at ${(r.falls.join(', ') || '–').padEnd(18)}s   guns destroyed ${String(r.guns).padStart(3)}   ${r.lost} hull lost of ${r.maxHull}: flak ${r.by.flak}, missiles ${r.by.missiles}, drones ${r.by.drones}`);
   return r;
 }
 console.log('\n— how long the fight is, and what it costs —');
