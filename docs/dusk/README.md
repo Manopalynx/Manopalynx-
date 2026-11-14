@@ -122,6 +122,25 @@ both checks red.
 
 None of this says how it feels. That is his to judge on the phone.
 
+## The boss: decided so far, nothing built
+
+Sam's, 14 November 2026:
+
+- **A boss round is the boss alone**, with "a purposely set amount of enemies in certain
+  locations", depending on the boss and on whether bosses get areas of their own.
+- **Dying to a boss is a normal death**, back to round 1. He wants to discuss lives, or an
+  upgrade that gives an extra life, at some point. Not yet discussed.
+- **Whether interceptors appear depends on the boss.**
+- His options for the shape of it, none chosen: a range picked at random every five rounds;
+  a range that gets harder in order; one boss that gets harder; a boss with an area of its
+  own, "such as a ice wall with turrets all around it".
+
+What the code says about cost, read not measured: the landscape is one `height(x, z)`
+function with 16 callers and one mesh built from it once, and ground units already sit
+wherever `height` puts them, so a second landscape is a contained change. `makeShip(scale)`
+already takes a size, with hull and gun count following from it, so a larger ship is a small
+one.
+
 ## Queued, in the agreed order
 
 1. Wrecks of downed capital ships that stay for the run.
