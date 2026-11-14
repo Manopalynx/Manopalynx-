@@ -729,7 +729,7 @@
   // turrets, hull bars and the fleet itself
   var turretMat = new THREE.MeshStandardMaterial({ color: 0x23262f, roughness: 0.6, metalness: 0.6, flatShading: true });
   var turretLamp = new THREE.MeshBasicMaterial({ color: 0x9dff6a, fog: false });
-  var TURRET_SPOTS = [[14, 3.3, 0], [8, -3.3, 0], [-12, -3.3, 0], [3, 3.3, 0], [-14, 3.3, 4.6], [-2, -3.3, -4.2], [15, -3.3, 0]]; // the last three are only ever used by the dreadnought
+  var TURRET_SPOTS = [[14, 3.3, 0], [8, -3.3, 0], [-12, -3.3, 0], [3, 3.3, 0]];
   function addTurrets(f, n) {
     f.turrets = [];
     for (var i = 0; i < n; i++) {
@@ -789,41 +789,172 @@
       fleet.splice(i, 0, f);
     }
   }
-  // ---------- the dreadnought: every fifth round is this ship, alone ----------
-  // Sam's rulings: boss alone; one capital ship at about double size, same rules as the others (shoot the turrets
-  // off, each one lost hurts the hull); harder each time it comes -- more hull, faster guns, and turrets that take
-  // more hits; it brings interceptors on the usual count; the readout shows its hull; the reward is the normal pick.
-  // It is an ordinary entry in `fleet`, so every weapon, the hit test, the turret fire and the sinking already apply.
-  var bossF = null, BOSS_SCALE = 2.2, bossPct = -1;
+  // ---------- the dreadnought: every fifth round is this fortress, alone ----------
+  // SAM'S RULINGS. A boss round is the boss alone. It gets harder each time it comes: more hull, faster guns, turrets
+  // that take more hits. It must have its own character, not be a capital ship scaled up. It must never go quiet:
+  // "when you destroy all of the turrets it can't attack so I'm just left shooting a defenceless ship". So turrets
+  // rebuild after 10 seconds; they sit "on multiple sides in strategic and cool looking positions"; two bays "shoot
+  // out two interceptors every 30 seconds so you need to keep on top of them or be overwhelmed"; and a shield
+  // generator "that regenerates the boss shield which the player can destroy".
+  // HIS "go with whatever you think works best", so these are MINE: the fortress shape; one interceptor from each bay
+  // per launch; up to six flying; the bays cannot be destroyed; the shield protects the hull only, so turrets can
+  // be shot through it; the generator stays destroyed; a turret lost costs 4% of the hull.
+  // It is an entry in `fleet`, kept last, so weapons, targeting, turret fire and the sinking already apply. What a
+  // capital ship hard-codes -- its hull shape, its bounding box, where a rammer is shoved to -- it carries as its own.
+  var bossF = null, BOSS_R = 44, bossPct = -1, bossLine = '';
   var bossHullMat = new THREE.MeshStandardMaterial({ color: 0x8a5a62, emissive: 0x2a0d12, roughness: 0.6, metalness: 0.4, flatShading: true }); // lit from within a little: a dark hull vanished into the dusk haze at 150
+  var bossBayMat = new THREE.MeshBasicMaterial({ color: 0xff4a3a, fog: false });
+  var BOSS_REBUILD = 10, BOSS_LAUNCH = 30, BOSS_IC_MAX = 6;
   function isBossRound(n) { return n % 5 === 0; }
   function bossTier(n) { return Math.floor(n / 5); } // 1 at round 5, 2 at round 10 ...
   function bossSpec(tier) {
+    var hull = Math.round(30 * Math.pow(tier, 1.5)) * 100; // steeply, because your guns grow steeply
     return {
-      // steeply, because your guns grow steeply: measured with every card put into guns, 3600 at round 10 lasted 7 seconds
-      hull: Math.round(40 * Math.pow(tier, 1.5)) * 100,   // 4000, 11300, 20800 ...
-      turrets: Math.min(7, 4 + tier),                 // 5, 6, then 7 from the third time on
-      turretHp: 8 + 3 * (tier - 1),                   // an ordinary turret takes 5
-      fireK: Math.max(0.4, 1 / (1 + 0.25 * (tier - 1))) // the gap between a turret's shots: an ordinary turret's the first time, then 0.8 of it, 0.67 ...
+      hull: hull,
+      turrets: Math.min(12, 2 + 2 * tier),              // 4 (the ring only), 6, 8, 10, then all 12 mounts
+      turretHp: 8 + 3 * (tier - 1),                     // an ordinary turret takes 5
+      fireK: Math.max(0.4, 1 / (1 + 0.25 * (tier - 1))), // the gap between a turret's shots: ordinary the first time, then 0.8 of it ...
+      shield: Math.round(hull * 0.2),                   // refills in three seconds while the generator lives: in practice the hull cannot be reached until it dies
+      genHp: Math.round(300 * Math.pow(tier, 1.3))      // 300, 740, 1250: at 30 a stand-in had it down two seconds into the round
     };
+  }
+  // the fortress in its own coordinates: a split spindle, a ring of eight, four arms, two cap plates
+  function bossInHull(v) {
+    var ax = Math.abs(v.x), ay = Math.abs(v.y), az = Math.abs(v.z);
+    if (ax < 8 && az < 8 && ay > 15 && ay < 48) return true;                 // the spindle, above and below the core
+    if (ax < 11 && az < 11 && ay > 27.5 && ay < 32.5) return true;           // cap plates
+    var r = Math.sqrt(v.x * v.x + v.z * v.z);
+    if (ay < 4.5 && r > BOSS_R - 5 && r < BOSS_R + 5) return true;           // the ring
+    if (ay < 2 && r < BOSS_R && (ax < 2 || az < 2) && r > 13) return true;   // the arms, outside the core
+    return false;
   }
   function ensureBoss() {
     if (bossF) return;
-    var f = { ship: makeShip(BOSS_SCALE), scale: BOSS_SCALE, radius: 118, alt: 92, angle: 2.4, speed: 0.011, maxHp: 2400, guns: 7, boss: true, reach: 280 };
-    f.ship.traverse(function (m) { if (m.material === hullMat) m.material = bossHullMat; });
+    var g = new THREE.Group(), R = BOSS_R, k, a, c, sn;
+    function box(w, h, d, x, y, z, mat, ry) { var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat || bossHullMat); m.position.set(x, y, z); if (ry) m.rotation.y = ry; g.add(m); return m; }
+    box(16, 33, 16, 0, 31.5, 0); box(16, 33, 16, 0, -31.5, 0);
+    box(22, 5, 22, 0, 30, 0, darkMat); box(22, 5, 22, 0, -30, 0, darkMat);
+    box(12, 3, 12, 0, 49.5, 0, bossBayMat); box(12, 3, 12, 0, -49.5, 0, bossBayMat); // the two bays
+    for (k = 0; k < 8; k++) {
+      a = k * Math.PI / 4; c = Math.cos(a); sn = Math.sin(a);
+      box(2 * R * 0.83, 9, 9, c * R, 0, sn * R, null, -a + Math.PI / 2);
+      if (k % 2 === 0) box(R - 13, 4, 4, c * (R + 13) / 2, 0, sn * (R + 13) / 2, darkMat, -a);
+    }
+    blinker(g, 0, 52, 0, 0xff5a4a, 0.9, 1.7);
+    // the shield generator: the core, hanging where the spindle is split
+    var genMat = new THREE.MeshBasicMaterial({ color: 0x8fe9ff, fog: false });
+    var orb = new THREE.Group(), ball = new THREE.Mesh(new THREE.SphereGeometry(12, 14, 10), genMat);
+    orb.add(ball);
+    var rings = [0.6, -0.6].map(function (tilt) { var rg = new THREE.Mesh(new THREE.TorusGeometry(18, 1.3, 6, 24), genMat); rg.rotation.x = Math.PI / 2 + tilt; orb.add(rg); return rg; });
+    g.add(orb);
+    // the shield: a faint shell round the whole ship, and a net over it so its edge reads against the sky
+    var shell = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 18), new THREE.MeshBasicMaterial({ color: 0x8fe9ff, transparent: true, opacity: 0.13, fog: false, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+    var net = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 9), new THREE.MeshBasicMaterial({ color: 0x8fe9ff, wireframe: true, transparent: true, opacity: 0.16, fog: false, depthWrite: false }));
+    shell.scale.set(62, 60, 62); net.scale.set(62, 60, 62); g.add(shell); g.add(net);
+    g.visible = false; scene.add(g);
+    var f = { ship: g, scale: 2.2, radius: 0, alt: 112, angle: 0, speed: 0.05, maxHp: 3000, boss: true, reach: 230, // its guns reach 230: there is room on the map to pull out and let the hull mend
+     
+      box: [56, -52, 52, 56], turR2: 34, barUp: 60, boomBox: [100, 90, 100], inHull: bossInHull,
+      gen: { hp: 0, maxHp: 30, pivot: orb, mat: genMat, rings: rings, flash: 0, gen: true }, shell: shell, net: net, shield: 0, shieldMax: 0, shieldGlow: 0, launchT: 0,
+      bays: [new THREE.Vector3(0, 52, 0), new THREE.Vector3(0, -52, 0)] };
     f.hp = f.maxHp; f.dying = 0; f.gone = Infinity; f.fall = 0; f.fallV = 0; f.list = 0; f.boomT = 0;
-    f.ship.visible = false;
-    addTurrets(f, f.guns); addBar(f);
+    // TURRETS ON EVERY SIDE. Four look outward from the ring where the arms meet it; then pairs above and below
+    // the ring between the arms. In that order, so the first time it comes it is ringed and the later ones bristle.
+    f.turrets = [];
+    var spots = [];
+    for (k = 0; k < 4; k++) { a = k * Math.PI / 2; spots.push([Math.cos(a) * (R + 5), 0, Math.sin(a) * (R + 5), Math.cos(a), 0, Math.sin(a)]); }
+    for (k = 0; k < 4; k++) { a = k * Math.PI / 2 + Math.PI / 4; spots.push([Math.cos(a) * R, 4.5, Math.sin(a) * R, 0, 1, 0]); }
+    for (k = 0; k < 4; k++) { a = k * Math.PI / 2 + Math.PI / 4; spots.push([Math.cos(a) * R, -4.5, Math.sin(a) * R, 0, -1, 0]); }
+    var upY = new THREE.Vector3(0, 1, 0), nrm = new THREE.Vector3();
+    spots.forEach(function (sp) {
+      nrm.set(sp[3], sp[4], sp[5]);
+      var base = new THREE.Mesh(new THREE.CylinderGeometry(3, 3.8, 2.4, 8), turretMat);
+      base.position.set(sp[0] + nrm.x * 1.2, sp[1] + nrm.y * 1.2, sp[2] + nrm.z * 1.2);
+      base.quaternion.setFromUnitVectors(upY, nrm); g.add(base);
+      var pivot = new THREE.Group();
+      pivot.position.set(sp[0] + nrm.x * 3.6, sp[1] + nrm.y * 3.6, sp[2] + nrm.z * 3.6);
+      var tm = turretMat.clone();
+      var dome = new THREE.Mesh(new THREE.SphereGeometry(2.6, 8, 6), tm), barrel = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 6.4), tm);
+      barrel.position.z = 3.6;
+      var lamp = new THREE.Mesh(new THREE.SphereGeometry(1.0, 8, 6), new THREE.MeshBasicMaterial({ color: 0x9dff6a, fog: false }));
+      lamp.position.z = 7;
+      pivot.add(dome); pivot.add(barrel); pivot.add(lamp); g.add(pivot);
+      var ring = new THREE.Group(), segs = [];
+      for (var sg = 0; sg < 5; sg++) {
+        var arc = new THREE.Mesh(new THREE.RingGeometry(2.7, 3.35, 10, 1, Math.PI / 2 - (sg + 1) * 1.2566 + 0.11, 1.2566 - 0.22),
+          new THREE.MeshBasicMaterial({ color: 0x9dff6a, transparent: true, opacity: 0.95, fog: false, depthTest: false, side: THREE.DoubleSide }));
+        arc.renderOrder = 12; ring.add(arc); segs.push(arc);
+      }
+      ring.visible = false; scene.add(ring);
+      f.turrets.push({ pivot: pivot, base: base, ring: ring, segs: segs, lamp: lamp, mat: tm, flash: 0, local: pivot.position.clone(), hp: 0, maxHp: 8, cool: 2, back: 0, fitted: false });
+    });
+    addBar(f);
     fleet.push(f); bossF = f;
   }
   function startBoss(tier) {
     ensureBoss();
     var sp = bossSpec(tier), f = bossF;
-    f.maxHp = sp.hull; f.turretHp = sp.turretHp; f.fireK = sp.fireK; f.turretBlow = Math.round(sp.hull * 0.1);
+    f.maxHp = sp.hull; f.turretHp = sp.turretHp; f.fireK = sp.fireK; f.turretBlow = Math.round(sp.hull * 0.04);
     reviveShip(f, true); f.gone = 0;
-    // only as many turrets as this tier carries
-    for (var i = 0; i < f.turrets.length; i++) if (i >= sp.turrets) { f.turrets[i].hp = 0; f.turrets[i].pivot.visible = false; }
-    bossPct = -1;
+    // only as many turrets as this tier carries; an unfitted mount is bare and never rebuilds
+    for (var i = 0; i < f.turrets.length; i++) {
+      var t = f.turrets[i];
+      t.fitted = i < sp.turrets; t.back = 0; t.base.visible = t.fitted;
+      if (!t.fitted) { t.hp = 0; t.pivot.visible = false; }
+    }
+    f.gen.maxHp = sp.genHp; f.gen.hp = sp.genHp; f.gen.pivot.visible = true; f.gen.mat.color.set(0x8fe9ff); f.gen.flash = 0;
+    f.shieldMax = sp.shield; f.shield = sp.shield; f.shell.visible = f.net.visible = true;
+    f.launchT = 6; // the first pair comes early, so the bays are understood; every 30 seconds after
+    bossPct = -1; bossLine = '';
+  }
+  function hitGenerator(f, dmg, at) {
+    var gn = f.gen;
+    gn.hp -= dmg; gn.flash = 0.2;
+    if (gn.hp <= 0) {
+      gn.hp = 0; gn.pivot.visible = false;
+      gn.pivot.getWorldPosition(fleetTmp); boom(fleetTmp, true); chainBlast(fleetTmp, 1.5);
+      sfx('shieldDown', fleetTmp); banner('Shield generator destroyed', 2.5);
+    } else boom(at, false);
+    updateReadout();
+  }
+  function updateBoss(dt) {
+    var f = bossF, i;
+    if (!f || f.gone > 0) return;
+    var alive = f.dying === 0;
+    // the shield: refilled by the generator, and gone for good once that is
+    if (alive && f.gen.hp > 0 && f.shield < f.shieldMax) { f.shield = Math.min(f.shieldMax, f.shield + f.shieldMax / 3 * dt); }
+    var frac = alive && f.shieldMax > 0 ? f.shield / f.shieldMax : 0;
+    f.shieldGlow = Math.max(0, f.shieldGlow - dt * 3);
+    f.shell.visible = f.net.visible = frac > 0.01;
+    f.shell.material.opacity = 0.05 + 0.1 * frac + 0.3 * f.shieldGlow;
+    f.net.material.opacity = 0.06 + 0.12 * frac + 0.3 * f.shieldGlow;
+    if (f.gen.hp > 0) {
+      f.gen.rings[0].rotation.z += dt * 1.1; f.gen.rings[1].rotation.z -= dt * 0.8;
+      if (f.gen.flash > 0) f.gen.flash -= dt;
+      // cyan while healthy, running to red as it is shot away, white when struck
+      var hpK = f.gen.hp / f.gen.maxHp;
+      if (f.gen.flash > 0) f.gen.mat.color.set(0xffffff); else f.gen.mat.color.setHSL(0.52 * hpK, 0.9, 0.7); // round the wheel, not through grey: cyan, green, yellow, red
+    }
+    if (!alive) return;
+    // turrets come back
+    for (i = 0; i < f.turrets.length; i++) {
+      var t = f.turrets[i];
+      if (!t.fitted || t.hp > 0) continue;
+      t.back -= dt;
+      if (t.back <= 0) { t.hp = t.maxHp; t.pivot.visible = true; paintRing(t); t.cool = 1.5 + Math.random(); t.flash = 0.3; sfx('rebuild', f.ship.position); }
+    }
+    // the bays: one interceptor from each, every 30 seconds, while there is room in the sky
+    if (!inControl || dead || !roundLive) return;
+    f.launchT -= dt;
+    if (f.launchT <= 0) {
+      f.launchT = BOSS_LAUNCH;
+      var sent = 0;
+      for (i = 0; i < f.bays.length; i++) {
+        fleetTmp.copy(f.bays[i]); f.ship.localToWorld(fleetTmp);
+        if (icLaunch(fleetTmp, i === 0 ? 1 : -1)) sent++;
+      }
+      if (sent) sfx('raid');
+    }
   }
   var ramCool = 0;
   var fleetTmp = new THREE.Vector3(), capTmp = new THREE.Vector3();
@@ -839,12 +970,20 @@
   }
   function updateReadout() {
     if (bossF && bossF.gone <= 0) {
+      // it names what stands between you and the kill: the generator while it lives, the hull after
       bossPct = Math.ceil(bossF.hp / bossF.maxHp * 100);
-      readoutEl.innerHTML = 'Round ' + round + '<br>Dreadnought ' + bossPct + '%';
-    } else readoutEl.innerHTML = 'Round ' + round + '<br>' + remaining() + ' to go';
+      var line = bossF.gen.hp > 0 ? 'Shield generator ' + Math.ceil(bossF.gen.hp / bossF.gen.maxHp * 100) + '%' : 'Dreadnought ' + bossPct + '%';
+      if (line !== bossLine) { bossLine = line; readoutEl.innerHTML = 'Round ' + round + '<br>' + line; }
+    } else { bossLine = ''; readoutEl.innerHTML = 'Round ' + round + '<br>' + remaining() + ' to go'; }
   }
   function hitCapital(f, dmg) {
     if (f.dying > 0 || f.gone > 0) return;
+    if (f.boss && f.shield > 0) {
+      // the shield takes it first; whatever is left over goes through
+      var soak = Math.min(f.shield, dmg);
+      f.shield -= soak; dmg -= soak; f.shieldGlow = 1; sfx('shield', f.ship.position);
+      if (dmg <= 0) return;
+    }
     f.hp -= dmg;
     if (f.hp <= 0) {
       f.hp = 0; f.dying = 0.001; f.fallV = 0; f.boomT = 0;
@@ -885,7 +1024,8 @@
         f.boomT -= dt;
         if (f.boomT <= 0) {
           f.boomT = 0.2;
-          fleetTmp.set((Math.random() - 0.5) * 56, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 12);
+          var bb = f.boomBox || [56, 8, 12];
+          fleetTmp.set((Math.random() - 0.5) * bb[0], (Math.random() - 0.5) * bb[1], (Math.random() - 0.5) * bb[2]);
           f.ship.localToWorld(fleetTmp);
           boom(fleetTmp, Math.random() < 0.6);
         }
@@ -930,7 +1070,7 @@
         continue;
       }
       f.bar.position.copy(f.ship.position);
-      f.bar.position.y += 17 * f.scale;
+      f.bar.position.y += f.barUp || 17 * f.scale;
       f.bar.quaternion.copy(camera.quaternion);
       f.bar.scale.setScalar(f.scale);
       var dist = f.ship.position.distanceTo(shipPos);
@@ -959,8 +1099,9 @@
       // flying into the hull hurts, and it shoves you out
       capTmp.copy(shipPos);
       f.ship.worldToLocal(capTmp);
-      if (inHull(capTmp)) {
-        capTmp.y = capTmp.y > 0.5 ? 12 : -6.5;
+      if ((f.inHull || inHull)(capTmp)) {
+        if (f.boss) { var cr = Math.sqrt(capTmp.x * capTmp.x + capTmp.z * capTmp.z); if (cr < 0.5) { capTmp.x = 1; cr = 1; } capTmp.x *= 64 / cr; capTmp.z *= 64 / cr; } // out sideways, clear of the ring
+        else capTmp.y = capTmp.y > 0.5 ? 12 : -6.5;
         f.ship.localToWorld(capTmp);
         shipPos.copy(capTmp);
         if (ramCool <= 0) { ramCool = 0.5; boom(shipPos, false); damage(15); }
@@ -1647,10 +1788,10 @@
   }
   function hitTurret(f, t, dmg, at) {
     t.hp -= dmg; t.flash = 0.2; paintRing(t);
-    if (t.hp <= 0) { t.pivot.visible = false; boom(at, true); t.pivot.getWorldPosition(chTmp); chainBlast(chTmp, 1); hitCapital(f, f.turretBlow || 60); }
+    if (t.hp <= 0) { t.hp = 0; t.back = BOSS_REBUILD; t.ring.visible = false; t.pivot.visible = false; boom(at, true); t.pivot.getWorldPosition(chTmp); chainBlast(chTmp, 1); hitCapital(f, f.turretBlow || 60); }
     else boom(at, false);
   }
-  var stA = new THREE.Vector3(), stB = new THREE.Vector3(), stC = new THREE.Vector3();
+  var stA = new THREE.Vector3(), stB = new THREE.Vector3(), stC = new THREE.Vector3(), CAP_BOX = [44, -10, 15, 13], GEN_AT = new THREE.Vector3(0, 0, 0);
   // something travelling a -> b this frame: did it hit? k scales damage to small targets, hullK to capital hulls
   function strike(a, b, k, hullK) {
     var j;
@@ -1668,14 +1809,17 @@
       var f = fleet[j];
       if (f.gone > 0) continue;
       stA.copy(b); f.ship.worldToLocal(stA);
-      if (Math.abs(stA.x) > 44 || stA.y < -10 || stA.y > 15 || Math.abs(stA.z) > 13) continue;
+      var bx = f.box || CAP_BOX;
+      if (Math.abs(stA.x) > bx[0] || stA.y < bx[1] || stA.y > bx[2] || Math.abs(stA.z) > bx[3]) continue;
       stB.copy(a); f.ship.worldToLocal(stB);
       stC.copy(stA).add(stB).multiplyScalar(0.5);
       for (var q = 0; q < f.turrets.length; q++) {
         var t = f.turrets[q];
-        if (t.hp > 0 && segDist2(t.local, stB, stA) < 13) { hitTurret(f, t, k * dmgMul(), a); return true; }
+        if (t.hp > 0 && segDist2(t.local, stB, stA) < (f.turR2 || 13)) { hitTurret(f, t, k * dmgMul(), a); return true; }
       }
-      if (inHull(stA) || inHull(stC)) { boom(a, false); hitCapital(f, hullK * dmgMul()); return true; }
+      if (f.gen && f.gen.hp > 0 && segDist2(GEN_AT, stB, stA) < 170) { hitGenerator(f, k * dmgMul(), a); return true; }
+      var ih = f.inHull || inHull;
+      if (ih(stA) || ih(stC)) { boom(a, false); hitCapital(f, hullK * dmgMul()); return true; }
     }
     return false;
   }
@@ -1687,7 +1831,7 @@
   function aimPoint(k, o, f, out) {
     if (k === 1) { if (!o.alive) return false; out.copy(o.mesh.position); return true; }
     if (k === 2) { if (!o.alive) return false; out.copy(o.pos); return true; }
-    if (k === 3) { if (o.hp <= 0 || f.gone > 0 || f.dying > 0) return false; o.pivot.getWorldPosition(out); return true; }
+    if (k === 3) { if (o.hp <= 0 || f.gone > 0 || f.dying > 0) return false; o.pivot.getWorldPosition(out); return true; } // a turret, or the dreadnought's generator: both have hp and a pivot
     if (k === 4) { if (!o.alive) return false; out.copy(o.pos); return true; }
     return false;
   }
@@ -1714,6 +1858,7 @@
       var f = fleet[i];
       if (f.gone > 0 || f.dying > 0 || f.ship.position.distanceTo(from) > range + 45 * f.scale) continue;
       for (j = 0; j < f.turrets.length; j++) if (f.turrets[j].hp > 0) { f.turrets[j].pivot.getWorldPosition(pkPos); pkLook(3, f.turrets[j], f, pkPos); }
+      if (f.gen && f.gen.hp > 0) { f.gen.pivot.getWorldPosition(pkPos); pkLook(3, f.gen, f, pkPos); }
     }
     return trk.k;
   }
@@ -2219,7 +2364,7 @@
   var icA = new THREE.Vector3(), icB = new THREE.Vector3(), icC = new THREE.Vector3(), icQ = new THREE.Quaternion();
   function icCount(n) { return n < 3 ? 0 : n < 5 ? 1 : n < 8 ? 2 : 3; }
   (function () {
-    for (var i = 0; i < 3; i++) {
+    for (var i = 0; i < BOSS_IC_MAX; i++) { // three is the most an ordinary round sends; the dreadnought can have six up
       var g = makeInterceptor(); g.visible = false; scene.add(g);
       var el = document.createElement('div'); el.className = 'point raid'; el.appendChild(document.createElement('i'));
       document.body.appendChild(el);
@@ -2235,7 +2380,7 @@
   function icHide(ic) { ic.alive = false; ic.g.visible = false; if (ic.shown) { ic.shown = false; ic.mark.style.display = 'none'; } }
   function icReset(n) {
     for (var i = 0; i < ics.length; i++) icHide(ics[i]);
-    icWant = icCount(n); icPeelT = icWant ? 4 : -1;
+    icWant = isBossRound(n) ? 0 : icCount(n); icPeelT = icWant ? 4 : -1; // in a boss round they come out of its bays instead
   }
   // round over, or you are down: whoever is left turns for the far fight
   function icLeave() {
@@ -2252,6 +2397,17 @@
     ic.hp = IC_HP; ic.alive = true; ic.mode = 1; ic.t = 0; ic.side = Math.random() < 0.5 ? -1 : 1;
     ic.cool = 1; ic.burst = 0; ic.bank = 0; ic.pd = 1e9;
     ic.g.visible = true;
+  }
+  // out of one of the dreadnought's bays: straight up or straight down, then round and in
+  function icLaunch(at, upDown) {
+    var ic = null;
+    for (var i = 0; i < ics.length; i++) if (!ics[i].alive) { ic = ics[i]; break; }
+    if (!ic) return false;
+    ic.pos.copy(at); ic.dir.set(0, upDown, 0);
+    ic.hp = IC_HP; ic.alive = true; ic.mode = 2; ic.t = -1.2; ic.side = upDown; // mode 2 flies its heading: 1.2 seconds straight out of the bay before it may turn in
+    ic.cool = 1.5; ic.burst = 0; ic.bank = 0; ic.pd = 1e9;
+    ic.g.visible = true;
+    return true;
   }
   function hitInterceptor(ic, dmg, at) {
     ic.hp -= dmg;
@@ -2311,7 +2467,7 @@
         // THE BREAK: straight on out the far side, then round and back in. No steering on the way out.
         steer = false; ic.t += dt;
         if (ahead < 0) spd = Math.max(IC_SPEED, speed + 45);
-        if (dist > 170 || ic.t > 8) { ic.mode = 1; ic.t = 0; ic.pd = 1e9; }
+        if ((dist > 170 && ic.t >= 0) || ic.t > 8) { ic.mode = 1; ic.t = 0; ic.pd = 1e9; } // t starts below zero for one just launched from a bay, so it clears the ship first
       }
       if (!steer) { icB.copy(ic.dir); icB.y *= 0.9; icB.y += Math.max(-0.2, Math.min(0.2, (shipPos.y + 6 - ic.pos.y) * 0.01)); icB.normalize(); } // level off towards your height
       // never into the ground
@@ -2545,6 +2701,7 @@
     ishot:      { label: 'Interceptor shot', heat: 0.12, gap: 0.04, play: function (v, d) { tone('sawtooth', 900, 260, 0.09, 0.13 * v, d); } },
     pass:       { label: 'Interceptor pass', heat: 0.15, gap: 0.3, floor: 0.5, play: function (v, d) { hiss(0.7, 0.6 * v, 'bandpass', 2600, 300, d, 1.2); tone('sawtooth', 240, 90, 0.6, 0.08 * v, d); } },
     boss:       { label: 'Dreadnought arrives', heat: 0.5, gap: 0.5, play: function (v, d) { tone('sawtooth', 55, 55, 1.7, 0.22, d); tone('sawtooth', 82.4, 82.4, 1.7, 0.14, d); tone('sawtooth', 55, 41.2, 1.2, 0.2, d, 1.2); hiss(2.4, 0.25, 'lowpass', 300, 80, d); } },
+    rebuild:    { label: 'Turret rebuilt', gap: 0.15, floor: 0.35, play: function (v, d) { tone('square', 330, 660, 0.12, 0.07 * v, d); tone('square', 660, 990, 0.1, 0.05 * v, d, 0.1); } },
     pick:       { label: 'Upgrade chosen', gap: 0.1, play: function (v, d) { tone('triangle', 660, 660, 0.16, 0.16, d); tone('triangle', 990, 990, 0.3, 0.16, d, 0.09); } }
   };
   // play a sound; with a position it gets quieter with distance and pans to the side it came from
@@ -2731,7 +2888,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'dreadnought-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'dreadnought-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +
@@ -2870,6 +3027,7 @@
     updateBursts(dt);
     updateFar(dt);
     updateDogfight(dt);
+    updateBoss(dt);
     updateInterceptors(dt);
 
     sky.position.copy(camera.position);

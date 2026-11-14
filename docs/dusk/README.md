@@ -122,56 +122,84 @@ both checks red.
 
 None of this says how it feels. That is his to judge on the phone.
 
-## The dreadnought (build `dreadnought-1`)
+## The dreadnought (build `dreadnought-2`)
 
-Every fifth round is one large ship, alone. **Sam's rulings:**
+Every fifth round is one fortress, alone: a split spindle through a ring of guns, a shield
+round the whole of it, the shield's generator hanging at its core, and a bay at each end.
 
-- **A boss round is the boss alone.** No drones, no ground units, no other ships. (For later
-  bosses: "a purposely set amount of enemies in certain locations", depending on the boss.)
-- **Same rules as any capital ship:** shoot the turrets off, and each one lost hurts the hull.
-- **Harder each time it comes:** more hull, faster guns, and, his addition, **turrets that
-  take more hits to blow up**.
-- **It brings interceptors** on the usual count. For other bosses that "depends on the boss".
-- **The readout shows its hull** instead of "to go".
-- **The reward is the normal pick of three cards.**
-- **Dying to it is a normal death**, back to round 1. He wants to discuss lives, or an
-  upgrade that gives an extra life. Not yet discussed.
+**Sam's rulings, in his words where quoted:**
 
-**How it is built.** It is an ordinary entry in `fleet`, kept last, made with `makeShip(2.2)`,
-so every weapon, the hit test, the turret fire and the sinking already apply to it. Rounds
-between bosses carry on counting: round 6 has 6 ships.
+- **A boss round is the boss alone.** For later bosses: "a purposely set amount of enemies in
+  certain locations", depending on the boss.
+- **Harder each time it comes:** more hull, faster guns, turrets that take more hits.
+- **It must have its own character.** Of `dreadnought-1`: "it looks like the capital ship
+  scaled up which I think it should have its own character".
+- **It must never go quiet.** "when you destroy all of the turrets it can't attack so I'm just
+  left shooting a defenceless ship as I wait for the large heath pool to reach zero".
+- **Turrets rebuild after 10 seconds**, and sit "on multiple sides in strategic and cool
+  looking positions".
+- **Two bays** "where it shoots our two interceptors ever 30 seconds so you need to keep on
+  top of them or be overwhelmed".
+- **A shield generator** "that regenerates the boss shield which the player can destroy".
+- **The readout shows what you are fighting** instead of "to go"; **the reward is the normal
+  pick of three cards**; **dying to it is a normal death**, back to round 1. He wants to
+  discuss lives, or an upgrade that gives an extra life. Not yet discussed.
 
-**The numbers are mine and are the first guess**, in `bossSpec(tier)`:
+**Mine, on his "go with whatever you think works best".** Open to him at any time:
 
-| round | hull | turrets | hits to blow a turret | hull lost when one goes | gap between a turret's shots |
-|---|---|---|---|---|---|
-| 5 | 4000 | 5 | 8 | 400 | ordinary |
-| 10 | 11300 | 6 | 11 | 1130 | ×0.80 |
-| 15 | 20800 | 7 | 14 | 2080 | ×0.67 |
+- **The fortress shape**, picked from three mock-ups (carrier, battleship, fortress) because
+  it is tall and his screen is: the two wide ones ran off the edge at fighting distance.
+- **One interceptor from each bay per launch**, the first pair six seconds in, **up to six
+  flying**. The far dogfight sends none in a boss round. **The bays cannot be destroyed.**
+- **The shield protects the hull only**: turrets and the generator can be shot through it.
+- **The generator stays destroyed.** It is the one permanent kill and the fight's turning
+  point. While it lives the shield refills in three seconds, so in practice the hull cannot
+  be reached until it dies.
+- **A turret lost costs 4% of the hull**, not 10%: with turrets returning every ten seconds,
+  10% was a farm.
+- **Its guns reach 230**, so there is room on the map to pull out and let the hull mend.
 
-An ordinary turret takes 5 hits. Each turret lost takes a tenth of the hull, so the turrets
-are worth far more than the same bolts spent on the hull.
+**How it is built.** An entry in `fleet`, kept last, so weapons, targeting, turret fire and
+the sinking already apply. What the capital-ship code hard-coded it now reads off the ship
+where the ship supplies one: `inHull`, the bounding `box`, turret hit radius, where a rammer
+is shoved. The generator is targeted as a turret is (`hp` and a `pivot`).
 
-**Why the hull climbs so steeply.** Guns grow steeply. With every card put into guns, a
-3600-hull ship at round 10 lasted 7 seconds.
+**The numbers are mine**, in `bossSpec(tier)`:
 
-**Measured** by `test/dusk-boss.mjs`, with a stand-in that flies at the nearest turret holding
-Fire, cannot dodge and cannot die:
+| round | hull | shield | generator, hits | turrets | hits to blow one | gap between its shots |
+|---|---|---|---|---|---|---|
+| 5 | 3000 | 600 | 300 | 4 | 8 | ordinary |
+| 10 | 8500 | 1700 | 740 | 6 | 11 | ×0.80 |
+| 15 | 15600 | 3120 | 1250 | 8 | 14 | ×0.67 |
+| 20 | 24000 | 4800 | 1820 | 10 | 17 | ×0.57 |
 
-| | sunk in | hull it lost |
-|---|---|---|
-| round 5, four upgrades all in guns and plating | 44s | 139 of 125 |
-| round 10, nine upgrades | 30s | 108 of 150 |
+An ordinary turret takes 5 hits. The first one carries only the four ring turrets; all
+twelve mounts are filled from round 25.
+
+**Measured** by `test/dusk-boss.mjs`, with a stand-in that flies at the generator and then the
+hull holding Fire. It never dodges, never shoots a turret or an interceptor, cannot die, and
+repair is not modelled:
+
+| | generator down | sunk | hull it lost |
+|---|---|---|---|
+| round 5, four upgrades in guns and plating | 22s | 67s | 194 of 125: turrets 104, interceptors 30, ramming 60 |
+| round 10, nine upgrades | 20s | 52s | 203 of 150: turrets 128, ramming 75 |
 
 **Not settled:**
 
-- **That stand-in would have died at round 5**, and dying is back to round 1. It never
-  dodges and repair is not modelled, so this is a ceiling on the cost, not a forecast.
-- **A player whose cards went elsewhere than guns faces the same hull** and a much longer
-  fight. Not measured.
-- **It is dim at range.** The haze takes the colour out of anything 150 away; the hull was
-  lightened once already.
+- **That stand-in would have died both times**, mostly to turrets it never shot at. Shooting
+  one buys ten seconds of quiet from it, which the stand-in never does, so this is a ceiling.
+  Whether a person survives round 5 is the first thing to learn from his phone.
+- **With no upgrades at all the generator alone took 76 seconds.** A player whose cards went
+  elsewhere than guns faces a much longer fight. Not measured further.
+- All turrets fire whether or not they can see him: a turret on the far side of the ring
+  shoots through the ship.
 - Interceptors can fly through its hull.
+
+**Two things the first versions got wrong, both found by measuring or by him:** the generator
+at 30 hits was down two seconds into the round; and `dreadnought-1`'s interceptor suite kept
+passing on a fixture that named round 5, then went red on a correct game when round 5 stopped
+sending interceptors from the far fight.
 
 ## Further bosses: his options, none chosen
 

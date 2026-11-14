@@ -1,8 +1,8 @@
-// The dreadnought in docs/dusk/: every fifth round is one large ship, alone, harder each time.
+// The dreadnought in docs/dusk/: every fifth round is one fortress, alone, harder each time.
 //
 // Asserts Sam's rulings and measures how long the fight takes. Like dusk-intercept.mjs it steps the real game
 // by hand at 30 ticks a second with drawing off, on a temp copy with one line added. The fight figures come
-// from a stand-in that flies at the nearest turret holding Fire: they bound the fight, they do not describe his.
+// from a stand-in that flies at the generator and then the hull holding Fire: they bound the fight, they do not describe his.
 //
 //   node test/dusk-boss.mjs
 
@@ -53,8 +53,8 @@ console.log('\n— which rounds —');
     `round ${n} is the dreadnought alone  [${c[n].readout.replace(/Round \d+/, '').trim()}]`, JSON.stringify(c[n]));
   for (const n of [4, 6, 11]) check(c[n].boss === 0 && c[n].ships === n && c[n].drones === 5 * n && c[n].ground === 5 * n,
     `round ${n} is an ordinary round: ${n} ships, ${5 * n} drones, ${5 * n} ground  [${c[n].readout.replace(/Round \d+/, '').trim()}]`, JSON.stringify(c[n]));
-  check(/Dreadnought 100%/.test(c[5].readout), 'the readout shows its hull, not a count', c[5].readout);
-  check(c[5].sent === 2 && c[10].sent === 3 && c[15].sent === 3, 'it brings interceptors on the usual count  [2 at round 5, 3 at 10 and 15]', `${c[5].sent}, ${c[10].sent}, ${c[15].sent}`);
+  check(/Shield generator 100%/.test(c[5].readout), 'the readout names what stands in the way, not a count', c[5].readout);
+  check(c[5].sent === 0 && c[10].sent === 0, 'none fly in from the far fight in a boss round: they come from its bays', `${c[5].sent}, ${c[10].sent}`);
   check(c.first === false, 'the first ship in the fleet is still an ordinary one (the shuttles fly to it)', 'fleet[0] is the dreadnought');
 }
 
@@ -62,37 +62,78 @@ console.log('\n— harder each time —');
 {
   // Everything is read off the live ship after the round starts, not off the table that set it.
   const t = await run(`var o = [];
-    function blow(f) { var t = f.turrets.filter(function (x) { return x.hp > 0; })[0], n = 0, hp0 = f.hp; while (t.hp > 0 && n < 99) { hitTurret(f, t, 1 * dmgMul(), t.local); n++; } return { hits: n, hullLost: hp0 - f.hp }; }
+    function blow(f) { var t = f.turrets.filter(function (x) { return x.hp > 0; })[0], n = 0; if (f.boss) { f.shield = 0; f.gen.hp = 0; } var hp0 = f.hp; while (t.hp > 0 && n < 99) { hitTurret(f, t, 1 * dmgMul(), t.local); n++; } return { hits: n, hullLost: hp0 - f.hp }; }
     startRound(4); var ord = blow(fleet[0]);
-    [5, 10, 15, 20, 40].forEach(function (n) { startRound(n); var f = bossF, live = f.turrets.filter(function (x) { return x.hp > 0; }).length, hull = f.hp, b = blow(f);
-      o.push({ round: n, hull: hull, turrets: live, hits: b.hits, lost: b.hullLost, gap: f.fireK, scale: f.scale }); });
+    [5, 10, 15, 20, 40].forEach(function (n) { startRound(n); var f = bossF, live = f.turrets.filter(function (x) { return x.hp > 0; }).length, hull = f.hp, sh = f.shield, gh = f.gen.hp, b = blow(f);
+      o.push({ round: n, hull: hull, turrets: live, hits: b.hits, lost: b.hullLost, gap: f.fireK, shield: sh, gen: gh }); });
     var sz = fleet.filter(function (f) { return !f.boss; }).map(function (f) { return f.scale; }).sort();
     JSON.stringify({ ord: ord, tiers: o, sizes: sz[0] + ' to ' + sz[sz.length - 1], typical: sz[Math.floor(sz.length / 2)] })`);
-  console.log('  round   hull   turrets   hits to blow one   hull lost when one goes   gap between its shots');
-  for (const r of t.tiers) console.log(`  ${String(r.round).padStart(5)}  ${String(r.hull).padStart(5)}   ${String(r.turrets).padStart(7)}   ${String(r.hits).padStart(16)}   ${String(r.lost).padStart(23)}   ${('×' + r.gap.toFixed(2)).padStart(21)}`);
+  console.log('  round   hull   shield   generator hits   turrets   hits to blow one   hull lost when one goes   gap between its shots');
+  for (const r of t.tiers) console.log(`  ${String(r.round).padStart(5)}  ${String(r.hull).padStart(5)}   ${String(r.shield).padStart(6)}   ${String(r.gen).padStart(14)}   ${String(r.turrets).padStart(7)}   ${String(r.hits).padStart(16)}   ${String(r.lost).padStart(23)}   ${('×' + r.gap.toFixed(2)).padStart(21)}`);
   console.log(`  (an ordinary ship's turret: ${t.ord.hits} hits)`);
   const up = k => t.tiers.every((r, i) => i === 0 || r[k] >= t.tiers[i - 1][k]), strictly = k => t.tiers[1][k] > t.tiers[0][k] && t.tiers[2][k] > t.tiers[1][k];
   check(up('hull') && strictly('hull'), 'more hull each time', t.tiers.map(r => r.hull).join(', '));
   check(up('hits') && strictly('hits') && t.tiers[0].hits > t.ord.hits, `its turrets take more hits each time, and more than an ordinary turret from the first  [${t.tiers.map(r => r.hits).join(', ')} against ${t.ord.hits}]`, JSON.stringify(t));
   check(t.tiers.every((r, i) => i === 0 || r.gap <= t.tiers[i - 1].gap) && t.tiers[1].gap < t.tiers[0].gap && t.tiers[0].gap <= 1, 'its guns fire faster each time it comes back, starting from an ordinary turret\'s rate', t.tiers.map(r => r.gap).join(', '));
-  check(t.tiers.every(r => r.turrets <= 7 && r.turrets >= 5) && t.tiers[1].turrets > t.tiers[0].turrets, 'more turrets each time, up to the seven it has mounts for', t.tiers.map(r => r.turrets).join(', '));
-  check(t.tiers.every(r => r.scale >= 2 * t.typical), `at least double the size of a typical ship  [${t.tiers[0].scale} against ${t.sizes}]`, t.tiers.map(r => r.scale).join(', '));
+  check(t.tiers.every(r => r.turrets <= 12 && r.turrets >= 4) && t.tiers[1].turrets > t.tiers[0].turrets, 'more turrets each time, up to the twelve it has mounts for', t.tiers.map(r => r.turrets).join(', '));
+  check(up('shield') && strictly('shield') && up('gen') && strictly('gen'), 'a bigger shield and a tougher generator each time', JSON.stringify(t.tiers));
+  check(t.tiers.every(r => Math.abs(r.lost / r.hull - 0.04) < 0.005), 'a turret lost costs it 4% of its hull, at every tier', t.tiers.map(r => (100 * r.lost / r.hull).toFixed(1) + '%').join(', '));
 }
 
-console.log('\n— same rules as any capital ship —');
+console.log('\n— what makes it a dreadnought —');
 {
-  const m = await run(`startRound(15); var f = bossF, out = [];
-    f.turrets.forEach(function (t, i) { var up = t.local.y > 0 ? 1 : -1, on = t.local.clone(); on.y -= up * 1.6; out.push({ i: i, outside: !inHull(t.local), seated: inHull(on) }); });
+  // The mounts: each sits outside the hull and against it, and between them they face every way.
+  const m = await run(`startRound(20); var f = bossF, out = [], c = new THREE.Vector3();
+    f.turrets.forEach(function (t, i) { var inw = t.local.clone().multiplyScalar(1 - 6 / t.local.length()); if (Math.abs(t.local.y) > 1) { inw.copy(t.local); inw.y -= Math.sign(t.local.y) * 6; }
+      out.push({ i: i, outside: !f.inHull(t.local), seated: f.inHull(inw), x: Math.round(t.local.x), y: Math.round(t.local.y), z: Math.round(t.local.z) }); });
     JSON.stringify(out)`);
-  check(m.length === 7 && m.every(t => t.outside && t.seated), 'all seven turret mounts sit on the hull: none buried in it, none floating off it', m.filter(t => !(t.outside && t.seated)).map(t => JSON.stringify(t)));
+  check(m.length === 12 && m.every(t => t.outside && t.seated), 'all twelve turret mounts sit on the hull: none buried in it, none floating off it', m.filter(t => !(t.outside && t.seated)).map(t => JSON.stringify(t)));
+  const sides = { above: m.some(t => t.y > 2), below: m.some(t => t.y < -2), xp: m.some(t => t.x > 30), xn: m.some(t => t.x < -30), zp: m.some(t => t.z > 30), zn: m.some(t => t.z < -30) };
+  check(Object.values(sides).every(Boolean), 'and between them they cover above, below and all four sides', JSON.stringify(sides));
 
-  const k = await run(`startRound(5); M.step(160); var f = bossF, ic0 = ics.filter(function (c) { return c.alive; }).length;
-    hitCapital(f, f.hp + 1);
+  // The shield, and the generator that feeds it.
+  const sh = await run(`startRound(5); damage = function () {}; var f = bossF, o = {};
+    hitCapital(f, 300); o.hullAfterHit = f.hp === f.maxHp; o.shieldDown = Math.round(f.shieldMax - f.shield);
+    M.step(120); o.refilled = f.shield === f.shieldMax;
+    var n = 0; o.genWas = f.gen.hp; while (f.gen.hp > 0 && n < 9999) { hitGenerator(f, 1 * dmgMul(), f.ship.position); n++; } o.genHits = n; o.readout = readoutEl.textContent;
+    hitCapital(f, f.shieldMax + 50); o.through = f.maxHp - f.hp; o.shieldGone = f.shield === 0;
+    M.step(300); o.stayedDown = f.shield === 0 && f.gen.hp === 0; o.shellHidden = !f.shell.visible;
+    JSON.stringify(o)`);
+  check(sh.hullAfterHit && sh.shieldDown === 300, 'the shield takes the hit and the hull is untouched', JSON.stringify(sh));
+  check(sh.refilled, 'while the generator lives the shield refills', JSON.stringify(sh));
+  check(sh.genHits === sh.genWas && sh.genHits >= 100 && /Dreadnought 100%/.test(sh.readout), `the generator can be destroyed  [${sh.genHits} hits at base damage], and the readout turns to the hull`, JSON.stringify(sh));
+  check(sh.shieldGone && sh.through === 50 && sh.stayedDown && sh.shellHidden, 'after that the shield can be shot away, what is left over reaches the hull, and neither comes back', JSON.stringify(sh));
+
+  // Turrets can be shot through the shield, and come back after ten seconds.
+  const tr = await run(`startRound(5); damage = function () {}; var f = bossF, t = f.turrets[0], n = 0, o = {};
+    o.shieldUp = f.shield === f.shieldMax;
+    while (t.hp > 0 && n < 99) { hitTurret(f, t, 1, t.local); n++; } o.hits = n; o.gone = !t.pivot.visible;
+    M.step(30 * 9); o.at9 = t.hp; M.step(45); o.at10 = t.hp; o.back = t.pivot.visible; o.bare = f.turrets.filter(function (x) { return !x.fitted; }).length;
+    M.step(30 * 30); o.bareStill = f.turrets.filter(function (x) { return !x.fitted && x.hp > 0; }).length;
+    JSON.stringify(o)`);
+  check(tr.shieldUp && tr.hits === 8 && tr.gone, 'a turret can be destroyed while the shield is up  [8 hits]', JSON.stringify(tr));
+  check(tr.at9 === 0 && tr.at10 === 8 && tr.back, 'and is back, whole, ten seconds later: not at nine', JSON.stringify(tr));
+  check(tr.bare === 8 && tr.bareStill === 0, 'a mount this tier does not carry stays bare', JSON.stringify(tr));
+
+  // The bays.
+  const by = await run(`startRound(5); damage = function () {}; var o = { n: [] }, last = 0, t0 = time, f = bossF;
+    M.step(30 * 100, function () { var n = ics.filter(function (c) { return c.alive; }).length; if (n !== last) { o.n.push([+(time - t0).toFixed(0), n]); last = n; } });
+    o.maxUp = Math.max.apply(null, o.n.map(function (x) { return x[1]; }));
+    var c = f.ship.position; o.clear = ics.filter(function (x) { return x.alive; }).every(function (x) { return !f.inHull(f.ship.worldToLocal(x.pos.clone())); });
+    JSON.stringify(o)`);
+  const at = by.n.map(x => x[0]), up = by.n.map(x => x[1]);
+  check(up[0] === 2 && up[1] === 4 && up[2] === 6 && Math.abs(at[1] - at[0] - 30) <= 1 && Math.abs(at[2] - at[1] - 30) <= 1,
+    `two interceptors leave its bays every 30 seconds  [flying: ${by.n.map(x => x[1] + ' at ' + x[0] + 's').join(', ')}]`, JSON.stringify(by));
+  check(by.maxUp === 6, 'and never more than six are flying, however long they are left alone', JSON.stringify(by));
+
+  const k = await run(`startRound(5); damage = function () {}; M.step(300); var f = bossF, ic0 = ics.filter(function (c) { return c.alive; }).length;
+    f.shield = 0; f.gen.hp = 0; hitCapital(f, f.hp + 1);
     var r = { ic0: ic0, live: roundLive, dying: f.dying > 0, icModes: ics.filter(function (c) { return c.alive; }).map(function (c) { return c.mode; }).join(''), note: noteEl.textContent };
-    startRound(6); r.next = M.census(); JSON.stringify(r)`);
+    var t = f.turrets[0]; t.hp = 0; t.back = 0.1; M.step(30); r.noRebuild = t.hp === 0;
+    startRound(6); r.next = M.census(); r.icNext = icWant; JSON.stringify(r)`);
   check(!k.live && k.dying && /cleared/.test(k.note), 'sinking it clears the round', JSON.stringify(k));
-  check(k.ic0 === 2 && k.icModes === '33', 'and its interceptors turn for home', JSON.stringify(k));
-  check(k.next.boss === 0 && k.next.ships === 6, 'the round after is ordinary again, with the ship count carrying on  [6 ships]', JSON.stringify(k.next));
+  check(k.ic0 === 2 && k.icModes === '33' && k.noRebuild, 'its interceptors turn for home, and nothing rebuilds on a sinking ship', JSON.stringify(k));
+  check(k.next.boss === 0 && k.next.ships === 6 && k.icNext === 2, 'the round after is ordinary again: 6 ships, and interceptors from the far fight as before', JSON.stringify(k.next));
 }
 
 // ------------------------------------------------------------ the fight
@@ -103,13 +144,15 @@ async function fight(round, ups, label) {
     ${ups}
     startRound(${round}); hull = maxHull();
     var R = { lost: 0, hits: 0, secs: null, turretsLeft: 0 }, t0 = time, f = bossF, tp = new THREE.Vector3(), away = false;
-    damage = function (n) { R.lost += n; R.hits++; };
+    R.by = { ram: 0, interceptors: 0, turrets: 0 };
+    damage = function (n) { R.lost += n; R.hits++; R.by[n === 15 ? 'ram' : n === 10 ? 'interceptors' : 'turrets'] += n; };   // told apart by what each one does: 15, 10, 8
     M.step(30 * 300, function () {
       if (!roundLive) { R.secs = +(time - t0).toFixed(1); return false; }
-      var tgt = null, bd = 1e9;
-      f.turrets.forEach(function (t) { if (t.hp > 0) { t.pivot.getWorldPosition(tp); var d = tp.distanceTo(shipPos); if (d < bd) { bd = d; tgt = tp.clone(); } } });
-      if (!tgt) { tgt = f.ship.position.clone(); bd = tgt.distanceTo(shipPos); }
-      if (bd < 45) away = true; else if (bd > 170) away = false;      // fly through, out the far side, round again
+      // the generator first, then the spindle: it never shoots a turret or an interceptor on purpose
+      var tgt = f.gen.hp > 0 ? f.ship.position.clone() : f.ship.localToWorld(new THREE.Vector3(0, 30, 0)), bd = tgt.distanceTo(shipPos);
+      if (f.gen.hp <= 0 && R.genAt === undefined) R.genAt = +(time - t0).toFixed(1);
+      R.icPeak = Math.max(R.icPeak || 0, ics.filter(function (c) { return c.alive; }).length);
+      if (bd < 75) away = true; else if (bd > 200) away = false;      // fly through, out the far side, round again
       if (!away) {
         var dx = tgt.x - shipPos.x, dy = tgt.y - shipPos.y, dz = tgt.z - shipPos.z, flat = Math.sqrt(dx * dx + dz * dz);
         var wy = Math.atan2(-dx, -dz), wp = Math.atan2(dy, flat);
@@ -120,7 +163,7 @@ async function fight(round, ups, label) {
     });
     R.turretsLeft = f.turrets.filter(function (t) { return t.hp > 0; }).length; R.hullLeft = Math.round(f.hp / f.maxHp * 100); R.maxHull = maxHull();
     JSON.stringify(R)`);
-  console.log(`  ${label.padEnd(44)} ${r.secs === null ? ('not sunk in 300s, ' + r.hullLeft + '% left').padEnd(22) : (r.secs + 's').padEnd(22)} hit ${String(r.hits).padStart(3)} times, ${String(r.lost).padStart(4)} hull lost (you have ${r.maxHull})`);
+  console.log(`  ${label.padEnd(44)} ${r.secs === null ? ('not sunk in 300s, ' + r.hullLeft + '% left').padEnd(26) : ('sunk in ' + r.secs + 's').padEnd(26)} generator down at ${String(r.genAt === undefined ? 'never' : r.genAt + 's').padEnd(7)} most interceptors up ${r.icPeak}   ${String(r.lost).padStart(4)} hull lost of ${r.maxHull}: turrets ${r.by.turrets}, interceptors ${r.by.interceptors}, ramming it ${r.by.ram}`);
   return r;
 }
 console.log('\n— how long the fight is, and what it costs —');

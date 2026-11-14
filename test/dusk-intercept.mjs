@@ -71,6 +71,9 @@ async function fresh() {
 const LEGS = `(function () { var r = Math.sqrt(shipPos.x * shipPos.x + shipPos.z * shipPos.z); if (r > 175 || M.turning) {
   var home = Math.atan2(shipPos.x, shipPos.z), d = Math.atan2(Math.sin(home - yaw), Math.cos(home - yaw));
   M.turning = Math.abs(d) > 0.15; if (M.turning) yaw += Math.sign(d) * 1.2 / 30; } })();`;
+// An ordinary round that sends two. Not 5: every fifth round is the dreadnought, whose interceptors come from its
+// bays -- this suite went red on a correct game the day that arrived, on a fixture that named round 5.
+const ROUND = 6;
 const FLY = {
   'legs, cruising':       LEGS,
   'legs, full speed':     LEGS + 'keys.f = true;',
@@ -127,17 +130,17 @@ async function fly(name, steer, round, firing) {
 const gap = p => p.length < 2 ? null : (p[p.length - 1] - p[0]) / (p.length - 1);
 const fmt = (x, d = 1) => x === null || x === undefined || Number.isNaN(x) ? '  –' : x.toFixed(d);
 
-console.log('\n— how they fly: round 5 (two interceptors), nothing else alive, 180s —');
+console.log('\n— how they fly: round ' + ROUND + ' (two interceptors), nothing else alive, 180s —');
 console.log('  player                 passes  laps round you  close+unseen  seen before pass  in view <250m  shots  from unseen  from astern  hits on you');
 const runs = [];
 for (const [name, steer] of Object.entries(FLY)) {
-  const r = await fly(name, steer, 5, false); runs.push(r);
+  const r = await fly(name, steer, ROUND, false); runs.push(r);
   const seenAvg = r.passSeen.length ? r.passSeen.reduce((a, b) => a + b, 0) / r.passSeen.length : null;
   console.log(`  ${name.padEnd(22)} ${String(r.passes.length).padStart(5)}   ${fmt(r.laps).padStart(10)}     ${fmt(100 * r.lurk / Math.max(1, r.alive), 0).padStart(8)}%      ${fmt(seenAvg).padStart(8)}s      ${fmt(100 * r.nearSeen / Math.max(1, r.near), 0).padStart(8)}%   ${String(r.shots).padStart(5)}   ${String(r.shotsUnseen).padStart(8)}     ${String(r.shotsAstern).padStart(6)}     ${r.hits} (${r.dmg} hull)`);
 }
 const all = k => runs.reduce((a, r) => a + r[k], 0);
 check(runs.every(r => r.errors.length === 0), 'nothing threw in any run', runs.flatMap(r => r.errors));
-check(runs.every(r => r.sent === 2), 'round 5 sends two', runs.map(r => `${r.name}: ${r.sent}`));
+check(runs.every(r => r.sent === 2), 'round ' + ROUND + ' sends two', runs.map(r => `${r.name}: ${r.sent}`));
 const legs = runs.filter(r => r.name.startsWith('legs') && !r.name.includes('hard'));
 check(legs.length === 3 && legs.every(r => r.passes.length >= 12), 'flown across the map, with or without a gentle weave, a pass comes at least every 15s  [' + legs.map(r => r.passes.length).join(', ') + ' in 180s]', runs.map(r => `${r.name}: ${r.passes.length}`));
 check(all('shots') > 0 && all('shotsAstern') === 0, `no shot is ever fired from behind you  [${all('shots')} shots]`, `${all('shotsAstern')} of ${all('shots')} from astern`);
@@ -157,7 +160,7 @@ check(runs.every(r => r.left === 0 && r.roundLive), 'they are not in the "to go"
 
 console.log('\n— can you shoot one? holding Fire, base guns, no upgrades —');
 for (const name of ['legs, cruising', 'legs, gentle weave']) {
-  const r = await fly(name, FLY[name], 5, true);
+  const r = await fly(name, FLY[name], ROUND, true);
   console.log(`  ${name.padEnd(22)} kills ${r.kills} of 2 in 180s   first at ${r.firstKill === null ? 'never' : r.firstKill + 's'}   passes made ${r.passes.length}   hits on you ${r.hits}`);
   runs.push(r);
 }
@@ -173,13 +176,13 @@ console.log('\n— the rules —');
 
   await again();
   const hp = await page.evaluate(() => window.__t(`
-    startRound(5); M.quiet(); damage = function () {}; M.step(200);
+    startRound(6); M.quiet(); damage = function () {}; M.step(200);
     var ic = ics[0], n = 0; while (ic.alive && n < 9) { hitInterceptor(ic, 1 * dmgMul(), ic.pos); n++; } n`));
   check(hp === 3, 'three hits at base damage brings one down', `took ${hp}`);
 
   await again();
   const pick = await page.evaluate(() => window.__t(`
-    startRound(5); damage = function () {}; M.step(140);
+    startRound(6); damage = function () {}; M.step(140);
     var d = drones[0]; d.alive = true; d.mesh.position.copy(shipPos).addScaledVector(fwdV, 60);
     ics[1].pos.copy(shipPos).addScaledVector(fwdV, 150).addScaledVector(rightV, 12);
     pickTarget(shipPos, fwdV, 0.914, 260, 0.04)`));
@@ -187,7 +190,7 @@ console.log('\n— the rules —');
 
   await again();
   const leave = await page.evaluate(() => window.__t(`
-    startRound(5); M.quiet(); damage = function () {}; M.step(200);
+    startRound(6); M.quiet(); damage = function () {}; M.step(200);
     var before = ics.filter(function (c) { return c.alive; }).length;
     var d0 = ics[0].pos.distanceTo(shipPos) + ics[1].pos.distanceTo(shipPos);
     checkRound();
@@ -202,7 +205,7 @@ console.log('\n— the rules —');
   await again();
   // Markers: put one at a known place relative to the camera and read where its marker went.
   const marks = await page.evaluate(() => window.__t(`
-    startRound(5); M.quiet(); damage = function () {}; M.step(140);
+    startRound(6); M.quiet(); damage = function () {}; M.step(140);
     var out = {}, w = innerWidth, h = innerHeight;
     function at(name, x, y, z) {
       ics[0].pos.copy(new THREE.Vector3(x, y, z).applyQuaternion(camera.quaternion).add(camera.position));
