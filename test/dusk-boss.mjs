@@ -119,13 +119,18 @@ console.log('\n— what makes it a dreadnought —');
     hitCapital(f, 300); o.hullAfterHit = f.hp === f.maxHp; o.shieldDown = Math.round(f.shieldMax - f.shield);
     M.step(120); o.refilled = f.shield === f.shieldMax;
     var n = 0; o.genWas = f.gen.hp; while (f.gen.hp > 0 && n < 9999) { hitGenerator(f, 1 * dmgMul(), f.ship.position); n++; } o.genHits = n; o.readout = readoutEl.textContent; M.step(2); o.ringGone = !f.gen.ring.visible;
-    hitCapital(f, f.shieldMax + 50); o.through = f.maxHp - f.hp; o.shieldGone = f.shield === 0;
-    M.step(300); o.stayedDown = f.shield === 0 && f.gen.hp === 0; o.shellHidden = !f.shell.visible;
+    o.shieldGone = f.shield === 0; M.step(2); o.shellHidden = !f.shell.visible && !f.net.visible;
+    hitCapital(f, 50); o.through = f.maxHp - f.hp;
+    M.step(300); o.stayedDown = f.shield === 0 && f.gen.hp === 0 && !f.shell.visible;
+    // with the core gone, is the upper half still joined to the lower? walk the centre line and look for a gap in the hull
+    o.gap = 0; for (var y = -47; y <= 47; y += 0.5) if (!f.inHull(new THREE.Vector3(0, y, 0))) o.gap++;
     JSON.stringify(o)`);
   check(sh.hullAfterHit && sh.shieldDown === 300, 'the shield takes the hit and the hull is untouched', JSON.stringify(sh));
   check(sh.refilled, 'while the generator lives the shield refills', JSON.stringify(sh));
   check(sh.ringGone && sh.genHits === sh.genWas && sh.genHits >= 100 && /Dreadnought 100%/.test(sh.readout), `the generator can be destroyed  [${sh.genHits} hits at base damage], and the readout turns to the hull`, JSON.stringify(sh));
-  check(sh.shieldGone && sh.through === 50 && sh.stayedDown && sh.shellHidden, 'after that the shield can be shot away, what is left over reaches the hull, and neither comes back', JSON.stringify(sh));
+  check(sh.shieldGone && sh.shellHidden, 'the shield falls the moment the generator does, and is gone from the screen', JSON.stringify(sh));
+  check(sh.through === 50 && sh.stayedDown, 'the next hit lands on the hull in full, and the shield never comes back', JSON.stringify(sh));
+  check(sh.gap === 0, 'with the core gone the two halves of the spindle are still joined: no gap anywhere down its centre line', `${sh.gap} half-unit steps of open air`);
 
   const rg = await run(`startRound(5); damage = function () {}; var f = bossF, o = [];
     function lit() { return f.gen.segs.filter(function (s) { return s.material.color.getHex() === 0x9dff6a; }).length; }

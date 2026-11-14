@@ -122,7 +122,7 @@ both checks red.
 
 None of this says how it feels. That is his to judge on the phone.
 
-## The dreadnought (build `dreadnought-3`)
+## The dreadnought (build `dreadnought-4`)
 
 Every fifth round is one fortress, alone: a split spindle, the shield's generator hanging in
 the gap, a ring of guns slung below it, a shield round the whole, and a bay at each end.
@@ -148,6 +148,11 @@ the gap, a ring of guns slung below it, a shield round the whole, and a bay at e
 - **The generator shows its health.** He shot the core, "nothing was happening", and moved
   to the structure: "perhaps a health bar or ring is necessary". It wears a five-segment
   ring from the start, and the round banner says to destroy it.
+- **Destroying the generator drops the shield.** His screenshot of `dreadnought-3` showed the
+  generator gone, the readout on the hull, and the shield standing at full: "the boss retains
+  there shield". It used to stop refilling and leave what was in it to be shot away.
+- **The ship stays in one piece.** Same screenshot: "the top flys on its own". The upper half
+  of the spindle was joined to nothing once the core was gone. An axle runs through the core.
 - **The interceptors are fine** as they are (three hull, 10 a shot).
 
 **Mine, on his "go with whatever you think works best".** Open to him at any time:

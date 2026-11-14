@@ -825,6 +825,7 @@
   function bossInHull(v) {
     var ax = Math.abs(v.x), ay = Math.abs(v.y), az = Math.abs(v.z);
     if (ax < 8 && az < 8 && ay > 15 && ay < 48) return true;                 // the spindle, above and below the core
+    if (ax < 2.5 && az < 2.5 && ay <= 15) return true;                       // the axle that joins them
     if (ax < 11 && az < 11 && ay > 27.5 && ay < 32.5) return true;           // cap plates
     var r = Math.sqrt(v.x * v.x + v.z * v.z);
     var ry = Math.abs(v.y - BOSS_RING_Y);
@@ -837,6 +838,7 @@
     var g = new THREE.Group(), R = BOSS_R, k, a, c, sn;
     function box(w, h, d, x, y, z, mat, ry) { var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat || bossHullMat); m.position.set(x, y, z); if (ry) m.rotation.y = ry; g.add(m); return m; }
     box(16, 33, 16, 0, 31.5, 0); box(16, 33, 16, 0, -31.5, 0);
+    box(5, 30, 5, 0, 0, 0, darkMat); // the axle through the core. Without it the upper half hung in the air once the generator was gone (Sam: "the top flies on its own")
     box(22, 5, 22, 0, 30, 0, darkMat); box(22, 5, 22, 0, -30, 0, darkMat);
     box(12, 3, 12, 0, 49.5, 0, bossBayMat); box(12, 3, 12, 0, -49.5, 0, bossBayMat); // the two bays
     for (k = 0; k < 8; k++) {
@@ -927,6 +929,9 @@
     gn.hp -= dmg; gn.flash = 0.2; paintRing(gn);
     if (gn.hp <= 0) {
       gn.hp = 0; gn.pivot.visible = false;
+      // THE SHIELD GOES WITH IT, AT ONCE. It used to stop refilling and leave what was in it to be shot away, which on
+      // the screen was a generator destroyed and a shield still standing at full (Sam: "the boss retains their shield").
+      f.shield = 0; f.shieldGlow = 1;
       gn.pivot.getWorldPosition(fleetTmp); boom(fleetTmp, true); chainBlast(fleetTmp, 1.5);
       sfx('shieldDown', fleetTmp); banner('Shield generator destroyed', 2.5);
     } else boom(at, false);
@@ -2906,7 +2911,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'dreadnought-3', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'dreadnought-4', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +
