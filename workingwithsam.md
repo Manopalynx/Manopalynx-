@@ -189,7 +189,7 @@ One branch, `main`, carries five projects sharing no code.
 
 **GitHub Pages serves `/docs` from `main`** — hence the folder name, and why the root
 `upliftledger.html` and `matchbox.html` are unpublished; `test/published.mjs` asserts
-`docs/matchbox.html` is byte-identical. **Three apps share one service worker**, and
+`docs/matchbox.html` is byte-identical. **Every app there shares one service worker**, and
 `addAll` is atomic: one bad path in `docs/sw.js` costs every app its files. `[12]` **The
 repository is public** — so anything written here is published, fixtures and examples too.
 
@@ -244,7 +244,7 @@ code attached to a wrapper `echo`. **When a check fails, ask whether the asserti
 before touching code**, and **prefer a differential to an absolute**: render twice, on and off,
 and diff. But **a differential needs a control that is neither option, and an arm differing
 from it in one thing only**: a mirror baseline was 23%, not 50%; and "prefer X, else take
-another" flattered all five boosters — an unimplemented one scored +0.58. `[3,4,5,7,8,12]`
+another" flattered all five boosters — an unimplemented one scored +0.58. `[3,4,5,7,8,12,15]`
 
 **The thing that is broken is the thing nothing complains about.** Nine ledger defects; five
 capabilities an opponent never had; a `fitLabels` no-op since it was written; a document that
@@ -266,7 +266,7 @@ restate — then check that the screen derived too.** `[2,4,5,7]`
 — the reverse, a player action no opponent had, and why the money pump survived every sweep.
 **Enumerate both directions whenever the action surface grows.** Its cousin: **a rule that
 exists but never fires** — check a mechanic fires at all before tuning it, and look for a
-second lock after removing the first. `[3,7]`
+second lock after removing the first. `[3,7,15]`
 
 **The guard for a defect class is a sweep, not a test of the instance.** `pump.test.mjs`
 drives every reversible action round its own loop; a test naming the citadel would have
@@ -283,7 +283,7 @@ wrong on five balance levers across two sessions, always the same way: a credit 
 becomes rent, and rent concentrates. **Measure combinations**, and ask what the harness does
 *not* do before quoting a figure — `sweep.mjs` seated two humans and **Sam plays one against
 three**. **And who sits in the seat**: he reached match five where the best policy reached
-it in 0 of 400 runs, so every difficulty figure described a weaker player. `[7,13]`
+it in 0 of 400 runs, so every difficulty figure described a weaker player. `[7,13,15]`
 
 **Interface copy goes stale in meaning while its digits stay right** — worse than a stale
 number, which is wrong once, because a false sentence misleads a decision. An upkeep bill

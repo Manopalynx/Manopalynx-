@@ -3095,3 +3095,87 @@ permanently in `skipped` until the suite was made to *take* the booster it has a
 
 And **`git add -A` swept a scratch probe into a commit.** Caught before pushing, amended out.
 Stage what you changed.
+
+## Instance 15 — 13–14 November 2026
+
+He opened with "go through your set up and let me know when you're done". Setup found the
+browser suites dead; then he handed over a game from a claude.ai artifact and the session
+became the longest single build of a project here: *A small world at dusk*, moved into the
+repository, given interceptors, and given three bosses. Two worker restarts and a model switch
+mid-session, none of which lost work, because everything was committed as it landed.
+
+### The pin was exact, correct as written, and dead
+
+The hook said Chromium would not launch. `package.json` pinned Playwright to exactly `1.56.0`,
+just as `workingwithsam.md` instructed, and that was the fault: the image had moved from
+Chromium build 1194 to 1243, which belongs to Playwright 1.63.0, so the documented cure
+reproduced the failure. Pinned to 1.63.0, five Grandiose probes still died, because each
+hard-coded the 1194 path; they take the `/opt/pw-browsers/chromium` alias now. The hook now
+reads the image's own global Playwright version and prints *"the pin is X, the machine wants
+Y"* instead of asking about a caret.
+
+Running every suite on the new browser found two more reds, both in the checks: `selling.probe`
+expected two buttons on a sheet that had had three since Counter arrived — nobody had seen it
+because the probe could not launch — and `ui.probe` needed more than the 250s I gave it. The
+matchbox sim was cut off by the one-hour background limit at 89 passes and its one "failure"
+was the cut; rerun alone, 96 of 96.
+
+### Dusk: moved in, and its own document
+
+The artifact came with a handoff note from a previous chat. I moved it to `docs/dusk/` with
+exactly two lines changed (three.js beside the page instead of a CDN, the BUILD tag), and the
+note became `docs/dusk/README.md` with his rulings marked as his and the earlier session's
+fills marked as fills. Everything since is in that document; this section is the record of
+how, not a second copy of what.
+
+### Interceptors flew in circles, and my harness had passed them
+
+`interceptors-1` passed every check. His first words were *"They just seem to fly in circles
+around me."* They steered for a point tied to where his nose pointed; anyone who turned dragged
+it round the sky. My main stand-in flew straight legs across the map, which nobody with an
+arrow on the screen does. I had a "circling" row showing it and filed it as an edge case. A
+stand-in that turns to face them reproduced him exactly — 3.2 laps round him per pass, 81% of
+the time close and off screen — and both measures are asserted now. **The catalogue's "who sits
+in the seat" line, a third time.**
+
+### The dreadnought: four builds, three of them found by him
+
+- *"It looks like the capital ship scaled up"* and *"I'm just left shooting a defenceless
+  ship"*. I had told him each turret took a tenth of the hull without working out that five
+  turrets left half the hull defenceless. Rebuilt as a fortress chosen from three rendered
+  mock-ups — the tall one, because his screen is tall and the wide two ran off it.
+- *"With no upgrades I'm not able to break through the shields."* The numbers were bad, but the
+  real fault was worse: the ring of guns sat level with the generator, and **of 160 bolts aimed
+  at the core from level, none arrived**. 33 green checks, and not one fired at the thing to be
+  shot and counted. Every boss since has had a line-of-fire check from the first build.
+- A screenshot: generator destroyed, shield still at full, and the top half of the spindle
+  hanging in the air. Both fixed and asserted.
+
+### The ice wall and the walker
+
+His design for the wall was one sentence with three autocorrected words in it; I read it back
+before building and he confirmed. The ground really comes down: a section's crack destroyed,
+its strip of terrain is rebuilt in eight steps, and the suite asserts every one of 48,841
+points is where the game thinks the ground is at each step. *"Rather easy"* — so guard towers
+and drones.
+
+The walker's first gait starved one set of legs (118 steps against 22, one foot left 290
+behind); the suite caught it before he saw it. Its first fight could not be won without
+upgrades, then was too easy with them; three rounds of tuning, each from a measurement.
+
+### Instruments wrong this session, in roughly the order found
+
+Five, each of which would have produced a confident wrong answer: a stale probe on a sheet
+that had grown a button; a fixture that named round 5 and went red the day round 5 became a
+boss round; a comment that swallowed a line of the fight code and crashed the suite; a
+line-of-fire check counting shots through solid rock as misses; and a stopwatch started a
+tick after the event it timed. The stand-in in the wrong seat makes six.
+
+### What I would tell the next instance
+
+Read `docs/dusk/README.md` before touching the shooter. Every boss has a suite; run all seven
+(`dusk`, `dusk-intercept`, `dusk-boss`, `dusk-wall`, `dusk-arena`, `dusk-lava`, `dusk-walker`)
+one at a time, never two at once. Render a frame before claiming anything looks right: the
+dark slab, the shadow with legs and the dim dreadnought were all found that way. Open, his to
+decide: the softer first dreadnought generator, a lives system, and offline and a Home Screen
+icon for the game. He said three bosses is enough for now.
