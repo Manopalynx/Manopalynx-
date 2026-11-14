@@ -592,12 +592,85 @@ compares against its typical level, not the moment's.
 
 **None of this says how it sounds.** It is measured as a signal, never heard here.
 
+## Chapters and bigger arenas: the design, proposed and not built
+
+**Sam's idea:** "every 5 rounds it moves to a new and larger arena because the enemy numbers keep
+getting larger", the maps themed on the bosses or original; and "an opportunity to try and add
+some variety rather than copy and paste an open empty landscape like the first one mostly is".
+He left the four open questions to me ("go with what you think works best"). **Everything below
+is mine on that say-so, for him to check before any of it is built.**
+
+### The shape
+
+- **A chapter is five rounds: four ordinary, then its boss, in one arena.** The boss is fought on
+  ground you have spent four rounds learning. The move comes after the boss, behind the upgrade
+  cards, and the next round's banner names the place ("Chapter 2 · The Ice Field").
+- **Each arena is its boss's landscape**: the dusk hills (the dreadnought), the ice field (the
+  wall), the lava field (the walker). In the ice chapter the wall stands quiet in the middle for
+  four rounds and wakes at the fifth.
+- **The order: the dusk hills first, then the ice and the lava in random order**, then round again,
+  the dusk hills then the other two in random order. This bends his earlier "bosses are random" for
+  the first boss only, which is now always the dreadnought: the game is called *at dusk*, and a run
+  should open there. From the second boss on, the order differs from run to run.
+- **The arenas grow so the spacing stays what round 4 has now**, and stop growing at chapter 4:
+
+| chapter | enemies by its last ordinary round | width you can fly | crossing at full speed | ground points |
+|---|---|---|---|---|
+| 1 | 44 | 444 (today) | 9 s | 49,000 |
+| 2 | 99 | about 650 | 14 s | about 86,000 |
+| 3 | 154 | about 770 | 16 s | about 118,000 |
+| 4 and on | 209 and more | about 880 | 19 s | about 155,000 |
+
+  From chapter 5 on, the arenas are full size and only the fights grow. Rebuilding the ground took
+  55 to 80 ms here at today's size, so about a fifth of a second at full size, once a chapter,
+  behind the cards.
+- **The ordinary rounds take a little of their place's danger.** In the lava chapter the volcano
+  erupts in the ordinary rounds too, with half the bombs. On the ice, nothing extra: the wall is
+  enough. The time of day and the weather carry on as now.
+
+### Variety: places, not a bigger empty plain
+
+**Every feature is built into the ground itself**, because the ground is what stops fire: enemy
+shots and missiles end where they meet it, and so do your bolts (`strike`). A canyon is cover from
+a missile site; a pillar is cover from a drone. Arches and overhangs could not be: the ground is a
+height at each point, so nothing can be above open air. **Each arena is made of regions, each asking
+for a different way to fly**, and enemies are placed by region, which is where the queued "ground
+units grouped into bases" lands.
+
+- **The ice field.** The wall across the middle. **Crevasses**: canyons cut down into the plain,
+  deep enough to fly in below the surface, out of the missile sites' sight. **A frozen lake**: flat,
+  glassy and open, nowhere to hide, where the drones gather. **A field of ice spires** to weave
+  through. **An outpost**: a walled compound with its guns grouped inside, to be dived on.
+- **The lava field.** The volcano at the rim and the rivers there now. **A forest of basalt
+  columns**, hexagonal and of different heights, for weaving and for cover. **A lava lake with
+  islands**, a battery on each. **A rift valley**: one long, deep cut across the field.
+- **The dusk hills, when the order comes round again at full size.** The landing pad becomes a
+  base. **A river canyon** winding across, **mesas** with flat tops for gun sites, and the hills
+  between. Chapter 1 stays as it is now: the open introduction, so the second chapter lands.
+
+### What has to change underneath
+
+About forty distances in the code assume today's map: the edge at 222, the spawn rings at 205, the
+far ridges at 430 to 670 (which would sit inside a full-size map), the fog veil at 260, the towers,
+the far fight. **Each will follow the arena's size**, with a suite that builds every arena at every
+size and checks nothing spawns in rock, over the edge, or inside a feature. **The ice wall's
+collapse** recomputes the shading across the whole map at each of its eight steps; on a map three
+times the size that is a hitch, so it will recompute only the strip that fell.
+
+### Built in stages, each merged with its own version, each shown as renders first
+
+1. Chapters: the move every five rounds and the order, at today's size.
+2. Size: every distance following the arena, and the arenas growing.
+3. The ice field's regions.
+4. The lava field's regions.
+5. The dusk hills at full size, for the second time round.
+
 ## Queued, in the agreed order
 
 1. Wrecks of downed capital ships that stay for the run.
 2. ~~Time of day moving on each round.~~ Built: the time of day, the weather and its sound, above.
-3. Ground units grouped into bases.
-4. Canyons for cover.
+3. Ground units grouped into bases. (Proposed as part of the chapters' regions, above.)
+4. Canyons for cover. (Likewise: crevasses, the rift, the river canyon.)
 5. ~~A boss every fifth round.~~ Built: the dreadnought, above.
 
 Also noted: once interceptors exist, invulnerable wingmen will look odd.
