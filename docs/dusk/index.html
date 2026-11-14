@@ -2550,7 +2550,7 @@
       pos.needsUpdate = true;
     }
   }
-  function wxBolt() {} // the thunder, in the sound change; here so the flash has somewhere to call
+  function wxBolt() { thunder(); }
 
   // ---------- rounds ----------
   var round = 1, roundLive = false, nextT = 0, bannerT = 0, best = 0;
@@ -3817,6 +3817,57 @@
     aEng.o1.frequency.setTargetAtTime(38 + speed * 1.2, t, 0.08);
     aEng.o2.frequency.setTargetAtTime(38 + speed * 1.2, t, 0.08);
     aEng.f.frequency.setTargetAtTime(140 + speed * 9, t, 0.08);
+    wxsFrame();
+  }
+
+  // ---------- the weather's sound: background, under the music ----------
+  // Sam: weather has sound, "but background sound". MINE: three beds that loop for as long as the weather lasts and
+  // fade in and out with it -- a hiss for rain (softer and duller for snow), wind that swells with each gust, a dry
+  // crackle for falling ash -- and thunder, low and far off, a second or two after each flash. Fog is silent: the
+  // quiet is the point. They go out with the effects, so "effects only" keeps them and "silent" does not.
+  // levels measured against the music in calm (test/dusk-wxsound.mjs): first set, rain was as loud as the music and a
+  // storm louder; these put each bed some 7 to 10 dB under it
+  var WXS_VOL = { rain: 0.03, snow: 0.014, wind: 0.022, crackle: 0.06, thunder: 0.16 }, wxs = null;
+  function wxsBuild() {
+    var bus = actx.createGain(); bus.gain.value = 1; bus.connect(aSfx);
+    function bed(buf, filt, f, q) {
+      var src = actx.createBufferSource(); src.buffer = buf; src.loop = true;
+      var fl = actx.createBiquadFilter(); fl.type = filt; fl.frequency.value = f; fl.Q.value = q || 0.7;
+      var g = actx.createGain(); g.gain.value = 0;
+      src.connect(fl); fl.connect(g); g.connect(bus); src.start();
+      return { src: src, f: fl, g: g };
+    }
+    // the crackle: a second of silence with a few dozen short clicks in it, looped
+    var len = actx.sampleRate, cb = actx.createBuffer(1, len, actx.sampleRate), cd = cb.getChannelData(0);
+    for (var k = 0; k < 40; k++) { var at = Math.floor(Math.random() * (len - 200)), amp = 0.3 + Math.random() * 0.7; for (var j = 0; j < 120; j++) cd[at + j] += (Math.random() * 2 - 1) * amp * Math.exp(-j / 25); }
+    return { bus: bus, rain: bed(aNoise, 'bandpass', 3200, 0.5), wind: bed(aNoise, 'lowpass', 320, 1.4), crackle: bed(cb, 'highpass', 900) };
+  }
+  // once a frame: each bed towards where the weather wants it
+  function wxsFrame() {
+    if (!actx || actx.state !== 'running') return;
+    if (!wxs) wxs = wxsBuild();
+    var t = actx.currentTime, W = WX[wx], rain = 0, wind = 0, crack = 0, falls = W.fall > 0;
+    if (falls && arena === 0) rain = WXS_VOL.rain;
+    if (falls && arena === 1) rain = WXS_VOL.snow * (W.wind ? 1.3 : 1);
+    if (falls && arena === 2) crack = WXS_VOL.crackle * (W.wind ? 1.4 : 1);
+    // the wind follows the gust: a low breath between them, a swell through them
+    if (W.wind) { var gk = Math.min(1, wind_len() / WX_GUST); wind = WXS_VOL.wind * (0.25 + 0.75 * gk); wxs.wind.f.frequency.setTargetAtTime(240 + 520 * gk, t, 0.3); }
+    wxs.rain.f.frequency.setTargetAtTime(arena === 1 ? 1400 : 3200, t, 0.2); // snow is a softer, duller hiss
+    wxs.rain.g.gain.setTargetAtTime(rain, t, 0.6);
+    wxs.wind.g.gain.setTargetAtTime(wind, t, 0.35);
+    wxs.crackle.g.gain.setTargetAtTime(crack, t, 0.6);
+  }
+  function wind_len() { return Math.sqrt(wind.x * wind.x + wind.z * wind.z); }
+  // thunder: far off, so it comes a second or two after the flash, low and long
+  function thunder() {
+    if (!actx || muted || actx.state !== 'running' || !wxs || voices >= 32) return;
+    var t = actx.currentTime + 0.8 + Math.random() * 1.4, src = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
+    src.buffer = aNoise; src.loop = true; src.playbackRate.value = 0.5;
+    f.type = 'lowpass'; f.frequency.setValueAtTime(220, t); f.frequency.exponentialRampToValueAtTime(70, t + 3.5);
+    var v = WXS_VOL.thunder * (0.6 + Math.random() * 0.4);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.25); g.gain.setTargetAtTime(v * 0.35, t + 0.5, 0.4); g.gain.exponentialRampToValueAtTime(0.0001, t + 4);
+    src.connect(f); f.connect(g); g.connect(wxs.bus); src.start(t); src.stop(t + 4.1);
+    voices++; src.onended = function () { voices = Math.max(0, voices - 1); g.disconnect(); };
   }
 
   // ---------- SAM: test panel, remove when building ends ----------
@@ -3853,7 +3904,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'weather-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'weather-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +

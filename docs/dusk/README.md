@@ -565,13 +565,37 @@ both weathers; a lightning counter that looked for a flash above 0.9 when a flas
 that within its first tick; a wind measure that kept only the sideways part of the push, so a wind
 of 10.9 read as 6.8; and a fog check that asked for a half of a distance its own list had capped.
 
-**Not settled:** how a storm's push feels on the phone; whether fog at 130 is too much; frame time
-with 1,400 drops on his phone, which nothing here can measure.
+**Sam, on the phone:** "Fog is looking good." Fog at 130 stands.
+
+**Not settled:** how a storm's push feels on the phone; frame time with 1,400 drops on his phone,
+which nothing here can measure.
+
+### The weather's sound (build `weather-2`)
+
+**His ruling:** weather has sound, "but background sound". **Mine:** three beds that loop while
+the weather lasts and fade with it: a hiss for rain, softer and duller for snow; wind that swells
+with each gust; a dry crackle for falling ash. Thunder comes low and far off, 0.8 to 2.2 seconds
+after each flash, and rolls for about three. **Fog is silent**: the quiet is the point. The beds
+go out with the effects, so "effects only" keeps them and "silent" stops them, thunder included.
+
+**Measured** by `test/dusk-wxsound.mjs`, with the browser's tap-to-start rule on, as on a phone.
+Nothing is built before the first tap. Loudness out of the weather's own bus, against the music in
+calm, where it is quietest (about -33 dB):
+
+| clear, fog | rain | storm | snow | blizzard | ash | thunder at its peak |
+|---|---|---|---|---|---|---|
+| silent | -41 dB | -40 dB | -49 dB | -48 dB | -53 dB | -37 dB |
+
+**First set, rain was as loud as the music and a storm louder** (-31 dB against -34). They are now
+7 dB or more under it. The music's own level wanders by 4 dB with the bar it is in, so the check
+compares against its typical level, not the moment's.
+
+**None of this says how it sounds.** It is measured as a signal, never heard here.
 
 ## Queued, in the agreed order
 
 1. Wrecks of downed capital ships that stay for the run.
-2. ~~Time of day moving on each round.~~ Built: the time of day and the weather, above. The weather's sound next.
+2. ~~Time of day moving on each round.~~ Built: the time of day, the weather and its sound, above.
 3. Ground units grouped into bases.
 4. Canyons for cover.
 5. ~~A boss every fifth round.~~ Built: the dreadnought, above.
@@ -604,6 +628,7 @@ node test/dusk-walker.mjs      # the walker's fight: knees, the fall, the core, 
 DUSK_QUICK=1 node test/dusk-walker.mjs   # its rules without the fights, for mutation runs: a minute instead of several
 node test/dusk-time.mjs        # the time of day: the cycle, dusk unchanged, each sky its own, and whether enemies still stand out
 node test/dusk-weather.mjs     # the weather: the draw, nothing stacking, how far you see in fog, the wind, lightning, who gets pushed
+node test/dusk-wxsound.mjs     # the weather's sound: nothing before a tap, each bed under the music, thunder after its flash, the sound modes
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between
