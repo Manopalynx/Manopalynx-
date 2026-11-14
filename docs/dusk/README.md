@@ -122,10 +122,10 @@ both checks red.
 
 None of this says how it feels. That is his to judge on the phone.
 
-## The dreadnought (build `dreadnought-2`)
+## The dreadnought (build `dreadnought-3`)
 
-Every fifth round is one fortress, alone: a split spindle through a ring of guns, a shield
-round the whole of it, the shield's generator hanging at its core, and a bay at each end.
+Every fifth round is one fortress, alone: a split spindle, the shield's generator hanging in
+the gap, a ring of guns slung below it, a shield round the whole, and a bay at each end.
 
 **Sam's rulings, in his words where quoted:**
 
@@ -144,6 +144,11 @@ round the whole of it, the shield's generator hanging at its core, and a bay at 
 - **The readout shows what you are fighting** instead of "to go"; **the reward is the normal
   pick of three cards**; **dying to it is a normal death**, back to round 1. He wants to
   discuss lives, or an upgrade that gives an extra life. Not yet discussed.
+
+- **The generator shows its health.** He shot the core, "nothing was happening", and moved
+  to the structure: "perhaps a health bar or ring is necessary". It wears a five-segment
+  ring from the start, and the round banner says to destroy it.
+- **The interceptors are fine** as they are (three hull, 10 a shot).
 
 **Mine, on his "go with whatever you think works best".** Open to him at any time:
 
@@ -195,6 +200,22 @@ repair is not modelled:
 - All turrets fire whether or not they can see him: a turret on the far side of the ring
   shoots through the ship.
 - Interceptors can fly through its hull.
+
+**`dreadnought-2` could not be shot where he aimed.** The ring sat level with the core. From
+150 out, of 160 bolts aimed at the core from level, none reached it: the ring took every one
+and the shield swallowed them. The suite had 33 checks and none fired a bolt at the generator
+and counted what arrived. The ring now hangs 18 below the core:
+
+| coming in | -40° | -22° | -8° | level | +8° | +15° | +30° |
+|---|---|---|---|---|---|---|---|
+| bolts aimed at the core that reach it | 49% | 0% | 100% | 100% | 100% | 100% | 100% |
+
+So the blind side is from underneath, through the ring. That is deliberate and is the one
+approach that does not work.
+
+**Proposed and not agreed:** let sustained fire break the shield (refill only after three
+seconds without a hit), and soften the first generator from 300 hits to about 150. With no
+upgrades the stand-in still needs 75 seconds to kill the generator.
 
 **Two things the first versions got wrong, both found by measuring or by him:** the generator
 at 30 hits was down two seconds into the round; and `dreadnought-1`'s interceptor suite kept

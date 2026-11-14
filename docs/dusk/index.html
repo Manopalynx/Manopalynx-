@@ -801,7 +801,10 @@
   // be shot through it; the generator stays destroyed; a turret lost costs 4% of the hull.
   // It is an entry in `fleet`, kept last, so weapons, targeting, turret fire and the sinking already apply. What a
   // capital ship hard-codes -- its hull shape, its bounding box, where a rammer is shoved to -- it carries as its own.
-  var bossF = null, BOSS_R = 44, bossPct = -1, bossLine = '';
+  // THE RING HANGS BELOW THE CORE, NOT ROUND IT. dreadnought-2 had it level with the generator, and measured from
+  // 150 out: of 160 bolts aimed at the core from level, none arrived -- the ring took every one and the shield
+  // swallowed them. Sam, who was aiming at the core: "nothing was happening". From level and above it is now clear.
+  var bossF = null, BOSS_R = 44, BOSS_RING_Y = -18, bossPct = -1, bossLine = '';
   var bossHullMat = new THREE.MeshStandardMaterial({ color: 0x8a5a62, emissive: 0x2a0d12, roughness: 0.6, metalness: 0.4, flatShading: true }); // lit from within a little: a dark hull vanished into the dusk haze at 150
   var bossBayMat = new THREE.MeshBasicMaterial({ color: 0xff4a3a, fog: false });
   var BOSS_REBUILD = 10, BOSS_LAUNCH = 30, BOSS_IC_MAX = 6;
@@ -824,8 +827,9 @@
     if (ax < 8 && az < 8 && ay > 15 && ay < 48) return true;                 // the spindle, above and below the core
     if (ax < 11 && az < 11 && ay > 27.5 && ay < 32.5) return true;           // cap plates
     var r = Math.sqrt(v.x * v.x + v.z * v.z);
-    if (ay < 4.5 && r > BOSS_R - 5 && r < BOSS_R + 5) return true;           // the ring
-    if (ay < 2 && r < BOSS_R && (ax < 2 || az < 2) && r > 13) return true;   // the arms, outside the core
+    var ry = Math.abs(v.y - BOSS_RING_Y);
+    if (ry < 4.5 && r > BOSS_R - 5 && r < BOSS_R + 5) return true;           // the ring
+    if (ry < 2 && r < BOSS_R && (ax < 2 || az < 2) && r > 8) return true;    // the arms, from the spindle out to it
     return false;
   }
   function ensureBoss() {
@@ -837,8 +841,8 @@
     box(12, 3, 12, 0, 49.5, 0, bossBayMat); box(12, 3, 12, 0, -49.5, 0, bossBayMat); // the two bays
     for (k = 0; k < 8; k++) {
       a = k * Math.PI / 4; c = Math.cos(a); sn = Math.sin(a);
-      box(2 * R * 0.83, 9, 9, c * R, 0, sn * R, null, -a + Math.PI / 2);
-      if (k % 2 === 0) box(R - 13, 4, 4, c * (R + 13) / 2, 0, sn * (R + 13) / 2, darkMat, -a);
+      box(2 * R * 0.83, 9, 9, c * R, BOSS_RING_Y, sn * R, null, -a + Math.PI / 2);
+      if (k % 2 === 0) box(R - 8, 4, 4, c * (R + 8) / 2, BOSS_RING_Y, sn * (R + 8) / 2, darkMat, -a);
     }
     blinker(g, 0, 52, 0, 0xff5a4a, 0.9, 1.7);
     // the shield generator: the core, hanging where the spindle is split
@@ -862,9 +866,9 @@
     // the ring between the arms. In that order, so the first time it comes it is ringed and the later ones bristle.
     f.turrets = [];
     var spots = [];
-    for (k = 0; k < 4; k++) { a = k * Math.PI / 2; spots.push([Math.cos(a) * (R + 5), 0, Math.sin(a) * (R + 5), Math.cos(a), 0, Math.sin(a)]); }
-    for (k = 0; k < 4; k++) { a = k * Math.PI / 2 + Math.PI / 4; spots.push([Math.cos(a) * R, 4.5, Math.sin(a) * R, 0, 1, 0]); }
-    for (k = 0; k < 4; k++) { a = k * Math.PI / 2 + Math.PI / 4; spots.push([Math.cos(a) * R, -4.5, Math.sin(a) * R, 0, -1, 0]); }
+    for (k = 0; k < 4; k++) { a = k * Math.PI / 2; spots.push([Math.cos(a) * (R + 5), BOSS_RING_Y, Math.sin(a) * (R + 5), Math.cos(a), 0, Math.sin(a)]); }
+    for (k = 0; k < 4; k++) { a = k * Math.PI / 2 + Math.PI / 4; spots.push([Math.cos(a) * R, BOSS_RING_Y + 4.5, Math.sin(a) * R, 0, 1, 0]); }
+    for (k = 0; k < 4; k++) { a = k * Math.PI / 2 + Math.PI / 4; spots.push([Math.cos(a) * R, BOSS_RING_Y - 4.5, Math.sin(a) * R, 0, -1, 0]); }
     var upY = new THREE.Vector3(0, 1, 0), nrm = new THREE.Vector3();
     spots.forEach(function (sp) {
       nrm.set(sp[3], sp[4], sp[5]);
@@ -886,8 +890,19 @@
         arc.renderOrder = 12; ring.add(arc); segs.push(arc);
       }
       ring.visible = false; scene.add(ring);
-      f.turrets.push({ pivot: pivot, base: base, ring: ring, segs: segs, lamp: lamp, mat: tm, flash: 0, local: pivot.position.clone(), hp: 0, maxHp: 8, cool: 2, back: 0, fitted: false });
+      f.turrets.push({ pivot: pivot, base: base, ring: ring, segs: segs, lamp: lamp, mat: tm, flash: 0, local: pivot.position.clone(), nrm: nrm.clone(), hp: 0, maxHp: 8, cool: 2, back: 0, fitted: false });
     });
+    // ITS HEALTH, ROUND IT. Sam shot the core, saw nothing change, and moved to the structure: "perhaps a health bar or
+    // ring is necessary". The same five-segment ring a turret wears, large, and shown from the start rather than
+    // only once damaged -- this is the thing to shoot, and it should say so before the first hit.
+    var gring = new THREE.Group(), gsegs = [];
+    for (var gs = 0; gs < 5; gs++) {
+      var garc = new THREE.Mesh(new THREE.RingGeometry(2.7, 3.35, 14, 1, Math.PI / 2 - (gs + 1) * 1.2566 + 0.07, 1.2566 - 0.14),
+        new THREE.MeshBasicMaterial({ color: 0x9dff6a, transparent: true, opacity: 0.95, fog: false, depthTest: false, side: THREE.DoubleSide }));
+      garc.renderOrder = 12; gring.add(garc); gsegs.push(garc);
+    }
+    gring.visible = false; scene.add(gring);
+    f.gen.ring = gring; f.gen.segs = gsegs;
     addBar(f);
     fleet.push(f); bossF = f;
   }
@@ -902,14 +917,14 @@
       t.fitted = i < sp.turrets; t.back = 0; t.base.visible = t.fitted;
       if (!t.fitted) { t.hp = 0; t.pivot.visible = false; }
     }
-    f.gen.maxHp = sp.genHp; f.gen.hp = sp.genHp; f.gen.pivot.visible = true; f.gen.mat.color.set(0x8fe9ff); f.gen.flash = 0;
+    f.gen.maxHp = sp.genHp; f.gen.hp = sp.genHp; f.gen.pivot.visible = true; f.gen.mat.color.set(0x8fe9ff); f.gen.flash = 0; paintRing(f.gen);
     f.shieldMax = sp.shield; f.shield = sp.shield; f.shell.visible = f.net.visible = true;
     f.launchT = 6; // the first pair comes early, so the bays are understood; every 30 seconds after
     bossPct = -1; bossLine = '';
   }
   function hitGenerator(f, dmg, at) {
     var gn = f.gen;
-    gn.hp -= dmg; gn.flash = 0.2;
+    gn.hp -= dmg; gn.flash = 0.2; paintRing(gn);
     if (gn.hp <= 0) {
       gn.hp = 0; gn.pivot.visible = false;
       gn.pivot.getWorldPosition(fleetTmp); boom(fleetTmp, true); chainBlast(fleetTmp, 1.5);
@@ -919,8 +934,11 @@
   }
   function updateBoss(dt) {
     var f = bossF, i;
-    if (!f || f.gone > 0) return;
+    if (!f || f.gone > 0) { if (f) f.gen.ring.visible = false; return; }
     var alive = f.dying === 0;
+    var showRing = alive && inControl && f.gen.hp > 0;
+    f.gen.ring.visible = showRing;
+    if (showRing) { f.gen.pivot.getWorldPosition(f.gen.ring.position); f.gen.ring.quaternion.copy(camera.quaternion); f.gen.ring.scale.setScalar(7 * (f.gen.flash > 0 ? 1 + f.gen.flash * 0.6 : 1)); }
     // the shield: refilled by the generator, and gone for good once that is
     if (alive && f.gen.hp > 0 && f.shield < f.shieldMax) { f.shield = Math.min(f.shieldMax, f.shield + f.shieldMax / 3 * dt); }
     var frac = alive && f.shieldMax > 0 ? f.shield / f.shieldMax : 0;
@@ -1583,7 +1601,7 @@
     hull = Math.min(maxHull(), hull + n * up.salvage); showHull();
   }
   function nextRound() { startRound(round + 1); roundBanner(); }
-  function roundBanner() { var b = isBossRound(round); banner('Round ' + round + (b ? ' \u2014 Dreadnought' : ''), b ? 3.5 : 2.5); sfx(b ? 'boss' : 'round'); }
+  function roundBanner() { var b = isBossRound(round); banner('Round ' + round + (b ? ' \u2014 Dreadnought. Destroy the shield generator at its core.' : ''), b ? 5 : 2.5); sfx(b ? 'boss' : 'round'); }
   function offerUpgrades() {
     var pool = [], i;
     for (i = 0; i < UPGRADES.length; i++) if (up[UPGRADES[i].id] < UPGRADES[i].max) pool.push(UPGRADES[i]);
@@ -2888,7 +2906,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'dreadnought-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'dreadnought-3', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +

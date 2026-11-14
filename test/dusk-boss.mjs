@@ -84,25 +84,54 @@ console.log('\n— what makes it a dreadnought —');
 {
   // The mounts: each sits outside the hull and against it, and between them they face every way.
   const m = await run(`startRound(20); var f = bossF, out = [], c = new THREE.Vector3();
-    f.turrets.forEach(function (t, i) { var inw = t.local.clone().multiplyScalar(1 - 6 / t.local.length()); if (Math.abs(t.local.y) > 1) { inw.copy(t.local); inw.y -= Math.sign(t.local.y) * 6; }
-      out.push({ i: i, outside: !f.inHull(t.local), seated: f.inHull(inw), x: Math.round(t.local.x), y: Math.round(t.local.y), z: Math.round(t.local.z) }); });
+    f.turrets.forEach(function (t, i) { var inw = t.local.clone().addScaledVector(t.nrm, -6);   // six back along the way the mount faces: that should be inside the hull
+      out.push({ i: i, outside: !f.inHull(t.local), seated: f.inHull(inw), x: Math.round(t.local.x), y: Math.round(t.local.y - BOSS_RING_Y), z: Math.round(t.local.z) }); });
     JSON.stringify(out)`);
   check(m.length === 12 && m.every(t => t.outside && t.seated), 'all twelve turret mounts sit on the hull: none buried in it, none floating off it', m.filter(t => !(t.outside && t.seated)).map(t => JSON.stringify(t)));
   const sides = { above: m.some(t => t.y > 2), below: m.some(t => t.y < -2), xp: m.some(t => t.x > 30), xn: m.some(t => t.x < -30), zp: m.some(t => t.z > 30), zn: m.some(t => t.z < -30) };
   check(Object.values(sides).every(Boolean), 'and between them they cover above, below and all four sides', JSON.stringify(sides));
 
+  // CAN THE CORE BE HIT. dreadnought-2 passed every check here while the ring stood between the guns and the
+  // generator: nothing fired a bolt at it and counted what arrived. From 150 out, 160 bolts a row, aimed at the core
+  // with a person's scatter, from every side.
+  const los = await run(`var out = {};
+    [-40, -22, -8, 0, 8, 15, 30].forEach(function (elev) {
+      startRound(5); damage = function () {}; bossF.launchT = 1e9;
+      var f = bossF, gen = 0, n = 0, hg = hitGenerator, hc = hitCapital, ht = hitTurret;
+      hitGenerator = function () { gen++; }; hitCapital = function () {}; hitTurret = function () {};
+      for (var k = 0; k < 16; k++) { M.step(1);
+        for (var q = 0; q < 10; q++) {
+          var az = (k * 10 + q) / 160 * 6.283, e = elev * Math.PI / 180, c = f.ship.position;
+          var from = new THREE.Vector3(c.x + Math.cos(az) * Math.cos(e) * 150, c.y + Math.sin(e) * 150, c.z + Math.sin(az) * Math.cos(e) * 150);
+          var dir = c.clone().sub(from).normalize(); dir.x += (Math.random() - 0.5) * 0.05; dir.y += (Math.random() - 0.5) * 0.05; dir.z += (Math.random() - 0.5) * 0.05; dir.normalize();
+          trk.k = 0; launchBolt(from, dir); n++; }
+        for (var w = 0; w < 30; w++) updateBolts(1 / 30); }
+      hitGenerator = hg; hitCapital = hc; hitTurret = ht; out[elev] = Math.round(100 * gen / n);
+    });
+    out.ring = bossF.gen.ring.visible; JSON.stringify(out)`);
+  console.log('  bolts aimed at the core that reach it, by how far above or below level you come in:');
+  console.log('  ' + [-40, -22, -8, 0, 8, 15, 30].map(e => `${e > 0 ? '+' : ''}${e}°: ${los[e]}%`).join('   '));
+  check(los[0] >= 90 && los[8] >= 90 && los[15] >= 90 && los[30] >= 90, `from level and from above, at least nine bolts in ten aimed at the core reach the generator  [level ${los[0]}%]`, JSON.stringify(los));
+  check(los.ring, 'the generator wears its health ring from the start, before it has been hit', JSON.stringify(los));
+
   // The shield, and the generator that feeds it.
   const sh = await run(`startRound(5); damage = function () {}; var f = bossF, o = {};
     hitCapital(f, 300); o.hullAfterHit = f.hp === f.maxHp; o.shieldDown = Math.round(f.shieldMax - f.shield);
     M.step(120); o.refilled = f.shield === f.shieldMax;
-    var n = 0; o.genWas = f.gen.hp; while (f.gen.hp > 0 && n < 9999) { hitGenerator(f, 1 * dmgMul(), f.ship.position); n++; } o.genHits = n; o.readout = readoutEl.textContent;
+    var n = 0; o.genWas = f.gen.hp; while (f.gen.hp > 0 && n < 9999) { hitGenerator(f, 1 * dmgMul(), f.ship.position); n++; } o.genHits = n; o.readout = readoutEl.textContent; M.step(2); o.ringGone = !f.gen.ring.visible;
     hitCapital(f, f.shieldMax + 50); o.through = f.maxHp - f.hp; o.shieldGone = f.shield === 0;
     M.step(300); o.stayedDown = f.shield === 0 && f.gen.hp === 0; o.shellHidden = !f.shell.visible;
     JSON.stringify(o)`);
   check(sh.hullAfterHit && sh.shieldDown === 300, 'the shield takes the hit and the hull is untouched', JSON.stringify(sh));
   check(sh.refilled, 'while the generator lives the shield refills', JSON.stringify(sh));
-  check(sh.genHits === sh.genWas && sh.genHits >= 100 && /Dreadnought 100%/.test(sh.readout), `the generator can be destroyed  [${sh.genHits} hits at base damage], and the readout turns to the hull`, JSON.stringify(sh));
+  check(sh.ringGone && sh.genHits === sh.genWas && sh.genHits >= 100 && /Dreadnought 100%/.test(sh.readout), `the generator can be destroyed  [${sh.genHits} hits at base damage], and the readout turns to the hull`, JSON.stringify(sh));
   check(sh.shieldGone && sh.through === 50 && sh.stayedDown && sh.shellHidden, 'after that the shield can be shot away, what is left over reaches the hull, and neither comes back', JSON.stringify(sh));
+
+  const rg = await run(`startRound(5); damage = function () {}; var f = bossF, o = [];
+    function lit() { return f.gen.segs.filter(function (s) { return s.material.color.getHex() === 0x9dff6a; }).length; }
+    o.push(lit()); [0.25, 0.5, 0.75, 0.95].forEach(function (k) { hitGenerator(f, f.gen.maxHp * k - (f.gen.maxHp - f.gen.hp), f.ship.position); o.push(lit()); });
+    JSON.stringify(o)`);
+  check(rg.join(',') === '5,4,3,2,1', `its ring loses a segment for each fifth shot away  [lit: ${rg.join(', ')} at 0, 25, 50, 75, 95% damage]`, rg.join(','));
 
   // Turrets can be shot through the shield, and come back after ten seconds.
   const tr = await run(`startRound(5); damage = function () {}; var f = bossF, t = f.turrets[0], n = 0, o = {};
