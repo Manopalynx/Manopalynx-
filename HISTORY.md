@@ -3179,3 +3179,51 @@ one at a time, never two at once. Render a frame before claiming anything looks 
 dark slab, the shadow with legs and the dim dreadnought were all found that way. Open, his to
 decide: the softer first dreadnought generator, a lives system, and offline and a Home Screen
 icon for the game. He said three bosses is enough for now.
+
+## Instance 16 — 14 November 2026
+
+Setup found everything green (the hook repaired a stale local `main`, 16 behind, nothing lost).
+Then a long run of Dusk, every change merged as it landed: `walker-2`, `time-1`, `weather-1`,
+`weather-2`, `chapters-1`, `chapters-2`, and the chapter design written down for him to check.
+Each has its section in `docs/dusk/README.md`; this is the record of how, not a second copy.
+
+### His decisions, each spent in a line
+
+Towers that rebuild and interceptors back in 20 seconds, for a walker that was "rather easy".
+Time of day as a cycle, night kept. Weather random, clear half the time, changing the game, with
+"background sound"; wind on the player only "unless it's designed in a way that the lighter enemies
+don't get messed up". Then the big one: "every 5 rounds it moves to a new and larger arena", with
+"variety rather than copy and paste an open empty landscape", and "go with what you think works
+best" for the rest. Then every arena takes every time of day, bosses keeping their look.
+
+### What measuring found that reasoning would have shipped
+
+- **The 257-second walker figure was one run of a spread** from 257 to 393. Quoted as the figure.
+- **Towers that rebuild make shooting them a loss**: a stand-in that clears them first loses more
+  hull, not less. Told him; his to change.
+- **The dusk sky had been painted once at load**, so the ice and the lava were fought under it.
+- **Fog hid nothing**: enemies' lights ignore the haze. And "halve how far you see" had nothing to
+  halve: in clear air those lights carry across the whole map.
+- **Interceptors went into hills in still air**, two runs in three; a hard floor now. Pushed by the
+  wind, every storm; so the wind leaves them alone, by his own rule.
+- **A capital ship has always flown 18 metres into a hill**, once every five minutes, from round 6.
+  Found only when the check walked whole circles instead of one minute of flight.
+- **Rain was as loud as the music**; thunder was over in half the time I had told him.
+
+### My instruments, wrong in roughly the order found
+
+Eighteen or so, each caught by a mutant or a number that could not be true. The ones worth knowing:
+a "stands out" measure that averaged only over pixels that changed, so a dark night scored 119%; a
+camera at 40 that the hills blinded; a wind measure that kept only the sideways part; a lightning
+counter that looked for a flash after it had faded; a stand-down check whose window was too short
+for a gun to fire either way; a "towers first" stand-in that could never finish because the towers
+rebuild; a comment that swallowed a line of code (Instance 15 did the same thing); and a measure
+that swung 18 points between runs on an unchanged build until the seed and the game clock were
+pinned. **I told him the ship "almost disappears" in a dark night. It does not; the ground does.**
+
+### Open, his to decide
+
+Fog at 130 he approved. Open: how a storm's push and the sound feel on the phone; whether the walker
+is now too hard (it costs about twice the hull you have, against the dreadnought's 1.5); towers
+whose rebuild makes clearing them pointless. Chapter steps 2 to 5 (size, then the ice, lava and
+dusk regions) are designed and agreed; step 2 is next.
