@@ -253,7 +253,7 @@
 <button type="button" class="sam" id="sam">Sam</button>
 <div class="dev" id="dev"><h2>Upgrades</h2><div class="dev-list" id="devList"></div>
   <h2>Sounds</h2><div class="dev-diag" id="devDiag"></div><div class="dev-snd" id="devSnd"></div>
-  <div class="dev-foot"><button type="button" class="dev-btn" id="devWalker">Boss: walker</button><button type="button" class="dev-btn" id="devWall">Boss: ice wall</button><button type="button" class="dev-btn" id="devBoss">Boss: dreadnought</button><button type="button" class="dev-btn" id="devRaid">Send interceptors</button><button type="button" class="dev-btn" id="devClear">Clear round</button><button type="button" class="dev-btn" id="devClose">Close</button></div></div>
+  <div class="dev-foot"><button type="button" class="dev-btn" id="devWalker">Boss: walker</button><button type="button" class="dev-btn" id="devWall">Boss: ice wall</button><button type="button" class="dev-btn" id="devBoss">Boss: dreadnought</button><button type="button" class="dev-btn" id="devTime">Time: dusk</button><button type="button" class="dev-btn" id="devRaid">Send interceptors</button><button type="button" class="dev-btn" id="devClear">Clear round</button><button type="button" class="dev-btn" id="devClose">Close</button></div></div>
 <!-- /SAM -->
 <div class="fail" id="fail">This device couldn’t start 3D graphics. Try opening the page in Safari or Chrome.</div>
 
@@ -361,8 +361,29 @@
     return PAD_H + (h - PAD_H) * t;
   }
 
+  // ---------- time of day: a cycle, one step a round ----------
+  // Sam: "time of day is a cycle"; keep night. Round 1 is dusk, then night, dawn, morning, and round 5 is dusk again.
+  // MINE: four steps, so bosses (every fifth round) meet every time of day over a long run; the sun stays low
+  // throughout, because flat shading under a sun overhead reads as plastic; night is moonlight, bright enough that the
+  // enemies still stand out (test/dusk-time.mjs measures it against dusk); the change is made as a round starts, a cut
+  // rather than a fade. Each look: the haze at the horizon and the zenith; a warm band low on the sun's side of the
+  // sky (warm, and how strongly, wk); the sun's direction, colour and strength; the hemisphere light's sky and ground;
+  // the water; how bright the stars, the giant and its ring are. Dusk is the game as it always was.
+  var TIMES = [
+    { name: 'dusk', haze: 0x3a2040, zenith: 0x060716, warm: 0x7a3550, wk: 0.8, dir: [-0.55, 0.32, -0.62], sun: 0xffc49a, sunK: 1.15,
+      sky: 0x7a78ff, ground: 0x24121c, hemiK: 0.6, water: 0x0e5566, glow: 0x0a3540, stars: 0.85, giant: 0xc9a79a, ring: 1 },
+    { name: 'night', haze: 0x222a4c, zenith: 0x04060f, warm: 0x34406c, wk: 0.5, dir: [0.5, 0.75, -0.45], sun: 0xb8c8ff, sunK: 1.0,
+      sky: 0x6a78d8, ground: 0x1a1e34, hemiK: 0.85, water: 0x0c2a48, glow: 0x081a30, stars: 1, giant: 0xa8949a, ring: 0.8 },
+    { name: 'dawn', haze: 0x7a5a78, zenith: 0x14204a, warm: 0xffa070, wk: 1, dir: [0.6, 0.12, -0.6], sun: 0xffb48a, sunK: 1.0,
+      sky: 0x9a8ad8, ground: 0x3a2028, hemiK: 0.7, water: 0x2a4a6a, glow: 0x1a2a44, stars: 0.35, giant: 0xc0a0a8, ring: 0.8 },
+    { name: 'morning', haze: 0x9db6cc, zenith: 0x2d5a96, warm: 0xffe0b0, wk: 0.6, dir: [0.45, 0.55, -0.6], sun: 0xfff0dc, sunK: 1.25,
+      sky: 0xb8d4ff, ground: 0x5a4436, hemiK: 0.8, water: 0x2a6a8a, glow: 0x14465a, stars: 0, giant: 0xd8c4bc, ring: 0.5 }
+  ];
+  var tod = 0;
+  function todOf(n) { return (n - 1) % TIMES.length; }
+
   // ---------- scene ----------
-  var HAZE = 0x3a2040, ZENITH = 0x060716;
+  var HAZE = TIMES[0].haze, ZENITH = TIMES[0].zenith;
   var scene = new THREE.Scene();
   scene.background = new THREE.Color(ZENITH);
   scene.fog = new THREE.FogExp2(HAZE, 0.0062);
@@ -378,12 +399,17 @@
 
   // terrain: one mesh, rebuilt from height() whenever the arena changes
   var ARENAS = [
-    { haze: 0x3a2040, zenith: 0x060716, sun: 0xffc49a, sky: 0x7a78ff, ground: 0x24121c, water: 0x0e5566, glow: 0x0a3540,
-      stops: [[-30, 0x1b1f2c], [1.5, 0x2c2a3d], [10, 0x44345a], [24, 0x8a4a3e], [38, 0xc98f6b], [60, 0xeadccd]] },
+    // the dusk world: its light comes from the time of day (TIMES), so only its ground colours are here
+    { stops: [[-30, 0x1b1f2c], [1.5, 0x2c2a3d], [10, 0x44345a], [24, 0x8a4a3e], [38, 0xc98f6b], [60, 0xeadccd]] },
+    // the ice and the lava keep a look of their own whatever the round, chosen for how each looks best (Sam: boss rounds
+    // "go for whatever look best"): the ice a clear cold dawn, the lava night. Each sky used to be the dusk one,
+    // painted once at load, so both were fought under a dusk sky above their own haze.
     { haze: 0x6a9cc0, zenith: 0x040b18, sun: 0xe6f3ff, sky: 0xa8d4ff, ground: 0x5d8fa8, hemiK: 1.0, steep: 0x2f78a8, water: 0x0b2f44, glow: 0x082230, // ice throws light back up, so a face in shadow is still pale
+      warm: 0xffc0a0, wk: 0.7, dir: [-0.55, 0.32, -0.62], sunK: 1.15, stars: 0.3, giant: 0xd0c0c8, ring: 0.8,
       stops: [[-30, 0x0b1d2e], [1.5, 0x1f4560], [9, 0x4f8fb0], [30, 0x8fc6e0], [60, 0xcdeaf7], [96, 0xffffff]] },
     // lava: the ground is lit from below by what runs through it; rock near the lava glows, rock away from it is black
     { haze: 0x4a1a0c, zenith: 0x0a0406, sun: 0xff9a5a, sky: 0xff8a50, ground: 0xa03a10, hemiK: 0.85, steep: 0x0e0a0c, water: 0xff5a14, glow: 0xff3c00, solid: true,
+      warm: 0xff5a20, wk: 0.6, dir: [-0.55, 0.32, -0.62], sunK: 1.15, stars: 1, giant: 0xa07a70, ring: 0.7,
       stops: [[-30, 0x7a1e06], [0.5, 0x8a2a0a], [3, 0x2a1512], [14, 0x1c1a1e], [45, 0x3a3034], [96, 0x6a5650]] }
   ];
   var terrainGeo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
@@ -425,13 +451,22 @@
   buildTerrain();
   // Changes the landscape and nothing else. Whatever stands on the ground was placed against the old one, so the
   // caller starts a round afterwards; this does not, because a round is not always what the caller wants next.
+  // the look now: the time of day in the dusk world, the landscape's own look on the ice and the lava
+  function lookNow() { return arena === 0 ? TIMES[tod] : ARENAS[arena]; }
+  function applyLook() {
+    var L = lookNow(), i;
+    scene.fog.color.set(L.haze); scene.background.set(L.zenith);
+    sun.color.set(L.sun); sun.intensity = L.sunK; sun.position.set(L.dir[0], L.dir[1], L.dir[2]);
+    hemi.color.set(L.sky); hemi.groundColor.set(L.ground); hemi.intensity = L.hemiK;
+    water.material.color.set(L.water); water.material.emissive.set(L.glow); water.material.opacity = L.solid ? 1 : 0.88; water.material.roughness = L.solid ? 0.6 : 0.18; water.material.metalness = L.solid ? 0 : 0.7;
+    paintSky(L);
+    skyStars.material.opacity = L.stars; giant.material.color.set(L.giant); giant.children[0].material.opacity = 0.38 * L.ring;
+    for (i = 0; i < ridgeMats.length; i++) { var m = ridgeMats[i], k = m.userData.k; m.color.set(L.haze); m.color.setRGB(Math.min(1, m.color.r * k[0]), Math.min(1, m.color.g * k[1]), Math.min(1, m.color.b * k[2])); }
+  }
   function setArena(n) {
     if (n === arena) return;
     arena = n;
-    var A = ARENAS[n];
-    scene.fog.color.set(A.haze); scene.background.set(A.zenith);
-    sun.color.set(A.sun); hemi.color.set(A.sky); hemi.groundColor.set(A.ground); hemi.intensity = A.hemiK || 0.6;
-    water.material.color.set(A.water); water.material.emissive.set(A.glow); water.material.opacity = A.solid ? 1 : 0.88; water.material.roughness = A.solid ? 0.6 : 0.18; water.material.metalness = A.solid ? 0 : 0.7;
+    applyLook();
     // the volcano stands beyond the map at dusk and on the ice; for the lava field it comes right up to the rim
     volcGroup.position.copy(n === 2 ? VOLC_NEAR : VOLC_FAR); embers.position.copy(volcGroup.position);
     duskProps.visible = n === 0; // the landing pad, its buildings and spire, and the pylons in the hills: all placed against the dusk ground
@@ -452,23 +487,29 @@
 
   (function () {
     var geo = new THREE.SphereGeometry(1500, 32, 20);
-    var pos = geo.attributes.position;
-    var cols = new Float32Array(pos.count * 3);
-    var lo = new THREE.Color(HAZE), hi = new THREE.Color(ZENITH), warm = new THREE.Color(0x7a3550), c = new THREE.Color();
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 3), 3));
+    skyDome = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+    sky.add(skyDome);
+  })();
+  // paints the sky for a look: haze at the horizon to the zenith overhead, and a warm band low on the sun's side.
+  // It used to be painted once, at load, from the dusk colours, and every landscape since had flown under it.
+  var skyDome, skyStars, skyC = [new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color()];
+  function paintSky(L) {
+    var pos = skyDome.geometry.attributes.position, col = skyDome.geometry.attributes.color;
+    var lo = skyC[0].set(L.haze), hi = skyC[1].set(L.zenith), warm = skyC[2].set(L.warm), c = skyC[3];
+    var dl = Math.sqrt(L.dir[0] * L.dir[0] + L.dir[2] * L.dir[2]), dx = L.dir[0] / dl, dz = L.dir[2] / dl;
     for (var i = 0; i < pos.count; i++) {
       var t = pos.getY(i) / 1500;
       if (t <= 0) c.copy(lo);
       else {
         c.copy(lo).lerp(hi, Math.pow(Math.min(1, t * 1.25), 0.55));
-        // warm band low on the giant's side of the sky
-        var side = Math.max(0, -(pos.getX(i) * 0.66 + pos.getZ(i) * 0.75) / 1500);
-        c.lerp(warm, side * Math.max(0, 1 - t * 4) * 0.8);
+        var side = Math.max(0, (pos.getX(i) * dx + pos.getZ(i) * dz) / 1500);
+        c.lerp(warm, side * Math.max(0, 1 - t * 4) * L.wk);
       }
-      cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
+      col.setXYZ(i, c.r, c.g, c.b);
     }
-    geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-    sky.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false })));
-  })();
+    col.needsUpdate = true;
+  }
 
   (function () {
     var n = 1400, arr = new Float32Array(n * 3);
@@ -479,7 +520,8 @@
     }
     var geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
-    sky.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xf6efe6, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.85, depthWrite: false })));
+    skyStars = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xf6efe6, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.85, depthWrite: false }));
+    sky.add(skyStars);
   })();
 
   // ringed giant, banded with a painted texture
@@ -516,7 +558,7 @@
 
   // ---------- far away, beyond the map ----------
   var farShips = [], tracers = [], flashes = [], meteors = [];
-  var embers, emberVel, crater, eruptT = 12, eruptOn = 0;
+  var embers, emberVel, crater, eruptT = 12, eruptOn = 0, ridgeMats = [];
   var VOLC = new THREE.Vector3(540, 0, -450), VOLC_TOP = 196;
   var volcGroup = new THREE.Group(), VOLC_FAR = new THREE.Vector3(0, 0, 0), VOLC_NEAR = new THREE.Vector3(-230, 0, 130); // NEAR puts its centre at (310, -320): its flank comes down to the edge of the arena
   scene.add(volcGroup);
@@ -524,6 +566,7 @@
     // mountain silhouettes ringing the map
     var near = new THREE.MeshBasicMaterial({ color: 0x2a1733, fog: false });
     var farM = new THREE.MeshBasicMaterial({ color: 0x321c3b, fog: false });
+    ridgeMats.push(near, farM);
     for (var i = 0; i < 48; i++) {
       var a = i / 48 * 6.283 + hash(i, 0.7) * 0.12;
       var r = 430 + hash(i, 3.1) * 240, h = 28 + hash(i, 8.8) * 70;
@@ -534,6 +577,9 @@
     }
     // a volcano on the horizon
     var vol = new THREE.Mesh(new THREE.CylinderGeometry(44, 290, 205, 7), new THREE.MeshBasicMaterial({ color: 0x241329, fog: false }));
+    ridgeMats.push(vol.material);
+    // each is a fixed shade of the dusk haze, channel by channel: keep that ratio to whatever the haze is now
+    ridgeMats.forEach(function (m) { var h = new THREE.Color(TIMES[0].haze); m.userData.k = [m.color.r / h.r, m.color.g / h.g, m.color.b / h.b]; });
     vol.position.set(VOLC.x, 96, VOLC.z);
     volcGroup.add(vol);
     crater = new THREE.Mesh(new THREE.SphereGeometry(40, 12, 8), new THREE.MeshBasicMaterial({ color: 0xff6a3a, fog: false }));
@@ -679,6 +725,7 @@
       if (me.life <= 0) {
         me.wait -= dt;
         if (me.wait > 0) continue;
+        if (skyStars.material.opacity < 0.3) { me.wait = 2; continue; } // none in a morning sky
         var az = Math.random() * 6.283, el = 0.45 + Math.random() * 0.6;
         me.mesh.position.set(Math.cos(az) * Math.cos(el) * 1300, Math.sin(el) * 1300, Math.sin(az) * Math.cos(el) * 1300);
         var dz = az + 1.2 + Math.random() * 0.7;
@@ -2376,7 +2423,8 @@
     var kind = boss ? pickBoss() : null;
     endWall(); wkTowersOff();
     if (walker && walker.on && !arenaHold) walkerOn(false);
-    if (kind !== 'wall' && kind !== 'walker' && !arenaHold) setArena(0); // the ice belongs to the wall and the lava to the walker; everything else is fought at dusk
+    if (kind !== 'wall' && kind !== 'walker' && !arenaHold) setArena(0); // the ice belongs to the wall and the lava to the walker; everything else is fought in the dusk world
+    tod = todOf(n); applyLook(); // the time of day moves on a step each round
     ensureFleet(Math.max(1, ships)); ensureDrones(small); ensureGround(small);
     for (i = 0; i < fleet.length; i++) {
       var f = fleet[i];
@@ -3644,10 +3692,11 @@
       joy.id = null; joy.x = 0; joy.y = 0; look.id = null; fireTouch = null; keys = {};
       stickEl.style.display = 'none'; fireEl.classList.remove('on');
       devPaint();
+      if (devTimeEl) devTimeEl.textContent = 'Time: ' + TIMES[tod].name;
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'walker-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'time-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +
@@ -3693,6 +3742,12 @@
   document.getElementById('devWalker').addEventListener('click', function () { devShow(false); bossForce = 'walker'; startRound(Math.floor(round / 5) * 5 + 5); roundBanner(); });
   document.getElementById('devWall').addEventListener('click', function () { devShow(false); bossForce = 'wall'; startRound(Math.floor(round / 5) * 5 + 5); roundBanner(); });
   document.getElementById('devBoss').addEventListener('click', function () { devShow(false); bossForce = 'dread'; startRound(Math.floor(round / 5) * 5 + 5); roundBanner(); });
+  // the next time of day, now, in the dusk world: so each can be judged without playing four rounds. The round after
+  // carries on the cycle from its own number, as ever.
+  var devTimeEl = document.getElementById('devTime');
+  document.getElementById('devTime').addEventListener('click', function () {
+    tod = (tod + 1) % TIMES.length; applyLook(); devTimeEl.textContent = 'Time: ' + TIMES[tod].name;
+  });
   document.getElementById('devRaid').addEventListener('click', function () {
     // two of them, now, whatever the round: so the flying can be judged without playing to round 3
     for (var i = 0; i < ics.length; i++) icHide(ics[i]);

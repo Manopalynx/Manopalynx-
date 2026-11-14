@@ -435,10 +435,76 @@ at the open core, 79% from a shallow 5° and 100% from 20° up.
 four- to eight-minute fight, and with the towers it is not survivable by any measure here. Whether a person stands under a bomb mark is not something a stand-in that
 never dodges can say. The footfall and eruption sounds are unheard by anyone but him.
 
+## The time of day (build `time-1`)
+
+**Sam's rulings:** time of day is **a cycle**; **keep night**; boss rounds "go for whatever look
+best". Weather is random, changes the game, has background sound, and is clear about half the
+time: that is the next change, not this one.
+
+**Mine, from mock-ups he saw:**
+
+- **Four steps, one a round: dusk, night, dawn, morning.** Round 1 is dusk, so the game opens as it
+  always did. Bosses come every fifth round, so over a long run each meets every time of day.
+- **The sun stays low throughout**: no noon. Flat shading under a sun overhead reads as plastic.
+- **Night is moonlight**, bright enough to fly by the ground.
+- **The change is a cut as the round starts**, not a fade.
+- **The ice keeps a clear cold dawn and the lava keeps night**, whatever the round. The dreadnought
+  is fought in the dusk world and takes whatever the cycle gives it.
+- **The Sam panel's "Time" button** steps to the next time at once, so each can be seen without
+  playing four rounds.
+
+**How it works.** `TIMES` holds each look; `ARENAS[0]` now holds only the dusk world's ground
+colours, because its light comes from the time. `applyLook()` sets the haze, the sun's direction,
+colour and strength, the hemisphere light, the water, the stars, the giant and its ring, repaints
+the sky (`paintSky`), and re-tints the far ridges and the volcano. Each ridge keeps, channel by
+channel, the ratio it always had to the dusk haze, so at dusk they are their old colours to within
+one step in 255. Shooting stars stop when the stars are faint.
+
+**Found on the way: the sky had been dusk everywhere.** It was painted once at load from the dusk
+colours, so the ice and the lava were fought under a dusk sky above their own haze. Each landscape
+has its own sky now.
+
+**Measured** by `test/dusk-time.mjs`. Dusk is unchanged: every light and colour exactly, the sky to
+within 0.2 of 255. Two things are measured at each time against dusk, which is what he plays, on
+nine views of one round (three capital ships, three ground units, three drones). The screen is
+modelled under office light: 4% of white added as reflected room light, then perceived lightness.
+**That 4% is an assumption, not a measurement.**
+
+- **Whether the enemies stand out**: each view drawn with the enemies as white silhouettes, then
+  shown and hidden; the difference in perceived lightness over the silhouettes.
+- **Whether the ground can be read**: the spread of perceived lightness across the ground, its
+  light and shade, which is what you fly low by.
+
+| against dusk | night | dawn | morning | fails below |
+|---|---|---|---|---|
+| enemies stand out | 90 to 97% | 104 to 123% | 130 to 181% | 75% |
+| the ground's light and shade | 170% | 142% | 232% | 60% |
+
+The two answer different questions, and the second exists because the first could not see what
+was wrong with a dark night. **Enemies carry their own lights and outline, so they stand out
+against any dark world**: a near-black night still scored 75 to 76% on the first. What a night
+that is too dark takes away is the ground: that near-black night keeps 31% of dusk's light and
+shade, and the mock-up's dark night 53%, so both fail. The moonlit night keeps more than dusk,
+because the moon is higher than the dusk sun.
+
+**The measure was wrong four times before it was right**, each found by feeding it a night that
+should fail:
+
+- Averaging only over pixels that changed let anything that melted into the dark drop out of the
+  average: the mock-up's dark night scored 119% of dusk.
+- Raw pixel values treat a dark difference like a bright one, which is not true on a phone under
+  office light; hence the glare.
+- One view of each kind swung the night from 80% to 89% between runs; nine views hold it steadier.
+- Then a near-black night passed, because the enemies were never what a dark night hides.
+
+**I told him the ship "almost disappears" in the mock-up's dark night.** It does not, by the first
+measure. What disappears is the ground, by the second, which is the right half of what my eye said
+for the wrong reason.
+
 ## Queued, in the agreed order
 
 1. Wrecks of downed capital ships that stay for the run.
-2. Time of day moving on each round.
+2. ~~Time of day moving on each round.~~ Built: the time of day, above. Weather and its sound next.
 3. Ground units grouped into bases.
 4. Canyons for cover.
 5. ~~A boss every fifth round.~~ Built: the dreadnought, above.
@@ -469,6 +535,7 @@ node test/dusk-wall.mjs        # the ice wall: cracks, guns that rebuild, sectio
 node test/dusk-lava.mjs        # the lava field, and the walker's every footfall for 150 seconds
 node test/dusk-walker.mjs      # the walker's fight: knees, the fall, the core, bombs, lava, towers, interceptors, which boss comes
 DUSK_QUICK=1 node test/dusk-walker.mjs   # its rules without the fights, for mutation runs: a minute instead of several
+node test/dusk-time.mjs        # the time of day: the cycle, dusk unchanged, each sky its own, and whether enemies still stand out
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between
