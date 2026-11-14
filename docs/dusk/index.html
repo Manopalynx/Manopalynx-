@@ -2165,19 +2165,19 @@
   // ---------- interceptors: from round 3, a few leave the far fight and come for you ----------
   // Sam's rulings: they are NOT in the round's count -- the round ends without them and the survivors go home;
   // one in rounds 3-4, two from 5, three from 8; three hits at base damage; weapons prefer them over everything else.
-  // The point of the flying is that every attack comes THROUGH the view. In portrait that is about 20 degrees
-  // either side, so an enemy on your tail is one you can neither see nor shoot: they never press an attack from
-  // behind, and after a pass they go out ahead of you to turn round where you can watch them do it.
+  // The point of the flying is that they come THROUGH you, in straight lines, and never sit on your tail. In portrait
+  // the view is about 20 degrees either side, so an enemy behind you is one you can neither see nor shoot: their
+  // guns fire only while they are on your screen, and one coming up from behind overtakes and flies on out ahead.
   var IC_HP = 3, IC_SCALE = 1.3, IC_SPEED = 66, IC_TURN = 1.9, IC_SHOT = 150, IC_DMG = 10, IC_SPREAD = 10;
-  var ics = [], icPeelT = -1, icWant = 0, icYawWas = 0, icTurn = 0;
-  var icA = new THREE.Vector3(), icB = new THREE.Vector3(), icC = new THREE.Vector3(), icQ = new THREE.Quaternion(), icUp = new THREE.Vector3(0, 1, 0);
+  var ics = [], icPeelT = -1, icWant = 0;
+  var icA = new THREE.Vector3(), icB = new THREE.Vector3(), icC = new THREE.Vector3(), icQ = new THREE.Quaternion();
   function icCount(n) { return n < 3 ? 0 : n < 5 ? 1 : n < 8 ? 2 : 3; }
   (function () {
     for (var i = 0; i < 3; i++) {
       var g = makeInterceptor(); g.visible = false; scene.add(g);
       var el = document.createElement('div'); el.className = 'point raid'; el.appendChild(document.createElement('i'));
       document.body.appendChild(el);
-      ics.push({ g: g, mark: el, shown: false, pos: new THREE.Vector3(), dir: new THREE.Vector3(0, 0, 1), hp: 0, alive: false, mode: 1, t: 0, side: 1, cool: 0, burst: 0, bank: 0, pd: 0 });
+      ics.push({ g: g, mark: el, shown: false, pos: new THREE.Vector3(), dir: new THREE.Vector3(0, 0, 1), hp: 0, alive: false, mode: 1, t: 0, side: 1, cool: 0, burst: 0, bank: 0, pd: 0, wp: new THREE.Vector3() });
     }
     // their fire: red, long, quicker than a drone's
     var geo = new THREE.BoxGeometry(0.4, 0.4, 3.6), mat = new THREE.MeshBasicMaterial({ color: 0xff5a48, fog: false });
@@ -2221,48 +2221,53 @@
         sfx('raid'); banner(icWant > 1 ? 'Interceptors inbound' : 'Interceptor inbound', 2.5);
       }
     }
-    // how hard you are turning, smoothed: someone circling has to be met where they will be looking, not where they are
-    var yd = Math.atan2(Math.sin(yaw - icYawWas), Math.cos(yaw - icYawWas)) / Math.max(dt, 0.001);
-    icYawWas = yaw; icTurn += (yd - icTurn) * Math.min(1, dt * 0.6); // slow enough that a weave averages out and a circle does not
     for (i = 0; i < ics.length; i++) {
       ic = ics[i];
       if (!ic.alive) continue;
       icA.copy(ic.pos).sub(shipPos);
       var dist = icA.length();
-      // 1: dead ahead of you, -1: dead astern. Measured against where your nose WILL be if you are in a steady turn,
-      // so a run at someone circling is begun where they are about to look; the guns still wait for the real view.
-      icC.copy(fwdV).applyAxisAngle(icUp, Math.max(-1, Math.min(1, icTurn * 1.5)));
-      var ahead = dist > 0.01 ? icA.dot(icC) / dist : 1;
-      var spd = IC_SPEED, onTgt = false;
+      var ahead = dist > 0.01 ? icA.dot(fwdV) / dist : 1; // 1: dead ahead of you, -1: dead astern
+      var spd = IC_SPEED, onTgt = false, steer = true;
       if (ic.mode === 3) {
         // going home
         icB.copy(DOG_C).sub(ic.pos).normalize(); spd = 120;
         if (dist > 520 || ic.pos.distanceToSquared(DOG_C) < 8100) { icHide(ic); continue; }
       } else if (ic.mode === 1) {
-        // attack run. Only ever from in front: if you have turned away, it goes round rather than follow you
-        if (dist > 300) spd = 120; // the long way in from the far fight
-        else if (dist > 90 && ahead < 0.6) { ic.mode = 2; ic.t = 0; } // out to one side counts as behind: you could not see it there either
-        // the pass itself: the moment it stops getting closer, it is past you
-        if (dist < 70 && dist > ic.pd) { ic.mode = 2; ic.t = 0; ic.side = -ic.side; sfx('pass', ic.pos); }
+        // THE RUN: straight at you from well out, and straight on through.
+        // An earlier version steered for a spot tied to where your nose pointed. Anyone who turned -- which is everyone,
+        // because the arrows invite it -- dragged that spot round the sky and they circled after it for good (Sam, on the
+        // phone: "they just seem to fly in circles around me"). Nothing here depends on your heading except the guns.
+        if (dist > 300) spd = 120;                              // the long way in from the far fight
+        else if (ahead < 0) spd = Math.max(IC_SPEED, speed + 45); // coming up from behind: it has to overtake, and will not fire
+        if (dist < 75) steer = false;                           // committed: hold the line, so it cannot curl into an orbit
+        else icB.copy(shipPos).addScaledVector(fwdV, speed * dist / (spd + speed * ahead)).addScaledVector(rightV, ic.side * 7).addScaledVector(upV, 4).sub(ic.pos).normalize();
+        // the moment it stops getting closer, it is past you
+        if (dist < 75 && dist > ic.pd) {
+          ic.t = 0; ic.side = -ic.side; sfx('pass', ic.pos);
+          if (ic.dir.dot(fwdV) >= 0) ic.mode = 2; // going your way: it is about to be out in front of you, where you can see it turn
+          else {
+            // going the other way: it would end up behind you. Instead it comes round to a spot out ahead of where you
+            // are heading NOW. The spot is fixed in the world the moment it is chosen -- turning cannot drag it about.
+            ic.mode = 4;
+            ic.wp.copy(shipPos).addScaledVector(fwdV, 190 + speed * 4).addScaledVector(rightV, ic.side * 45);
+            ic.wp.y = Math.max(shipPos.y + 8, Math.max(height(ic.wp.x, ic.wp.z), 0) + 24);
+          }
+        }
         ic.pd = dist;
-        // it flies at a point just beside and above you, so the run skims past rather than through; the guns aim at you
-        icB.copy(shipPos).addScaledVector(fwdV, speed * dist / (IC_SPEED + speed)).addScaledVector(rightV, ic.side * 7).addScaledVector(upV, 4).sub(ic.pos).normalize();
         onTgt = dist > 60;
+      } else if (ic.mode === 4) {
+        // round to the spot ahead, overtaking you wide on the way
+        icB.copy(ic.wp).sub(ic.pos);
+        var wd = icB.length(); icB.normalize();
+        spd = Math.max(IC_SPEED, speed + 45); ic.t += dt;
+        if (wd < 45 || ic.t > 9) { ic.mode = 1; ic.t = 0; ic.pd = 1e9; }
+      } else {
+        // THE BREAK: straight on out the far side, then round and back in. No steering on the way out.
+        steer = false; ic.t += dt;
+        if (ahead < 0) spd = Math.max(IC_SPEED, speed + 45);
+        if (dist > 170 || ic.t > 8) { ic.mode = 1; ic.t = 0; ic.pd = 1e9; }
       }
-      if (ic.mode === 2) {
-        // breaking away: make for a spot well out in front of you and off to one side, then turn back in
-        // (nearer in when you are turning hard, or the spot sweeps round faster than anything could fly to it)
-        var lead = Math.max(-1.4, Math.min(1.4, icTurn * 2.5)), reach = Math.max(130, 200 / (1 + 1.2 * Math.abs(icTurn)));
-        icC.copy(fwdV).applyAxisAngle(icUp, lead);
-        icB.copy(shipPos).addScaledVector(icC, reach).addScaledVector(rightV, ic.side * 55 * reach / 200);
-        icB.y = Math.max(shipPos.y + 10, Math.max(height(icB.x, icB.z), 0) + 24);
-        icB.sub(ic.pos);
-        var gd = icB.length(); icB.normalize();
-        spd = Math.max(IC_SPEED, speed + 48); // it has to overtake you to get there
-        ic.t += dt;
-        // a run only starts from far enough out, and near enough dead ahead, to be watched all the way in
-        if ((dist > 110 && ahead > 0.9 && (gd < 50 || dist > 150)) || ic.t > 14) { ic.mode = 1; ic.t = 0; ic.pd = 1e9; }
-      }
+      if (!steer) { icB.copy(ic.dir); icB.y *= 0.9; icB.y += Math.max(-0.2, Math.min(0.2, (shipPos.y + 6 - ic.pos.y) * 0.01)); icB.normalize(); } // level off towards your height
       // never into the ground
       var floor = Math.max(height(ic.pos.x, ic.pos.z), 0) + 13;
       if (ic.pos.y < floor) { icB.y = 0; icB.normalize().multiplyScalar(0.5); icB.y = 1; icB.normalize(); onTgt = false; }
@@ -2679,7 +2684,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'interceptors-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'interceptors-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +

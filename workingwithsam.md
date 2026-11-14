@@ -185,7 +185,7 @@ One branch, `main`, carries five projects sharing no code.
 | **Grandiose** | Monopoly-shaped game set in his novel | `docs/` | `docs/README.md` |
 | **Matchbox** | single-file falling-sand toy with a heat model | `matchbox.html`, `test/matchbox-*.mjs` | `MATCHBOX.md` |
 | **The Column** | drafting autobattler in his novel; playable, published under `docs/` | `docs/column/` | `docs/column/README.md` |
-| **Dusk** | 3D phone shooter, three.js; moved from an artifact, published under `docs/` | `docs/dusk/`, `test/dusk.mjs` | `docs/dusk/README.md` |
+| **Dusk** | 3D phone shooter, three.js; moved from an artifact, published under `docs/` | `docs/dusk/`, `test/dusk*.mjs` | `docs/dusk/README.md` |
 
 **GitHub Pages serves `/docs` from `main`** — hence the folder name, and why the root
 `upliftledger.html` and `matchbox.html` are unpublished; `test/published.mjs` asserts

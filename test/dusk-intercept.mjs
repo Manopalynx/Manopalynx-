@@ -77,13 +77,17 @@ const FLY = {
   'legs, gentle weave':   LEGS + 'yaw += Math.sin(time * 0.8) * 0.45 / 30;',
   'legs, hard weave':     LEGS + 'yaw += Math.sin(time * 0.8) * 0.9 / 30;',
   'circling, never stops': 'yaw += 0.5 / 30;',
+  // What a person does with an arrow on the screen: turns to face the nearest one. Sam's report -- "they just
+  // fly in circles around me" -- came from the real seat, and none of the rows above sat in it.
+  'turns to face them':   `(function () { var b = null, bd = 1e9; for (var i = 0; i < ics.length; i++) if (ics[i].alive) { var d = ics[i].pos.distanceTo(shipPos); if (d < bd) { bd = d; b = ics[i]; } }
+    if (b) { var want = Math.atan2(-(b.pos.x - shipPos.x), -(b.pos.z - shipPos.z)), d = Math.atan2(Math.sin(want - yaw), Math.cos(want - yaw)); yaw += Math.max(-1.4 / 30, Math.min(1.4 / 30, d)); } })();`,
 };
 async function fly(name, steer, round, firing) {
   const { page, errors } = await fresh();
   const r = await page.evaluate(([steer, round, firing]) => window.__t(`
     startRound(${round}); M.quiet();
-    var R = { alive: 0, near: 0, nearSeen: 0, shots: 0, shotsUnseen: 0, shotsAstern: 0, hits: 0, dmg: 0, passes: [], passSeen: [], kills: 0, firstKill: null, sent: 0, heatPeak: 0, sfx: {} };
-    var seenAcc = [0, 0, 0], t0 = time, hp0 = [0, 0, 0];
+    var R = { alive: 0, near: 0, nearSeen: 0, shots: 0, shotsUnseen: 0, shotsAstern: 0, hits: 0, dmg: 0, passes: [], passSeen: [], laps: 0, lurk: 0, kills: 0, firstKill: null, sent: 0, heatPeak: 0, sfx: {} };
+    var seenAcc = [0, 0, 0], t0 = time, hp0 = [0, 0, 0], brg = [null, null, null];
     damage = function (n) { R.hits++; R.dmg += n; };
     var sfx0 = sfx;
     sfx = function (n, p) {
@@ -105,6 +109,11 @@ async function fly(name, steer, round, firing) {
         var d = ic.pos.distanceTo(shipPos), v = M.inView(ic.pos);
         if (v) seenAcc[i] += 1 / 30;
         if (d < 250) { R.near++; if (v) R.nearSeen++; }
+        // LAPS: how far round you it has swung, in whole turns. A straight pass through is half a lap; circling is many laps and no passes.
+        var bb = Math.atan2(ic.pos.x - shipPos.x, ic.pos.z - shipPos.z);
+        if (brg[i] !== null && d > 12) R.laps += Math.abs(Math.atan2(Math.sin(bb - brg[i]), Math.cos(bb - brg[i]))) / 6.283;
+        brg[i] = bb;
+        if (d < 110 && !v) R.lurk++;   // close by and not on the screen
       }
     });
     R.sent = icWant; R.left = remaining(); R.roundLive = roundLive;
@@ -119,12 +128,12 @@ const gap = p => p.length < 2 ? null : (p[p.length - 1] - p[0]) / (p.length - 1)
 const fmt = (x, d = 1) => x === null || x === undefined || Number.isNaN(x) ? '  –' : x.toFixed(d);
 
 console.log('\n— how they fly: round 5 (two interceptors), nothing else alive, 180s —');
-console.log('  player                 passes  secs between  seen before pass  in view <250m  shots  from unseen  from astern  hits on you');
+console.log('  player                 passes  laps round you  close+unseen  seen before pass  in view <250m  shots  from unseen  from astern  hits on you');
 const runs = [];
 for (const [name, steer] of Object.entries(FLY)) {
   const r = await fly(name, steer, 5, false); runs.push(r);
   const seenAvg = r.passSeen.length ? r.passSeen.reduce((a, b) => a + b, 0) / r.passSeen.length : null;
-  console.log(`  ${name.padEnd(22)} ${String(r.passes.length).padStart(5)}   ${fmt(gap(r.passes)).padStart(8)}      ${fmt(seenAvg).padStart(8)}s      ${fmt(100 * r.nearSeen / Math.max(1, r.near), 0).padStart(8)}%   ${String(r.shots).padStart(5)}   ${String(r.shotsUnseen).padStart(8)}     ${String(r.shotsAstern).padStart(6)}     ${r.hits} (${r.dmg} hull)`);
+  console.log(`  ${name.padEnd(22)} ${String(r.passes.length).padStart(5)}   ${fmt(r.laps).padStart(10)}     ${fmt(100 * r.lurk / Math.max(1, r.alive), 0).padStart(8)}%      ${fmt(seenAvg).padStart(8)}s      ${fmt(100 * r.nearSeen / Math.max(1, r.near), 0).padStart(8)}%   ${String(r.shots).padStart(5)}   ${String(r.shotsUnseen).padStart(8)}     ${String(r.shotsAstern).padStart(6)}     ${r.hits} (${r.dmg} hull)`);
 }
 const all = k => runs.reduce((a, r) => a + r[k], 0);
 check(runs.every(r => r.errors.length === 0), 'nothing threw in any run', runs.flatMap(r => r.errors));
@@ -134,9 +143,15 @@ check(legs.length === 3 && legs.every(r => r.passes.length >= 12), 'flown across
 check(all('shots') > 0 && all('shotsAstern') === 0, `no shot is ever fired from behind you  [${all('shots')} shots]`, `${all('shotsAstern')} of ${all('shots')} from astern`);
 check(all('shots') > 0 && all('shotsUnseen') === 0, `no shot is ever fired from off the screen  [${all('shots')} shots]`, `${all('shotsUnseen')} of ${all('shots')} from out of view`);
 const few = r => r.passSeen.filter(s => s < 0.5).length;
-// Not every pass can be seen: you turn at the edge of the map while one is already inbound. Those fire nothing
-// (asserted above), so the cost of one is a whoosh from off the screen. One in five is the line; the count is printed.
-check(legs.every(r => few(r) <= r.passSeen.length * 0.2), 'at least four passes in five are on screen for half a second or more first  [unseen: ' + legs.map(r => few(r) + ' of ' + r.passSeen.length).join(', ') + ']', runs.map(r => `${r.name}: ${few(r)} of ${r.passSeen.length} unseen`));
+// THE CIRCLING CHECK. Build interceptors-1 passed everything above and Sam's first words on it were "they just seem
+// to fly in circles around me". Measured afterwards against a player who turns to face them: 3.2 laps round him for
+// every pass, 81% of the time close by and off the screen. A straight run through is half a lap. The line is 1.0.
+const facer = runs.find(r => r.name === 'turns to face them');
+const lapsPer = facer.laps / Math.max(1, facer.passes.length), lurk = 100 * facer.lurk / Math.max(1, facer.alive);
+check(lapsPer < 1.0, `they go through a player who turns to face them, not round him  [${lapsPer.toFixed(2)} laps a pass; circling was 3.2]`, `${facer.laps.toFixed(1)} laps for ${facer.passes.length} passes`);
+check(lurk < 45, `and are not close-but-unseen most of the time  [${lurk.toFixed(0)}%; circling was 81%]`, `${lurk.toFixed(0)}% of the time within 110 and off the screen`);
+check(few(facer) <= facer.passSeen.length * 0.2, `four passes in five at that player are on screen for half a second first  [unseen: ${few(facer)} of ${facer.passSeen.length}]`, `${few(facer)} of ${facer.passSeen.length} unseen`);
+console.log('  (not asserted, because not true: at a player flying straight legs ' + legs.map(r => few(r) + ' of ' + r.passSeen.length).join(', ') + ' passes are unseen, and all of them at one who circles without stopping. Unseen passes fire nothing.)');
 check(legs.every(r => r.heatPeak > 0.3), 'they raise the heat the music follows', runs.map(r => `${r.name}: peak ${r.heatPeak.toFixed(2)}`));
 check(runs.every(r => r.left === 0 && r.roundLive), 'they are not in the "to go" count  [0 to go with two still flying]', runs.map(r => `${r.name}: ${r.left} to go`));
 

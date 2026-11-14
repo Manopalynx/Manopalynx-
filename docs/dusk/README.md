@@ -60,7 +60,7 @@ sound, pin music intensity, and a diagnostic line that starts with the `BUILD` t
 `BUILD` on every change that reaches `main`** so he can tell which version his phone has.
 All of it is fenced with `SAM` comments and comes out when building ends.
 
-## Interceptors (build `interceptors-1`)
+## Interceptors (build `interceptors-2`)
 
 From round 3 a few leave the distant dogfight and come for him. **Sam's rulings:**
 
@@ -77,42 +77,48 @@ From round 3 a few leave the distant dogfight and come for him. **Sam's rulings:
 reinforces back to five a side; "Send interceptors" in the Sam panel launches two at once in
 any round.
 
-**How they fly.** Attack run, pass, break away, come round. Three rules keep every attack
-inside a portrait view about 20 degrees wide either side:
+**How they fly: straight lines through him.**
 
-1. A run only starts from dead ahead of him and at least 110 away, and is abandoned if he
-   turns so that it is no longer in front.
-2. After a pass they overtake him and go out to a point 200 ahead and off to one side, so the
-   turn back happens where he can watch it.
-3. **The guns fire only while the interceptor is on his screen**, measured against the
-   screen's real shape rather than a round cone.
+1. **The run.** Straight at him from at least 170 out. Inside 75 it stops steering and holds
+   its line, so it cannot curl into an orbit. The moment it stops getting closer, it is past.
+2. **After a pass going his way**, it flies straight on out ahead of him, where he can watch
+   it turn back in.
+3. **After a pass going the other way**, it comes round to a spot out ahead of where he was
+   heading. That spot is fixed in the world the moment it is chosen.
+4. **The guns fire only while the interceptor is on his screen**, measured against the
+   screen's real shape. One coming up from behind overtakes and does not fire.
 
 Each has a red marker: a diamond on it while in view, an arrow at the screen edge when not.
 
+**`interceptors-1` flew in circles, and the harness had passed it.** It steered for a spot
+tied to where his nose pointed. Anyone who turned dragged that spot round the sky and they
+chased it for good. Sam's first words on it: *"They just seem to fly in circles around me."*
+The harness's main stand-in flew straight legs across the map, which is not how a person
+with an arrow on the screen flies. **The stand-in that matters turns to face them**, and
+rule 3's "fixed in the world" is the lesson: nothing in the flying may depend on his heading
+from moment to moment, only the guns.
+
 **Measured** by `test/dusk-intercept.mjs`: round 5, two interceptors, nothing else alive, 180
-game-seconds, a stand-in player who never aims. Run it for current figures; one run gave:
+game-seconds. Against the stand-in who turns to face them:
 
-| stand-in player | passes | on screen before each | shots | hits on him |
-|---|---|---|---|---|
-| straight legs across the map, cruising | 39 | 2.9s | 35 | 13 |
-| straight legs, full throttle | 31 | 3.1s | 17 | 5 |
-| legs with a gentle weave | 20 | 4.8s | 3 | 1 |
-| legs with a hard weave | 11 | 2.4s | 0 | 0 |
-| circling without ever stopping | 50 | 0.3s | 0 | 0 |
+| | `interceptors-1` | `interceptors-2` |
+|---|---|---|
+| laps round him per pass (a straight pass is 0.5) | 3.2 | 0.58 |
+| time spent close by and off the screen | 81% | 29% |
+| time on screen when within 250 | 18% | 40% |
+| on screen before each pass | 2.7s | 3.3s |
+| shots at him / hits | 6 / 0 | 45 / 11 |
 
-Of 55 shots across those runs, none came from behind him and none from off the screen;
-removing rule 3 turns both checks red.
+Across every run no shot came from behind him or from off the screen; removing rule 4 turns
+both checks red.
 
-**What the figures say that is not settled:**
+**What is not settled:**
 
-- **They die fast.** The stand-in holds Fire and flies its line, never aiming, and still
-  kills both inside 12 to 26 seconds. A head-on run comes straight down the gun line. Three
-  hull may be too little; that is Sam's to change.
-- **A player who circles without stopping is buzzed but never shot at.** They cannot get in
-  front of a nose that never stops moving, and they will not fire from where he cannot see.
-- **A hard weave is a complete defence** against their guns; a gentle one nearly so.
-- Roughly one pass in ten is never on screen, when he turns at the map edge with one already
-  inbound. Those fire nothing.
+- **Against a player flying straight legs, about four passes in ten are never on screen.**
+  They fire nothing, but they are a whoosh from nowhere.
+- **A player who circles without ever stopping is never shot at**, and never sees them.
+- **They die fast.** A stand-in that holds Fire and never aims kills both in 26 to 43
+  seconds. Three hull may be too little; Sam's to change.
 
 None of this says how it feels. That is his to judge on the phone.
 
