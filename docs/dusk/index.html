@@ -95,11 +95,13 @@
     clip-path: polygon(50% 0, 100% 100%, 50% 70%, 0 100%);
     filter: drop-shadow(0 0 4px rgba(6, 7, 22, 0.9));
   }
+  .point.raid i { background: #ff5a48; }
   .point.lock i {
     inset: 2px; background: none; clip-path: none;
     border: 1.5px solid var(--glow);
     transform: rotate(45deg);
   }
+  .point.raid.lock i { border-color: #ff5a48; }
   .warn {
     position: fixed;
     top: calc(68px + env(safe-area-inset-top, 0px));
@@ -251,7 +253,7 @@
 <button type="button" class="sam" id="sam">Sam</button>
 <div class="dev" id="dev"><h2>Upgrades</h2><div class="dev-list" id="devList"></div>
   <h2>Sounds</h2><div class="dev-diag" id="devDiag"></div><div class="dev-snd" id="devSnd"></div>
-  <div class="dev-foot"><button type="button" class="dev-btn" id="devClear">Clear round</button><button type="button" class="dev-btn" id="devClose">Close</button></div></div>
+  <div class="dev-foot"><button type="button" class="dev-btn" id="devRaid">Send interceptors</button><button type="button" class="dev-btn" id="devClear">Clear round</button><button type="button" class="dev-btn" id="devClose">Close</button></div></div>
 <!-- /SAM -->
 <div class="fail" id="fail">This device couldn’t start 3D graphics. Try opening the page in Safari or Chrome.</div>
 
@@ -1147,7 +1149,7 @@
   }
   function die() {
     dead = true; deadT = 0;
-    boom(shipPos, true); sfx('dead'); heat = 0;
+    boom(shipPos, true); sfx('dead'); heat = 0; icLeave();
     player.visible = false;
     crossEl.style.display = 'none';
     fireTouch = null; fireEl.classList.remove('on');
@@ -1462,6 +1464,7 @@
     for (i = 0; i < missiles.length; i++) { missiles[i].life = 0; missiles[i].mesh.visible = false; }
     for (i = 0; i < seekers.length; i++) { seekers[i].life = 0; seekers[i].mesh.visible = false; }
     clearChain();
+    icReset(n);
     updateReadout();
   }
   function checkRound() {
@@ -1470,6 +1473,7 @@
     hull = maxHull(); showHull();
     shield = maxShield(); showShield();
     if (round > best) { best = round; try { localStorage.setItem('small-world-best', String(best)); } catch (e) {} }
+    icLeave();
     banner('Round ' + round + ' cleared', 3); sfx('clear'); heat *= 0.25;
   }
   function updateRounds(dt) {
@@ -1604,6 +1608,9 @@
   // something travelling a -> b this frame: did it hit? k scales damage to small targets, hullK to capital hulls
   function strike(a, b, k, hullK) {
     var j;
+    for (j = 0; j < ics.length; j++) {
+      if (ics[j].alive && segDist2(ics[j].pos, a, b) < 16) { hitInterceptor(ics[j], k * dmgMul(), a); return true; }
+    }
     for (j = 0; j < drones.length; j++) {
       if (drones[j].alive && segDist2(drones[j].mesh.position, a, b) < 13) { killDrone(drones[j]); return true; }
     }
@@ -1627,7 +1634,7 @@
     return false;
   }
 
-  // ---------- targeting: drones (1), ground units (2), live turrets (3) ----------
+  // ---------- targeting: drones (1), ground units (2), live turrets (3), interceptors (4, and first) ----------
   var trk = { k: 0, o: null, f: null };
   var pkFrom, pkDir, pkCos, pkR2, pkRange, pkDistW, pkBest;
   var pkTmp = new THREE.Vector3(), pkPos = new THREE.Vector3();
@@ -1635,6 +1642,7 @@
     if (k === 1) { if (!o.alive) return false; out.copy(o.mesh.position); return true; }
     if (k === 2) { if (!o.alive) return false; out.copy(o.pos); return true; }
     if (k === 3) { if (o.hp <= 0 || f.gone > 0 || f.dying > 0) return false; o.pivot.getWorldPosition(out); return true; }
+    if (k === 4) { if (!o.alive) return false; out.copy(o.pos); return true; }
     return false;
   }
   function pkLook(k, o, f, p) {
@@ -1651,6 +1659,9 @@
     var i, j;
     pkFrom = from; pkDir = dir; pkCos = cosMin; pkRange = range; pkR2 = range * range; pkDistW = distW; pkBest = -Infinity;
     trk.k = 0; trk.o = null; trk.f = null;
+    // an interceptor inside the cone is taken ahead of anything else (Sam)
+    for (i = 0; i < ics.length; i++) if (ics[i].alive) pkLook(4, ics[i], null, ics[i].pos);
+    if (trk.k) return trk.k;
     for (i = 0; i < drones.length; i++) if (drones[i].alive) pkLook(1, drones[i], null, drones[i].mesh.position);
     for (i = 0; i < ground.length; i++) if (ground[i].alive) pkLook(2, ground[i], null, ground[i].pos);
     for (i = 0; i < fleet.length; i++) {
@@ -1862,6 +1873,7 @@
     for (i = 1; i < waves.length; i++) if (waves[i].life < w.life) w = waves[i];
     w.mesh.position.copy(c.p); w.r = c.r; w.life = 0.4; w.mesh.visible = true; sfx('chain', c.p);
     var r2 = c.r * c.r, dmg = CHAIN_DMG[up.chain] * dmgMul();
+    for (i = 0; i < ics.length; i++) if (ics[i].alive && ics[i].pos.distanceToSquared(c.p) < r2) hitInterceptor(ics[i], dmg, ics[i].pos);
     for (i = 0; i < drones.length; i++) if (drones[i].alive && drones[i].mesh.position.distanceToSquared(c.p) < r2) killDrone(drones[i]);
     for (i = 0; i < ground.length; i++) if (ground[i].alive && ground[i].pos.distanceToSquared(c.p) < r2) hitGround(ground[i], dmg, ground[i].pos);
     for (i = 0; i < fleet.length; i++) {
@@ -2150,6 +2162,186 @@
     }
   }
 
+  // ---------- interceptors: from round 3, a few leave the far fight and come for you ----------
+  // Sam's rulings: they are NOT in the round's count -- the round ends without them and the survivors go home;
+  // one in rounds 3-4, two from 5, three from 8; three hits at base damage; weapons prefer them over everything else.
+  // The point of the flying is that every attack comes THROUGH the view. In portrait that is about 20 degrees
+  // either side, so an enemy on your tail is one you can neither see nor shoot: they never press an attack from
+  // behind, and after a pass they go out ahead of you to turn round where you can watch them do it.
+  var IC_HP = 3, IC_SCALE = 1.3, IC_SPEED = 66, IC_TURN = 1.9, IC_SHOT = 150, IC_DMG = 10, IC_SPREAD = 10;
+  var ics = [], icPeelT = -1, icWant = 0, icYawWas = 0, icTurn = 0;
+  var icA = new THREE.Vector3(), icB = new THREE.Vector3(), icC = new THREE.Vector3(), icQ = new THREE.Quaternion(), icUp = new THREE.Vector3(0, 1, 0);
+  function icCount(n) { return n < 3 ? 0 : n < 5 ? 1 : n < 8 ? 2 : 3; }
+  (function () {
+    for (var i = 0; i < 3; i++) {
+      var g = makeInterceptor(); g.visible = false; scene.add(g);
+      var el = document.createElement('div'); el.className = 'point raid'; el.appendChild(document.createElement('i'));
+      document.body.appendChild(el);
+      ics.push({ g: g, mark: el, shown: false, pos: new THREE.Vector3(), dir: new THREE.Vector3(0, 0, 1), hp: 0, alive: false, mode: 1, t: 0, side: 1, cool: 0, burst: 0, bank: 0, pd: 0 });
+    }
+    // their fire: red, long, quicker than a drone's
+    var geo = new THREE.BoxGeometry(0.4, 0.4, 3.6), mat = new THREE.MeshBasicMaterial({ color: 0xff5a48, fog: false });
+    for (i = 0; i < 18; i++) {
+      var m = new THREE.Mesh(geo, mat); m.visible = false; scene.add(m);
+      shots.push({ mesh: m, vel: new THREE.Vector3(), prev: new THREE.Vector3(), life: 0, kind: 3, dmg: IC_DMG });
+    }
+  })();
+  function icHide(ic) { ic.alive = false; ic.g.visible = false; if (ic.shown) { ic.shown = false; ic.mark.style.display = 'none'; } }
+  function icReset(n) {
+    for (var i = 0; i < ics.length; i++) icHide(ics[i]);
+    icWant = icCount(n); icPeelT = icWant ? 4 : -1;
+  }
+  // round over, or you are down: whoever is left turns for the far fight
+  function icLeave() {
+    icPeelT = -1;
+    for (var i = 0; i < ics.length; i++) if (ics[i].alive) ics[i].mode = 3;
+  }
+  function icPeel(ic) {
+    // take the place of an enemy that is really out there, so it is seen to leave; that one's replacement flies in as usual
+    var src = null;
+    for (var i = 0; i < dogs.length; i++) if (dogs[i].team === 1 && dogs[i].alive) { src = dogs[i]; break; }
+    if (src) { ic.pos.copy(src.pos); src.alive = false; src.g.visible = false; src.dead = 3 + Math.random() * 4; }
+    else dogPoint(ic.pos, 0.6);
+    ic.dir.copy(shipPos).sub(ic.pos).normalize();
+    ic.hp = IC_HP; ic.alive = true; ic.mode = 1; ic.t = 0; ic.side = Math.random() < 0.5 ? -1 : 1;
+    ic.cool = 1; ic.burst = 0; ic.bank = 0; ic.pd = 1e9;
+    ic.g.visible = true;
+  }
+  function hitInterceptor(ic, dmg, at) {
+    ic.hp -= dmg;
+    if (ic.hp <= 0) { boom(ic.pos, true); icHide(ic); salvage(4); } // no chainBlast: a chain can kill them, they do not carry it on
+    else boom(at, false);
+  }
+  function updateInterceptors(dt) {
+    var i, ic;
+    if (icPeelT > 0 && inControl && !dead && roundLive) {
+      icPeelT -= dt;
+      if (icPeelT <= 0) {
+        for (i = 0; i < icWant; i++) icPeel(ics[i]);
+        sfx('raid'); banner(icWant > 1 ? 'Interceptors inbound' : 'Interceptor inbound', 2.5);
+      }
+    }
+    // how hard you are turning, smoothed: someone circling has to be met where they will be looking, not where they are
+    var yd = Math.atan2(Math.sin(yaw - icYawWas), Math.cos(yaw - icYawWas)) / Math.max(dt, 0.001);
+    icYawWas = yaw; icTurn += (yd - icTurn) * Math.min(1, dt * 0.6); // slow enough that a weave averages out and a circle does not
+    for (i = 0; i < ics.length; i++) {
+      ic = ics[i];
+      if (!ic.alive) continue;
+      icA.copy(ic.pos).sub(shipPos);
+      var dist = icA.length();
+      // 1: dead ahead of you, -1: dead astern. Measured against where your nose WILL be if you are in a steady turn,
+      // so a run at someone circling is begun where they are about to look; the guns still wait for the real view.
+      icC.copy(fwdV).applyAxisAngle(icUp, Math.max(-1, Math.min(1, icTurn * 1.5)));
+      var ahead = dist > 0.01 ? icA.dot(icC) / dist : 1;
+      var spd = IC_SPEED, onTgt = false;
+      if (ic.mode === 3) {
+        // going home
+        icB.copy(DOG_C).sub(ic.pos).normalize(); spd = 120;
+        if (dist > 520 || ic.pos.distanceToSquared(DOG_C) < 8100) { icHide(ic); continue; }
+      } else if (ic.mode === 1) {
+        // attack run. Only ever from in front: if you have turned away, it goes round rather than follow you
+        if (dist > 300) spd = 120; // the long way in from the far fight
+        else if (dist > 90 && ahead < 0.6) { ic.mode = 2; ic.t = 0; } // out to one side counts as behind: you could not see it there either
+        // the pass itself: the moment it stops getting closer, it is past you
+        if (dist < 70 && dist > ic.pd) { ic.mode = 2; ic.t = 0; ic.side = -ic.side; sfx('pass', ic.pos); }
+        ic.pd = dist;
+        // it flies at a point just beside and above you, so the run skims past rather than through; the guns aim at you
+        icB.copy(shipPos).addScaledVector(fwdV, speed * dist / (IC_SPEED + speed)).addScaledVector(rightV, ic.side * 7).addScaledVector(upV, 4).sub(ic.pos).normalize();
+        onTgt = dist > 60;
+      }
+      if (ic.mode === 2) {
+        // breaking away: make for a spot well out in front of you and off to one side, then turn back in
+        // (nearer in when you are turning hard, or the spot sweeps round faster than anything could fly to it)
+        var lead = Math.max(-1.4, Math.min(1.4, icTurn * 2.5)), reach = Math.max(130, 200 / (1 + 1.2 * Math.abs(icTurn)));
+        icC.copy(fwdV).applyAxisAngle(icUp, lead);
+        icB.copy(shipPos).addScaledVector(icC, reach).addScaledVector(rightV, ic.side * 55 * reach / 200);
+        icB.y = Math.max(shipPos.y + 10, Math.max(height(icB.x, icB.z), 0) + 24);
+        icB.sub(ic.pos);
+        var gd = icB.length(); icB.normalize();
+        spd = Math.max(IC_SPEED, speed + 48); // it has to overtake you to get there
+        ic.t += dt;
+        // a run only starts from far enough out, and near enough dead ahead, to be watched all the way in
+        if ((dist > 110 && ahead > 0.9 && (gd < 50 || dist > 150)) || ic.t > 14) { ic.mode = 1; ic.t = 0; ic.pd = 1e9; }
+      }
+      // never into the ground
+      var floor = Math.max(height(ic.pos.x, ic.pos.z), 0) + 13;
+      if (ic.pos.y < floor) { icB.y = 0; icB.normalize().multiplyScalar(0.5); icB.y = 1; icB.normalize(); onTgt = false; }
+      // nor through each other
+      for (var q = 0; q < ics.length; q++) {
+        var o = ics[q];
+        if (o === ic || !o.alive) continue;
+        var sep = o.pos.distanceToSquared(ic.pos);
+        if (sep < 400 && sep > 0.01) { sep = Math.sqrt(sep); icB.addScaledVector(icC.copy(ic.pos).sub(o.pos), (1 - sep / 20) * 1.6 / sep); }
+      }
+      icB.normalize();
+      // turn at a limited rate about the axis between the two headings (blending stalls when the goal is astern)
+      var yaw0 = Math.atan2(-ic.dir.x, -ic.dir.z);
+      var ang = ic.dir.angleTo(icB);
+      if (ang > 0.0001) {
+        icC.crossVectors(ic.dir, icB);
+        if (icC.lengthSq() < 1e-8) icC.set(0, 1, 0).cross(ic.dir);
+        if (icC.lengthSq() < 1e-8) icC.set(1, 0, 0);
+        ic.dir.applyAxisAngle(icC.normalize(), Math.min(ang, IC_TURN * dt)).normalize();
+      }
+      var yaw1 = Math.atan2(-ic.dir.x, -ic.dir.z), dy = yaw1 - yaw0;
+      if (dy > Math.PI) dy -= 6.283; else if (dy < -Math.PI) dy += 6.283;
+      var wantBank = Math.max(-1.25, Math.min(1.25, dy / Math.max(dt, 0.001) * 0.85));
+      ic.bank += (wantBank - ic.bank) * Math.min(1, dt * 5);
+      ic.pos.addScaledVector(ic.dir, spd * dt);
+      ic.g.position.copy(ic.pos);
+      ic.g.rotation.set(Math.asin(Math.max(-1, Math.min(1, ic.dir.y))), yaw1, ic.bank);
+      // drawn large while it is far off, as the far fight is, and down to its real size as it closes
+      ic.g.scale.setScalar(IC_SCALE + (DOG_SCALE - IC_SCALE) * Math.max(0, Math.min(1, (dist - 220) / 260)));
+      // guns: a burst of three, and only when it is in front of you and you could have seen it coming
+      ic.cool -= dt;
+      // "in front" is measured against the screen, not a round cone: portrait is far narrower sideways than up and down
+      var fz = icA.dot(fwdV), vt = Math.tan(camera.fov * Math.PI / 360);
+      var seen = fz > 0 && Math.abs(icA.dot(rightV)) < fz * vt * camera.aspect * 0.95 && Math.abs(icA.dot(upV)) < fz * vt * 0.9;
+      if (onTgt && inControl && !dead && ic.cool <= 0 && dist < 175 && -icA.dot(ic.dir) / dist > 0.985 && seen) {
+        var s = null;
+        for (var k = 0; k < shots.length; k++) if (shots[k].life <= 0 && shots[k].kind === 3) { s = shots[k]; break; }
+        if (s) {
+          icC.copy(shipPos).addScaledVector(fwdV, speed * (dist / IC_SHOT) * 0.6);
+          icC.x += (Math.random() - 0.5) * IC_SPREAD; icC.y += (Math.random() - 0.5) * IC_SPREAD; icC.z += (Math.random() - 0.5) * IC_SPREAD;
+          s.mesh.position.copy(ic.pos).addScaledVector(ic.dir, 3); s.prev.copy(s.mesh.position);
+          s.vel.copy(icC).sub(s.mesh.position).normalize().multiplyScalar(IC_SHOT);
+          s.mesh.lookAt(icC);
+          s.life = 2; s.mesh.visible = true;
+          sfx('ishot', ic.pos);
+        }
+        ic.burst++;
+        if (ic.burst >= 3) { ic.burst = 0; ic.cool = 1.6 + Math.random() * 1.2; } else ic.cool = 0.13;
+      }
+    }
+  }
+  // a red marker for each one: a diamond on it while it is in view, an arrow at the edge of the screen when it is not
+  function updateIcMarkers() {
+    var w = window.innerWidth, h = window.innerHeight, t = Math.tan(camera.fov * Math.PI / 360);
+    icQ.copy(camera.quaternion).invert();
+    for (var i = 0; i < ics.length; i++) {
+      var ic = ics[i], want = ic.alive && inControl && !dead;
+      if (want !== ic.shown) { ic.shown = want; ic.mark.style.display = want ? 'block' : 'none'; }
+      if (!want) continue;
+      // as the camera sees it: x right, y up, negative z ahead
+      icA.copy(ic.pos).sub(camera.position).applyQuaternion(icQ);
+      var x = 0, y = 0, rot = 0, lock = false;
+      if (icA.z < 0) {
+        var nx = icA.x / (-icA.z * t * camera.aspect), ny = icA.y / (-icA.z * t);
+        if (Math.abs(nx) < 0.9 && Math.abs(ny) < 0.74) { lock = true; x = (nx * 0.5 + 0.5) * w; y = (-ny * 0.5 + 0.5) * h; }
+      }
+      if (!lock) {
+        var len = Math.sqrt(icA.x * icA.x + icA.y * icA.y), dx = 0, dy = -1;
+        if (len > 0.0001) { dx = icA.x / len; dy = icA.y / len; }
+        // out to the edge of the screen, inside the bars at the top and the thumbs at the bottom
+        var hw = w / 2 - 20, hh = h / 2 - 110;
+        var k = Math.min(hw / Math.max(Math.abs(dx), 0.0001), hh / Math.max(Math.abs(dy), 0.0001));
+        x = w / 2 + dx * k; y = h / 2 - dy * k; rot = Math.atan2(dx, dy);
+      }
+      ic.mark.className = lock ? 'point raid lock' : 'point raid';
+      ic.mark.style.transform = 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px) rotate(' + rot.toFixed(3) + 'rad)';
+    }
+  }
+
   // ---------- pointer to the nearest enemy, once a round is down to its last quarter ----------
   var pointEl = document.getElementById('point'), pointOn = false;
   var ptr = new THREE.Vector3(), qInv = new THREE.Quaternion();
@@ -2298,6 +2490,9 @@
     dead:       { label: 'Ship lost', gap: 0.5, play: function (v, d) { tone('sawtooth', 420, 36, 1.3, 0.3, d); hiss(1.2, 0.5, 'lowpass', 1500, 60, d); } },
     round:      { label: 'Round start', gap: 0.3, play: function (v, d) { tone('triangle', 440, 440, 0.2, 0.15, d); tone('triangle', 554, 554, 0.2, 0.15, d, 0.1); tone('triangle', 659, 659, 0.34, 0.15, d, 0.2); } },
     clear:      { label: 'Round cleared', gap: 0.3, play: function (v, d) { tone('triangle', 523, 523, 0.18, 0.15, d); tone('triangle', 659, 659, 0.18, 0.15, d, 0.09); tone('triangle', 784, 784, 0.18, 0.15, d, 0.18); tone('triangle', 1047, 1047, 0.5, 0.15, d, 0.27); } },
+    raid:       { label: 'Interceptors inbound', heat: 0.3, gap: 0.5, play: function (v, d) { tone('square', 880, 880, 0.11, 0.11, d); tone('square', 622, 622, 0.11, 0.11, d, 0.14); tone('square', 880, 880, 0.11, 0.11, d, 0.28); tone('square', 622, 622, 0.2, 0.11, d, 0.42); } },
+    ishot:      { label: 'Interceptor shot', heat: 0.12, gap: 0.04, play: function (v, d) { tone('sawtooth', 900, 260, 0.09, 0.13 * v, d); } },
+    pass:       { label: 'Interceptor pass', heat: 0.15, gap: 0.3, floor: 0.5, play: function (v, d) { hiss(0.7, 0.6 * v, 'bandpass', 2600, 300, d, 1.2); tone('sawtooth', 240, 90, 0.6, 0.08 * v, d); } },
     pick:       { label: 'Upgrade chosen', gap: 0.1, play: function (v, d) { tone('triangle', 660, 660, 0.16, 0.16, d); tone('triangle', 990, 990, 0.3, 0.16, d, 0.09); } }
   };
   // play a sound; with a position it gets quieter with distance and pans to the side it came from
@@ -2484,7 +2679,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'pages-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'interceptors-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +
@@ -2525,6 +2720,11 @@
     for (i = 0; i < fleet.length; i++) if (fleet[i].gone <= 0) { fleet[i].gone = Infinity; fleet[i].dying = 0; fleet[i].ship.visible = false; }
     devShow(false);
     updateReadout(); checkRound();
+  });
+  document.getElementById('devRaid').addEventListener('click', function () {
+    // two of them, now, whatever the round: so the flying can be judged without playing to round 3
+    for (var i = 0; i < ics.length; i++) icHide(ics[i]);
+    icWant = 2; icPeelT = 0.05; devShow(false);
   });
   // ---------- /SAM ----------
 
@@ -2614,6 +2814,7 @@
     updateBursts(dt);
     updateFar(dt);
     updateDogfight(dt);
+    updateInterceptors(dt);
 
     sky.position.copy(camera.position);
     giant.rotation.y += dt * 0.01;
@@ -2635,6 +2836,7 @@
     }
 
     updatePointer();
+    updateIcMarkers();
     audioFrame(inControl && !dead);
     renderer.render(scene, camera);
     requestAnimationFrame(tick);

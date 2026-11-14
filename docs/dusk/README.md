@@ -5,7 +5,7 @@ r128 beside it; all sound is synthesised, there are no other assets. Published a
 `/Manopalynx-/dusk/`.
 
 It was built in a claude.ai artifact across earlier chats and moved here unchanged at build
-`pages-1`: the only two lines that differ from the artifact are the three.js `<script>` tag
+`pages-1`: the only two lines that differed from the artifact were the three.js `<script>` tag
 (CDN to `./three.min.js`) and the `BUILD` tag. **The artifact is frozen; this folder is the
 one copy.**
 
@@ -60,23 +60,63 @@ sound, pin music intensity, and a diagnostic line that starts with the `BUILD` t
 `BUILD` on every change that reaches `main`** so he can tell which version his phone has.
 All of it is fenced with `SAM` comments and comes out when building ends.
 
-## Next: interceptors as real enemies
+## Interceptors (build `interceptors-1`)
 
-From round 3, a few peel away from the dogfight and come for him. Agreed requirements:
+From round 3 a few leave the distant dogfight and come for him. **Sam's rulings:**
 
-- They make passes **through his view**: head-on and crossing runs, then break away and
-  come round. No tail-chasing. In portrait he sees only about ±22 degrees sideways, so an
-  enemy behind him is one he can neither see nor shoot.
-- Edge-of-screen markers showing where each one is.
-- They get sounds, and they raise heat.
+- **How many:** one in rounds 3 and 4, two from round 5, three from round 8, never more.
+- **They are not in the round's "to go" count.** The round ends without them and the
+  survivors turn for home. An enemy that passes and comes round again is the worst possible
+  last target to wait for.
+- **Hull:** three hits at base bolt damage.
+- **Weapons prefer them:** tracking bolts and seekers take an interceptor inside their cone
+  ahead of anything else. Point defence ignores them. A chain reaction can kill one; they do
+  not carry the chain on.
 
-Not yet decided, and his to decide: how many per round, whether they count toward the
-round's "to go" total, how much hull they have.
+**Fills, not his decisions:** their shots do 10, the same as a drone's; the far dogfight
+reinforces back to five a side; "Send interceptors" in the Sam panel launches two at once in
+any round.
 
-The dogfight's flight code carries over, but it is tuned for scenery at 2.4x scale, so
-speeds and turn rate need re-tuning for close range.
+**How they fly.** Attack run, pass, break away, come round. Three rules keep every attack
+inside a portrait view about 20 degrees wide either side:
 
-## Queued after that, in the agreed order
+1. A run only starts from dead ahead of him and at least 110 away, and is abandoned if he
+   turns so that it is no longer in front.
+2. After a pass they overtake him and go out to a point 200 ahead and off to one side, so the
+   turn back happens where he can watch it.
+3. **The guns fire only while the interceptor is on his screen**, measured against the
+   screen's real shape rather than a round cone.
+
+Each has a red marker: a diamond on it while in view, an arrow at the screen edge when not.
+
+**Measured** by `test/dusk-intercept.mjs`: round 5, two interceptors, nothing else alive, 180
+game-seconds, a stand-in player who never aims. Run it for current figures; one run gave:
+
+| stand-in player | passes | on screen before each | shots | hits on him |
+|---|---|---|---|---|
+| straight legs across the map, cruising | 39 | 2.9s | 35 | 13 |
+| straight legs, full throttle | 31 | 3.1s | 17 | 5 |
+| legs with a gentle weave | 20 | 4.8s | 3 | 1 |
+| legs with a hard weave | 11 | 2.4s | 0 | 0 |
+| circling without ever stopping | 50 | 0.3s | 0 | 0 |
+
+Of 55 shots across those runs, none came from behind him and none from off the screen;
+removing rule 3 turns both checks red.
+
+**What the figures say that is not settled:**
+
+- **They die fast.** The stand-in holds Fire and flies its line, never aiming, and still
+  kills both inside 12 to 26 seconds. A head-on run comes straight down the gun line. Three
+  hull may be too little; that is Sam's to change.
+- **A player who circles without stopping is buzzed but never shot at.** They cannot get in
+  front of a nose that never stops moving, and they will not fire from where he cannot see.
+- **A hard weave is a complete defence** against their guns; a gentle one nearly so.
+- Roughly one pass in ten is never on screen, when he turns at the map edge with one already
+  inbound. Those fire nothing.
+
+None of this says how it feels. That is his to judge on the phone.
+
+## Queued, in the agreed order
 
 1. Wrecks of downed capital ships that stay for the run.
 2. Time of day moving on each round.
@@ -102,20 +142,22 @@ Also noted: once interceptors exist, invulnerable wingmen will look odd.
 ## Tests
 
 ```
-node test/dusk.mjs
+node test/dusk.mjs             # smoke
+node test/dusk-intercept.mjs   # the interceptors' rules and how they fly
 ```
 
-A smoke test: the page opens, three.js loads from beside it, the picture changes between
+`dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between
 two moments, the Sam panel shows the `BUILD` the source declares, nothing is requested from
 outside the folder, and nothing throws. It reads `BUILD` from the source rather than
 restating it.
 
-**It proves the page runs, not how it plays.** Headless Chromium draws this at a few frames
-a second, so it can check mechanics and never feel. Feel is Sam's to judge on his phone.
+`dusk-intercept.mjs` steps the real game by hand at 30 ticks a second with drawing switched
+off, so its figures are the same on any machine. It works on a temp copy with one line added
+(`window.__t = function (code) { return eval(code); }` before the final
+`requestAnimationFrame(tick);`), never the published file. **Clearing a round brings up the
+upgrade cards, which stops the clock**: give each check a fresh page.
 
-To reach the game's internals from a test, inject
-`window.__t = function (code) { return eval(code); }` just before the final
-`requestAnimationFrame(tick);` in a served copy, not in the published file.
+**Neither proves how it plays.** Feel is Sam's to judge on his phone.
 
 ## Not done yet
 
