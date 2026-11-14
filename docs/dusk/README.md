@@ -327,55 +327,70 @@ the dreadnought shipped with a generator nothing could reach.
 - The first stand-in ignored the guns and reported a 319-second fight. That measured the wrong
   route, not the wall.
 
-## The lava field and the walker (build `lava-1`): step one of the third boss, no fight yet
+## The walker (build `walker-1`): the third boss
 
 Sam: "would we be able to add a new massive lava zone by the volcano with a massive walking
-enemy spider tank looking thing?" and, to the design below, "Go with your ideas". He also said
-**three bosses is enough for now.**
+enemy spider tank looking thing?"; to the design, "Go with your ideas"; to the place and the walk,
+"Looking good, go for it". He said **three bosses is enough for now.** Every rule below is
+therefore mine, on his say-so, and open to him.
 
-**Step one is the place and the walk.** Reached only from the Sam panel ("Lava field on/off").
-Nothing in it can be fought, won or lost to. The fight is step two, after he has looked,
-because whether a walk looks alive is something only his eye can say.
+**The lava field** (`heightLava`, arena 2): black rock cut by channels below sea level. **The sea,
+recoloured and glowing, is the lava**, so rivers and lakes are wherever the ground dips below
+nought, 36% of the field. **The volcano is the one that was always on the horizon**, brought up
+to the rim (`VOLC_NEAR`).
 
-**The lava field** (`heightLava`, arena 2). Black rock cut by channels that dip below sea
-level. **The sea, recoloured and made to glow, is the lava**, so the rivers and lakes are not
-drawn: they are wherever the ground goes below nought (36% of the field). **The volcano is the
-one that was always on the horizon**, brought up to the rim (`VOLC_NEAR`): its centre is 446
-from the middle, where it was 703. Its streams, crater and embers come with it.
+**The walker**: six legs, two bones and a knee each, solved from hip and foot; a body the size
+of a capital ship riding some 34 up, so it can be flown under; a circuit of radius 105. The two
+sets of three legs strictly take turns. How it walks is asserted by `test/dusk-lava.mjs`.
 
-**The walker.** Six legs, a body about the size of a capital ship riding some 34 above its
-feet, walking a circuit of radius 105 at 9 a second: a lap in 73 seconds.
+**The fight:**
 
-- **Feet stand on the ground as it is.** A foot plants at `max(height, 0)`, so in a channel it
-  wades on the lava's surface. 43% of its route is over lava.
-- **Two bones and a knee per leg**, solved from hip and foot. The knee goes up and out, which
-  is what makes it a spider and not a table.
-- **The gait is two sets of three, strictly taking turns.** Nothing lifts while anything is in
-  the air, and the set that went last waits.
-- **The body looks a length ahead** for rising ground, because it climbs slowly.
+- **Its plate cannot be hurt.** You bring it down **by its knees**, each with a health ring once
+  hit. It slows for each leg lost.
+- **Three knees gone and it falls**: belly on the rock, stopped. **The fall alone costs it 15%.**
+- **Its core opens on its back** for 10 seconds (9, then 8). **The core is a weak spot**: a bolt
+  does three times what it would to a hull.
+- **Then it gets up**, every leg mended, and walks on with the damage it took.
+- **Turrets that rebuild** after 10 seconds, four on its back, two more under it from round 10.
+- **The volcano is the third player**: each eruption throws bombs (4, 6, 8 by tier) that land on
+  marks on the ground, centred on where you will be. 25 if you are over a mark within 70 of the
+  ground when it lands.
+- **The lava burns**: 12, twice a second, skimming it within 3.4 of its surface.
+- **Which boss**: any of the three first in a run, then any but the last. 60 runs: dreadnought
+  20, ice wall 17, walker 23 first; all six pairings seen.
 
-**Measured** by `test/dusk-lava.mjs` over 150 seconds, a little over two laps, checked every
-tick (27,000 foot-ticks): no planted foot off the ground or under it; no leg stretched past its
-length or folded short; no knee in the ground; never more than three feet in the air and never
-both sets at once; 56 steps by every leg; never less than 18.8 of room under the belly.
+| round | core | each knee | turrets | seconds open | bombs an eruption |
+|---|---|---|---|---|---|
+| 5 | 1800 | 30 | 4 | 10 | 4 |
+| 10 | 5100 | 74 | 6 | 9 | 6 |
+| 15 | 9400 | 125 | 6 | 8 | 8 |
 
-**The first gait was broken and this suite caught it before he saw it.** It let whichever leg
-was furthest behind go next. One set starved the other: some legs took 118 steps and some 22,
-and one foot was left planted 290 behind its hip, with the leg drawn stretched across the map.
+**Measured** by `test/dusk-walker.mjs`, with a stand-in that flies at the nearest knee, and at the
+core when open, holding Fire. It never dodges, cannot die, and repair is not modelled:
 
-**The walker was a shadow with legs** in the first render: dark machine, black rock, red haze.
-It is paler now, lit from within, with glowing knees and a hot seam down each flank.
+| | destroyed in | it fell at | hull it lost |
+|---|---|---|---|
+| round 5, no upgrades | 257s | 71, 186, 256s | 665 of 100 |
+| round 5, four upgrades | 44s | 16, 43s | 88 of 125 |
+| round 10, nine upgrades | 42s | 16, 40s | 128 of 150 |
 
-**Agreed for the fight, not built** (his "go with your ideas" covers these):
+Bolts aimed at a knee with a clear line reach it 87% of the time level, 93 to 100% from above;
+at the open core, 79% from a shallow 5° and 100% from 20° up.
 
-- You bring it down **by its legs**: each has a joint with a health ring; the body is armoured.
-- Lose enough legs and **it falls**, exposing a core on its back for a few seconds.
-- **Then it gets back up**: legs repair, it walks on. Each fall costs it a chunk of health.
-- It carries **turrets that rebuild**.
-- **The volcano is the third player**: each eruption throws lava bombs into the arena, landing
-  in marked spots.
-- **The lava hurts** if you touch it.
-- With three bosses, "never the same twice running" becomes a real draw between the other two.
+**How it got here, measured not guessed:**
+
+- The first gait starved one set of legs: 118 steps against 22, a foot left 290 behind.
+- The first walker was a shadow with legs against black rock in red haze.
+- With no upgrades the first fight could not be won in seven minutes: four falls had it 42%
+  done. The weak-spot core and the cost of a fall are the fix.
+- Then, with four upgrades, it was over in 44s for 32 hull. More core and four turrets from the
+  start brought that to 88.
+- Two of the suite's own checks were wrong first time: one counted bolts that had rock between
+  gun and knee as misses, and one started its stopwatch after the core had opened.
+
+**Not settled:** a player with no upgrades, as the Sam panel's boss buttons give, faces a
+four-minute fight. Whether a person stands under a bomb mark is not something a stand-in that
+never dodges can say. The footfall and eruption sounds are unheard by anyone but him.
 
 ## Queued, in the agreed order
 
@@ -409,6 +424,7 @@ node test/dusk-boss.mjs        # the dreadnought's rules and how long the fight 
 node test/dusk-arena.mjs       # the ice landscape: nothing floating, nothing buried, and dusk comes back exact
 node test/dusk-wall.mjs        # the ice wall: cracks, guns that rebuild, sections that fall, which boss comes
 node test/dusk-lava.mjs        # the lava field, and the walker's every footfall for 150 seconds
+node test/dusk-walker.mjs      # the walker's fight: knees, the fall, the core, bombs, lava, which boss comes
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between

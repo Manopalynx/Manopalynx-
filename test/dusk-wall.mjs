@@ -182,14 +182,9 @@ console.log('\n— winning, and what comes after —');
   check(t[1].crack > t[0].crack && t[2].crack > t[1].crack && t[1].guns > t[0].guns && t[2].guns > t[1].guns && t[1].flakHp > t[0].flakHp, 'harder each time it comes: tougher cracks, more guns, tougher guns', JSON.stringify(t));
   check(t.every(r => r.level === r.guns) && t[2].guns === 32, 'and at its fullest, all 32 mounts, every gun is still on level ice', JSON.stringify(t));
 
-  // Which boss. Twenty runs of four boss rounds each.
-  const b = await run(`var first = { dread: 0, wall: 0 }, repeats = 0, seq = [];
-    for (var runN = 0; runN < 20; runN++) { lastBoss = null; var prev = null; for (var q = 0; q < 4; q++) { var k = pickBoss(); if (q === 0) first[k]++; if (k === prev) repeats++; prev = k; } }
-    lastBoss = null; bossForce = null; startRound(5); var a = wallOn ? 'wall' : 'dread', aArena = arena; startRound(10); var c = wallOn ? 'wall' : 'dread', cArena = arena;
-    JSON.stringify({ first: first, repeats: repeats, a: a, c: c, aArena: aArena, cArena: cArena })`);
-  check(b.first.dread >= 3 && b.first.wall >= 3, `the first boss of a run is sometimes one and sometimes the other  [of 20 runs: dreadnought ${b.first.dread}, wall ${b.first.wall}]`, JSON.stringify(b));
-  check(b.repeats === 0 && b.a !== b.c, 'and the same boss never comes twice running', JSON.stringify(b));
-  check((b.a === 'wall') === (b.aArena === 1) && (b.c === 'wall') === (b.cArena === 1), 'the ice is there for the wall and only for the wall', JSON.stringify(b));
+  // (Which boss a round draws is asserted in dusk-walker.mjs, where there are three to draw from.)
+  const b = await run(`M.wall(5); var a = arena, w = wallOn; bossForce = 'dread'; startRound(10); JSON.stringify({ a: a, w: w, c: arena, cw: wallOn })`);
+  check(b.a === 1 && b.w && b.c === 0 && !b.cw, 'the ice is there for the wall and only for the wall', JSON.stringify(b));
 }
 
 // ------------------------------------------------------------ the fight

@@ -253,7 +253,7 @@
 <button type="button" class="sam" id="sam">Sam</button>
 <div class="dev" id="dev"><h2>Upgrades</h2><div class="dev-list" id="devList"></div>
   <h2>Sounds</h2><div class="dev-diag" id="devDiag"></div><div class="dev-snd" id="devSnd"></div>
-  <div class="dev-foot"><button type="button" class="dev-btn" id="devLava">Lava field on/off</button><button type="button" class="dev-btn" id="devWall">Boss: ice wall</button><button type="button" class="dev-btn" id="devBoss">Boss: dreadnought</button><button type="button" class="dev-btn" id="devRaid">Send interceptors</button><button type="button" class="dev-btn" id="devClear">Clear round</button><button type="button" class="dev-btn" id="devClose">Close</button></div></div>
+  <div class="dev-foot"><button type="button" class="dev-btn" id="devWalker">Boss: walker</button><button type="button" class="dev-btn" id="devWall">Boss: ice wall</button><button type="button" class="dev-btn" id="devBoss">Boss: dreadnought</button><button type="button" class="dev-btn" id="devRaid">Send interceptors</button><button type="button" class="dev-btn" id="devClear">Clear round</button><button type="button" class="dev-btn" id="devClose">Close</button></div></div>
 <!-- /SAM -->
 <div class="fail" id="fail">This device couldn’t start 3D graphics. Try opening the page in Safari or Chrome.</div>
 
@@ -857,9 +857,10 @@
   var fleet = [];
   // [scale, patrol radius, altitude, starting angle, speed]
   var SHIP_SPECS = [[0.8, 150, 82, 0.5, 0.018], [0.62, 112, 58, 3.4, -0.02], [1.25, 178, 104, 1.9, 0.014], [0.9, 132, 122, 5.1, -0.016], [0.7, 96, 44, 4.2, 0.022], [1.1, 196, 70, 0.0, -0.013]];
+  function specials() { var n = 0; for (var i = 0; i < fleet.length; i++) if (fleet[i].boss) n++; return n; } // the bosses that live in the fleet, always after the ordinary ships
   function ensureFleet(n) {
-    while (fleet.length - (bossF ? 1 : 0) < n) {
-      var i = fleet.length - (bossF ? 1 : 0), sp = SHIP_SPECS[i % SHIP_SPECS.length], lap = Math.floor(i / SHIP_SPECS.length);
+    while (fleet.length - specials() < n) {
+      var i = fleet.length - specials(), sp = SHIP_SPECS[i % SHIP_SPECS.length], lap = Math.floor(i / SHIP_SPECS.length);
       var f = { ship: makeShip(sp[0]), scale: sp[0], radius: sp[1] - lap * 9, alt: sp[2] + lap * 16, angle: sp[3] + lap * 0.9, speed: sp[4],
         maxHp: Math.round(720 * sp[0]), guns: sp[0] > 1.05 ? 4 : sp[0] > 0.75 ? 3 : 2 };
       f.hp = f.maxHp; f.dying = 0; f.gone = Infinity; f.fall = 0; f.fallV = 0; f.list = 0; f.boomT = 0;
@@ -912,6 +913,31 @@
     if (ry < 2 && r < BOSS_R && (ax < 2 || az < 2) && r > 8) return true;    // the arms, from the spindle out to it
     return false;
   }
+  // one boss turret on ship group g, at sp = [x, y, z, and the way it faces]. The dreadnought and the walker both mount these.
+  var mtUp = new THREE.Vector3(0, 1, 0), mtN = new THREE.Vector3();
+  function mountTurret(f, g, sp) {
+    var upY = mtUp, nrm = mtN;
+    nrm.set(sp[3], sp[4], sp[5]);
+    var base = new THREE.Mesh(new THREE.CylinderGeometry(3, 3.8, 2.4, 8), turretMat);
+    base.position.set(sp[0] + nrm.x * 1.2, sp[1] + nrm.y * 1.2, sp[2] + nrm.z * 1.2);
+    base.quaternion.setFromUnitVectors(upY, nrm); g.add(base);
+    var pivot = new THREE.Group();
+    pivot.position.set(sp[0] + nrm.x * 3.6, sp[1] + nrm.y * 3.6, sp[2] + nrm.z * 3.6);
+    var tm = turretMat.clone();
+    var dome = new THREE.Mesh(new THREE.SphereGeometry(2.6, 8, 6), tm), barrel = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 6.4), tm);
+    barrel.position.z = 3.6;
+    var lamp = new THREE.Mesh(new THREE.SphereGeometry(1.0, 8, 6), new THREE.MeshBasicMaterial({ color: 0x9dff6a, fog: false }));
+    lamp.position.z = 7;
+    pivot.add(dome); pivot.add(barrel); pivot.add(lamp); g.add(pivot);
+    var ring = new THREE.Group(), segs = [];
+    for (var sg = 0; sg < 5; sg++) {
+      var arc = new THREE.Mesh(new THREE.RingGeometry(2.7, 3.35, 10, 1, Math.PI / 2 - (sg + 1) * 1.2566 + 0.11, 1.2566 - 0.22),
+        new THREE.MeshBasicMaterial({ color: 0x9dff6a, transparent: true, opacity: 0.95, fog: false, depthTest: false, side: THREE.DoubleSide }));
+      arc.renderOrder = 12; ring.add(arc); segs.push(arc);
+    }
+    ring.visible = false; scene.add(ring);
+    f.turrets.push({ pivot: pivot, base: base, ring: ring, segs: segs, lamp: lamp, mat: tm, flash: 0, local: pivot.position.clone(), nrm: nrm.clone(), hp: 0, maxHp: 8, cool: 2, back: 0, fitted: false });
+  }
   function ensureBoss() {
     if (bossF) return;
     var g = new THREE.Group(), R = BOSS_R, k, a, c, sn;
@@ -950,29 +976,7 @@
     for (k = 0; k < 4; k++) { a = k * Math.PI / 2; spots.push([Math.cos(a) * (R + 5), BOSS_RING_Y, Math.sin(a) * (R + 5), Math.cos(a), 0, Math.sin(a)]); }
     for (k = 0; k < 4; k++) { a = k * Math.PI / 2 + Math.PI / 4; spots.push([Math.cos(a) * R, BOSS_RING_Y + 4.5, Math.sin(a) * R, 0, 1, 0]); }
     for (k = 0; k < 4; k++) { a = k * Math.PI / 2 + Math.PI / 4; spots.push([Math.cos(a) * R, BOSS_RING_Y - 4.5, Math.sin(a) * R, 0, -1, 0]); }
-    var upY = new THREE.Vector3(0, 1, 0), nrm = new THREE.Vector3();
-    spots.forEach(function (sp) {
-      nrm.set(sp[3], sp[4], sp[5]);
-      var base = new THREE.Mesh(new THREE.CylinderGeometry(3, 3.8, 2.4, 8), turretMat);
-      base.position.set(sp[0] + nrm.x * 1.2, sp[1] + nrm.y * 1.2, sp[2] + nrm.z * 1.2);
-      base.quaternion.setFromUnitVectors(upY, nrm); g.add(base);
-      var pivot = new THREE.Group();
-      pivot.position.set(sp[0] + nrm.x * 3.6, sp[1] + nrm.y * 3.6, sp[2] + nrm.z * 3.6);
-      var tm = turretMat.clone();
-      var dome = new THREE.Mesh(new THREE.SphereGeometry(2.6, 8, 6), tm), barrel = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 6.4), tm);
-      barrel.position.z = 3.6;
-      var lamp = new THREE.Mesh(new THREE.SphereGeometry(1.0, 8, 6), new THREE.MeshBasicMaterial({ color: 0x9dff6a, fog: false }));
-      lamp.position.z = 7;
-      pivot.add(dome); pivot.add(barrel); pivot.add(lamp); g.add(pivot);
-      var ring = new THREE.Group(), segs = [];
-      for (var sg = 0; sg < 5; sg++) {
-        var arc = new THREE.Mesh(new THREE.RingGeometry(2.7, 3.35, 10, 1, Math.PI / 2 - (sg + 1) * 1.2566 + 0.11, 1.2566 - 0.22),
-          new THREE.MeshBasicMaterial({ color: 0x9dff6a, transparent: true, opacity: 0.95, fog: false, depthTest: false, side: THREE.DoubleSide }));
-        arc.renderOrder = 12; ring.add(arc); segs.push(arc);
-      }
-      ring.visible = false; scene.add(ring);
-      f.turrets.push({ pivot: pivot, base: base, ring: ring, segs: segs, lamp: lamp, mat: tm, flash: 0, local: pivot.position.clone(), nrm: nrm.clone(), hp: 0, maxHp: 8, cool: 2, back: 0, fitted: false });
-    });
+    spots.forEach(function (sp) { mountTurret(f, g, sp); });
     // ITS HEALTH, ROUND IT. Sam shot the core, saw nothing change, and moved to the structure: "perhaps a health bar or
     // ring is necessary". The same five-segment ring a turret wears, large, and shown from the start rather than
     // only once damaged -- this is the thing to shoot, and it should say so before the first hit.
@@ -1016,6 +1020,15 @@
     } else boom(at, false);
     updateReadout();
   }
+  // turrets come back, on whichever boss carries them
+  function rebuildTurrets(f, dt) {
+    for (var i = 0; i < f.turrets.length; i++) {
+      var t = f.turrets[i];
+      if (!t.fitted || t.hp > 0) continue;
+      t.back -= dt;
+      if (t.back <= 0) { t.hp = t.maxHp; t.pivot.visible = true; paintRing(t); t.cool = 1.5 + Math.random(); t.flash = 0.3; sfx('rebuild', f.ship.position); }
+    }
+  }
   function updateBoss(dt) {
     var f = bossF, i;
     if (!f || f.gone > 0) { if (f) f.gen.ring.visible = false; return; }
@@ -1038,13 +1051,7 @@
       if (f.gen.flash > 0) f.gen.mat.color.set(0xffffff); else f.gen.mat.color.setHSL(0.52 * hpK, 0.9, 0.7); // round the wheel, not through grey: cyan, green, yellow, red
     }
     if (!alive) return;
-    // turrets come back
-    for (i = 0; i < f.turrets.length; i++) {
-      var t = f.turrets[i];
-      if (!t.fitted || t.hp > 0) continue;
-      t.back -= dt;
-      if (t.back <= 0) { t.hp = t.maxHp; t.pivot.visible = true; paintRing(t); t.cool = 1.5 + Math.random(); t.flash = 0.3; sfx('rebuild', f.ship.position); }
-    }
+    rebuildTurrets(f, dt);
     // the bays: one interceptor from each, every 30 seconds, while there is room in the sky
     if (!inControl || dead || !roundLive) return;
     f.launchT -= dt;
@@ -1076,11 +1083,13 @@
       bossPct = Math.ceil(bossF.hp / bossF.maxHp * 100);
       var line = bossF.gen.hp > 0 ? 'Shield generator ' + Math.ceil(bossF.gen.hp / bossF.gen.maxHp * 100) + '%' : 'Dreadnought ' + bossPct + '%';
       if (line !== bossLine) { bossLine = line; readoutEl.innerHTML = 'Round ' + round + '<br>' + line; }
-    } else if (wallOn) { bossLine = ''; readoutEl.innerHTML = 'Round ' + round + '<br>Ice wall: ' + wallStanding() + ' of ' + WALL_SECS + ' standing'; }
+    } else if (walkF && walkF.gone <= 0) { bossLine = ''; readoutEl.innerHTML = 'Round ' + round + '<br>Walker ' + Math.ceil(walkF.hp / walkF.maxHp * 100) + '%' + (walker.state === 'down' ? ' \u2014 core open' : ''); }
+    else if (wallOn) { bossLine = ''; readoutEl.innerHTML = 'Round ' + round + '<br>Ice wall: ' + wallStanding() + ' of ' + WALL_SECS + ' standing'; }
     else { bossLine = ''; readoutEl.innerHTML = 'Round ' + round + '<br>' + remaining() + ' to go'; }
   }
   function hitCapital(f, dmg) {
     if (f.dying > 0 || f.gone > 0) return;
+    if (f.armour) return; // the walker's plate: nothing gets through it, the way in is its core
     if (f.boss && f.shield > 0) {
       // the shield takes it first; whatever is left over goes through
       var soak = Math.min(f.shield, dmg);
@@ -1095,7 +1104,7 @@
       chainBlast(f.ship.position, 2.2);
       updateReadout(); checkRound();
     }
-    if (f.boss && Math.ceil(f.hp / f.maxHp * 100) !== bossPct) updateReadout();
+    if (f.boss && (f.kind === 'walker' || Math.ceil(f.hp / f.maxHp * 100) !== bossPct)) updateReadout();
     f.fill.scale.x = Math.max(0.001, 33 * f.hp / f.maxHp);
     f.fill.material.color.set(f.hp < f.maxHp * 0.35 ? 0xff7058 : 0xffc880);
   }
@@ -1117,7 +1126,7 @@
   }
   function placeFleet(dt) {
     fleet.forEach(function (f) {
-      if (f.gone > 0) return;
+      if (f.gone > 0 || f.selfMoved) return;
       f.angle += f.speed * dt * (f.dying > 0 ? 0.5 : 1);
       var dirSign = f.speed >= 0 ? 0 : Math.PI;
       var x = Math.cos(f.angle) * f.radius, z = Math.sin(f.angle) * f.radius;
@@ -1203,7 +1212,8 @@
       capTmp.copy(shipPos);
       f.ship.worldToLocal(capTmp);
       if ((f.inHull || inHull)(capTmp)) {
-        if (f.boss) { var cr = Math.sqrt(capTmp.x * capTmp.x + capTmp.z * capTmp.z); if (cr < 0.5) { capTmp.x = 1; cr = 1; } capTmp.x *= 64 / cr; capTmp.z *= 64 / cr; } // out sideways, clear of the ring
+        if (f.kind === 'walker') capTmp.y = capTmp.y > 0 ? 18 : -14; // over its back or under its belly
+        else if (f.boss) { var cr = Math.sqrt(capTmp.x * capTmp.x + capTmp.z * capTmp.z); if (cr < 0.5) { capTmp.x = 1; cr = 1; } capTmp.x *= 64 / cr; capTmp.z *= 64 / cr; } // out sideways, clear of the ring
         else capTmp.y = capTmp.y > 0.5 ? 12 : -6.5;
         f.ship.localToWorld(capTmp);
         shipPos.copy(capTmp);
@@ -1676,8 +1686,10 @@
     };
   }
   // which boss this round is: random the first time in a run, then never the same twice running
+  var BOSSES = ['dread', 'wall', 'walker'];
   function pickBoss() {
-    var k = bossForce || (lastBoss === null ? (Math.random() < 0.5 ? 'dread' : 'wall') : lastBoss === 'dread' ? 'wall' : 'dread');
+    var pool = BOSSES.filter(function (b) { return b !== lastBoss; }); // any of them the first time, then any but the last
+    var k = bossForce || pool[Math.floor(Math.random() * pool.length)];
     bossForce = null; lastBoss = k;
     return k;
   }
@@ -1825,20 +1837,43 @@
     }
   }
 
-  // ---------- the walker: the third boss, so far only walking ----------
+  // ---------- the walker: the third boss ----------
   // Sam asked for "a new massive lava zone by the volcano with a massive walking enemy spider tank looking thing",
-  // and then "go with your ideas". MINE: six legs; a body about the size of a capital ship standing some 40 up, so it
-  // can be flown under; it walks a slow circuit of the lava field rather than chasing a ship it could never catch.
-  // THIS IS STEP ONE: the place and the walk, with no fight, reached from the Sam panel. The fight comes after he has
-  // looked at it, because whether a walk looks alive is something only his eye can say.
-  var walker = null, WK_R = 105, WK_SPEED = 9, WK_HIP = 34, WK_L1 = 27, WK_L2 = 41, WK_STRIDE = 15, WK_STEP = 0.5;
+  // said "go with your ideas" to the design, looked at the place and the walk ("Looking good, go for it").
+  // MINE, ALL OF IT, ON THAT SAY-SO: six legs; a body the size of a capital ship some 34 up, so it can be flown
+  // under; it walks a slow circuit rather than chase a ship it could never catch. You bring it down BY ITS KNEES:
+  // lose three and it falls, its core opens for a few seconds, and that is the only time it can be hurt. Then it
+  // gets up, legs mended, and walks on. It carries turrets that rebuild. Every eruption the volcano throws lava
+  // bombs that come down in marked places. The lava hurts to touch.
+  var walker = null, walkF = null, WK_R = 105, WK_SPEED = 9, WK_HIP = 34, WK_L1 = 27, WK_L2 = 41, WK_STRIDE = 15, WK_STEP = 0.5;
+  var WK_FALL_AT = 3, WK_CORE = new THREE.Vector3(0, 10.5, 2), WK_BOMB_T = 3.6, WK_BOMB_R = 15, WK_BOMB_DMG = 25, WK_LAVA_DMG = 12;
   var wkA = new THREE.Vector3(), wkB = new THREE.Vector3(), wkC = new THREE.Vector3(), wkUp = new THREE.Vector3(0, 1, 0);
+  var lavaBombs = [], lavaT = 0;
+  function walkerSpec(tier) {
+    return {
+      hull: Math.round(18 * Math.pow(tier, 1.5)) * 100,   // 1800, 5100, 9400: what its core takes; about three falls at round 5
+      kneeHp: Math.round(30 * Math.pow(tier, 1.3)),       // 30, 74, 125
+      turrets: Math.min(6, 2 + 2 * tier),                 // 4 on its back, then two under it as well
+      turretHp: 8 + 3 * (tier - 1),
+      fireK: Math.max(0.4, 1 / (1 + 0.25 * (tier - 1))),
+      down: Math.max(6, 11 - tier),                       // seconds its core stays open: 10, 9, 8
+      bombs: 2 + 2 * tier                                 // per eruption: 4, 6, 8
+    };
+  }
   function wkGround(x, z) { return Math.max(height(x, z), 0); } // it wades: a foot in a channel stands on the lava's surface
   // lays a unit box along the line from a to b
   function wkBone(mesh, a, b, thick) {
     mesh.position.copy(a).add(b).multiplyScalar(0.5);
     mesh.lookAt(b);
     mesh.scale.set(thick, thick, a.distanceTo(b));
+  }
+  function wkInHull(v) {
+    var ax = Math.abs(v.x);
+    if (ax < 12 && Math.abs(v.y) < 4.5 && Math.abs(v.z) < 20) return true;         // carapace
+    if (ax < 9 && v.y >= 4.5 && v.y < 9 && v.z > -16 && v.z < 14) return true;      // deck
+    if (ax < 7 && v.y > -4 && v.y < 2 && v.z >= 20 && v.z < 31) return true;        // head
+    if (ax < 6 && v.y > -8 && v.y <= -4.5 && v.z > -8 && v.z < 4) return true;      // belly housing
+    return false;
   }
   function ensureWalker() {
     if (walker) return;
@@ -1856,22 +1891,67 @@
     box(9, 2.2, 1.2, 0, -0.5, 31.2, hotM);         // the slit it looks through
     box(12, 4, 12, 0, -6, -2, darkM);              // the belly housing
     box(7, 1.6, 7, 0, -8.6, -2, hotM);             // and what glows under it
-    box(5, 7, 5, 0, 11, -8, darkM);                // a stack
-    box(2.4, 1.2, 2.4, 0, 15, -8, hotM);
+    box(4, 5, 4, 0, 11, -13, darkM);               // a stack, aft
+    box(2, 1, 2, 0, 14, -13, hotM);
     box(0.8, 1.6, 30, 12.2, 1.5, -1, hotM); box(0.8, 1.6, 30, -12.2, 1.5, -1, hotM); // a hot seam down each flank
+    // THE CORE, on its back, under a hatch that only opens when it is down
+    var coreMat = new THREE.MeshBasicMaterial({ color: 0xffe08a, fog: false });
+    var core = new THREE.Group(), ball = new THREE.Mesh(new THREE.SphereGeometry(5.5, 12, 8), coreMat);
+    core.add(ball); core.position.copy(WK_CORE); core.visible = false; g.add(core);
+    var hatch = box(13, 2.4, 13, WK_CORE.x, 9.8, WK_CORE.z, hullM);
     g.visible = false; scene.add(g);
     var legs = [];
     [-14, 0, 14].forEach(function (hz, row) {
       [1, -1].forEach(function (side) {
         var upper = new THREE.Mesh(unit, hullM), lower = new THREE.Mesh(unit, darkM);
-        var knee = new THREE.Mesh(new THREE.SphereGeometry(3.0, 8, 6), hotM), pad = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 5.4, 2.4, 7), hullM);
+        var km = hotM.clone();
+        var knee = new THREE.Mesh(new THREE.SphereGeometry(3.4, 8, 6), km), pad = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 5.4, 2.4, 7), hullM);
         var shoulder = new THREE.Mesh(new THREE.SphereGeometry(3.6, 8, 6), darkM);
         [upper, lower, knee, pad, shoulder].forEach(function (m) { m.visible = false; scene.add(m); });
-        legs.push({ side: side, hz: hz, tripod: (row + (side > 0 ? 0 : 1)) % 2, upper: upper, lower: lower, knee: knee, pad: pad, shoulder: shoulder,
+        var r = makeRing(4);
+        legs.push({ side: side, hz: hz, tripod: (row + (side > 0 ? 0 : 1)) % 2, upper: upper, lower: lower, knee: knee, pad: pad, shoulder: shoulder, mat: km,
+          ring: r.ring, segs: r.segs, pivot: knee, hp: 0, maxHp: 40, dead: false, flash: 0,
           foot: new THREE.Vector3(), from: new THREE.Vector3(), to: new THREE.Vector3(), t: -1, hip: new THREE.Vector3(), kneeAt: new THREE.Vector3(), steps: 0 });
       });
     });
-    walker = { g: g, legs: legs, on: false, ang: 0, pos: new THREE.Vector3(), fwd: new THREE.Vector3(), right: new THREE.Vector3(), y: 0, sway: 0, turn: 0 };
+    walker = { g: g, legs: legs, on: false, fight: false, ang: 0, pos: new THREE.Vector3(), fwd: new THREE.Vector3(), right: new THREE.Vector3(), y: 0, sway: 0, turn: 0,
+      state: 'walk', st: 0, core: core, coreMat: coreMat, hatch: hatch, erupting: false, lavaCool: 0, falls: 0 };
+    // It lives in the fleet, last, like the dreadnought: weapons, targeting, turret fire and the hull bar already apply.
+    // It moves itself (selfMoved), nothing gets through its plate (armour), and its knees and core are its own to test (hit).
+    var f = { ship: g, scale: 1.6, radius: 0, alt: 0, angle: 0, speed: 0, maxHp: 1200, boss: true, kind: 'walker', selfMoved: true, armour: true, reach: 240,
+      box: [75, -60, 60, 75], turR2: 34, barUp: 30, inHull: wkInHull, turrets: [], turretBlow: 0, aims: legs.slice() };
+    f.hp = f.maxHp; f.dying = 0; f.gone = Infinity; f.fall = 0; f.fallV = 0; f.list = 0; f.boomT = 0;
+    [[9, 9, 10, 0, 1, 0], [-9, 9, -12, 0, 1, 0], [-9, 9, 10, 0, 1, 0], [9, 9, -12, 0, 1, 0], [8, -4.5, 12, 0, -1, 0], [-8, -4.5, 12, 0, -1, 0]].forEach(function (sp) { mountTurret(f, g, sp); });
+    f.coreAim = { hp: 0, pivot: core }; f.aims.push(f.coreAim);
+    f.hit = function (a, b, la, lb, k, hullK) {
+      var i, w = walker;
+      // a knee, wherever that leg has it just now
+      if (w.state === 'walk') for (i = 0; i < w.legs.length; i++) {
+        var lg = w.legs[i];
+        if (!lg.dead && segDist2(lg.kneeAt, a, b) < 36) { hitKnee(lg, k * dmgMul(), a); return true; }
+      }
+      // the core, and only while the hatch is off it
+      if (w.state === 'down' && segDist2(WK_CORE, la, lb) < 64) {
+        boom(a, false); w.coreFlash = 0.2;
+        // the core is a weak spot: a bolt does three times what it would to a hull. With no upgrades a first version
+        // could not be killed in seven minutes: three falls had taken a fifth of it.
+        f.armour = false; hitCapital(f, 3 * hullK * dmgMul()); f.armour = true;
+        return true;
+      }
+      return false;
+    };
+    addBar(f);
+    fleet.push(f); walkF = f;
+    // lava bombs, and the mark each one is coming down on
+    var bombMat = new THREE.MeshBasicMaterial({ color: 0xffa040, fog: false });
+    for (var q = 0; q < 10; q++) {
+      var bm = new THREE.Mesh(new THREE.SphereGeometry(3.2, 8, 6), bombMat); bm.visible = false; scene.add(bm);
+      var mark = new THREE.Mesh(new THREE.RingGeometry(WK_BOMB_R - 1.6, WK_BOMB_R, 28), new THREE.MeshBasicMaterial({ color: 0xff4a2a, transparent: true, opacity: 0.9, fog: false, depthWrite: false, side: THREE.DoubleSide }));
+      mark.rotation.x = -Math.PI / 2; mark.visible = false; scene.add(mark);
+      var beam = new THREE.Mesh(new THREE.CylinderGeometry(WK_BOMB_R, WK_BOMB_R, 70, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xff5a2a, transparent: true, opacity: 0.1, fog: false, depthWrite: false, side: THREE.DoubleSide }));
+      beam.visible = false; scene.add(beam);
+      lavaBombs.push({ mesh: bm, mark: mark, beam: beam, from: new THREE.Vector3(), to: new THREE.Vector3(), t: -1 });
+    }
   }
   // where a leg wants its foot: out to the side of its hip, and a little ahead when it is about to step there
   function wkRest(lg, lead, out) {
@@ -1880,17 +1960,51 @@
     out.y = wkGround(out.x, out.z);
     return out;
   }
+  function wkLegShow(lg, on) {
+    lg.upper.visible = lg.shoulder.visible = on;
+    lg.lower.visible = lg.knee.visible = lg.pad.visible = on && !lg.dead;
+    if (!on || lg.dead) lg.ring.visible = false;
+  }
   function walkerOn(on) {
     ensureWalker();
-    var w = walker;
-    w.on = on; w.g.visible = on;
-    for (var i = 0; i < w.legs.length; i++) { var lg = w.legs[i]; lg.upper.visible = lg.lower.visible = lg.knee.visible = lg.pad.visible = lg.shoulder.visible = on; lg.t = -1; lg.steps = 0; }
+    var w = walker, i;
+    w.on = on; w.g.visible = on; w.fight = false; w.state = 'walk'; w.st = 0; w.falls = 0;
+    w.core.visible = false; w.hatch.visible = true;
+    for (i = 0; i < w.legs.length; i++) { var lg = w.legs[i]; lg.dead = false; lg.hp = lg.maxHp; lg.t = -1; lg.steps = 0; lg.flash = 0; lg.mat.color.set(0xff6a2a); wkLegShow(lg, on); }
+    for (i = 0; i < walkF.turrets.length; i++) { walkF.turrets[i].pivot.visible = false; walkF.turrets[i].base.visible = false; walkF.turrets[i].ring.visible = false; }
+    for (i = 0; i < lavaBombs.length; i++) { lavaBombs[i].t = -1; lavaBombs[i].mesh.visible = lavaBombs[i].mark.visible = lavaBombs[i].beam.visible = false; }
     if (!on) return;
     w.ang = 0.6; w.turn = 0; wkPlace(0);
     for (i = 0; i < w.legs.length; i++) wkRest(w.legs[i], (w.legs[i].tripod ? 0.5 : -0.5) * WK_STRIDE * 0.5, w.legs[i].foot); // the two tripods start half a stride apart
     var sum = 0; for (i = 0; i < w.legs.length; i++) sum += w.legs[i].foot.y;
     w.y = sum / w.legs.length + WK_HIP;
     wkPose();
+  }
+  function startWalker(tier) {
+    var sp = walkerSpec(tier), f, i;
+    if (arena !== 2) setArena(2);
+    walkerOn(true);
+    f = walkF; walker.fight = true; walker.spec = sp;
+    f.maxHp = sp.hull; f.turretHp = sp.turretHp; f.fireK = sp.fireK;
+    reviveShip(f, true); f.gone = 0;
+    for (i = 0; i < f.turrets.length; i++) {
+      var t = f.turrets[i];
+      t.fitted = i < sp.turrets; t.back = 0; t.base.visible = t.fitted;
+      if (!t.fitted) { t.hp = 0; t.pivot.visible = false; }
+    }
+    for (i = 0; i < walker.legs.length; i++) { walker.legs[i].maxHp = sp.kneeHp; walker.legs[i].hp = sp.kneeHp; paintRing(walker.legs[i]); }
+    f.coreAim.hp = 0;
+    eruptT = Math.min(eruptT, 9); // the first eruption comes soon, so the bombs are met early
+    shipPos.set(0, 62, 30); yaw = Math.atan2(shipPos.x - walker.pos.x, shipPos.z - walker.pos.z); pitch = 0; bank = 0; basis();
+    camera.position.copy(shipPos).addScaledVector(fwdV, -9.5).addScaledVector(upV, 2.6);
+  }
+  function hitKnee(lg, dmg, at) {
+    lg.hp -= dmg; lg.flash = 0.2; paintRing(lg);
+    if (lg.hp > 0) { boom(at, false); return; }
+    lg.hp = 0; lg.dead = true; lg.t = -1; wkLegShow(lg, true);
+    boom(lg.kneeAt, true); chainBlast(lg.kneeAt, 1);
+    var gone = 0; for (var i = 0; i < walker.legs.length; i++) if (walker.legs[i].dead) gone++;
+    if (gone >= WK_FALL_AT && walker.state === 'walk') { walker.state = 'falling'; walker.st = 0; sfx('capital', walker.g.position); banner('It is going down', 2); }
   }
   // where it is on its circuit, and which way that faces
   function wkPlace(dt) {
@@ -1908,6 +2022,13 @@
       var lg = w.legs[i];
       lg.hip.copy(w.g.position).addScaledVector(w.right, lg.side * 12).addScaledVector(w.fwd, lg.hz);
       lg.hip.y -= 1.5;
+      lg.shoulder.position.copy(lg.hip);
+      if (lg.dead) {
+        // a leg shot through at the knee: what is left of it hangs from the hip
+        lg.kneeAt.copy(lg.hip).addScaledVector(w.right, lg.side * 9); lg.kneeAt.y -= 13;
+        wkBone(lg.upper, lg.hip, lg.kneeAt, 3.6);
+        continue;
+      }
       // two bones and a knee: the knee goes up and out, which is what makes it a spider and not a table
       wkA.copy(lg.foot).sub(lg.hip);
       var len = Math.max(Math.abs(WK_L1 - WK_L2) + 0.5, Math.min(WK_L1 + WK_L2 - 0.5, wkA.length()));
@@ -1918,52 +2039,151 @@
       lg.kneeAt.copy(lg.hip).addScaledVector(wkA, along).addScaledVector(wkB, rise);
       wkBone(lg.upper, lg.hip, lg.kneeAt, 3.6);
       wkBone(lg.lower, lg.kneeAt, lg.foot, 2.8);
-      lg.knee.position.copy(lg.kneeAt); lg.shoulder.position.copy(lg.hip);
+      lg.knee.position.copy(lg.kneeAt);
       lg.pad.position.copy(lg.foot); lg.pad.position.y += 1.0;
     }
   }
-  function updateWalker(dt) {
-    var w = walker, i;
-    if (!w || !w.on) return;
-    wkPlace(dt);
-    w.sway += dt * 2.2;
-    // THE GAIT: two sets of three, strictly taking turns. A first version let whichever leg was furthest behind go
-    // next, and one set starved the other: over 150 seconds some legs took 118 steps and some 22, and one foot was
-    // left planted 290 behind. Now nothing lifts while anything is in the air, and the set that went last waits.
-    var air = false, lag = 0;
-    for (i = 0; i < w.legs.length; i++) {
-      var lg = w.legs[i];
-      if (lg.t >= 0) {
-        // mid-step: across to where it is going, lifted in an arc and never through a rise in between
-        air = true;
-        lg.t += dt / WK_STEP;
-        if (lg.t >= 1) { lg.t = -1; lg.foot.copy(lg.to); lg.steps++; sfx('stomp', lg.foot); }
-        else {
-          var e = lg.t * lg.t * (3 - 2 * lg.t), lift = Math.sin(Math.PI * lg.t) * 9;
-          lg.foot.copy(lg.from).lerp(lg.to, e);
-          lg.foot.y = Math.max(lg.foot.y + lift, wkGround(lg.foot.x, lg.foot.z) + lift * 0.35);
-        }
-      } else if (lg.tripod === w.turn) {
-        wkRest(lg, 0, wkC);
-        lag = Math.max(lag, Math.sqrt((lg.foot.x - wkC.x) * (lg.foot.x - wkC.x) + (lg.foot.z - wkC.z) * (lg.foot.z - wkC.z)));
-      }
+  function lavaVolley(n) {
+    walkF.ship.updateMatrixWorld();
+    for (var i = 0, sent = 0; i < lavaBombs.length && sent < n; i++) {
+      var bm = lavaBombs[i];
+      if (bm.t >= 0) continue;
+      bm.from.set(VOLC.x + volcGroup.position.x, VOLC_TOP, VOLC.z + volcGroup.position.z);
+      // round where you will be when it lands, so standing still under one is a choice
+      var a = Math.random() * 6.283, r = sent === 0 ? 0 : 18 + Math.random() * 55;
+      bm.to.copy(shipPos).addScaledVector(fwdV, speed * WK_BOMB_T * 0.8);
+      bm.to.x += Math.cos(a) * r; bm.to.z += Math.sin(a) * r;
+      var d = Math.sqrt(bm.to.x * bm.to.x + bm.to.z * bm.to.z); if (d > 210) { bm.to.x *= 210 / d; bm.to.z *= 210 / d; }
+      bm.to.y = wkGround(bm.to.x, bm.to.z);
+      bm.t = 0; bm.mesh.visible = bm.mark.visible = bm.beam.visible = true;
+      bm.mark.position.set(bm.to.x, bm.to.y + 0.6, bm.to.z); bm.beam.position.set(bm.to.x, bm.to.y + 35, bm.to.z);
+      sent++;
     }
-    if (!air && lag > WK_STRIDE) {
+    sfx('erupt');
+  }
+  function updateLavaBombs(dt) {
+    for (var i = 0; i < lavaBombs.length; i++) {
+      var bm = lavaBombs[i];
+      if (bm.t < 0) continue;
+      bm.t += dt / WK_BOMB_T;
+      if (bm.t >= 1) {
+        // it comes down as a fountain: anything over the mark and within 70 of the ground is in it
+        bm.t = -1; bm.mesh.visible = bm.mark.visible = bm.beam.visible = false;
+        for (var q = 0; q < 4; q++) { wkC.set(bm.to.x + (Math.random() - 0.5) * 12, bm.to.y + q * 16, bm.to.z + (Math.random() - 0.5) * 12); boom(wkC, true); }
+        var dx = shipPos.x - bm.to.x, dz = shipPos.z - bm.to.z;
+        if (inControl && !dead && dx * dx + dz * dz < WK_BOMB_R * WK_BOMB_R && shipPos.y < bm.to.y + 70) damage(WK_BOMB_DMG);
+        continue;
+      }
+      bm.mesh.position.copy(bm.from).lerp(bm.to, bm.t); bm.mesh.position.y += Math.sin(Math.PI * bm.t) * 150;
+      bm.mark.material.opacity = 0.35 + 0.6 * bm.t; bm.beam.material.opacity = 0.05 + 0.18 * bm.t;
+    }
+  }
+  function updateWalker(dt) {
+    var w = walker, i, lg;
+    // the lava itself, whenever you are over this landscape
+    if (arena === 2 && inControl && !dead) {
+      lavaT -= dt;
+      if (lavaT <= 0 && height(shipPos.x, shipPos.z) < 0 && shipPos.y < 3.4) { lavaT = 0.5; boom(shipPos, false); damage(WK_LAVA_DMG); }
+    }
+    if (!w || !w.on) return;
+    var f = walkF, fighting = w.fight && f.gone <= 0;
+    w.st += dt;
+    if (fighting && f.dying > 0) {
+      // done for: it settles onto the rock and burns
+      w.y += (wkGround(w.pos.x, w.pos.z) + 9 - w.y) * Math.min(1, dt * 2);
+      f.dying += dt; f.boomT -= dt;
+      if (f.boomT <= 0) { f.boomT = 0.18; wkC.set((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 16, (Math.random() - 0.5) * 60).add(w.g.position); boom(wkC, Math.random() < 0.6); }
+      wkPose();
+      if (f.dying > 3.2) { f.dying = 0; f.gone = Infinity; walkerOn(false); }
+      return;
+    }
+    if (w.state === 'walk') {
+      var live = 0; for (i = 0; i < w.legs.length; i++) if (!w.legs[i].dead) live++;
+      wkPlace(dt * (live / w.legs.length)); // it slows as it loses them
+      w.sway += dt * 2.2;
+      // THE GAIT: two sets of three, strictly taking turns. A first version let whichever leg was furthest behind go
+      // next, and one set starved the other: over 150 seconds some legs took 118 steps and some 22, and one foot was
+      // left planted 290 behind. Now nothing lifts while anything is in the air, and the set that went last waits.
+      var air = false, lag = 0;
       for (i = 0; i < w.legs.length; i++) {
         lg = w.legs[i];
-        if (lg.tripod !== w.turn) continue;
-        lg.from.copy(lg.foot); wkRest(lg, WK_STRIDE * 0.9 + WK_SPEED * WK_STEP, lg.to); lg.t = 0;
+        if (lg.dead) continue;
+        if (lg.t >= 0) {
+          // mid-step: across to where it is going, lifted in an arc and never through a rise in between
+          air = true;
+          lg.t += dt / WK_STEP;
+          if (lg.t >= 1) { lg.t = -1; lg.foot.copy(lg.to); lg.steps++; sfx('stomp', lg.foot); }
+          else {
+            var e = lg.t * lg.t * (3 - 2 * lg.t), lift = Math.sin(Math.PI * lg.t) * 9;
+            lg.foot.copy(lg.from).lerp(lg.to, e);
+            lg.foot.y = Math.max(lg.foot.y + lift, wkGround(lg.foot.x, lg.foot.z) + lift * 0.35);
+          }
+        } else if (lg.tripod === w.turn) {
+          wkRest(lg, 0, wkC);
+          lag = Math.max(lag, Math.sqrt((lg.foot.x - wkC.x) * (lg.foot.x - wkC.x) + (lg.foot.z - wkC.z) * (lg.foot.z - wkC.z)));
+        }
       }
-      w.turn = 1 - w.turn;
+      if (!air && lag > WK_STRIDE) {
+        for (i = 0; i < w.legs.length; i++) {
+          lg = w.legs[i];
+          if (lg.dead || lg.tripod !== w.turn) continue;
+          lg.from.copy(lg.foot); wkRest(lg, WK_STRIDE * 0.9 + WK_SPEED * WK_STEP, lg.to); lg.t = 0;
+        }
+      }
+      if (!air && (lag > WK_STRIDE || lag === 0)) w.turn = 1 - w.turn; // a set with no legs left to move passes its turn
+      // the body rides at a set height over wherever its planted feet are
+      var sum = 0, n = 0;
+      for (i = 0; i < w.legs.length; i++) if (!w.legs[i].dead && w.legs[i].t < 0) { sum += w.legs[i].foot.y; n++; }
+      // and never lower than clear of the ground straight under it, so a ridge passes beneath the belly
+      // (and it looks a body-length ahead, because it rises slowly and a ridge does not wait)
+      var under = Math.max(wkGround(w.pos.x, w.pos.z), wkGround(w.pos.x + w.fwd.x * 18, w.pos.z + w.fwd.z * 18), wkGround(w.pos.x - w.fwd.x * 14, w.pos.z - w.fwd.z * 14));
+      if (n) w.y += (Math.max(sum / n + WK_HIP, under + 32) - w.y) * Math.min(1, dt * 2.5);
+    } else {
+      // DOWN, in three parts: it drops, it lies open, it gets up. Feet stay where they were; the legs fold.
+      var floor = wkGround(w.pos.x, w.pos.z) + 10;
+      if (w.state === 'falling') {
+        w.y += (floor - w.y) * Math.min(1, dt * 4);
+        if (w.st > 0.9) {
+          w.state = 'down'; w.st = 0; w.falls++;
+          // the fall itself costs it: a seventh of its whole, whatever the guns that brought it down. Without this a
+          // player with no upgrades took four falls in seven minutes and had it only 42% done.
+          f.armour = false; hitCapital(f, Math.round(f.maxHp * 0.15)); f.armour = true;
+          if (f.dying > 0) return;
+          w.core.visible = true; w.hatch.visible = false; f.coreAim.hp = 1;
+          for (i = 0; i < 6; i++) { wkC.set((Math.random() - 0.5) * 50, -6, (Math.random() - 0.5) * 50).add(w.g.position); boom(wkC, true); }
+          banner('It is down. Hit the core on its back.', 3); updateReadout();
+        }
+      } else if (w.state === 'down') {
+        w.y += (floor - w.y) * Math.min(1, dt * 4);
+        if (w.st > w.spec.down) {
+          w.state = 'rising'; w.st = 0; w.core.visible = false; w.hatch.visible = true; f.coreAim.hp = 0;
+          for (i = 0; i < w.legs.length; i++) { lg = w.legs[i]; lg.dead = false; lg.hp = lg.maxHp; lg.t = -1; lg.mat.color.set(0xff6a2a); paintRing(lg); wkLegShow(lg, true); wkRest(lg, 0, lg.foot); }
+          banner('It is getting up', 2); sfx('rebuild', w.g.position); updateReadout();
+        }
+      } else {
+        var sm = 0; for (i = 0; i < w.legs.length; i++) sm += w.legs[i].foot.y;
+        w.y += (sm / w.legs.length + WK_HIP - w.y) * Math.min(1, dt * 2.2);
+        if (w.st > 1.6) { w.state = 'walk'; w.st = 0; w.turn = 0; }
+      }
     }
-    // the body rides at a set height over wherever its planted feet are
-    var sum = 0, n = 0;
-    for (i = 0; i < w.legs.length; i++) if (w.legs[i].t < 0) { sum += w.legs[i].foot.y; n++; }
-    // and never lower than clear of the ground straight under it, so a ridge passes beneath the belly
-    // (and it looks a body-length ahead, because it rises slowly and a ridge does not wait)
-    var under = Math.max(wkGround(w.pos.x, w.pos.z), wkGround(w.pos.x + w.fwd.x * 18, w.pos.z + w.fwd.z * 18), wkGround(w.pos.x - w.fwd.x * 14, w.pos.z - w.fwd.z * 14));
-    if (n) w.y += (Math.max(sum / n + WK_HIP, under + 32) - w.y) * Math.min(1, dt * 2.5);
     wkPose();
+    // each knee shows what it has left: by its colour always, and by a ring once it has been hit
+    for (i = 0; i < w.legs.length; i++) {
+      lg = w.legs[i];
+      if (lg.dead) continue;
+      if (lg.flash > 0) lg.flash -= dt;
+      if (lg.flash > 0) lg.mat.color.set(0xffffff); else lg.mat.color.setHSL(0.07, 0.95, 0.36 + 0.24 * lg.hp / lg.maxHp); // it dims as it goes
+      var show = fighting && inControl && w.state === 'walk' && lg.hp < lg.maxHp;
+      lg.ring.visible = show;
+      if (show) { lg.ring.position.copy(lg.kneeAt); lg.ring.quaternion.copy(camera.quaternion); lg.ring.scale.setScalar(2.2 * (lg.flash > 0 ? 1 + lg.flash : 1)); }
+    }
+    if (w.core.visible) { w.coreFlash = Math.max(0, (w.coreFlash || 0) - dt); w.coreMat.color.set(w.coreFlash > 0 ? 0xffffff : 0xffe08a); w.core.scale.setScalar(1 + Math.sin(time * 9) * 0.08); }
+    if (!fighting) return;
+    rebuildTurrets(f, dt);
+    // the volcano: when it goes up, bombs come down
+    if (eruptT > 16) eruptT = 16;
+    if (eruptOn > 0 && !w.erupting) { w.erupting = true; if (inControl && !dead) lavaVolley(w.spec.bombs); }
+    else if (eruptOn <= 0) w.erupting = false;
   }
   // A look at the lava field and the walker, with nothing else in it. Not a round: nothing here can be won or lost to.
   function lavaPreview(on) {
@@ -2032,7 +2252,7 @@
   function nextRound() { startRound(round + 1); roundBanner(); }
   function roundBanner() {
     var b = isBossRound(round);
-    banner('Round ' + round + (!b ? '' : wallOn ? ' \u2014 The Ice Wall. Break its cracks to bring it down.' : ' \u2014 Dreadnought. Destroy the shield generator at its core.'), b ? 5 : 2.5);
+    banner('Round ' + round + (!b ? '' : wallOn ? ' \u2014 The Ice Wall. Break its cracks to bring it down.' : walkF && walkF.gone <= 0 ? ' \u2014 The Walker. Shoot out its knees to bring it down.' : ' \u2014 Dreadnought. Destroy the shield generator at its core.'), b ? 5 : 2.5);
     sfx(b ? 'boss' : 'round');
   }
   function offerUpgrades() {
@@ -2089,7 +2309,7 @@
     var kind = boss ? pickBoss() : null;
     endWall();
     if (walker && walker.on && !arenaHold) walkerOn(false);
-    if (kind !== 'wall' && !arenaHold) setArena(0); // the ice belongs to the wall; everything else is fought at dusk
+    if (kind !== 'wall' && kind !== 'walker' && !arenaHold) setArena(0); // the ice belongs to the wall and the lava to the walker; everything else is fought at dusk
     ensureFleet(Math.max(1, ships)); ensureDrones(small); ensureGround(small);
     for (i = 0; i < fleet.length; i++) {
       var f = fleet[i];
@@ -2104,6 +2324,7 @@
     for (i = 0; i < ground.length; i++) { ground[i].alive = false; ground[i].group.visible = false; ground[i].ring.visible = false; }
     for (i = 0; i < small; i++) placeGround(ground[i]);
     if (kind === 'wall') startWall(bossTier(n));
+    if (kind === 'walker') startWalker(bossTier(n));
     for (i = 0; i < shots.length; i++) { shots[i].life = 0; shots[i].mesh.visible = false; }
     for (i = 0; i < missiles.length; i++) { missiles[i].life = 0; missiles[i].mesh.visible = false; }
     for (i = 0; i < seekers.length; i++) { seekers[i].life = 0; seekers[i].mesh.visible = false; }
@@ -2283,6 +2504,7 @@
         if (t.hp > 0 && segDist2(t.local, stB, stA) < (f.turR2 || 13)) { hitTurret(f, t, k * dmgMul(), a); return true; }
       }
       if (f.gen && f.gen.hp > 0 && segDist2(GEN_AT, stB, stA) < 170) { hitGenerator(f, k * dmgMul(), a); return true; }
+      if (f.hit && f.hit(a, b, stB, stA, k, hullK)) return true; // whatever else this ship has that can be shot
       var ih = f.inHull || inHull;
       if (ih(stA) || ih(stC)) { boom(a, false); hitCapital(f, hullK * dmgMul()); return true; }
     }
@@ -2326,6 +2548,7 @@
       if (f.gone > 0 || f.dying > 0 || f.ship.position.distanceTo(from) > range + 45 * f.scale) continue;
       for (j = 0; j < f.turrets.length; j++) if (f.turrets[j].hp > 0) { f.turrets[j].pivot.getWorldPosition(pkPos); pkLook(3, f.turrets[j], f, pkPos); }
       if (f.gen && f.gen.hp > 0) { f.gen.pivot.getWorldPosition(pkPos); pkLook(3, f.gen, f, pkPos); }
+      if (f.aims) for (j = 0; j < f.aims.length; j++) if (f.aims[j].hp > 0) { f.aims[j].pivot.getWorldPosition(pkPos); pkLook(3, f.aims[j], f, pkPos); }
     }
     return trk.k;
   }
@@ -3168,6 +3391,7 @@
     ishot:      { label: 'Interceptor shot', heat: 0.12, gap: 0.04, play: function (v, d) { tone('sawtooth', 900, 260, 0.09, 0.13 * v, d); } },
     pass:       { label: 'Interceptor pass', heat: 0.15, gap: 0.3, floor: 0.5, play: function (v, d) { hiss(0.7, 0.6 * v, 'bandpass', 2600, 300, d, 1.2); tone('sawtooth', 240, 90, 0.6, 0.08 * v, d); } },
     boss:       { label: 'Dreadnought arrives', heat: 0.5, gap: 0.5, play: function (v, d) { tone('sawtooth', 55, 55, 1.7, 0.22, d); tone('sawtooth', 82.4, 82.4, 1.7, 0.14, d); tone('sawtooth', 55, 41.2, 1.2, 0.2, d, 1.2); hiss(2.4, 0.25, 'lowpass', 300, 80, d); } },
+    erupt:      { label: 'Volcano erupts', heat: 0.3, gap: 1, play: function (v, d) { hiss(2.6, 0.55, 'lowpass', 700, 60, d); tone('sawtooth', 48, 30, 2.2, 0.25, d); } },
     stomp:      { label: 'Walker footfall', heat: 0.04, gap: 0.08, floor: 0.2, play: function (v, d) { tone('sine', 70, 34, 0.32, 0.5 * v, d); hiss(0.18, 0.3 * v, 'lowpass', 500, 90, d); } },
     rebuild:    { label: 'Turret rebuilt', gap: 0.15, floor: 0.35, play: function (v, d) { tone('square', 330, 660, 0.12, 0.07 * v, d); tone('square', 660, 990, 0.1, 0.05 * v, d, 0.1); } },
     pick:       { label: 'Upgrade chosen', gap: 0.1, play: function (v, d) { tone('triangle', 660, 660, 0.16, 0.16, d); tone('triangle', 990, 990, 0.3, 0.16, d, 0.09); } }
@@ -3356,7 +3580,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'lava-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'walker-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +
@@ -3399,7 +3623,7 @@
     updateReadout(); checkRound();
   });
   // straight to the next round that is a multiple of five, with the boss named, so each can be tried at each tier
-  document.getElementById('devLava').addEventListener('click', function () { devShow(false); lavaPreview(arena !== 2); banner(arena === 2 ? 'The lava field' : 'Round ' + round, 2.5); });
+  document.getElementById('devWalker').addEventListener('click', function () { devShow(false); bossForce = 'walker'; startRound(Math.floor(round / 5) * 5 + 5); roundBanner(); });
   document.getElementById('devWall').addEventListener('click', function () { devShow(false); bossForce = 'wall'; startRound(Math.floor(round / 5) * 5 + 5); roundBanner(); });
   document.getElementById('devBoss').addEventListener('click', function () { devShow(false); bossForce = 'dread'; startRound(Math.floor(round / 5) * 5 + 5); roundBanner(); });
   document.getElementById('devRaid').addEventListener('click', function () {
@@ -3428,6 +3652,7 @@
     updateGround(dt);
     updateWall(dt);
     updateWalker(dt);
+    updateLavaBombs(dt);
     updateMissiles(dt);
     updateRounds(dt);
 
