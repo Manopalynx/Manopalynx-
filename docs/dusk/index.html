@@ -451,8 +451,25 @@
   buildTerrain();
   // Changes the landscape and nothing else. Whatever stands on the ground was placed against the old one, so the
   // caller starts a round afterwards; this does not, because a round is not always what the caller wants next.
-  // the look now: the time of day in the dusk world, the landscape's own look on the ice and the lava
-  function lookNow() { return arena === 0 ? TIMES[tod] : ARENAS[arena]; }
+  // the look now. In the dusk hills, the time of day. On the ice and the lava, their own look in their boss rounds
+  // (Sam: "the boss battles still keep whatever looks best"), and in the ordinary rounds the place's look and the hour's
+  // light blended ("every arena gets all times of day, that way it stays dynamic"): LOOK_MIX of the hour, the rest the
+  // place. The lava itself, the sea, the ground's colours and what is steep never blend: they are the place.
+  var LOOK_MIX = [0, 0.4, 0.5], LOOK_KEYS = ['haze', 'zenith', 'warm', 'sun', 'sky', 'ground', 'giant'], lookCache = {};
+  function blendLook(a, t) {
+    var key = a + ':' + t;
+    if (lookCache[key]) return lookCache[key];
+    var A = ARENAS[a], T = TIMES[t], k = LOOK_MIX[a], L = {}, c = new THREE.Color(), d = new THREE.Color();
+    for (var p in A) L[p] = A[p];
+    LOOK_KEYS.forEach(function (n) { L[n] = c.set(A[n]).lerp(d.set(T[n]), k).getHex(); });
+    ['wk', 'sunK', 'hemiK', 'stars', 'ring'].forEach(function (n) { L[n] = A[n] + (T[n] - A[n]) * k; });
+    L.dir = T.dir.slice(); L.name = T.name;
+    return (lookCache[key] = L);
+  }
+  function lookNow() {
+    if (arena === 0) return TIMES[tod];
+    return isBossRound(round) || arenaHold ? ARENAS[arena] : blendLook(arena, tod);
+  }
   function applyLook() {
     var L = lookNow(), i;
     scene.fog.color.set(L.haze); scene.background.set(L.zenith);
@@ -3945,7 +3962,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'chapters-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'chapters-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +

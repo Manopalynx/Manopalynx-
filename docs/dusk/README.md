@@ -480,6 +480,11 @@ modelled under office light: 4% of white added as reflected room light, then per
 | enemies stand out | 90 to 97% | 104 to 123% | 130 to 181% | 75% |
 | the ground's light and shade | 170% | 142% | 232% | 60% |
 
+(Those were three runs of nine views each. Since `chapters-2` the suite uses fifteen views with a
+fixed seed and clock, one sample the same every run: night 136%, dawn 157%, morning 253% for the
+enemies; 155%, 122%, 216% for the ground. Different enemies in view, so different figures, all well
+clear of the bars.)
+
 The two answer different questions, and the second exists because the first could not see what
 was wrong with a dark night. **Enemies carry their own lights and outline, so they stand out
 against any dark world**: a near-black night still scored 75 to 76% on the first. What a night
@@ -669,8 +674,27 @@ walker round's bombs. A chapter's first round names the place in its banner. The
 buttons still work: the chapter they jump to becomes that boss's arena. `chapterHold` pins every
 chapter to one arena for the suites, which are about other things; each holds the dusk hills.
 
-**The time of day pauses in the ice and lava chapters**: those landscapes keep their own look (a cold
-dawn, night) for all five rounds. Giving each its own four times is possible, and is his to ask for.
+**Every arena gets every time of day** (`chapters-2`). Sam: "Every arena gets all times of day, that
+way it stays dynamic but the boss battles still keep whatever looks best." In the ice and lava
+chapters' ordinary rounds the look is the place's own blended with the hour's light (`blendLook`):
+40% the hour on the ice, 50% on the lava. The lava itself, the sea, the ground's colours and what
+is steep never blend. The ice wall's and the walker's rounds keep their own look exactly; the
+dreadnought takes the hour, as before. The ice was first blended half and half too, and at dusk and
+dawn its enemies stood out only 72 to 73% as far as in its boss look, under the 75% the suite asks.
+
+Measured against each place's boss look, over the same enemies (`test/dusk-time.mjs`):
+
+| | dusk | night | dawn | morning |
+|---|---|---|---|---|
+| ice: enemies stand out | 80% | 79% | **76%** | 100% |
+| ice: the ground's light and shade | 103% | 135% | 99% | 117% |
+| lava: enemies stand out | 99% | 83% | 97% | 108% |
+| lava: the ground's light and shade | 99% | 104% | 91% | 109% |
+
+**Ice at dawn is the near thing**, one point over the bar. These figures are now the same every run:
+the suite fixes its random seed and the game clock, because with them free the lava's night swung
+from 87% to 69% between two runs with nothing changed, and drones circling by the clock moved with
+however long the test took to start.
 
 **Capital ships used to patrol only the dusk hills.** They are now lifted, where they need it, to keep
 every hull 10 clear of the ground on its whole circle: on the ice, three of nine, by up to 69, over

@@ -93,8 +93,8 @@ console.log('\n— do the enemies still stand out —');
   // silhouettes, is how far the enemies stand out. A part of one that melts into the dark counts as a zero there.
   // (A first version averaged only over pixels that differed by more than a threshold, so whatever melted away simply
   // left the average: the mock-up's dark night, where the ships were hard to see, scored 119% of dusk.)
-  // Nine views of an ordinary round 4, three of each kind: behind a capital ship, down onto a ground unit, and at a drone.
-  const r = await T(`
+  // Fifteen views of an ordinary round, five of each kind: behind a capital ship, down onto a ground unit, and at a drone.
+  let r = await T(`
     var gl = renderer.getContext(), W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, A = new Uint8Array(W * H * 4), B = new Uint8Array(W * H * 4);
     function enemies(on) {
       fleet.forEach(function (f) { if (f.gone <= 0) f.ship.visible = on; });
@@ -120,23 +120,33 @@ console.log('\n— do the enemies still stand out —');
     function lum(b, i) { var Y = (0.2126 * lin(b[i]) + 0.7152 * lin(b[i + 1]) + 0.0722 * lin(b[i + 2]) + GLARE) / (1 + GLARE); return (116 * Math.cbrt(Y) - 16) / 100; }
     function view(k, j) {
       var p, back, up;
-      if (k === 0) { p = fleet.filter(function (x) { return x.gone <= 0; })[j].ship.position; back = 140; up = 18; }
-      else if (k === 1) { p = ground.filter(function (x) { return x.alive; })[j].pos; back = 70; up = 45; }
-      else { p = drones.filter(function (x) { return x.alive; })[j].mesh.position; back = 45; up = 6; }
+      var pick = function (list) { return list[j % list.length]; }; // round 4 has only four capital ships
+      if (k === 0) { p = pick(fleet.filter(function (x) { return x.gone <= 0 && !x.boss; })).ship.position; back = 140; up = 18; }
+      else if (k === 1) { p = pick(ground.filter(function (x) { return x.alive; })).pos; back = 70; up = 45; }
+      else { p = pick(drones.filter(function (x) { return x.alive; })).mesh.position; back = 45; up = 6; }
       shipPos.set(p.x + back * 0.5, p.y + up, p.z + back * 0.87); yaw = Math.atan2(shipPos.x - p.x, shipPos.z - p.z);
       pitch = Math.atan2(p.y - shipPos.y, Math.hypot(p.x - shipPos.x, p.z - shipPos.z)); bank = 0; basis(); speed = 0;
       camera.position.copy(shipPos).addScaledVector(fwdV, -9.5).addScaledVector(upV, 2.6); camera.lookAt(p);
       sky.position.copy(camera.position); camera.updateMatrixWorld();
     }
+    // each landscape: one ordinary round, its enemies held where they are, under each time in turn; and on the ice and the
+    // lava, under their boss rounds' look too, which is the control there
+    // A fixed seed: the comparison is between looks over the same enemies, but which enemies, where, varied from run to
+    // run, and on the lava the night swung from 87% to 69% of the boss look between two runs with nothing changed.
+    var seed = 12345; Math.random = function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    function measureArena(a) {
     var out = {};
-    startRound(4); M.step(30 * 3); inControl = false; // one round, its enemies held where they are, under each time in turn
-    [1, 2, 3, 4].forEach(function (n) {
-      tod = todOf(n); applyLook();
+    seed = 12345 + a; time = 0; last = M.now; // and the clock: drones circle by it, and its first step was however long the test took to get here
+    chapterHold = a; startRound(a ? 9 : 4); M.step(30 * 3); inControl = false;
+    var looks = [1, 2, 3, 4].map(function (n) { return todOf(n); }); if (a) looks.push('boss');
+    looks.forEach(function (lk) {
+      if (lk === 'boss') round = 10; else { tod = lk; round = a ? 9 : 4; } applyLook();
+      var name = lk === 'boss' ? 'boss' : TIMES[lk].name;
       var sum = 0, px = 0, views = [], gs = 0, gs2 = 0, gn = 0;
-      // three of each kind: one of each made the figure swing from 80% to 89% of dusk between runs
+      // five of each kind: one of each made the figure swing from 80% to 89% of dusk between runs
       for (var k = 0; k < 3; k++) {
         var s = 0, c = 0;
-        for (var j = 0; j < 3; j++) {
+        for (var j = 0; j < 5; j++) {
           view(k, j); silhouettes(); enemies(true); shot(A); enemies(false); shot(B); enemies(true);
           for (var i = 0; i < A.length; i += 4) { if (MASK[i] < 128) continue; s += Math.abs(lum(A, i) - lum(B, i)); c++; }
           // the ground's light and shade, where the ground is and no enemy is in front of it
@@ -146,9 +156,14 @@ console.log('\n— do the enemies still stand out —');
         views.push(c ? s / c : 0); sum += s; px += c;
       }
       var gm = gs / Math.max(1, gn);
-      out[TIMES[tod].name] = { mean: sum / Math.max(1, px), views: views, px: px, relief: Math.sqrt(Math.max(0, gs2 / Math.max(1, gn) - gm * gm)), groundL: gm };
+      out[name] = { mean: sum / Math.max(1, px), views: views, px: px, relief: Math.sqrt(Math.max(0, gs2 / Math.max(1, gn) - gm * gm)), groundL: gm };
     });
-    JSON.stringify(out)`);
+    return out;
+    }
+    var all = { 0: measureArena(0), 1: measureArena(1), 2: measureArena(2) }; chapterHold = 0;
+    JSON.stringify(all)`);
+  const R = r, rIce = R[1], rLava = R[2];
+  r = R[0];
   const base = r.dusk.mean;
   console.log('  how far the enemies stand out, as a difference in perceived lightness where they are, under office light (0 to 1):');
   for (const k of ['dusk', 'night', 'dawn', 'morning']) console.log(`    ${k.padEnd(8)} ${r[k].mean.toFixed(3)}  (${Math.round(100 * r[k].mean / base)}% of dusk)   ship ${r[k].views[0].toFixed(3)}, ground unit ${r[k].views[1].toFixed(3)}, drone ${r[k].views[2].toFixed(3)}   over ${r[k].px} pixels`);
@@ -161,6 +176,24 @@ console.log('\n— do the enemies still stand out —');
   console.log('  the ground\'s light and shade (spread of perceived lightness across it), and how light it is:');
   for (const k of ['dusk', 'night', 'dawn', 'morning']) console.log(`    ${k.padEnd(8)} spread ${r[k].relief.toFixed(3)} (${Math.round(100 * r[k].relief / r.dusk.relief)}% of dusk), lightness ${r[k].groundL.toFixed(2)}`);
   check(['night', 'dawn', 'morning'].every(k => r[k].relief >= 0.6 * r.dusk.relief), 'at every time the ground keeps at least 60% of the light and shade it shows at dusk', JSON.stringify(['dusk', 'night', 'dawn', 'morning'].map(k => r[k].relief)));
+
+  // The ice and the lava, which take every time of day in their ordinary rounds (Sam), against their own boss look.
+  const T4 = ['dusk', 'night', 'dawn', 'morning'];
+  for (const [nm, x] of [['ice', rIce], ['lava', rLava]]) {
+    console.log(`  ${nm}, against its boss look: enemies stand out ` + T4.map(k => `${k} ${Math.round(100 * x[k].mean / x.boss.mean)}%`).join(', ') + `; the ground's light and shade ` + T4.map(k => `${k} ${Math.round(100 * x[k].relief / x.boss.relief)}%`).join(', '));
+  }
+  check([rIce, rLava].every(x => T4.every(k => x[k].mean >= 0.75 * x.boss.mean && x[k].relief >= 0.6 * x.boss.relief)), 'on the ice and the lava, at every time, enemies stand out at least three quarters as far and the ground keeps 60% of its light and shade, against each one\'s boss look', JSON.stringify({ ice: rIce, lava: rLava }));
+}
+
+console.log('\n— the ice and the lava take every time of day, and their bosses keep their look —');
+{
+  const r = await T(`var o = {};
+    [1, 2].forEach(function (a) { chapterHold = a; var hz = [];
+      for (var n = 6; n <= 9; n++) { startRound(n); hz.push(scene.fog.color.getHexString()); }
+      startRound(10); o[a] = { times: hz, boss: scene.fog.color.getHexString(), own: new THREE.Color(ARENAS[a].haze).getHexString() }; });
+    chapterHold = 0; JSON.stringify(o)`);
+  check([1, 2].every(a => new Set(r[a].times).size === 4), 'each of the four ordinary rounds on the ice and on the lava has a look of its own', JSON.stringify(r));
+  check([1, 2].every(a => r[a].boss === r[a].own && !r[a].times.includes(r[a].own)), 'and the boss round has its own look, exactly as before', JSON.stringify(r));
 }
 
 check(errors.length === 0, 'nothing threw', errors);
