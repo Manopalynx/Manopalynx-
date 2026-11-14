@@ -33,6 +33,7 @@ async function fresh() {
   await page.mouse.click(196, 426);
   await page.evaluate(() => window.__t(`
     renderer.render = function () {};
+    wxHold = 'clear'; wxStart(round); // the weather is random; these checks are about other things, so hold it clear
     window.M = { now: performance.now() };
     M.step = function (n, each) { for (var i = 0; i < n; i++) { M.now += 1000 / 30; tick(M.now); if (each && each() === false) break; } };
     M.census = function () {

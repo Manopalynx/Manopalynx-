@@ -253,7 +253,7 @@
 <button type="button" class="sam" id="sam">Sam</button>
 <div class="dev" id="dev"><h2>Upgrades</h2><div class="dev-list" id="devList"></div>
   <h2>Sounds</h2><div class="dev-diag" id="devDiag"></div><div class="dev-snd" id="devSnd"></div>
-  <div class="dev-foot"><button type="button" class="dev-btn" id="devWalker">Boss: walker</button><button type="button" class="dev-btn" id="devWall">Boss: ice wall</button><button type="button" class="dev-btn" id="devBoss">Boss: dreadnought</button><button type="button" class="dev-btn" id="devTime">Time: dusk</button><button type="button" class="dev-btn" id="devRaid">Send interceptors</button><button type="button" class="dev-btn" id="devClear">Clear round</button><button type="button" class="dev-btn" id="devClose">Close</button></div></div>
+  <div class="dev-foot"><button type="button" class="dev-btn" id="devWalker">Boss: walker</button><button type="button" class="dev-btn" id="devWall">Boss: ice wall</button><button type="button" class="dev-btn" id="devBoss">Boss: dreadnought</button><button type="button" class="dev-btn" id="devTime">Time: dusk</button><button type="button" class="dev-btn" id="devWx">Weather: clear</button><button type="button" class="dev-btn" id="devRaid">Send interceptors</button><button type="button" class="dev-btn" id="devClear">Clear round</button><button type="button" class="dev-btn" id="devClose">Close</button></div></div>
 <!-- /SAM -->
 <div class="fail" id="fail">This device couldn’t start 3D graphics. Try opening the page in Safari or Chrome.</div>
 
@@ -462,6 +462,8 @@
     paintSky(L);
     skyStars.material.opacity = L.stars; giant.material.color.set(L.giant); giant.children[0].material.opacity = 0.38 * L.ring;
     for (i = 0; i < ridgeMats.length; i++) { var m = ridgeMats[i], k = m.userData.k; m.color.set(L.haze); m.color.setRGB(Math.min(1, m.color.r * k[0]), Math.min(1, m.color.g * k[1]), Math.min(1, m.color.b * k[2])); }
+    skyDome.material.color.setScalar(1);
+    wxApply();
   }
   function setArena(n) {
     if (n === arena) return;
@@ -1398,6 +1400,7 @@
     var top = Math.max(height(cx, cz), 0);
     for (var q = 0; q < 24; q++) top = Math.max(top, height(cx + Math.cos(q * 0.2618) * d.r, cz + Math.sin(q * 0.2618) * d.r)); // 24 round it: eight could straddle the crest of the ice wall, which is narrower than the gaps between them
     d.c.set(cx, top + 16 + Math.random() * 38, cz);
+    d.clear = d.c.y - top; d.off = d.off || new THREE.Vector3(); d.off.set(0, 0, 0); d.reT = Math.random() * 0.2; // how high it keeps over its circle, and how far the wind has drifted it
     d.w = (0.25 + Math.random() * 0.4) * (Math.random() < 0.5 ? -1 : 1);
     d.ph = Math.random() * 6.283;
     d.alive = true; d.mesh.visible = true;
@@ -1408,7 +1411,20 @@
       var d = drones[i];
       if (!d.alive) continue;
       var a = time * d.w + d.ph;
-      d.mesh.position.set(d.c.x + Math.cos(a) * d.r, d.c.y + Math.sin(a * 1.3) * 4, d.c.z + Math.sin(a) * d.r);
+      // the storm drifts its circle, and it springs back home; over new ground it keeps the height it keeps over its own
+      if (wind.x || wind.z || d.off.x || d.off.z) {
+        d.off.addScaledVector(wind, 0.6 * dt).multiplyScalar(1 - Math.min(1, 0.35 * dt));
+        if (d.off.length() > WX_DRIFT) d.off.setLength(WX_DRIFT);
+        d.reT -= dt;
+        if (d.reT <= 0) {
+          d.reT = 0.2;
+          var ox = d.c.x + d.off.x, oz = d.c.z + d.off.z, top = Math.max(height(ox, oz), 0);
+          for (var q = 0; q < 24; q++) top = Math.max(top, height(ox + Math.cos(q * 0.2618) * (d.r + 3), oz + Math.sin(q * 0.2618) * (d.r + 3)));
+          d.want = top + d.clear;
+        }
+        if (d.want > d.c.y) d.c.y = Math.min(d.want, d.c.y + 40 * dt); else if (d.want < d.c.y) d.c.y = Math.max(d.want, d.c.y - 4 * dt); // up quickly, down slowly
+      }
+      d.mesh.position.set(d.c.x + d.off.x + Math.cos(a) * d.r, d.c.y + Math.sin(a * 1.3) * 4, d.c.z + d.off.z + Math.sin(a) * d.r);
       d.mesh.rotation.y += dt * 1.2;
       d.ring.rotation.x += dt * 2.1;
       if (inControl && !dead && d.mesh.position.distanceTo(shipPos) < 140) {
@@ -2366,7 +2382,8 @@
   function nextRound() { startRound(round + 1); roundBanner(); }
   function roundBanner() {
     var b = isBossRound(round);
-    banner('Round ' + round + (!b ? '' : wallOn ? ' \u2014 The Ice Wall. Break its cracks to bring it down.' : walkF && walkF.gone <= 0 ? ' \u2014 The Walker. Shoot out its knees to bring it down.' : ' \u2014 Dreadnought. Destroy the shield generator at its core.'), b ? 5 : 2.5);
+    var wn = wxName();
+    banner('Round ' + round + (wn ? ' \u00b7 ' + wn : '') + (!b ? '' : wallOn ? ' \u2014 The Ice Wall. Break its cracks to bring it down.' : walkF && walkF.gone <= 0 ? ' \u2014 The Walker. Shoot out its knees to bring it down.' : ' \u2014 Dreadnought. Destroy the shield generator at its core.'), b ? 5 : 2.5);
     sfx(b ? 'boss' : 'round');
   }
   function offerUpgrades() {
@@ -2400,6 +2417,140 @@
     pickEl.style.display = 'none'; picking = false;
     nextRound();
   }
+
+  // ---------- weather: drawn afresh each round ----------
+  // SAM'S RULINGS: weather is random; it changes the game, not only the look; it has background sound (the next
+  // change); clear about half the time. Wind pushes only the player "unless it's designed in a way that the lighter
+  // enemies don't get messed up too bad and if so then it effects them also".
+  // MINE: four kinds -- clear 50%, fog 20%, rain 15%, storm 15% -- each named for where it falls: on the ice rain is
+  // snow and a storm a blizzard, on the lava rain is falling ash and fog is smoke. In clear air an enemy's lights carry
+  // across the whole map; in fog you lose a drone at about 130 (test/dusk-weather.mjs), the haze a third thicker.
+  // Rain darkens the light. A storm brings lightning (not on the ice) and gusts that push you. The gusts drift the
+  // drones' circles too, which spring back home and keep their height over whatever ground they drift across: in a
+  // storm they come no nearer the ground than in still air. They do NOT push the interceptors. Pushed, interceptors
+  // went into the ground in every one of four three-minute storms, as deep as 13.6, and never once in four still ones,
+  // even when pushed only while well above their floor. That is "messed up", so by Sam's rule they are left alone.
+  // Capital ships and bosses are too heavy.
+  var WX = {
+    clear: { p: 0.5, fogK: 1, veil: 0, dim: 1, fall: 0, wind: 0, bolts: false },
+    fog:   { p: 0.2, fogK: 1.3, veil: 0.85, dim: 0.9, fall: 0, wind: 0, bolts: false },
+    rain:  { p: 0.15, fogK: 1.3, veil: 0.4, dim: 0.75, fall: 1, wind: 0, bolts: false },
+    storm: { p: 0.15, fogK: 1.5, veil: 0.6, dim: 0.6, fall: 1.6, wind: 1, bolts: true }
+  };
+  var WX_NAMES = [{ fog: 'Fog', rain: 'Rain', storm: 'Storm' }, { fog: 'Fog', rain: 'Snow', storm: 'Blizzard' }, { fog: 'Smoke', rain: 'Ash', storm: 'Ash storm' }];
+  var WX_FOG = 0.0062, WX_GUST = 11, WX_DRIFT = 30;
+  var wx = 'clear', wxForce = null, wxBase = { hemiK: 0.6, haze: new THREE.Color(), sky: new THREE.Color(1, 1, 1) };
+  var wxHold = null; // the same weather every round, for the suites
+  var wind = new THREE.Vector3(), windAng = 0, gustT = 0, gustK = 0, gustDur = 0, gustPeak = 0, boltT = 4, flash = 0, flashes2 = 0;
+  function wxPick() {
+    if (wxHold) return wxHold;
+    if (wxForce) { var k = wxForce; wxForce = null; return k; }
+    var r = Math.random(), acc = 0;
+    for (var key in WX) { acc += WX[key].p; if (r < acc) return key; }
+    return 'clear';
+  }
+  function wxName() { return wx === 'clear' ? '' : WX_NAMES[arena][wx]; }
+  // A veil hung round the camera, just beyond the map, in the haze's colour. The far ridges, the far fight, the giant
+  // and the stars are all drawn without haze so the skyline shows; the veil fades all of them at once when the weather
+  // closes in, and anything nearer than it is left to the real haze.
+  var wxVeil = new THREE.Mesh(new THREE.SphereGeometry(260, 24, 16), new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide, transparent: true, opacity: 0, fog: false, depthWrite: false }));
+  wxVeil.renderOrder = -1; wxVeil.visible = false; scene.add(wxVeil);
+  // what falls: rain as streaks, snow and ash as flakes, in a box that travels with the camera
+  var WX_BOX = 120, WX_TALL = 80, wxFall = [];
+  (function () {
+    var n = 1400, a = new Float32Array(n * 6), g = new THREE.BufferGeometry();
+    for (var i = 0; i < n; i++) { var x = (Math.random() - 0.5) * WX_BOX, y = Math.random() * WX_TALL, z = (Math.random() - 0.5) * WX_BOX; a.set([x, y, z, x, y - 4.5, z], i * 6); }
+    g.setAttribute('position', new THREE.BufferAttribute(a, 3));
+    var rain = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xbfd2ff, transparent: true, opacity: 0.4, fog: false, depthWrite: false }));
+    rain.frustumCulled = false; rain.visible = false; scene.add(rain);
+    wxFall.push({ obj: rain, n: n, per: 2, speed: 70, streak: true });
+    [[0xffffff, 3.4, 0.9, 9], [0xb8a8a0, 3, 0.85, 6]].forEach(function (f) { // snow, then ash: a first render at 2.4 and a dark ash could barely be seen against the ice and the rock
+      var m = 1400, p = new Float32Array(m * 3), g2 = new THREE.BufferGeometry();
+      for (var j = 0; j < m; j++) p.set([(Math.random() - 0.5) * WX_BOX, Math.random() * WX_TALL, (Math.random() - 0.5) * WX_BOX], j * 3);
+      g2.setAttribute('position', new THREE.BufferAttribute(p, 3));
+      var pts = new THREE.Points(g2, new THREE.PointsMaterial({ color: f[0], size: f[1], sizeAttenuation: false, transparent: true, opacity: f[2], fog: false, depthWrite: false }));
+      pts.frustumCulled = false; pts.visible = false; scene.add(pts);
+      wxFall.push({ obj: pts, n: m, per: 1, speed: f[3], streak: false });
+    });
+  })();
+  function wxFaller() { return WX[wx].fall ? wxFall[arena === 0 ? 0 : arena] : null; } // the dusk world rains, the ice snows, the lava drops ash
+  // a new round's weather
+  function wxStart(n) {
+    wx = wxPick(); wind.set(0, 0, 0); windAng = Math.random() * 6.283; gustT = 1 + Math.random() * 3; gustK = 0; boltT = 3 + Math.random() * 4; flash = 0; flashes2 = 0;
+    for (var i = 0; i < drones.length; i++) if (drones[i].off) drones[i].off.set(0, 0, 0);
+    applyLook(); // the whole look again, with this weather on top: applying the weather alone would stack on the last
+  }
+  // Enemies' lights -- engines, lamps, a drone's core -- are drawn without haze so they glow, and so in a first version
+  // fog hid nothing: a drone 250 away still stood out 43% as much as one 30 away in clear air. In fog, and only in fog,
+  // the lights of ordinary enemies take the haze too. Health rings and bars (drawn over everything), enemy fire (to be
+  // dodged) and bosses (to be fought) never do.
+  function wxGlows(on) {
+    function take(root) { root.traverse(function (o) { var m = o.material; if (!m || m.depthTest === false || m.userData.wxKeep) return;
+      if (m.fog === false && !m.userData.wxGlow) m.userData.wxGlow = true;
+      if (m.userData.wxGlow && m.fog !== on) { m.fog = on; m.needsUpdate = true; } }); }
+    var i;
+    // a light a boss shares with ordinary ships stays clear on both: the boss comes first
+    for (i = 0; i < fleet.length; i++) if (fleet[i].boss) fleet[i].ship.traverse(function (o) { if (o.material) o.material.userData.wxKeep = true; });
+    for (i = 0; i < fleet.length; i++) if (!fleet[i].boss) take(fleet[i].ship);
+    for (i = 0; i < drones.length; i++) take(drones[i].mesh);
+    for (i = 0; i < ground.length; i++) take(ground[i].group);
+    for (i = 0; i < ics.length; i++) take(ics[i].g);
+  }
+  // the weather's share of the look, on top of what the time of day or the landscape set; applyLook calls it last
+  function wxApply() {
+    var W = WX[wx], i;
+    wxGlows(wx === 'fog');
+    scene.fog.density = WX_FOG * W.fogK;
+    wxBase.hemiK = hemi.intensity * W.dim; hemi.intensity = wxBase.hemiK; sun.intensity *= W.dim;
+    wxBase.haze.copy(scene.fog.color);
+    wxVeil.material.color.copy(scene.fog.color); wxVeil.material.opacity = W.veil; wxVeil.visible = W.veil > 0;
+    for (i = 0; i < wxFall.length; i++) wxFall[i].obj.visible = false;
+    var f = wxFaller(); if (f) f.obj.visible = true;
+  }
+  function updateWeather(dt) {
+    var W = WX[wx], i, f = wxFaller();
+    wxVeil.position.copy(camera.position);
+    // gusts: a slow wind that wanders in direction, with a gust every few seconds that rises, holds and falls
+    if (W.wind) {
+      windAng += (Math.random() - 0.5) * dt * 0.6;
+      gustT -= dt;
+      if (gustT <= 0 && gustK <= 0) { gustDur = 2.5 + Math.random() * 2; gustPeak = 0.6 + Math.random() * 0.4; gustK = gustDur; gustT = 4 + Math.random() * 5; }
+      var g = 0;
+      if (gustK > 0) { gustK -= dt; var u = 1 - gustK / gustDur; g = gustPeak * Math.min(1, u * 3, (1 - u) * 3); }
+      var s = W.wind * (0.15 + 0.85 * g) * WX_GUST;
+      wind.set(Math.cos(windAng) * s, 0, Math.sin(windAng) * s);
+    } else wind.set(0, 0, 0);
+    // lightning: a flash, and often a second a moment later
+    if (W.bolts && arena !== 1) {
+      boltT -= dt;
+      if (boltT <= 0) { flash = 1; flashes2 = Math.random() < 0.6 ? 0.18 : 0; boltT = 5 + Math.random() * 7; wxBolt(); }
+      if (flashes2 > 0) { flashes2 -= dt; if (flashes2 <= 0) flash = 0.8; }
+    }
+    if (flash > 0) {
+      flash = Math.max(0, flash - dt * 4);
+      hemi.intensity = wxBase.hemiK + flash * 2.4;
+      scene.fog.color.copy(wxBase.haze).lerp(wxBase.sky.set(0xdfe6ff), flash * 0.6);
+      skyDome.material.color.setScalar(1 + flash * 1.6);
+      wxVeil.material.color.copy(scene.fog.color);
+      if (flash === 0) { hemi.intensity = wxBase.hemiK; scene.fog.color.copy(wxBase.haze); skyDome.material.color.setScalar(1); wxVeil.material.color.copy(wxBase.haze); }
+    }
+    // what falls, falling, slanted by the wind, the box following the camera
+    if (f) {
+      var pos = f.obj.geometry.attributes.position, a = pos.array, cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
+      var vy = -f.speed * W.fall, vx = wind.x * (f.streak ? 1.4 : 2.2), vz = wind.z * (f.streak ? 1.4 : 2.2), h = WX_BOX / 2;
+      for (i = 0; i < f.n; i++) {
+        var k = i * f.per * 3, x = a[k] + vx * dt, y = a[k + 1] + vy * dt, z = a[k + 2] + vz * dt;
+        // wrap round the camera, so the box is always full where you are
+        if (y < cy - 30) y += WX_TALL; else if (y > cy - 30 + WX_TALL) y -= WX_TALL;
+        if (x < cx - h) x += WX_BOX; else if (x > cx + h) x -= WX_BOX;
+        if (z < cz - h) z += WX_BOX; else if (z > cz + h) z -= WX_BOX;
+        a[k] = x; a[k + 1] = y; a[k + 2] = z;
+        if (f.streak) { a[k + 3] = x - vx * 0.06; a[k + 4] = y + 4.5; a[k + 5] = z - vz * 0.06; }
+      }
+      pos.needsUpdate = true;
+    }
+  }
+  function wxBolt() {} // the thunder, in the sound change; here so the flash has somewhere to call
 
   // ---------- rounds ----------
   var round = 1, roundLive = false, nextT = 0, bannerT = 0, best = 0;
@@ -2445,6 +2596,7 @@
     for (i = 0; i < seekers.length; i++) { seekers[i].life = 0; seekers[i].mesh.visible = false; }
     clearChain();
     icReset(n);
+    wxStart(n); // after the landscape is settled, because what falls and what it is called depend on it
     updateReadout();
   }
   function checkRound() {
@@ -3299,7 +3451,11 @@
       if (dy > Math.PI) dy -= 6.283; else if (dy < -Math.PI) dy += 6.283;
       var wantBank = Math.max(-1.25, Math.min(1.25, dy / Math.max(dt, 0.001) * 0.85));
       ic.bank += (wantBank - ic.bank) * Math.min(1, dt * 5);
-      ic.pos.addScaledVector(ic.dir, spd * dt);
+      ic.pos.addScaledVector(ic.dir, spd * dt); // not by the wind: see the weather section
+      // and never into the ground. The floor above only steers, and steering can be late: measuring the weather found
+      // them a few metres inside a hill in still air, in two of three three-minute runs. Now the ground stops them.
+      var gfl = Math.max(height(ic.pos.x, ic.pos.z), 0) + 3;
+      if (ic.pos.y < gfl) { ic.pos.y = gfl; if (ic.dir.y < 0) { ic.dir.y = 0; ic.dir.normalize(); } }
       ic.g.position.copy(ic.pos);
       ic.g.rotation.set(Math.asin(Math.max(-1, Math.min(1, ic.dir.y))), yaw1, ic.bank);
       // drawn large while it is far off, as the far fight is, and down to its real size as it closes
@@ -3693,10 +3849,11 @@
       stickEl.style.display = 'none'; fireEl.classList.remove('on');
       devPaint();
       if (devTimeEl) devTimeEl.textContent = 'Time: ' + TIMES[tod].name;
+      if (devWxEl) devWxEl.textContent = 'Weather: ' + (wxName() || 'clear');
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'time-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'weather-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +
@@ -3747,6 +3904,11 @@
   var devTimeEl = document.getElementById('devTime');
   document.getElementById('devTime').addEventListener('click', function () {
     tod = (tod + 1) % TIMES.length; applyLook(); devTimeEl.textContent = 'Time: ' + TIMES[tod].name;
+  });
+  // the next weather, now, in this round: so each can be judged without waiting for it to come up
+  var devWxEl = document.getElementById('devWx'), WX_KEYS = Object.keys(WX);
+  document.getElementById('devWx').addEventListener('click', function () {
+    wxForce = WX_KEYS[(WX_KEYS.indexOf(wx) + 1) % WX_KEYS.length]; wxStart(round); devWxEl.textContent = 'Weather: ' + (wxName() || 'clear');
   });
   document.getElementById('devRaid').addEventListener('click', function () {
     // two of them, now, whatever the round: so the flying can be judged without playing to round 3
@@ -3806,6 +3968,8 @@
       speed += ((25 + f * 22) - speed) * (1 - Math.exp(-dt * 2.2));
       basis();
       shipPos.addScaledVector(fwdV, speed * dt).addScaledVector(rightV, s * 15 * dt);
+      // the storm's wind; never further out past the edge, where the ship is already turning itself home
+      if (wind.x || wind.z) { var wo = (shipPos.x * wind.x + shipPos.z * wind.z) / Math.max(1, dc); if (dc < 222 || wo < 0) shipPos.addScaledVector(wind, dt); }
 
       var ground = Math.max(height(shipPos.x, shipPos.z), 0) + 1.7;
       if (shipPos.y < ground) { shipPos.y = ground; if (pitch < 0.08) pitch = Math.min(0.08, pitch + dt * 2.4); }
@@ -3843,6 +4007,7 @@
     updateChain(dt);
     updateBursts(dt);
     updateFar(dt);
+    updateWeather(dt);
     updateDogfight(dt);
     updateBoss(dt);
     updateInterceptors(dt);

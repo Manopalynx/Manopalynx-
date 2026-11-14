@@ -501,10 +501,77 @@ should fail:
 measure. What disappears is the ground, by the second, which is the right half of what my eye said
 for the wrong reason.
 
+## The weather (build `weather-1`)
+
+**Sam's rulings:** random, drawn afresh each round; **clear about half the time**; it **changes the
+game**, not only the look; it has **background sound** (the next change, not this one); wind pushes
+**only the player** "unless it's designed in a way that the lighter enemies don't get messed up too
+bad and if so then it effects them also". Boss rounds "go for whatever look best".
+
+**Mine, open to him:**
+
+| | how often | the look | what it does to play |
+|---|---|---|---|
+| clear | 50% | as ever | nothing |
+| fog | 20% | haze a third thicker, far skyline veiled | **enemy lights fade too**: you lose a drone at about 130 |
+| rain | 15% | rain streaks, light dimmed by a quarter | mood, and its sound when that lands |
+| storm | 15% | heavier rain, light dimmed by 40%, lightning every 5 to 12 seconds | **gusts push you** |
+
+- **Named for where it falls:** on the ice rain is snow and a storm a blizzard, with no lightning;
+  on the lava rain is ash, a storm an ash storm, fog is smoke.
+- **The round's banner names it** ("Round 6 · Storm"). The **Sam panel's "Weather" button** steps
+  to the next kind at once, in the middle of a round.
+- **Gusts**: a wind that wanders in direction, a gust every 4 to 9 seconds, rising, holding and
+  falling over 2.5 to 4.5 seconds. It never pushes you further out past the map's edge.
+- **Who else the wind pushes**, by his rule and by measurement: **drones yes, interceptors no.** A
+  drone's circle drifts up to 30 and springs back home, keeping its height over whatever ground it
+  drifts across: in a storm drones come no nearer the ground than in still air. Interceptors,
+  pushed, went into the ground in every one of four three-minute storms, as deep as 13.6 (still
+  air: none of four, at the time); that is "messed up", so they are left alone. Capital ships,
+  ground units and bosses are too heavy.
+
+**How it works.** `WX` holds the kinds; `wxStart` draws one at each round's start, after the
+landscape is settled, and re-applies the whole look with the weather on top (`wxApply`, which
+`applyLook` calls last), so nothing stacks from round to round. **A veil**, a sphere round the
+camera just beyond the map in the haze colour, fades the far ridges, the far fight, the giant and
+the stars together, all of which are drawn without haze so the skyline shows. What falls is one
+batch of streaks or flakes in a box that travels with the camera. `wxHold` pins the weather for
+the suites, which are about other things; each holds it clear.
+
+**Measured** by `test/dusk-weather.mjs`:
+
+| | |
+|---|---|
+| the draw, 20,000 times | clear 50%, fog 20%, rain 15%, storm 15%, each within 2 points |
+| a drone straight ahead, still standing out a quarter as much as at 30 in clear | **clear: across the whole map (48% at 450); fog: to about 130** |
+| push on a ship holding nothing | peak about 12.5 a second (full strafe is 15), pushing hard a quarter to a third of the time |
+| lightning in a storm | 15 or 16 flashes in two minutes; none in rain or a blizzard |
+| nearest a drone comes to the ground, still against storm | 11 to 21 against 11 to 18 |
+
+**Three things the first versions got wrong, all found by measuring:**
+
+- **Fog hid nothing.** Enemies' lights (engines, lamps, a drone's core) are drawn without haze so
+  they glow, so a drone 250 away still stood out 43% as much as one 30 away in clear. In fog, the
+  lights of ordinary enemies take the haze now. Health rings and bars, enemy fire and bosses never do.
+- **"Halve how far you can see" had nothing to halve.** In clear air those lights carry across the
+  whole map. What fog does is set a distance: about 130 at the thickness chosen, under a third of the
+  map's width, and visibly thicker than clear. The haze was first doubled, which cut it to 75.
+- **Interceptors went into the ground in still air too.** Their floor only steered, and steering
+  can be late: in two of three three-minute runs one went a few metres into a hill. They now have a
+  hard floor, 3 over the ground, and a check that flies one straight down at a hill.
+
+Four of the suite's own checks were wrong first: a camera at 40 that the hills blinded beyond 100 in
+both weathers; a lightning counter that looked for a flash above 0.9 when a flash has faded below
+that within its first tick; a wind measure that kept only the sideways part of the push, so a wind
+of 10.9 read as 6.8; and a fog check that asked for a half of a distance its own list had capped.
+
+**Not settled:** how a storm's push feels on the phone; whether fog at 130 is too much; frame time
+with 1,400 drops on his phone, which nothing here can measure.
+
 ## Queued, in the agreed order
 
 1. Wrecks of downed capital ships that stay for the run.
-2. ~~Time of day moving on each round.~~ Built: the time of day, above. Weather and its sound next.
+2. ~~Time of day moving on each round.~~ Built: the time of day and the weather, above. The weather's sound next.
 3. Ground units grouped into bases.
 4. Canyons for cover.
 5. ~~A boss every fifth round.~~ Built: the dreadnought, above.
@@ -536,6 +603,7 @@ node test/dusk-lava.mjs        # the lava field, and the walker's every footfall
 node test/dusk-walker.mjs      # the walker's fight: knees, the fall, the core, bombs, lava, towers, interceptors, which boss comes
 DUSK_QUICK=1 node test/dusk-walker.mjs   # its rules without the fights, for mutation runs: a minute instead of several
 node test/dusk-time.mjs        # the time of day: the cycle, dusk unchanged, each sky its own, and whether enemies still stand out
+node test/dusk-weather.mjs     # the weather: the draw, nothing stacking, how far you see in fog, the wind, lightning, who gets pushed
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between
