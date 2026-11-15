@@ -3414,3 +3414,10 @@ was red through a whole mutant run and four "caught" results were worth nothing;
 death, was caught by nothing else, because the line did nothing. Removed. The other two of his three are not
 started: I asked what he holds when it gets easy, and which region ideas he likes.
 
+### `score-2`
+
+His: the points should flash on screen as in Call of Duty, "where you can see it add up". The tally moved from
+beside the score to under the crosshair, swelling per kill, each kill's points flashing beside it. A render caught
+the flashes landing on his ship in landscape; moved beside the tally. Six mutants, all caught. Only the score suite
+and the smoke test were re-run: the change is display only.
+

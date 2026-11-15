@@ -46,7 +46,7 @@ const PRE = `
   M.scene = function (round) { startRound(round || 6); damage = function () {}; };
   M.drone = function () { for (var i = 0; i < drones.length; i++) if (drones[i].alive) { killDrone(drones[i]); return; } };
   M.gun = function () { for (var i = 0; i < ground.length; i++) if (ground[i].alive) { hitGround(ground[i], 99, ground[i].pos); return; } };
-  M.s = function () { return { score: score, tally: tally, k: scoreK(), n: scoreN.textContent, t: scoreT.textContent }; };
+  M.s = function () { return { score: score, tally: tally, k: scoreK(), n: scoreN.textContent, t: scoreT.textContent, pop: popN.textContent, on: popEl.classList.contains('on'), each: [].map.call(popEach, function (e) { return e.textContent; }).join(' ') }; };
   M.step(3);`;
 const J = s => `JSON.stringify((function () { ${s} })())`;
 async function run(code, keep) {
@@ -94,7 +94,10 @@ check(chain.seq.join(',') === '10,10,10,20,20,20,30,30,30,40,40,40,50,50,50,50',
 check(chain.at29.score === 0 && chain.at29.tally === chain.tally, 'the tally is still counting 2.9 seconds after the last kill', JSON.stringify(chain.at29));
 check(chain.at31.score === chain.tally && chain.at31.tally === 0, `and is added to the score by 3.1  [${chain.tally}]`, JSON.stringify(chain.at31));
 check(chain.after === 10, 'the next kill starts a new chain at once times', `worth ${chain.after}`);
-check(chain.tally === chain.seq.reduce((a, b) => a + b, 0) && chain.shown.n === '0' && chain.shown.t === `+${chain.tally} ×5` && chain.at31.n === String(chain.tally) && chain.at31.t === '', 'the screen shows the score, and the tally with its multiplier while it counts', JSON.stringify([chain.shown, chain.at31]));
+check(chain.tally === chain.seq.reduce((a, b) => a + b, 0) && chain.shown.n === '0' && chain.shown.pop === `+${chain.tally} ×5` && chain.shown.on, 'the tally shows in the middle of the screen with its multiplier while it counts', JSON.stringify(chain.shown));
+// Sam: "when you defeat an enemy the points flashes on the screen like in call of duty ... where you can see it add up"
+check(chain.shown.each === '+50 +50 +50 +50', 'each kill\'s own points flash by it: the last four here were 50 apiece', chain.shown.each);
+check(chain.at31.n === String(chain.tally) && !chain.at31.on && chain.at31.pop === `+${chain.tally} ×5`, 'banked, the score takes it and the tally is let fade, still reading what it reached', JSON.stringify(chain.at31));
 
 const keepUp = await run(`
   M.scene(9); var o = {};
@@ -121,7 +124,7 @@ check(frozen.during.tally === 10 && frozen.at28.tally === 10 && frozen.after.sco
     startRound(9); M.drone(); bankScore(); die(); o.best2 = bestScore; o.stored2 = localStorage.getItem('small-world-best-score');
     return o;
   `, true);
-  check(d.banked === 20 && d.pending === 10 && d.dead.score === 20 && d.dead.tally === 0, 'the tally not yet banked is lost with the ship; what was banked stands', JSON.stringify(d));
+  check(d.banked === 20 && d.pending === 10 && d.dead.score === 20 && d.dead.tally === 0 && !d.dead.on, 'the tally not yet banked is lost with the ship; what was banked stands', JSON.stringify(d));
   check(d.best === 20 && d.stored === '20' && /Score 20\./.test(d.note) && d.dead.t === 'Best 20', 'the best is kept, and the screen says the score and the best', JSON.stringify(d));
   check(d.again.score === 0 && d.again.tally === 0 && d.again.n === '0' && d.bestAgain === 20, 'flying again starts from nothing, the best still held', JSON.stringify(d));
   check(d.best2 === 20 && d.stored2 === '20', 'a worse run does not lower the best', JSON.stringify(d));
@@ -141,10 +144,11 @@ for (const [name, vp] of [['portrait', { width: 393, height: 852 }], ['landscape
   const r = await page.evaluate(() => {
     const box = id => { const b = document.getElementById(id).getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; };
     const hit = (a, b) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
-    const s = box('score'), others = ['warn', 'hull', 'shieldBar', 'readout', 'sam', 'snd', 'fire'].filter(id => document.getElementById(id)).map(id => [id, box(id)]);
-    return { s, on: s.l >= 0 && s.t >= 0 && s.r <= innerWidth && s.b <= innerHeight, over: others.filter(([id, b]) => hit(s, b)).map(([id]) => id), text: document.getElementById('score').textContent };
+    const s = box('score'), p = box('popN'), others = ['warn', 'hull', 'shieldBar', 'readout', 'sam', 'snd', 'fire', 'cross'].filter(id => document.getElementById(id)).map(id => [id, box(id)]);
+    const inside = b => b.l >= 0 && b.t >= 0 && b.r <= innerWidth && b.b <= innerHeight;
+    return { s, p, on: inside(s) && inside(p) && p.r > p.l, over: others.filter(([id, b]) => hit(s, b) || hit(p, b)).concat(hit(s, p) ? [['each other']] : []).map(([id]) => id), text: document.getElementById('score').textContent + ' / ' + document.getElementById('popN').textContent };
   });
-  check(r.on && r.over.length === 0, `${name}: a seven-figure score and a five-figure tally fit, over nothing else on the screen  [${r.text}]`, JSON.stringify(r));
+  check(r.on && r.over.length === 0, `${name}: a seven-figure score, and a five-figure tally under the crosshair, fit over nothing else on the screen  [${r.text}]`, JSON.stringify(r));
   await page.close();
 }
 

@@ -996,7 +996,7 @@ than here. In boss rounds: it does nothing against the dreadnought, which has no
 level-1 bomb destroyed all six of the walker's tower guns in 90 seconds and 13 of the wall's 30, and they rebuild.
 Not measured: with chain reaction beyond one run, and a stand-in that flies at the bases.
 
-## The score (build `score-1`)
+## The score (build `score-2`)
 
 **Sam's rulings:** "every time you destroy a unit you get points"; "if you get multiple points in a row it counts up
 and then after a few seconds with no points it gets added to the total"; "when you die you go back to round one so
@@ -1012,10 +1012,15 @@ your score resets"; "yes to best score being saved". The rest were my recommenda
   (his). The death message gives the score.
 - **The best** is kept on the phone (`small-world-best-score`) as each tally is banked, and shown on the first
   screen and while down.
-- **Where:** top left under the hull and shield bars; the tally and its multiplier beside it in gold. The Missile
-  warning moved down a line to make room. Checked over nothing else at 393×852, 852×393 and 667×375.
+- **Where:** the score top left under the hull and shield bars; the Missile warning moved down a line to make room.
+- **The tally is in the middle of the screen, under the crosshair** (`score-2`). Sam: "when you defeat an enemy the
+  points flashes on the screen like in call of duty multiplayer kills where you can see it add up". The gold tally
+  and its multiplier sit just below the crosshair and swell as each kill lands; that kill's own points flash beside
+  it and rise away; when it is banked it fades, still reading what it reached. The flashes are beside the tally,
+  not under it: in landscape the ship is under it.
+- Checked over nothing else, the crosshair included, at 393×852, 852×393 and 667×375.
 
-`test/dusk-score.mjs`, 22 checks. A line that saved the best at death was removed: a mutant showed it did nothing,
+`test/dusk-score.mjs`, 24 checks. A line that saved the best at death was removed: a mutant showed it did nothing,
 since banking had already saved it.
 
 ## Both ways up (build `landscape-1`)

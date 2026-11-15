@@ -110,6 +110,24 @@
     text-shadow: 0 1px 8px rgba(6, 7, 22, 0.9); pointer-events: none;
   }
   .score .tally { margin-left: 0.6em; font-style: italic; color: var(--glow); }
+  /* the tally, in the middle of the screen just under the crosshair: each kill's points rise off it and it swells as
+     they are added, then fades when it is banked (Sam: "like in call of duty multiplayer kills where you can see it add up") */
+  .pop {
+    position: fixed; left: 50%; top: calc(50% + 22px); transform: translateX(-50%);
+    font-size: 1.3rem; font-style: italic; color: var(--glow); white-space: nowrap; text-align: center;
+    font-variant-numeric: tabular-nums; text-shadow: 0 1px 8px rgba(6, 7, 22, 0.95);
+    pointer-events: none; opacity: 0; transition: opacity 0.6s ease;
+  }
+  .pop.on { opacity: 1; transition: none; }
+  .pop .n { display: inline-block; }
+  .pop .n.bump { animation: popbump 0.2s ease-out; }
+  .pop .each {
+    position: absolute; left: 100%; top: 0.25em; margin-left: 14px; /* beside the tally, not under it: under it is the ship */
+    font-size: 0.95rem; color: var(--ink); opacity: 0;
+  }
+  .pop .each.go { animation: poprise 0.8s ease-out; }
+  @keyframes popbump { from { transform: scale(1.5); } to { transform: scale(1); } }
+  @keyframes poprise { from { opacity: 1; transform: translateY(0.5em); } to { opacity: 0; transform: translateY(-0.9em); } }
   .warn {
     position: fixed;
     top: calc(92px + env(safe-area-inset-top, 0px));
@@ -260,6 +278,7 @@
 <div class="hull shieldbar" id="shieldBar" role="img" aria-label="Shield strength"><i id="shieldFill"></i></div>
 <div class="point" id="point"><i></i></div>
 <div class="score" id="score"><span id="scoreN"></span><span class="tally" id="scoreT"></span></div>
+<div class="pop" id="pop"><span class="n" id="popN"></span><span class="each"></span><span class="each"></span><span class="each"></span><span class="each"></span></div>
 <div class="warn" id="warn">Missile</div>
 <div class="hurt" id="hurt"></div>
 <div class="note" id="note"></div>
@@ -3271,18 +3290,27 @@
   var SCORE_BANK = 3, SCORE_STEP = 3, SCORE_MAXK = 5;
   var score = 0, tally = 0, chain = 0, tallyT = 0, bestScore = 0;
   var scoreN = document.getElementById('scoreN'), scoreT = document.getElementById('scoreT');
+  var popEl = document.getElementById('pop'), popN = document.getElementById('popN'), popEach = popEl.querySelectorAll('.each'), popNext = 0;
   try { bestScore = Math.max(0, parseInt(localStorage.getItem('small-world-best-score'), 10) || 0); } catch (e) {}
   function scoreFmt(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
   function scoreK() { return Math.min(SCORE_MAXK, 1 + Math.floor(chain / SCORE_STEP)); }
   function paintScore() {
     // before the first touch, and while down, the best; in flight, the score and the tally still counting
     scoreN.textContent = inControl ? scoreFmt(score) : bestScore ? 'Best ' + scoreFmt(bestScore) : '';
-    scoreT.textContent = dead ? (bestScore ? 'Best ' + scoreFmt(bestScore) : '') : tally ? '+' + scoreFmt(tally) + (scoreK() > 1 ? ' \u00d7' + scoreK() : '') : '';
+    scoreT.textContent = dead && bestScore ? 'Best ' + scoreFmt(bestScore) : '';
+    // the tally lives in the middle of the screen; once banked its last figure is left to fade out
+    if (tally) popN.textContent = '+' + scoreFmt(tally) + (scoreK() > 1 ? ' \u00d7' + scoreK() : '');
+    popEl.classList.toggle('on', tally > 0 && !dead);
   }
+  function popRestart(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); } // an animation starts again only if the class leaves and comes back
   function addScore(kind) {
     if (dead || !inControl) return;
-    tally += SCORE[kind] * scoreK(); chain++; tallyT = SCORE_BANK;
+    var pts = SCORE[kind] * scoreK();
+    tally += pts; chain++; tallyT = SCORE_BANK;
     paintScore();
+    // this kill's own points rise off the tally, and the tally swells as they land in it
+    var e = popEach[popNext]; popNext = (popNext + 1) % popEach.length;
+    e.textContent = '+' + scoreFmt(pts); popRestart(e, 'go'); popRestart(popN, 'bump');
   }
   function bankScore() {
     score += tally; tally = 0; chain = 0;
@@ -4637,7 +4665,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'score-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'score-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +
