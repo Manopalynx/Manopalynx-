@@ -3266,3 +3266,54 @@ the walker is now too hard (he beat it), and whether the towers' 10-second rebui
 them pointless. He asked whether to carry on here or start fresh; I advised a fresh session, because this
 one had grown long enough that its early parts survived only as summaries.
 
+## Instance 17 — 15 November 2026
+
+Setup found everything green (the hook repaired a stale local `main`, 30 behind, nothing lost; fast suites all
+passed). One change, the bomb, merged as `bomb-1`. Its design and figures are in `docs/dusk/README.md`; this is the
+record of how.
+
+### His decisions
+
+"We are doing the bomb"; "it's an upgrade that fires automatically"; then, to three questions I put (falling or
+guided, whether the wall's and walker's tower guns count, what balanced means), "go with your recommendations and
+whatever you think works best as you're building it". Real authorisation; I did not re-ask. The ledger's month of
+real entries, for testing its arithmetic: "potentially when the time comes".
+
+### What measuring found that the design did not
+
+- **The bomb as recommended was invisible.** A bomb keeping the ship's speed lands under the ship, and the portrait
+  camera sees 39° below its line at most. Found on the first render, not in the design. It is thrown now: nose
+  speed plus 55, gravity 30, on screen in level flight from 15 to 130 up, asserted.
+- **"Takes a whole camp", which I told him before building, was false of the first version.** It let go at the
+  first chance, so the blast landed at a camp's near edge and took one gun of three. Found on a render, by a figure
+  at the bottom of the script (`alive: [true, true, false]`), not by the suite. It now waits for the closest
+  approach; a check for the camp, and a mutant that undoes it, are in the suite.
+- **Twice the game was right and my scene was wrong**: a gun just behind a ridge the ship skimmed, and a gun on a
+  rise 9 above a gully. Both are geometry, and both are now written down as behaviour rather than fixed.
+- **The release point was taken from the ship's model, which moves a tick after the ship.** Harmless in the game
+  (same tick by the time the bomb runs) and wrong in any scene that moves the ship by hand; now worked from the
+  ship's position.
+
+### My instruments, wrong in the order found
+
+A scene laying guns from the ship when a thrown bomb lands far past them; a carpet of guns the turning ship flew
+off; a "new round clears bombs" check that looked 200 steps after the round started, when the bomb had landed
+anyway (mutant caught it); a mutant that sped up time and so traced the identical curve (a dud, replaced); a
+level-ground search too strict for the hills, then the ice field, where "above the highest ground" meant above the
+ice wall. And the seed: the worth table moved between identical runs. **Seeding after load is not seeding**: the page
+builds the far dogfight at load on unseeded randomness, and round 6's interceptors come out of it. Seeded from an
+init script now, three runs identical. Separately, **the sound effects draw from the same `Math.random` as the game,
+gated on the real audio clock**; muted in the worth runs. The other Dusk suites that seed after load, or with sound
+on, may carry the same drift. Measured in this suite only; not checked in theirs.
+
+Twelve mutants at the end, all caught. My mutation script stopped on a stale anchor once and left the published
+file holding a mutant; restored from the copy and diffed before going on.
+
+At the merge: sixteen Dusk suites, 377 checks, plus offline, published and version, all green. The card's text
+still said "below you" after the throw went in; caught on a read-through of the diff, before the merge.
+
+### Open, his
+
+How the bomb feels and looks on the phone (for its first half second it is hidden behind his own ship); the starting
+numbers; whether the tower guns counting is right, given the open question of their 10-second rebuild. Balancing is
+the next step, its own change: the worth table is a first measure with nothing else firing.
