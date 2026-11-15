@@ -3397,3 +3397,10 @@ The check now fails properly and the script counts a non-zero exit. Neither chan
 ... but no more the rest of the game": shown once per page opened, not again after dying. "Yes to tower guns
 counting for bombs": already so, now his ruling rather than my fill. Two mutants on the banner, both caught.
 
+### `landscape-1`
+
+His: "make sure it all looks good if I play it on landscape and portrait including the upgrade screen". Five phone
+shapes, each both ways up, rendered and each element's box checked against the screen. One fault: the landscape
+upgrade screen ran off the top and bottom; cards now sit side by side there, checked with the three longest card
+texts on the smallest screen. The worker restarted mid-fix; nothing was lost. The notch was not checkable here.
+

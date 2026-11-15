@@ -148,6 +148,15 @@
   .card-name { display: block; font-size: 1.15rem; }
   .card-desc { display: block; margin-top: 3px; font-size: 0.95rem; line-height: 1.35; color: var(--ink-soft); }
   .card-lvl { display: block; margin-top: 6px; font-size: 0.85rem; font-style: italic; color: var(--glow); }
+  /* a phone on its side: three stacked cards are taller than the screen (the title went off the top and the third
+     card off the bottom), so they sit side by side, clear of the notch whichever side it is on */
+  @media (orientation: landscape) and (max-height: 520px) {
+    .pick { padding: calc(12px + env(safe-area-inset-top, 0px)) calc(20px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px)); }
+    .pick h2 { margin-bottom: 12px; max-width: none; font-size: 1.2rem; }
+    .cards { flex-direction: row; align-items: stretch; width: min(100%, 780px); }
+    .card { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+    .card-lvl { margin-top: auto; padding-top: 6px; }
+  }
   .cross {
     position: fixed; left: 50%; top: 50%;
     width: 22px; height: 22px; margin: -11px 0 0 -11px;
@@ -4583,7 +4592,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'capitals-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'landscape-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +

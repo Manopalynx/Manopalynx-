@@ -996,7 +996,21 @@ than here. In boss rounds: it does nothing against the dreadnought, which has no
 level-1 bomb destroyed all six of the walker's tower guns in 90 seconds and 13 of the wall's 30, and they rebuild.
 Not measured: with chain reaction beyond one run, and a stand-in that flies at the bases.
 
-## Queued, in the agreed order
+## Both ways up (build `landscape-1`)
+
+**Sam:** "make sure it all looks good if I play it on landscape and portrait including the upgrade screen".
+Rendered at iPhone 16 (393×852), iPhone SE (375×667), a Pro Max on its side (932×430), each both ways up: the
+first screen, play, the upgrade screen, a dreadnought round and the Sam panel, with every element's box checked
+against the screen's edges.
+
+**One fault, in landscape only: the upgrade screen.** Its title started above the top of the screen and the third
+card ended below the bottom. On a short landscape screen the three cards now sit side by side, clear of the notch
+on either side. Checked with the three longest descriptions on the smallest screen, an SE on its side: the cards run
+96 to 316 of 375. Portrait is unchanged. Everything else fitted both ways already; the Sam panel scrolls.
+
+**Not checkable here:** the notch itself. The browser used here has no notch, so the safe-area margins (which the
+HUD already had) were read, not seen working.
+
 
 1. Wrecks of downed capital ships that stay for the run.
 2. ~~Time of day moving on each round.~~ Built: the time of day, the weather and its sound, above.
