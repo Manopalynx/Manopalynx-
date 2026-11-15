@@ -3317,3 +3317,39 @@ still said "below you" after the throw went in; caught on a read-through of the 
 How the bomb feels and looks on the phone (for its first half second it is hidden behind his own ship); the starting
 numbers; whether the tower guns counting is right, given the open question of their 10-second rebuild. Balancing is
 the next step, its own change: the worth table is a first measure with nothing else firing.
+
+### Later the same day: `bomb-2`, the cone
+
+(The startup hook called the resumed session "Instance 18"; it is the same conversation, so it is recorded here.)
+
+**His reaction to `bomb-1`: "I like it"**, and a change: it should hit ground targets while he fights in the air. I
+proposed lobbing at anything within a circle round the ship; he redirected in one sentence, **"still shooting forward
+so you still see it but potentially it's got a targeting similar to the wingmen"**. The second sentence carried a
+constraint my proposal had dropped. Then "sound good go for it".
+
+**Measured before proposing, both times, with a stand-in that fights drones** (turns and pitches at the nearest,
+guns firing): `bomb-1` threw 2 bombs in 90 seconds where its cool-down allowed 22, with a ground unit within 100 of
+the ship 98% of the time. Then the cones. The wingmen's own cone, round the nose, holds a ground target 12% of the
+fight, worse than `bomb-1`: a literal copy of "like the wingmen" would have made it worse. Round the heading on the
+map: 46% at ±15°, 64% at ±30°, 79% at ±45°, 90% at ±60°, with the target on screen 41%, 38%, 25%, 19%. He took
+±30°, preferring a target on the screen. The table is in `docs/dusk/README.md`.
+
+**What it did:** 14 ground units of 30 in 90 seconds of the drone fight at level 1, against `bomb-1`'s couple and
+seekers' 4. It is now the strong card on the ground. I told him beforehand it would be much stronger; I did not
+guess by how much, and the figure is three to four times.
+
+**My instruments, again:** guns laid where the angle had widened past the cone by the first look, a second in; an
+on-screen fixture read before the camera had swung in behind the ship; a camp scene that stopped before its bomb
+landed; a turning carpet whose guns left the cone faster than the cool-down; a near-limit scene whose gun was flown
+past before the first look (its mutant sailed through); a "round the nose" mutant too weak to be one (fwdV's flat
+part, not a 3D angle); an assertion of mine that `bodyGeo` appeared once, when the seekers have one too. Fourteen
+mutants at the end, all caught, the script restoring the game file in a `finally` this time.
+
+**Seen and not:** in level flight the throw shows and a target 15° aside lands near the screen's edge, its angle
+widening as you fly on; nose up, the ground is under the view and the bomb is heard, not seen. In level flight
+the blast is on screen at 80 up and off it at 130; between them is not measured.
+
+At the merge: sixteen Dusk suites, 385 checks, and offline, published and version, all green.
+
+**Open, his:** how `bomb-2` feels; whether three to four times seekers on the ground is too strong (balancing); and
+the two still open from `bomb-1`, tower guns counting and the seed helper.
