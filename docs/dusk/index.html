@@ -448,10 +448,10 @@
     return iceTerritories(x, z, base);
   }
   // the bases: each a flat yard inside walls, a gate in the side facing the middle, the ground levelled round it
-  function iceBases(x, z, h) {
-    var L = ICE_T;
-    for (var i = 0; i < L.bases.length; i++) {
-      var o = L.bases[i], dx = x - o.x, dz = z - o.z, ax = Math.abs(dx), az = Math.abs(dz), out = o.half + o.wallT;
+  function iceBases(x, z, h) { return basesHeight(ICE_T.bases, x, z, h); }
+  function basesHeight(list, x, z, h) {
+    for (var i = 0; i < list.length; i++) {
+      var o = list[i], dx = x - o.x, dz = z - o.z, ax = Math.abs(dx), az = Math.abs(dz), out = o.half + o.wallT;
       if (ax > out + 8 || az > out + 8) continue;
       h = o.floor + (h - o.floor) * smooth(out, out + 8, Math.max(ax, az));
       var inWall = Math.max(ax, az) > o.half && Math.max(ax, az) < out;
@@ -482,13 +482,130 @@
   }
   // 2: THE LAVA FIELD. Black rock cut by channels that dip below sea level, and the sea, recoloured, is the lava.
   // So the rivers and lakes are not drawn: they are wherever this function goes below nought.
-  function heightLava(x, z) {
-    var d = Math.sqrt(x * x + z * z);
+  // THE LAVA FIELD'S TERRITORIES (chapter step 4), built as territories from the start: the ice's first version was
+  // four stamped shapes, and Sam said so. The middle stays as it is -- black rock and lava rivers, where the walker walks
+  // a circle 105 out with its feet reaching 150, and where its gait is tested -- and four territories fill the land from
+  // just beyond its feet out to the crags, borders wandering and blending, each of its six guard towers kept a patch:
+  //   the basalt forest (135 degrees) -- hexagonal columns with flat tops, 15 to 50 high, gaps of 12 or more to weave
+  //   the lava lake (225) -- a wide basin of lava, rock islands in it, a battery of guns on each
+  //   the rift (45) -- one long winding trench between raised rims, a thread of lava down its floor
+  //   the delta (315, at the volcano's foot) -- braided channels of lava between low bars of rock (MINE: Sam left the
+  //   fourth to me, between ash dunes and a delta; dunes would have been the ice's pressure ridges again)
+  // and, as on the ice, one large base and small camps scattered through them, walled, on rock.
+  var LAVA_T = null, LAVA_T_AT = -1, LAVA_COL_GAP = 26;
+  var LAVA_TERR = [{ k: 'forest', a: 135 }, { k: 'lake', a: 225 }, { k: 'rift', a: 45 }, { k: 'delta', a: 315 }];
+  function lavaWeights(x, z, out) {
+    var L = LAVA_T, d = Math.sqrt(x * x + z * z), i;
+    for (i = 0; i < 4; i++) out[i] = 0;
+    // short fades: at chapter 2's size the band is only about 100 deep, and with fades of 40 the rift's rims fell in them
+    // and stood 6 over its floor
+    var rad = smooth(160, 185, d) * (1 - smooth(L.outer - 25, L.outer, d));
+    for (i = 0; i < WK_TOWERS.length; i++) { var tx = x - WK_TOWERS[i][0], tz = z - WK_TOWERS[i][1]; rad *= smooth(16, 30, Math.sqrt(tx * tx + tz * tz)); }
+    if (rad <= 0) return 0;
+    var th = Math.atan2(z, x) + (fbm(x * 0.006 + 13.3, z * 0.006 + 2.1) - 0.5) * 1.6, sum = 0;
+    for (i = 0; i < 4; i++) { out[i] = 1 - smooth(0.35, 1.25, Math.abs(angDiff(th, LAVA_TERR[i].a * Math.PI / 180))); sum += out[i]; }
+    for (i = 0; i < 4; i++) out[i] = sum > 0 ? out[i] / sum * rad : 0;
+    return rad;
+  }
+  function lavaLayout() {
+    if (LAVA_T_AT === SCALE) return LAVA_T;
+    LAVA_T_AT = SCALE;
+    var outer = 175 * SCALE;
+    if (outer - 165 < 70) return (LAVA_T = null);
+    var L = LAVA_T = { outer: outer, rc: (165 + outer) / 2, bases: [], islands: [] }, w = [0, 0, 0, 0];
+    var la = 225 * Math.PI / 180;
+    L.lake = { x: Math.cos(la) * L.rc, z: Math.sin(la) * L.rc, R: (outer - 165) * 0.45 };
+    // the lake's islands: on a loose grid across the lake's heart, each a flat-topped rock 8 high
+    for (var gx = -outer; gx <= outer; gx += 46) for (var gz = -outer; gz <= outer; gz += 46) {
+      var ix = gx + (hash(gx * 0.21 + 3, gz * 0.11) - 0.5) * 16, iz = gz + (hash(gx * 0.17, gz * 0.23 + 9) - 0.5) * 16;
+      lavaWeights(ix, iz, w);
+      if (w[1] > 0.7) L.islands.push({ x: ix, z: iz, r: 11 + hash(ix, iz) * 4 });
+    }
+    // the rift: one line across its territory, at right angles to the way out from the middle
+    var ra = 45 * Math.PI / 180; L.rift = { x: Math.cos(ra) * L.rc, z: Math.sin(ra) * L.rc, ux: -Math.sin(ra), uz: Math.cos(ra), k: 1 };
+    // the bases, clear of the towers, the volcano and each other
+    var vc = new THREE.Vector3(310, 0, -320).multiplyScalar(SCALE), vr = 290 * SCALE;
+    function base(deg, rr, half, guns) {
+      var a = deg * Math.PI / 180, b = { x: Math.cos(a) * rr, z: Math.sin(a) * rr, half: half, wallT: half > 20 ? 5 : 3, wallH: half > 20 ? 16 : 11, gate: half > 20 ? 9 : 7, guns: guns };
+      var ext = half + b.wallT + 8;
+      for (var i = 0; i < WK_TOWERS.length; i++) if (Math.hypot(WK_TOWERS[i][0] - b.x, WK_TOWERS[i][1] - b.z) < ext + 24) return;
+      for (i = 0; i < L.bases.length; i++) if (Math.hypot(L.bases[i].x - b.x, L.bases[i].z - b.z) < ext + L.bases[i].half + 30) return;
+      for (i = 0; i < L.islands.length; i++) if (Math.hypot(L.islands[i].x - b.x, L.islands[i].z - b.z) < ext + L.islands[i].r + 10) return;
+      if (Math.hypot(vc.x - b.x, vc.z - b.z) < vr + ext || rr + ext > outer - 10) return;
+      b.gx = -b.x / rr; b.gz = -b.z / rr; L.bases.push(b);
+    }
+    base(115, L.rc, (outer - 165) * 0.25, 8);
+    var small = SCALE < 1.8 ? 3 : 5, tries = [[80, 1.0], [160, 1.05], [200, 0.95], [20, 1.0], [250, 1.1], [180, 1.15], [60, 1.15], [140, 0.92]];
+    for (var t = 0; t < tries.length && L.bases.length < small + 1; t++) base(tries[t][0], L.rc * tries[t][1], 12, 3);
+    // a base stands on its ground as the territories leave it, and at least 4 up: rock, clear of the lava
+    // ...and on the forest's floor, not on a column: a first version set its floor from the ground at its centre, and at
+    // full size the large base sat on top of a column, 40 up
+    L.bases.forEach(function (bb) { bb.floor = Math.max(4, lavaGroundNoBases(bb.x, bb.z, true)); });
+    return L;
+  }
+  var lavaW = [0, 0, 0, 0];
+  function lavaRock(x, z) {
     var n = fbm(x * 0.013 + 21.4, z * 0.013 + 6.9);
     var ch = 1 - Math.abs(2 * fbm(x * 0.017 + 2.2, z * 0.017 + 40.1) - 1);   // 1 along the channels
-    var h = (n - 0.42) * 46 + 7 - smooth(0.72, 0.95, ch) * 16;                // rock a few metres up, channels cut down through it
-    h += smooth(175, 255, d / SCALE) * (18 + fbm(x * 0.02 + 9.1, z * 0.02 + 1.3) * 70); // crags at the rim, which moves out with the arena
+    return (n - 0.42) * 46 + 7 - smooth(0.72, 0.95, ch) * 16;                // rock a few metres up, channels cut down through it
+  }
+  function lavaTerritories(x, z, base, noCols) {
+    var L = LAVA_T, rad = lavaWeights(x, z, lavaW);
+    if (rad <= 0) return base;
+    var h = base, w;
+    // the lake: lava, flat, filling its basin
+    if ((w = lavaW[1]) > 0.01) h += (-6 - h) * smooth(0.35, 0.7, w);
+    // the delta: braided channels of lava between low bars of rock
+    if ((w = lavaW[3]) > 0.01) {
+      var bc = 1 - Math.abs(2 * fbm(x * 0.035 + 7.7, z * 0.035 + 1.9) - 1);
+      var delta = 3 + fbm(x * 0.05, z * 0.05) * 5 - smooth(0.62, 0.86, bc) * 12;
+      h += (delta - h) * smooth(0.3, 0.7, w);
+    }
+    // the rift: raised rims, a floor 4 up, a thread of lava down the middle; it fades out where its territory ends
+    if ((w = lavaW[2]) > 0.01) {
+      var R = L.rift, dx = x - R.x, dz = z - R.z, along = dx * R.ux + dz * R.uz, perp = dx * R.uz - dz * R.ux;
+      perp -= Math.sin(along * 0.03) * 14; var ap = Math.abs(perp);
+      var rim = 26 * (1 - smooth(18, 46, ap)), floor = ap < 15 ? (ap < 2.5 ? -3 : 4) : null;
+      var rift = floor !== null ? floor + (rim - floor) * smooth(12, 16, ap) : Math.max(h, 6 + rim);
+      h += (rift - h) * smooth(0.25, 0.65, w);
+    }
+    // the basalt forest: a level floor of rock, and hexagonal columns standing flat-topped out of it. The floor is levelled
+    // because the field's rock rolls by twenty either way, and where it rose between two columns it filled the gap to fly
+    // through: measured, a gap of 0 where the columns' own spacing leaves 12
+    if ((w = lavaW[0]) > 0.01) {
+      var floorH = 3 + fbm(x * 0.05 + 4.4, z * 0.05 + 8.8) * 2;
+      h += (floorH - h) * smooth(0.3, 0.7, w);
+    }
+    if ((w = lavaW[0]) > 0.01 && !noCols) {
+      var S = LAVA_COL_GAP, qz = z / (S * 0.866), qx = x / S - qz * 0.5, rz = Math.round(qz), rx = Math.round(qx), ry = Math.round(-qx - qz);
+      var dxr = Math.abs(rx - qx), dyr = Math.abs(ry - (-qx - qz)), dzr = Math.abs(rz - qz);
+      if (dxr > dyr && dxr > dzr) rx = -ry - rz; else if (dyr <= dzr) rz = -rx - ry;
+      var cx = (rx + rz * 0.5) * S, cz = rz * S * 0.866, cw = [0, 0, 0, 0];
+      lavaWeights(cx, cz, cw);
+      var dens = smooth(0.15, 0.6, cw[0]);
+      if (dens > 0 && hash(cx * 0.7 + 1, cz * 0.7 + 2) < dens) {
+        var ox = x - cx, oz = z - cz, hd = Math.max(Math.abs(oz), Math.abs(ox * 0.866 + oz * 0.5), Math.abs(ox * 0.866 - oz * 0.5)); // a hexagon's distance
+        // 5 to 6 across the flats: two neighbours 26 apart leave 12 or more between them; 15 to 48 high off the floor
+        var cr = 5 + hash(cz, cx), top = 15 + hash(cx * 0.3, cz * 0.9) * 33 * smooth(0.3, 0.85, cw[0]);
+        h = Math.max(h, h + (top - h) * (1 - smooth(cr - 0.8, cr + 0.8, hd)));
+      }
+    }
+    // the lake's islands, standing out of whatever is round them
+    for (var i = 0; i < L.islands.length; i++) {
+      var is = L.islands[i], idx = x - is.x, idz = z - is.z;
+      if (Math.abs(idx) > is.r + 4 || Math.abs(idz) > is.r + 4) continue;
+      h = Math.max(h, 8 * (1 - smooth(is.r - 2, is.r + 3, Math.sqrt(idx * idx + idz * idz))) + h * smooth(is.r - 2, is.r + 3, Math.sqrt(idx * idx + idz * idz)));
+    }
     return h;
+  }
+  function lavaGroundNoBases(x, z, noCols) {
+    var d = Math.sqrt(x * x + z * z);
+    var base = lavaRock(x, z) + smooth(175, 255, d / SCALE) * (18 + fbm(x * 0.02 + 9.1, z * 0.02 + 1.3) * 70);
+    return lavaLayout() ? lavaTerritories(x, z, base, noCols) : base;
+  }
+  function heightLava(x, z) {
+    var h = lavaGroundNoBases(x, z);
+    return LAVA_T ? basesHeight(LAVA_T.bases, x, z, h) : h;
   }
   function height(x, z) { return arena === 1 ? heightIce(x, z) : arena === 2 ? heightLava(x, z) : heightDusk(x, z); }
   function heightDusk(x, z) {
@@ -549,7 +666,9 @@
     // lava: the ground is lit from below by what runs through it; rock near the lava glows, rock away from it is black
     { haze: 0x4a1a0c, zenith: 0x0a0406, sun: 0xff9a5a, sky: 0xff8a50, ground: 0xa03a10, hemiK: 0.85, steep: 0x0e0a0c, water: 0xff5a14, glow: 0xff3c00, solid: true,
       warm: 0xff5a20, wk: 0.6, dir: [-0.55, 0.32, -0.62], sunK: 1.15, stars: 1, giant: 0xa07a70, ring: 0.7,
-      stops: [[-30, 0x7a1e06], [0.5, 0x8a2a0a], [3, 0x2a1512], [14, 0x1c1a1e], [45, 0x3a3034], [96, 0x6a5650]] }
+      // tall rock is lighter than low rock: the basalt columns, the rift's rims and the crags read against the low black
+      // ground (a first render of the lava's territories had them dark against dark); the walker's ground is mostly under 14
+      stops: [[-30, 0x7a1e06], [0.5, 0x8a2a0a], [3, 0x2a1512], [14, 0x1c1a1e], [24, 0x3a3036], [45, 0x5a4c4e], [96, 0x7a6660]] }
   ];
   var terrainGeo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
   terrainGeo.rotateX(-Math.PI / 2);
@@ -1814,19 +1933,23 @@
     while (ground.length < n) ground.push(makeGround(ground.length % 5 < 3 ? 'flak' : 'sam'));
   }
   function placeGround(g) {
-    var x = 0, z = 0, h = 0;
+    var x = 0, z = 0, h = 0, fx = null, fz = null, found = false;
     for (var tries = 0; tries < 60; tries++) {
       var a = Math.random() * 6.283, r = 50 + Math.random() * (SPAWN * SCALE - 50);
       x = Math.cos(a) * r; z = Math.sin(a) * r; h = height(x, z);
       if (h < 2.5) continue;
       if (Math.abs(height(x + 3, z) - h) > 2.2 || Math.abs(height(x, z + 3) - h) > 2.2) continue;
+      if (fx === null) { fx = x; fz = z; } // the first place that is rock and level, should nothing be clear of the others
       var clear = true;
       for (var i = 0; i < ground.length && clear; i++) {
         var o = ground[i];
         if (o !== g && o.alive && (o.pos.x - x) * (o.pos.x - x) + (o.pos.z - z) * (o.pos.z - z) < 260) clear = false;
       }
-      if (clear) break;
+      if (clear) { found = true; break; }
     }
+    // with the lava's lake and delta there is less rock: if no place clear of the others turned up, take the first that was
+    // rock and level, never the last one tried, which could be in the lava
+    if (!found && fx !== null) { x = fx; z = fz; }
     setGround(g, x, z);
   }
   // puts a unit down at a given spot, whole and ready
@@ -2829,13 +2952,17 @@
     for (i = 0; i < ground.length; i++) { ground[i].alive = false; ground[i].group.visible = false; ground[i].ring.visible = false; }
     // on the ice from chapter 2's size, enemies by place: a third of the drones over the frozen lake, and up to eight guns
     // inside the outpost's walls (the queued "ground units grouped into bases"); the rest wherever there is room
-    var G = arena === 1 && !boss ? iceLayout() : null, inYard = 0;
+    var G = boss ? null : arena === 1 ? iceLayout() : arena === 2 ? lavaLayout() : null, inYard = 0;
     if (G) {
       for (i = 0; i < Math.min(12, Math.floor(small / 3)); i++) spawnDrone(drones[i], G.lake);
       // the bases' guns: the large base's eight first, then three to each camp, while there are guns to give
       G.bases.forEach(function (o) {
         var spots = o.guns === 8 ? [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]] : [[-0.6, -0.4], [0.6, -0.4], [0, 0.55]], step = o.half * 0.55;
         for (var q = 0; q < spots.length && inYard < small; q++) { setGround(ground[inYard], o.x + spots[q][0] * step, o.z + spots[q][1] * step); inYard++; }
+      });
+      // the lava lake's islands: a battery of two on each
+      (G.islands || []).forEach(function (is) {
+        for (var q = -1; q <= 1 && inYard < small; q += 2) { setGround(ground[inYard], is.x + q * is.r * 0.35, is.z); inYard++; }
       });
     }
     for (i = inYard; i < small; i++) placeGround(ground[i]);
@@ -4154,7 +4281,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'ice-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'lava-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +

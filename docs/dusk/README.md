@@ -799,12 +799,57 @@ the bottom of its bob inside the ice wall's crest. A drone settles its height fr
 points round its circle, and the crest, narrow and jagged, could fall between them. It checks 48 now.
 That fault was rare and random, so one clean run does not prove the fix; it is right in principle.
 
+### Step 4, built (`lava-1`): the lava field's territories
+
+**Sam: "ready for lava whenever you are"**, the fourth territory left to me (ash dunes or a delta: the
+delta, because dunes would have been the ice's pressure ridges again). Built as territories from the
+start. **The middle is left exactly as it was**: black rock and lava rivers, where the walker walks
+105 out with its feet reaching 150 and where its gait is tested. The territories fill everything from
+just beyond its feet (about 170) out to the crags, blending over short fades, because at chapter 2's
+size that band is only about a hundred deep; each of the walker's six towers keeps a patch.
+
+- **The basalt forest** (135°): a level floor of rock about 3 up, hexagonal columns 5 to 6 across the
+  flats standing 15 to 48 out of it, taller in the territory's heart, 26 apart: 12 or more between
+  neighbours.
+- **The lava lake** (225°): lava filling the basin, flat-topped rock islands 8 high, a battery of two
+  guns on each. A third of the drones, up to twelve, circle over it.
+- **The rift** (45°): one winding trench along the territory, floor 4 up with a thread of lava down
+  its middle, rims about 30.
+- **The delta** (315°, at the volcano's foot): braided channels of lava between low bars of rock.
+- **Bases**: one large and small camps, three at chapter 2's size and five at full, on rock at least
+  4 up, clear of the towers and the volcano.
+
+**Tall rock is lighter than low**: new colour stops above 14, so the columns, the rift's rims and the
+crags read against the black ground; the walker's own ground is mostly under 14. **Ground placement**
+used to fall back to the last spot it tried when none was clear of the others, which with less rock
+could be lava; it falls back to the first rock that was level.
+
+**Measured** by `test/dusk-lavafield.mjs`:
+
+| | chapter 2 | full size |
+|---|---|---|
+| land beyond the walker's feet claimed by a territory | 100% | 100% |
+| forest / lake / rift / delta | 30 / 16 / 21 / 33% | 23 / 24 / 23 / 29% |
+| narrowest gap between neighbouring columns; tallest | 12.5; 34 | 12.5; 47 |
+| islands, each with its battery | 7 | 29 |
+| a rim gun's line to a ship down in the rift, blocked; over the rims | 83%; 21% | 100%; 21% |
+| the walker's ground to 155 out, changed | not at all | not at all |
+
+**What the first versions got wrong, all found by measuring:** columns of fixed height barely stood out
+where the rock rose round them, and the rock rolling twenty either way filled the gaps between them,
+so the forest's floor is levelled; at full size the large base took its floor from the top of a column
+and sat 40 up; and at chapter 2's size the rift at full width put both its rims in the fades at the
+band's edges, standing 6 over its floor. I scaled the rift's width to the band as well as shortening
+the fades; a deliberate break showed the scaling did nothing once the fades were short, so it is gone.
+Two of the suite's checks were wrong first: one measured the rift at the wrong widths, and one counted
+a base's walls as a column.
+
 ### Built in stages, each merged with its own version, each shown as renders first
 
 1. ~~Chapters: the move every five rounds and the order, at today's size.~~ Built, above.
 2. ~~Size: every distance following the arena, and the arenas growing.~~ Built, above.
 3. ~~The ice field's regions.~~ Built, above.
-4. The lava field's regions.
+4. ~~The lava field's regions.~~ Built as territories, above.
 5. The dusk hills at full size, for the second time round.
 
 ## Queued, in the agreed order
@@ -847,6 +892,7 @@ node test/dusk-wxsound.mjs     # the weather's sound: nothing before a tap, each
 node test/dusk-chapter.mjs     # the chapters: the order, one arena a chapter, ordinary rounds on the ice and lava, ships over the ground
 node test/dusk-size.mjs        # the arenas' sizes: the spacing, the ground at every size, nothing in the wrong place, the wall's strips
 node test/dusk-ice.mjs         # the ice field's territories: the plain filled, borders that blend, each place doing its job, the bases
+node test/dusk-lavafield.mjs   # the lava field's territories: the land filled, the walker's ground untouched, each place doing its job
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between
