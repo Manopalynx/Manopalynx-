@@ -200,7 +200,9 @@ console.log('\n— the rules —');
     var d1 = ics[0].pos.distanceTo(shipPos) + ics[1].pos.distanceTo(shipPos);
     startRound(2);
     JSON.stringify({ before: before, live: roundLive, modes: modes, further: Math.round(d1 - d0), after: ics.filter(function (c) { return c.alive; }).length })`)).then(JSON.parse);
-  check(leave.before === 2 && leave.modes === '33' && leave.further > 60 && leave.after === 0,
+  // (further than 30 in the two seconds: how far depends on which way each was facing when the round cleared, and a bar
+  // of 60 failed now and then at 59 on a build that had not changed)
+  check(leave.before === 2 && leave.modes === '33' && leave.further > 30 && leave.after === 0,
     'the round clears with them still flying; they turn for home, and none carries into the next round', JSON.stringify(leave));
 
   await again();

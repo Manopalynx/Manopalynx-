@@ -844,13 +844,47 @@ the fades; a deliberate break showed the scaling did nothing once the fades were
 Two of the suite's checks were wrong first: one measured the rift at the wrong widths, and one counted
 a base's walls as a column.
 
+### Step 5, built (`dusk-1`): the dusk hills' territories
+
+**Sam: "Let's complete the maps and then we can move into the bomb."** The dusk hills come round
+again from chapter 4, at full size; chapter 1 stays the open introduction. **The middle to 150 out,
+the landing pad and its town, is exactly as it was**; beyond it, four territories, blending:
+
+- **The river canyon** (45°): one deep meandering canyon, water at its floor, rims about 30.
+- **The mesas** (135°): low ground, and flat-topped plateaus on steep sides, a battery of two guns on
+  each. **Ragged, stretched and some stepped**: the first ones were round, and from above they read
+  as polka dots, which is the look Sam called demo areas.
+- **The hills** (225°): the dusk hills' own ground. A third of the drones, up to twelve, gather over it.
+- **The range** (315°): a ridge of peaks to about 120, passes down to about 40 between them. The
+  first was a smooth bank with no peaks to speak of.
+- **Bases**: one large and small camps, as elsewhere.
+
+**One departure from the agreed design:** it said the landing pad would become a base. Its flat
+deck is 16 across with its town on it, so it stays as it is, and the mesas' tops are the gun sites.
+**The pylons out in the hills** were placed once, against today's ground; they are now seated on
+whatever ground each size has, and not there where a territory has taken their spot.
+
+**Measured** by `test/dusk-hills.mjs`, at full size (the only size the dusk hills take territories in
+a run; 1.5 is checked too, reachable through the Sam panel's boss buttons):
+
+| | full size |
+|---|---|
+| land beyond the town claimed; river / mesas / hills / range | 100%; 25 / 21 / 28 / 25% |
+| a rim gun's line to a ship down in the river canyon, blocked; lifted well over it | 99%; 8% |
+| mesas; how many are 1.3 or more times as wide one way as another | 28; all |
+| the range's highest crest; its lowest pass | 123; 36 |
+
+The suite's checks were wrong three times on the way: a ship placed for the canyon's control that
+the meander put over the rim, the same ship lifted only barely over the far rim, and a mesa's drop
+measured at a fixed distance that on a stretched mesa was still on it.
+
 ### Built in stages, each merged with its own version, each shown as renders first
 
 1. ~~Chapters: the move every five rounds and the order, at today's size.~~ Built, above.
 2. ~~Size: every distance following the arena, and the arenas growing.~~ Built, above.
 3. ~~The ice field's regions.~~ Built, above.
 4. ~~The lava field's regions.~~ Built as territories, above.
-5. The dusk hills at full size, for the second time round.
+5. ~~The dusk hills at full size, for the second time round.~~ Built, above. The maps are done.
 
 ## Queued, in the agreed order
 
@@ -893,6 +927,7 @@ node test/dusk-chapter.mjs     # the chapters: the order, one arena a chapter, o
 node test/dusk-size.mjs        # the arenas' sizes: the spacing, the ground at every size, nothing in the wrong place, the wall's strips
 node test/dusk-ice.mjs         # the ice field's territories: the plain filled, borders that blend, each place doing its job, the bases
 node test/dusk-lavafield.mjs   # the lava field's territories: the land filled, the walker's ground untouched, each place doing its job
+node test/dusk-hills.mjs       # the dusk hills' territories: the town untouched, the canyon, ragged mesas, the range, the pylons
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between
