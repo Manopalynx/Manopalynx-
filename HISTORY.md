@@ -3366,3 +3366,20 @@ other Dusk suites and the mutants were not, the change being one constant.
 He also raised the dreadnought: "a bit easy", "mostly just shooting at a structure with little threat", with two
 ideas (add units, six interceptors out at a time), for after the bomb. Queued in his words in
 `docs/dusk/README.md`. One thing found for it: boss rounds place no ground units, so the bomb does nothing there.
+
+### `dreadnought-5`
+
+His "go for your recommendations": missile launchers on the ship, an escort, six interceptors a launch, aimed at
+the danger of the round before it. Measured first: `dreadnought-4` dealt 3.6 a second to a stand-in against round
+4's 8.9, and most of that was the stand-in ramming it. **I recommended escorts and six interceptors as part of the
+answer and they are not: the escort added 13 damage in a fight and the interceptors 27.** The launchers are all of
+it, and it took four at 5 to 8 seconds, not the two I first built, to reach round 4. Said so to him plainly.
+
+**The escort did not exist for two measurements and nothing complained.** The round's setup clears its drones after
+it starts the dreadnought. A row reading "drone: 0" was the only sign; a check that counted them at round start
+would have caught it at once, and the suite has one now. The launcher mounts floated two off the collar; the
+suite's own "none floating" check caught that. Eight mutants on the new checks, all caught.
+
+He raised two more in the same message, discussed and not built: interceptors every 30 seconds in ordinary rounds,
+and double damage to a capital ship with no turrets left.
+

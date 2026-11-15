@@ -122,7 +122,7 @@ both checks red.
 
 None of this says how it feels. That is his to judge on the phone.
 
-## The dreadnought (build `dreadnought-4`)
+## The dreadnought (build `dreadnought-5`)
 
 Every fifth round is one fortress, alone: a split spindle, the shield's generator hanging in
 the gap, a ring of guns slung below it, a shield round the whole, and a bay at each end.
@@ -226,6 +226,43 @@ upgrades the stand-in still needs 75 seconds to kill the generator.
 at 30 hits was down two seconds into the round; and `dreadnought-1`'s interceptor suite kept
 passing on a fixture that named round 5, then went red on a correct game when round 5 stopped
 sending interceptors from the far fight.
+
+### `dreadnought-5`: it was too easy
+
+**Sam:** "the dreadnought is a bit easy and also it's mostly just shooting at a structure with little threat so we
+probably need to find ways to up the difficulty such as add units or have 6 interceptors come out at a time."
+This supersedes "a boss round is the boss alone", by the other half of that ruling: "a purposely set amount of
+enemies in certain locations".
+
+**Measured first** (a stand-in with four upgrades that never dodges and cannot die; damage that reaches the ship,
+counted; means of three seeds). `dreadnought-4` in round 5 dealt 3.6 a second, of which 2.0 was the stand-in ramming
+it and 1.6 its guns; round 4, the round before it, dealt 8.9. For 29% of the fight four seconds or more had passed
+since a hit, which is when the hull mends; in round 4, 4%. Its interceptors landed nothing. **What hurts in an
+ordinary round is missiles**: 507 of round 4's 797.
+
+**Built, on his "go for your recommendations". The numbers are mine:**
+
+- **Four missile launchers** on the two dark collars, red-lamped like a missile site. Turrets in every way but what
+  they fire: shot through the shield, ringed, rebuilt after ten seconds, 4% of the hull when one goes. Each fires
+  every 5 to 8 seconds (faster on later visits, as the guns are). Point defence has work in this fight now.
+- **An escort of drones**, posted evenly on a ring 95 out, alternately above and below the ring of guns: 6, 8, 10,
+  12, 14 by visit. **They go down with the ship**, in the same moment, so there is never a straggler to hunt.
+- **Six interceptors a launch**: three pairs, 0.7 seconds apart, every 30 seconds, the first six seconds in. Still
+  never more than six flying.
+
+| round 5 | damage a second | quiet 4s+ | guns | missiles | interceptors | escort | ramming |
+|---|---|---|---|---|---|---|---|
+| `dreadnought-4` | 3.6 | 29% | 88 | – | 0 | – | 105 |
+| `dreadnought-5` | 8.9 | 6% | 91 | 240 | 27 | 13 | 105 |
+| round 4, for comparison | 8.9 | 4% | | | | | |
+
+**Which way each lever went:** the launchers are the whole of it. Six escorts added 13 damage in the fight and six
+interceptors a launch 27; twenty drones do 30 in all of round 4. They make the fight busier, not more dangerous, to
+this stand-in. Launcher rates measured: every 8 to 11 seconds 6.5 a second, 5 to 8 (chosen) 8.9, 2 to 5 11.7.
+**The stand-in never dodges and Sam does**, so every figure overstates what he would take; they compare fights.
+Round 10: 8.8 a second with three launchers at 8 to 11 seconds, 13.5 with four at 3 to 6; at the chosen rate it
+is not measured, and nor is the ordinary round before it.
+**The bomb still does nothing here**: there is nothing on the ground.
 
 ## The ice wall (build `icewall-2`): the second boss
 
@@ -968,9 +1005,10 @@ Not measured: with chain reaction beyond one run, and a stand-in that flies at t
 4. Canyons for cover. (Likewise: crevasses, the rift, the river canyon.)
 5. ~~A boss every fifth round.~~ Built: the dreadnought, above.
 6. ~~The bomb, once the maps were done (Sam).~~ Built and balanced: `bomb-3`, above.
-7. **The dreadnought is too easy** (Sam, after `bomb-2`): "it's mostly just shooting at a structure with little
-   threat so we probably need to find ways to up the difficulty such as add units or have 6 interceptors come out at
-   a time". After the bomb is finished. Today: one interceptor from each bay every 30 seconds, up to six flying.
+7. ~~The dreadnought is too easy (Sam).~~ Built: `dreadnought-5`, above.
+8. **Interceptors every 30 seconds in ordinary rounds** (Sam: "they get destroyed early every round"). Proposed,
+   not agreed in detail.
+9. **A capital ship with every turret destroyed takes double damage** (Sam). Proposed, not agreed in detail.
 
 Also noted: once interceptors exist, invulnerable wingmen will look odd.
 
