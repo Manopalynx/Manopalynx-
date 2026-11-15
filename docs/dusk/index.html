@@ -2112,6 +2112,112 @@
     return { type: type, group: g, pivot: pivot, lamp: lamp, lampColor: lampColor, mat: mat, ring: r.ring, segs: r.segs,
       hp: 0, maxHp: type === 'sam' ? 4 : 3, baseHp: type === 'sam' ? 4 : 3, alive: false, cool: 0, burst: 0, burstT: 0, flash: 0, pos: new THREE.Vector3(), spot: null, tower: null, back: 0 };
   }
+  // ---------- an enemy of its own for each region (Sam) ----------
+  // The ice field has LANCERS: a gun on a tall mast that charges where you can see it and throws one slow, heavy shot from
+  // far off, to be dodged. The dusk hills have CRAWLERS: a tracked gun that drives between the hills, so not everything on
+  // the ground stays put. (The lava field's, the ember, is not a ground unit and has its own section.) A few of a round's
+  // ordinary ground units become these, so the round's count is what it was. MINE, his to strike: every number and shape.
+  var LANCE_HP = 6, LANCE_RANGE = 320, LANCE_UP = 12.3, LANCE_CHARGE = 1.5, LANCE_SPEED = 62, LANCE_DMG = 30;
+  var CRAWL_HP = 5, CRAWL_SPEED = 7, CRAWL_RANGE = 125;
+  function regionCount(n) { return Math.min(6, Math.floor((n + 1) / 3)); } // none in round 1; one from 2, two from 5, three from 8 ... six at most
+  (function () {
+    var geo = new THREE.SphereGeometry(1.5, 10, 8), mat = new THREE.MeshBasicMaterial({ color: 0xbff4ff, fog: false });
+    for (var q = 0; q < 8; q++) {
+      var m = new THREE.Mesh(geo, mat); m.visible = false; scene.add(m);
+      shots.push({ mesh: m, vel: new THREE.Vector3(), prev: new THREE.Vector3(), life: 0, kind: 4, dmg: LANCE_DMG });
+    }
+  })();
+  function buildKind(kind) {
+    var g = new THREE.Group(), pivot = new THREE.Group(), mat = gDark.clone(), lampColor, lamp;
+    function add(parent, geo, m, x, y, z) { var o = new THREE.Mesh(geo, m); o.position.set(x, y, z); parent.add(o); return o; }
+    if (kind === 'lance') {
+      lampColor = 0x8fe9ff;
+      add(g, new THREE.CylinderGeometry(2.2, 3, 2, 8), gBase, 0, 1, 0);
+      add(g, new THREE.CylinderGeometry(0.8, 1.3, 12, 6), gBase, 0, 8, 0);
+      pivot.position.y = 2.15 + LANCE_UP; // where its hit point is: see setKindAt
+      add(pivot, new THREE.BoxGeometry(2.4, 1.8, 3.2), mat, 0, 0, 0);
+      add(pivot, new THREE.BoxGeometry(0.55, 0.55, 7.5), mat, 0, 0, 4.6);
+      lamp = add(pivot, new THREE.SphereGeometry(0.8, 8, 6), new THREE.MeshBasicMaterial({ color: lampColor, fog: false }), 0, 0, 8.6); // at the muzzle: it swells as the shot charges
+    } else {
+      lampColor = 0xffa040;
+      add(g, new THREE.BoxGeometry(5, 1.4, 6.5), gBase, 0, 1.1, 0);
+      add(g, new THREE.BoxGeometry(1.1, 1.3, 7.2), gDark, 2.9, 0.65, 0); add(g, new THREE.BoxGeometry(1.1, 1.3, 7.2), gDark, -2.9, 0.65, 0);
+      pivot.position.y = 2.5;
+      add(pivot, new THREE.SphereGeometry(1.5, 8, 6), mat, 0, 0, 0);
+      add(pivot, new THREE.BoxGeometry(0.36, 0.36, 3.8), mat, 0.5, 0.1, 2); add(pivot, new THREE.BoxGeometry(0.36, 0.36, 3.8), mat, -0.5, 0.1, 2);
+      add(g, new THREE.CylinderGeometry(0.09, 0.09, 3.4, 5), gDark, -1.8, 3, -2.4);
+      lamp = add(g, new THREE.SphereGeometry(0.55, 8, 6), new THREE.MeshBasicMaterial({ color: lampColor, fog: false }), -1.8, 4.9, -2.4);
+    }
+    g.add(pivot); g.visible = false; scene.add(g);
+    return { group: g, pivot: pivot, lamp: lamp, mat: mat, lampColor: lampColor };
+  }
+  // makes a ground unit one of a region's own, or (kind null) an ordinary one again: it keeps its place in the list, its
+  // ring and everything that counts it, and wears a different body
+  function groundKind(g, kind) {
+    if (!g.sets) g.sets = { base: { group: g.group, pivot: g.pivot, lamp: g.lamp, mat: g.mat, lampColor: g.lampColor } };
+    var key = kind || 'base';
+    if (!g.sets[key]) g.sets[key] = buildKind(kind);
+    g.group.visible = false;
+    var st = g.sets[key];
+    g.group = st.group; g.pivot = st.pivot; g.lamp = st.lamp; g.mat = st.mat; g.lampColor = st.lampColor;
+    g.kind = kind || null; g.maxHp = kind === 'lance' ? LANCE_HP : kind === 'crawl' ? CRAWL_HP : g.baseHp;
+    g.charge = 0; g.wp = null;
+  }
+  // puts one down as its kind: a lancer's gun, and so where it is shot, is at the top of its mast
+  function setKindAt(g, kind, x, z) {
+    groundKind(g, kind); setGround(g, x, z);
+    if (kind === 'lance') { g.pos.y += LANCE_UP; g.cool = 3 + Math.random() * 3; g.pivot.rotation.set(0, Math.random() * 6.283, 0); }
+    if (kind === 'crawl') g.group.rotation.y = Math.random() * 6.283;
+  }
+  function lanceShoot(g, dist) {
+    var s = null;
+    for (var i = 0; i < shots.length; i++) if (shots[i].life <= 0 && shots[i].kind === 4) { s = shots[i]; break; }
+    if (!s) return;
+    gTmp.set(0, 0, 8.6); g.pivot.localToWorld(gTmp);
+    // aimed exactly where you will be if you fly on as you are: turn, climb or change speed and it passes. The meeting
+    // time t solves |ship + v t - muzzle| = LANCE_SPEED t; a rough lead (distance over speed) missed a straight flier by
+    // many lengths at range, which made the shot no threat at all.
+    var rx = shipPos.x - gTmp.x, ry = shipPos.y - gTmp.y, rz = shipPos.z - gTmp.z, vx = fwdV.x * speed, vy = fwdV.y * speed, vz = fwdV.z * speed;
+    var qa = vx * vx + vy * vy + vz * vz - LANCE_SPEED * LANCE_SPEED, qb = 2 * (rx * vx + ry * vy + rz * vz), qc = rx * rx + ry * ry + rz * rz;
+    var disc = qb * qb - 4 * qa * qc, tm = disc > 0 && qa < 0 ? (-qb - Math.sqrt(disc)) / (2 * qa) : dist / LANCE_SPEED;
+    aimTmp.copy(shipPos).addScaledVector(fwdV, speed * tm);
+    s.mesh.position.copy(gTmp); s.prev.copy(gTmp);
+    s.vel.copy(aimTmp).sub(gTmp).normalize().multiplyScalar(LANCE_SPEED);
+    s.life = 7; s.mesh.visible = true;
+    sfx('lance', gTmp);
+  }
+  function updateLance(g, dt, dist) {
+    g.pivot.lookAt(shipPos);
+    if (g.charge > 0) {
+      g.charge -= dt;
+      g.lamp.scale.setScalar(1 + 3.2 * (1 - Math.max(0, g.charge) / LANCE_CHARGE));
+      if (g.charge <= 0) { g.lamp.scale.setScalar(1); lanceShoot(g, dist); g.cool = 6 + Math.random() * 3; }
+      return;
+    }
+    if (dist > LANCE_RANGE || dist < 45) return;
+    g.cool -= dt;
+    if (g.cool <= 0) { g.charge = LANCE_CHARGE; sfx('charge', g.pos); }
+  }
+  // drives to a place picked near by, then another; it keeps to rock that is near level, and off the pad's town
+  function updateCrawl(g, dt) {
+    var x = g.group.position.x, z = g.group.position.z, i;
+    if (!g.wp || (g.wp.x - x) * (g.wp.x - x) + (g.wp.z - z) * (g.wp.z - z) < 9) {
+      g.wp = g.wp || { x: 0, z: 0 };
+      for (i = 0; i < 12; i++) {
+        var a = Math.random() * 6.283, r = 25 + Math.random() * 45, wx = x + Math.cos(a) * r, wz = z + Math.sin(a) * r, wr = Math.sqrt(wx * wx + wz * wz);
+        if (wr < 60 || wr > SPAWN * SCALE || height(wx, wz) < 2.5) continue;
+        g.wp.x = wx; g.wp.z = wz; break;
+      }
+      if (i === 12) { g.wp.x = x; g.wp.z = z; return; }
+    }
+    var dx = g.wp.x - x, dz = g.wp.z - z, d = Math.sqrt(dx * dx + dz * dz) || 1, nx = x + dx / d * CRAWL_SPEED * dt, nz = z + dz / d * CRAWL_SPEED * dt, h = height(nx, nz);
+    // water, lava or a wall ahead: pick somewhere else next tick
+    if (h < 2.5 || Math.abs(h - height(x, z)) > 1.6 * CRAWL_SPEED * dt + 0.4) { g.wp.x = x; g.wp.z = z; return; }
+    for (i = 0; i < ground.length; i++) { var o = ground[i]; if (o !== g && o.alive && (o.pos.x - nx) * (o.pos.x - nx) + (o.pos.z - nz) * (o.pos.z - nz) < 64) { g.wp.x = x; g.wp.z = z; return; } }
+    g.group.position.set(nx, h - 0.25, nz); g.pos.set(nx, h + 1.9, nz);
+    var want = Math.atan2(dx, dz), turn = Math.atan2(Math.sin(want - g.group.rotation.y), Math.cos(want - g.group.rotation.y));
+    g.group.rotation.y += Math.max(-2 * dt, Math.min(2 * dt, turn));
+  }
   function ensureGround(n) {
     while (ground.length < n) ground.push(makeGround(ground.length % 5 < 3 ? 'flak' : 'sam'));
   }
@@ -2222,9 +2328,11 @@
       if (show) { g.ring.position.copy(g.pos); g.ring.quaternion.copy(camera.quaternion); }
       if (!inControl || dead) continue;
       if (!roundLive && wkTowerGun(g)) continue; // the walker is down: its towers stand down with it
-      if (dist > (g.type === 'sam' ? 210 : 125)) continue;
+      if (g.kind === 'lance') { updateLance(g, dt, dist); continue; }
+      if (g.kind === 'crawl') updateCrawl(g, dt);
+      if (dist > (g.kind === 'crawl' ? CRAWL_RANGE : g.type === 'sam' ? 210 : 125)) continue;
       g.pivot.lookAt(shipPos);
-      if (g.type === 'flak') {
+      if (g.type === 'flak' || g.kind === 'crawl') {
         if (g.burst > 0) {
           g.burstT -= dt;
           if (g.burstT <= 0) { flakShoot(g, dist); g.burst--; g.burstT = 0.14; }
@@ -3134,7 +3242,7 @@
       if (i < small) spawnDrone(drones[i]);
       else { drones[i].alive = false; drones[i].mesh.visible = false; }
     }
-    for (i = 0; i < ground.length; i++) { ground[i].alive = false; ground[i].group.visible = false; ground[i].ring.visible = false; }
+    for (i = 0; i < ground.length; i++) { if (ground[i].kind) groundKind(ground[i], null); ground[i].alive = false; ground[i].group.visible = false; ground[i].ring.visible = false; }
     // on the ice from chapter 2's size, enemies by place: a third of the drones over the frozen lake, and up to eight guns
     // inside the outpost's walls (the queued "ground units grouped into bases"); the rest wherever there is room
     var G = boss ? null : arena === 1 ? iceLayout() : arena === 2 ? lavaLayout() : duskLayout(), inYard = 0;
@@ -3151,6 +3259,10 @@
       });
     }
     for (i = inYard; i < small; i++) placeGround(ground[i]);
+    // the region's own: the last few of those just put down in the open become lancers on the ice, crawlers in the hills
+    var own = boss || arena === 2 ? 0 : Math.min(regionCount(n), small - inYard);
+    for (i = 0; i < own; i++) { var og = ground[small - 1 - i]; setKindAt(og, arena === 1 ? 'lance' : 'crawl', og.pos.x, og.pos.z); }
+    emberReset(boss || arena !== 2 ? 0 : n);
     if (kind === 'dread') bossEscort(bossTier(n));
     if (kind === 'wall') startWall(bossTier(n));
     if (kind === 'walker') startWalker(bossTier(n));
@@ -3286,7 +3398,7 @@
   // it gets added to the total". His too: dying ends the run, so the score starts again from nothing, and the best is
   // kept on the phone. MINE, his to strike: the points; a multiplier that rises a step every three kills of a chain, to
   // five times; three seconds without a kill to bank; a tally not yet banked is lost with the ship.
-  var SCORE = { drone: 10, ground: 15, turret: 20, interceptor: 25, knee: 50, capital: 100, generator: 200, section: 250, boss: 1000 };
+  var SCORE = { drone: 10, ground: 15, ember: 20, turret: 20, interceptor: 25, crawler: 30, lance: 40, knee: 50, capital: 100, generator: 200, section: 250, boss: 1000 };
   var SCORE_BANK = 3, SCORE_STEP = 3, SCORE_MAXK = 5;
   var score = 0, tally = 0, chain = 0, tallyT = 0, bestScore = 0;
   var scoreN = document.getElementById('scoreN'), scoreT = document.getElementById('scoreT');
@@ -3334,7 +3446,7 @@
   function hitGround(g, dmg, at) {
     g.hp -= dmg; g.flash = 0.2; paintRing(g);
     if (g.hp <= 0) {
-      salvage(4); addScore('ground'); g.alive = false; g.group.visible = false; g.ring.visible = false; chainBlast(g.pos, 1);
+      salvage(4); addScore(g.kind === 'lance' ? 'lance' : g.kind === 'crawl' ? 'crawler' : 'ground'); g.alive = false; g.group.visible = false; g.ring.visible = false; chainBlast(g.pos, 1);
       boom(g.pos, true); if (wallOn) wallUnitDown(g); else if (wkTowerGun(g)) g.back = WK_TOWER_BACK; updateReadout(); checkRound();
     } else boom(at, false);
   }
@@ -3349,6 +3461,9 @@
     var j;
     for (j = 0; j < ics.length; j++) {
       if (ics[j].alive && segDist2(ics[j].pos, a, b) < 16) { hitInterceptor(ics[j], k * dmgMul(), a); return true; }
+    }
+    for (j = 0; j < rushers.length; j++) {
+      if (rushers[j].alive && segDist2(rushers[j].pos, a, b) < 13) { hitEmber(rushers[j], k * dmgMul(), a); return true; }
     }
     for (j = 0; j < drones.length; j++) {
       if (drones[j].alive && segDist2(drones[j].mesh.position, a, b) < 13) { killDrone(drones[j]); return true; }
@@ -3393,7 +3508,7 @@
     if (k === 1) { if (!o.alive) return false; out.copy(o.mesh.position); return true; }
     if (k === 2) { if (!o.alive) return false; out.copy(o.pos); return true; }
     if (k === 3) { if (o.hp <= 0 || f.gone > 0 || f.dying > 0) return false; o.pivot.getWorldPosition(out); return true; } // a turret, or the dreadnought's generator: both have hp and a pivot
-    if (k === 4) { if (!o.alive) return false; out.copy(o.pos); return true; }
+    if (k === 4 || k === 6) { if (!o.alive) return false; out.copy(o.pos); return true; } // an interceptor, or an ember
     if (k === 5) { if (o.down || o.falling > 0) return false; out.copy(o.face[shipPos.z >= 0 ? 0 : 1]); out.z -= (shipPos.z >= 0 ? 1 : -1) * 3; return true; } // a crack in the ice wall, on the face you are looking at
     return false;
   }
@@ -3414,6 +3529,7 @@
     // an interceptor inside the cone is taken ahead of anything else (Sam)
     for (i = 0; i < ics.length; i++) if (ics[i].alive) pkLook(4, ics[i], null, ics[i].pos);
     if (trk.k) return trk.k;
+    for (i = 0; i < rushers.length; i++) if (rushers[i].alive) pkLook(6, rushers[i], null, rushers[i].pos);
     for (i = 0; i < drones.length; i++) if (drones[i].alive) pkLook(1, drones[i], null, drones[i].mesh.position);
     for (i = 0; i < ground.length; i++) if (ground[i].alive) pkLook(2, ground[i], null, ground[i].pos);
     if (wallOn) for (i = 0; i < wallSecs.length; i++) if (!wallSecs[i].down && wallSecs[i].falling === 0) pkLook(5, wallSecs[i], null, wallSecs[i].face[shipPos.z >= 0 ? 0 : 1]);
@@ -3775,6 +3891,7 @@
     w.mesh.position.copy(c.p); w.r = c.r; w.life = 0.4; w.mesh.visible = true; sfx('chain', c.p);
     var r2 = c.r * c.r, dmg = CHAIN_DMG[up.chain] * dmgMul();
     for (i = 0; i < ics.length; i++) if (ics[i].alive && ics[i].pos.distanceToSquared(c.p) < r2) hitInterceptor(ics[i], dmg, ics[i].pos);
+    for (i = 0; i < rushers.length; i++) if (rushers[i].alive && rushers[i].pos.distanceToSquared(c.p) < r2) hitEmber(rushers[i], dmg, rushers[i].pos);
     for (i = 0; i < drones.length; i++) if (drones[i].alive && drones[i].mesh.position.distanceToSquared(c.p) < r2) killDrone(drones[i]);
     for (i = 0; i < ground.length; i++) if (ground[i].alive && ground[i].pos.distanceToSquared(c.p) < r2) hitGround(ground[i], dmg, ground[i].pos);
     for (i = 0; i < fleet.length; i++) {
@@ -4269,6 +4386,78 @@
     }
   }
 
+  // ---------- embers: the lava field's own (Sam: an enemy type for each region) ----------
+  // Something that rises out of the lava near you and rushes you: dangerous if you fly low over it. MINE, his to strike:
+  // one comes up every seven seconds (sooner in later rounds, which allow more at once) while you are under 80 and there is lava within reach, never more than a few at once;
+  // it climbs for a moment, then comes straight at you faster than you cruise but slower than you can fly, turning only so
+  // hard; touching you it bursts for 20, and after seven seconds it burns out. Two hits. Like the interceptors they are
+  // not in the round's "to go" count and go when the round does.
+  var EMBER_GAP = 7, EMBER_LOW = 80, EMBER_SPEED = 42, EMBER_TURN = 1.6, EMBER_LIFE = 7, EMBER_DMG = 20, EMBER_HP = 2, EMBER_RISE = 0.9;
+  var rushers = [], emberT = 0, emberWant = 0, emA = new THREE.Vector3();
+  (function () {
+    var core = new THREE.IcosahedronGeometry(1.5, 0), shell = new THREE.IcosahedronGeometry(2.1, 0);
+    for (var i = 0; i < 4; i++) {
+      var g = new THREE.Group();
+      g.add(new THREE.Mesh(core, new THREE.MeshBasicMaterial({ color: 0xffb040, fog: false })));
+      g.add(new THREE.Mesh(shell, new THREE.MeshBasicMaterial({ color: 0xff5a20, fog: false, wireframe: true })));
+      g.visible = false; scene.add(g);
+      rushers.push({ g: g, pos: g.position, dir: new THREE.Vector3(0, 1, 0), alive: false, hp: 0, t: 0 });
+    }
+  })();
+  function emberCount(n) { return n < 2 ? 0 : Math.min(4, 1 + Math.floor(n / 4)); } // one from round 2, two from 4, three from 8, four from 12
+  function emberReset(n) {
+    for (var i = 0; i < rushers.length; i++) { rushers[i].alive = false; rushers[i].g.visible = false; }
+    emberWant = n ? emberCount(n) : 0; emberT = 4;
+  }
+  function emberOut(e, big) { boom(e.pos, big); e.alive = false; e.g.visible = false; }
+  function hitEmber(e, dmg, at) {
+    e.hp -= dmg;
+    if (e.hp <= 0) { salvage(4); addScore('ember'); emberOut(e, true); chainBlast(e.pos, 1); }
+    else boom(at, false);
+  }
+  function updateEmbers(dt) {
+    var i, e, nUp = 0;
+    for (i = 0; i < rushers.length; i++) if (rushers[i].alive) nUp++;
+    if (emberWant && inControl && !dead && roundLive) {
+      emberT -= dt;
+      if (emberT <= 0) {
+        emberT = 1; // nothing to do yet: look again in a second
+        var low = shipPos.y - Math.max(height(shipPos.x, shipPos.z), 0) < EMBER_LOW;
+        if (low && nUp < emberWant) {
+          for (i = 0; i < rushers.length && rushers[i].alive; i++) {}
+          e = rushers[i];
+          for (var q = 0; q < 24; q++) {
+            // lava ahead of you by preference, so it is seen to rise
+            var a = yaw + Math.PI + (Math.random() - 0.5) * (q < 12 ? 1.6 : 6.283), r = 70 + Math.random() * 80;
+            var x = shipPos.x + Math.sin(a) * -r, z = shipPos.z + Math.cos(a) * -r;
+            if (height(x, z) >= -0.5 || Math.sqrt(x * x + z * z) > EDGE * SCALE) continue;
+            e.pos.set(x, -2, z); e.dir.set(0, 1, 0); e.alive = true; e.hp = EMBER_HP; e.t = 0; e.g.visible = true;
+            boom(emA.set(x, 0, z), true); sfx('ember', e.pos); emberT = EMBER_GAP / emberWant; // more allowed at once, so they come quicker
+            break;
+          }
+        }
+      }
+    }
+    for (i = 0; i < rushers.length; i++) {
+      e = rushers[i];
+      if (!e.alive) continue;
+      if (!roundLive || dead) { emberOut(e, false); continue; }
+      e.t += dt;
+      e.g.rotation.x += dt * 3; e.g.rotation.y += dt * 2.2;
+      if (e.t < EMBER_RISE) { e.pos.y += 14 * dt; continue; } // climbing out of the lava
+      if (e.t > EMBER_RISE + EMBER_LIFE) { emberOut(e, false); continue; }
+      emA.copy(shipPos).sub(e.pos);
+      var dist = emA.length();
+      if (dist < 3.2) { emberOut(e, true); if (inControl) damage(EMBER_DMG); continue; }
+      emA.multiplyScalar(1 / dist);
+      var ang = e.dir.angleTo(emA);
+      if (ang > 0.0001) e.dir.lerp(emA, Math.min(1, EMBER_TURN * dt / ang)).normalize();
+      e.pos.addScaledVector(e.dir, EMBER_SPEED * dt);
+      var floor = Math.max(height(e.pos.x, e.pos.z), 0) + 1.5;
+      if (e.pos.y < floor) e.pos.y = floor; // over the rock, not through it
+    }
+  }
+
   // ---------- pointer to the nearest enemy, once a round is down to its last quarter ----------
   var pointEl = document.getElementById('point'), pointOn = false;
   var ptr = new THREE.Vector3(), qInv = new THREE.Quaternion();
@@ -4426,6 +4615,9 @@
     rebuild:    { label: 'Turret rebuilt', gap: 0.15, floor: 0.35, play: function (v, d) { tone('square', 330, 660, 0.12, 0.07 * v, d); tone('square', 660, 990, 0.1, 0.05 * v, d, 0.1); } },
     drop:       { label: 'Bomb away', gap: 0.2, play: function (v, d) { tone('square', 210, 120, 0.07, 0.08, d); tone('sine', 1500, 520, 1.1, 0.035, d, 0.05); } },
     bomb:       { label: 'Bomb blast', heat: 0.08, gap: 0.08, floor: 0.35, play: function (v, d) { tone('sine', 96, 28, 0.7, 0.6 * v, d); hiss(0.8, 0.45 * v, 'lowpass', 900, 50, d); } },
+    charge:     { label: 'Lancer charging', heat: 0.1, gap: 0.3, floor: 0.3, play: function (v, d) { tone('sawtooth', 180, 1400, 1.4, 0.09 * v, d); } },
+    lance:      { label: 'Lancer shot', heat: 0.2, gap: 0.1, floor: 0.35, play: function (v, d) { tone('sine', 520, 70, 0.5, 0.5 * v, d); hiss(0.4, 0.3 * v, 'bandpass', 2400, 300, d, 1.2); } },
+    ember:      { label: 'Ember rises', heat: 0.2, gap: 0.3, floor: 0.4, play: function (v, d) { hiss(0.9, 0.5 * v, 'lowpass', 300, 2200, d); tone('sawtooth', 70, 210, 0.8, 0.14 * v, d); } },
     pick:       { label: 'Upgrade chosen', gap: 0.1, play: function (v, d) { tone('triangle', 660, 660, 0.16, 0.16, d); tone('triangle', 990, 990, 0.3, 0.16, d, 0.09); } }
   };
   // play a sound; with a position it gets quieter with distance and pans to the side it came from
@@ -4665,7 +4857,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'score-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'regions-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +
@@ -4826,6 +5018,7 @@
     updateDogfight(dt);
     updateBoss(dt);
     updateInterceptors(dt);
+    updateEmbers(dt);
 
     sky.position.copy(camera.position);
     giant.rotation.y += dt * 0.01;
