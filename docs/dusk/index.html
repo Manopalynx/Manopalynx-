@@ -335,86 +335,134 @@
     }
     return d;
   }
-  // THE ICE FIELD'S REGIONS (chapter step 3). Sam: "an opportunity to try and add some variety rather than copy and
-  // paste an open empty landscape". MINE, agreed as a design: four places in the plain round the wall, each asking for
-  // a different way to fly, all of them in the ground itself, because the ground is what stops fire.
-  //   crevasses -- a shelf of ice 34 high cut by canyons down to the plain: fly in them, out of the shelf guns' sight
-  //   a frozen lake -- flat, glassy and open, nowhere to hide: the drones gather over it
-  //   ice spires -- a field of columns 25 to 60 high to weave through
-  //   an outpost -- a walled yard with a gate, its guns grouped inside, to be dived on
-  // They sit in the band between the wall and the crags at the rim, in the gaps between the wall's six guard towers
-  // (which stand on a ring 150 out at 30, 90, 150 ... degrees): the outpost at 60, the spires at 120, the crevasses at
-  // 240, the lake at 300. At today's size the band is too narrow to hold them, so they come from chapter 2's size on.
-  var ICE_REG = null, ICE_REG_AT = -1, ICE_SHELF = 34, ICE_LAKE_H = 1.2, ICE_CANYON = 22;
-  function iceRegions() {
-    if (ICE_REG_AT === SCALE) return ICE_REG;
-    ICE_REG_AT = SCALE;
-    var inner = 140, outer = 170 * SCALE, rc = (inner + outer) / 2, R = (outer - inner) / 2 * 0.95;
-    if (R < 35) return (ICE_REG = null);
-    function at(deg) { var a = deg * Math.PI / 180; return { x: Math.cos(a) * rc, z: Math.sin(a) * rc, R: R }; }
-    ICE_REG = { outpost: at(60), spires: at(120), crev: at(240), lake: at(300), R: R };
-    // the outpost: a square yard, its walls, and a gate facing the wall in the middle
-    var cv = ICE_REG.crev, a0 = 0.4;
-    cv.canyons = (R < 70 ? [[a0, 0], [a0 + Math.PI / 2, 0]] : [[a0, -0.4 * R], [a0, 0.4 * R], [a0 + Math.PI / 2, 0]]).map(function (k) { return { ux: Math.cos(k[0]), uz: Math.sin(k[0]), off: k[1] }; });
-    var o = ICE_REG.outpost; o.half = R * 0.5; o.wallT = 5; o.wallH = 16; o.gate = 9;
-    o.floor = 2 + fbm(o.x * 0.03 + 11.1, o.z * 0.03 + 4.4) * 9;
-    o.gx = -o.x / rc; o.gz = -o.z / rc; // the gate faces back towards the middle
-    // the spires: on a jittered grid, each its own radius and height
-    var sp = ICE_REG.spires; sp.list = [];
-    // 26 apart, give or take 2.5, and 3 to 4.5 thick at the top's base: at least 8 clear between any two bases. A first
-    // version, 22 apart give or take 5 and up to 6.5 thick, had bases touching: no gap to weave through.
-    for (var gx = -R; gx <= R; gx += 26) for (var gz = -R; gz <= R; gz += 26) {
-      var jx = gx + (hash(gx * 0.31 + 5, gz * 0.17) - 0.5) * 5, jz = gz + (hash(gx * 0.13, gz * 0.29 + 7) - 0.5) * 5;
-      if (jx * jx + jz * jz > (R - 8) * (R - 8)) continue;
-      sp.list.push({ x: sp.x + jx, z: sp.z + jz, r: 3 + hash(jx, jz) * 1.5, h: 25 + hash(jz * 0.7, jx * 0.9) * 35 });
-    }
-    return ICE_REG;
+  // THE ICE FIELD'S TERRITORIES (chapter step 3, second version). Sam, of the first: "it also looks like little demo
+  // areas around the map on the snow one" -- four stamped shapes on a plain that was still plain everywhere else. Now
+  // the plain round the wall is divided into four territories, each about a quarter of it, whose borders wander and
+  // blend into each other, and each fades in from the wall's clear ring and out into the crags at the rim:
+  //   crevasse country (towards 225 degrees) -- a broken shelf 34 high, a network of canyons 22 wide through it
+  //   the lake basin (315) -- a wide frozen lake, a ragged shore, a few low islands; the drones gather over it
+  //   the spire forest (135) -- columns dense and tall in its heart, thinning out towards its edges
+  //   pressure ridges (45) -- long parallel ridges of ice, valleys between them to fly along
+  // And bases scattered through them (Sam: "can have a large one or a few but mostly smaller scattered around"): one
+  // large, off the wall's end, and three small camps at chapter 2's size, five at full size, each walled, a gate facing
+  // the middle. Every guard tower of the wall keeps a patch of plain to stand on. At today's size there is no room
+  // between the wall and the crags, and the ice is as it always was.
+  var ICE_T = null, ICE_T_AT = -1, ICE_SHELF = 34, ICE_LAKE_H = 1.2, ICE_CANYON = 22, ICE_CANYON_GAP = 70, ICE_SPIRE_GAP = 26;
+  var ICE_TERR = [{ k: 'crev', a: 225 }, { k: 'lake', a: 315 }, { k: 'spires', a: 135 }, { k: 'ridges', a: 45 }];
+  function angDiff(a, b) { var d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; }
+  // how much of each territory is here, 0 to 1 each, together no more than 1
+  function iceWeights(x, z, out) {
+    var L = ICE_T, d = Math.sqrt(x * x + z * z), i;
+    for (i = 0; i < 4; i++) out[i] = 0;
+    // in from the wall itself, not from a ring round the middle: a first version began at 150 from the middle all the
+    // way round, and from above the territories were a ring round a plain. Now they come to about 55 from the wall's
+    // faces and ends, leaving it a moat to be fought across
+    var wx = Math.max(0, Math.abs(x) - 135), wz = Math.max(0, Math.abs(z) - 50), dw = Math.sqrt(wx * wx + wz * wz);
+    var rad = smooth(35, 75, dw) * (1 - smooth(L.outer - 45, L.outer, d));
+    for (i = 0; i < WALL_TOWERS.length; i++) { var tx = x - WALL_TOWERS[i][0], tz = z - WALL_TOWERS[i][1]; rad *= smooth(16, 30, Math.sqrt(tx * tx + tz * tz)); }
+    if (rad <= 0) return 0;
+    var th = Math.atan2(z, x) + (fbm(x * 0.006 + 3.3, z * 0.006 + 8.1) - 0.5) * 1.6, sum = 0; // borders that wander
+    for (i = 0; i < 4; i++) { out[i] = 1 - smooth(0.35, 1.25, Math.abs(angDiff(th, ICE_TERR[i].a * Math.PI / 180))); sum += out[i]; } // a wide band where two meet: a first version blended 8% of the land
+    for (i = 0; i < 4; i++) out[i] = sum > 0 ? out[i] / sum * rad : 0;
+    return rad;
   }
-  // what the regions make of the plain at (x, z); the plain's own height comes in as base
-  function iceRegionHeight(x, z, base) {
-    var G = iceRegions();
-    if (!G) return base;
-    var h = base, dx, dz, d, k, e;
-    // crevasses: a shelf with soft-edged cliffs, cut by narrow winding canyons down to the plain
-    var c = G.crev; dx = x - c.x; dz = z - c.z; d = Math.sqrt(dx * dx + dz * dz);
-    if (d < c.R) {
-      e = 1 - smooth(c.R - 14, c.R, d);
-      // The canyons are laid out, not left to noise: a first version cut them from noise fixed to the world, and the
-      // shelf took whatever slice of it lay under it -- thin cracks 12 wide at one setting, at another a shelf broken
-      // into islands at chapter 2's size and a maze at full size. Now each canyon is a winding line across the shelf,
-      // 22 wide: two crossing like a + on the smaller shelf, three like a # on the larger.
+  function iceLayout() {
+    if (ICE_T_AT === SCALE) return ICE_T;
+    ICE_T_AT = SCALE;
+    var outer = 170 * SCALE;
+    if (outer - 140 < 70) return (ICE_T = null);
+    var L = ICE_T = { outer: outer, rc: (110 + outer) / 2, bases: [], spires: {} }, w = [0, 0, 0, 0];
+    L.lake = { x: Math.cos(315 * Math.PI / 180) * L.rc, z: Math.sin(315 * Math.PI / 180) * L.rc, R: (outer - 150) * 0.45 };
+    // the spires, worked out once for this size: a jittered grid over the map, each kept with the forest's weight there
+    for (var gx = -outer; gx <= outer; gx += ICE_SPIRE_GAP) for (var gz = -outer; gz <= outer; gz += ICE_SPIRE_GAP) {
+      var sx = gx + (hash(gx * 0.31 + 5, gz * 0.17) - 0.5) * 5, sz = gz + (hash(gx * 0.13, gz * 0.29 + 7) - 0.5) * 5;
+      iceWeights(sx, sz, w);
+      var dens = smooth(0.15, 0.6, w[2]);
+      if (dens <= 0 || hash(sx * 0.7 + 1, sz * 0.7 + 2) > dens) continue;
+      var key = Math.round(gx / ICE_SPIRE_GAP) + ',' + Math.round(gz / ICE_SPIRE_GAP);
+      L.spires[key] = { x: sx, z: sz, r: 3 + hash(sx, sz) * 1.5, h: (20 + hash(sz * 0.7, sx * 0.9) * 40) * (0.5 + 0.5 * smooth(0.3, 0.8, w[2])) };
+    }
+    // the bases: one large off the wall's end, small camps scattered through the territories, each kept clear of the
+    // wall's towers and of each other
+    function base(deg, rr, half, guns) {
+      var a = deg * Math.PI / 180, b = { x: Math.cos(a) * rr, z: Math.sin(a) * rr, half: half, wallT: half > 20 ? 5 : 3, wallH: half > 20 ? 16 : 11, gate: half > 20 ? 9 : 7, guns: guns };
+      var ext = half + b.wallT + 8;
+      for (var i = 0; i < WALL_TOWERS.length; i++) if (Math.hypot(WALL_TOWERS[i][0] - b.x, WALL_TOWERS[i][1] - b.z) < ext + 24) return;
+      for (i = 0; i < L.bases.length; i++) if (Math.hypot(L.bases[i].x - b.x, L.bases[i].z - b.z) < ext + L.bases[i].half + 30) return;
+      if (rr + ext > outer - 10) return;
+      b.gx = -b.x / rr; b.gz = -b.z / rr; L.bases.push(b);
+    }
+    base(0, L.rc, (outer - 150) * 0.25, 8);
+    var small = SCALE < 1.8 ? 3 : 5, tries = [[165, 1.0], [255, 0.95], [75, 1.05], [205, 1.15], [290, 0.9], [110, 1.15], [340, 1.15]];
+    for (var t = 0; t < tries.length && L.bases.length < small + 1; t++) base(tries[t][0], L.rc * tries[t][1], 12, 3);
+    // the bases sit on the ground as the territories leave it, so find that first, without them
+    L.bases.forEach(function (b) { b.floor = Math.max(3, iceGroundNoBases(b.x, b.z)); }); // a camp on the lake stands on a platform of ice: its guns, like every ground unit, 2.5 or more clear of the water line
+    return L;
+  }
+  var iceW = [0, 0, 0, 0];
+  function icePlain(x, z) { return 2 + fbm(x * 0.03 + 11.1, z * 0.03 + 4.4) * 9; }
+  // the territories, without the bases
+  function iceTerritories(x, z, base) {
+    var L = ICE_T, rad = iceWeights(x, z, iceW);
+    if (rad <= 0) return base;
+    var h = base, w;
+    // crevasse country: a shelf whose edge breaks up as the territory thins, canyons on two crossing sets of winding lines
+    if ((w = iceW[0]) > 0.01) {
       var cut = 0;
-      for (var q = 0; q < c.canyons.length; q++) {
-        var cy = c.canyons[q], along = dx * cy.ux + dz * cy.uz, perp = -dx * cy.uz + dz * cy.ux - cy.off;
-        perp -= Math.sin(along * 0.07 + q * 2.1) * 6; // winding
-        cut = Math.max(cut, 1 - smooth(ICE_CANYON / 2 - 3, ICE_CANYON / 2 + 3, Math.abs(perp)));
-      }
-      h = Math.max(h, base + (ICE_SHELF - base) * e * (1 - cut) + (fbm(x * 0.09, z * 0.09) - 0.5) * 3 * e * (1 - cut));
+      [[0.4, 0], [1.55, 35]].forEach(function (fam) {
+        var p = x * Math.cos(fam[0]) + z * Math.sin(fam[0]) + fam[1] + Math.sin((x * Math.sin(fam[0]) - z * Math.cos(fam[0])) * 0.045) * 8; // winding
+        var m = ((p % ICE_CANYON_GAP) + ICE_CANYON_GAP) % ICE_CANYON_GAP, dl = Math.abs(m - ICE_CANYON_GAP / 2);
+        cut = Math.max(cut, 1 - smooth(ICE_CANYON / 2 - 3, ICE_CANYON / 2 + 3, dl));
+      });
+      var shelf = ICE_SHELF + (fbm(x * 0.09, z * 0.09) - 0.5) * 3;
+      h += (base + (shelf - base) * (1 - cut) - base) * smooth(0.3, 0.65, w);
     }
-    // the frozen lake: flat, a low bank round it
-    var L = G.lake; dx = x - L.x; dz = z - L.z; d = Math.sqrt(dx * dx + dz * dz);
-    if (d < L.R) { k = smooth(L.R * 0.78, L.R * 0.95, d); h = ICE_LAKE_H + (h - ICE_LAKE_H) * k + Math.sin(Math.PI * k) * 2.5; }
-    // spires
-    var S = G.spires; dx = x - S.x; dz = z - S.z;
-    if (dx * dx + dz * dz < S.R * S.R) {
-      for (var i = 0; i < S.list.length; i++) {
-        var p = S.list[i], sx = x - p.x, sz = z - p.z;
-        if (Math.abs(sx) > p.r + 3 || Math.abs(sz) > p.r + 3) continue;
-        var t = 1 - smooth(p.r * 0.35, p.r + 2, Math.sqrt(sx * sx + sz * sz)); // a steep cone with a sharp top
-        h = Math.max(h, base + p.h * t);
+    // the lake basin: flat ice, a shore band, now and then a low island
+    if ((w = iceW[1]) > 0.01) {
+      var isl = Math.max(0, fbm(x * 0.028 + 5.1, z * 0.028 + 9.7) - 0.7) * 30; // few and low: the noise seldom passes 0.9, so under 7
+      var lake = ICE_LAKE_H + isl;
+      h += (lake - base) * smooth(0.35, 0.7, w);
+    }
+    // pressure ridges: long parallel ridges, valleys between
+    if ((w = iceW[3]) > 0.01) {
+      var q = (x * 0.62 + z * 0.78) / 42 + (fbm(x * 0.01 + 2.2, z * 0.01 + 6.6) - 0.5) * 1.6, fr = q - Math.floor(q);
+      var ridge = smooth(0.25, 1, 1 - Math.abs(2 * fr - 1));
+      h += ridge * 22 * w;
+    }
+    // the spire forest: from the stored spires, the nearest few
+    if (iceW[2] > 0.01) {
+      var cx = Math.round(x / ICE_SPIRE_GAP), cz = Math.round(z / ICE_SPIRE_GAP);
+      for (var i = -1; i <= 1; i++) for (var j = -1; j <= 1; j++) {
+        var sp = L.spires[(cx + i) + ',' + (cz + j)];
+        if (!sp) continue;
+        var dx = x - sp.x, dz = z - sp.z;
+        if (Math.abs(dx) > sp.r + 3 || Math.abs(dz) > sp.r + 3) continue;
+        h = Math.max(h, base + sp.h * (1 - smooth(sp.r * 0.35, sp.r + 2, Math.sqrt(dx * dx + dz * dz))));
       }
     }
-    // the outpost: a flat yard inside four walls, a gate in the side facing the middle
-    var o = G.outpost; dx = x - o.x; dz = z - o.z;
-    var ax = Math.abs(dx), az = Math.abs(dz), out = o.half + o.wallT;
-    if (ax < out + 6 && az < out + 6) {
-      h = o.floor + (h - o.floor) * smooth(out, out + 6, Math.max(ax, az)); // the ground levelled round it
+    return h;
+  }
+  function iceGroundNoBases(x, z) {
+    var d = Math.sqrt(x * x + z * z);
+    var base = icePlain(x, z) + smooth(170, 250, d / SCALE) * (20 + fbm(x * 0.02 + 7.3, z * 0.02 + 3.1) * 60);
+    return iceTerritories(x, z, base);
+  }
+  // the bases: each a flat yard inside walls, a gate in the side facing the middle, the ground levelled round it
+  function iceBases(x, z, h) {
+    var L = ICE_T;
+    for (var i = 0; i < L.bases.length; i++) {
+      var o = L.bases[i], dx = x - o.x, dz = z - o.z, ax = Math.abs(dx), az = Math.abs(dz), out = o.half + o.wallT;
+      if (ax > out + 8 || az > out + 8) continue;
+      h = o.floor + (h - o.floor) * smooth(out, out + 8, Math.max(ax, az));
       var inWall = Math.max(ax, az) > o.half && Math.max(ax, az) < out;
-      // the gate: the stretch of wall that the line back to the middle crosses
-      var gate = (Math.abs(o.gx) > Math.abs(o.gz) ? (ax > o.half && Math.sign(dx) === Math.sign(o.gx) && az < o.gate) : (az > o.half && Math.sign(dz) === Math.sign(o.gz) && ax < o.gate));
+      var gate = Math.abs(o.gx) > Math.abs(o.gz) ? (ax > o.half && Math.sign(dx) === Math.sign(o.gx) && az < o.gate) : (az > o.half && Math.sign(dz) === Math.sign(o.gz) && ax < o.gate);
       if (inWall && !gate) h = o.floor + o.wallH;
     }
     return h;
+  }
+  function iceRegionHeight(x, z, base) {
+    if (!iceLayout()) return base;
+    return iceBases(x, z, iceTerritories(x, z, base));
   }
   function heightIce(x, z) {
     // a frozen plain with drifts a few metres high, breaking up into peaks at the rim
@@ -1561,7 +1609,7 @@
     // above the highest ground anywhere on its circle, not only at the middle of it: beside a cliff the middle can be
     // on the plain and the circle inside the rock
     var top = Math.max(height(cx, cz), 0);
-    for (var q = 0; q < 24; q++) top = Math.max(top, height(cx + Math.cos(q * 0.2618) * d.r, cz + Math.sin(q * 0.2618) * d.r)); // 24 round it: eight could straddle the crest of the ice wall, which is narrower than the gaps between them
+    for (var q = 0; q < 48; q++) top = Math.max(top, height(cx + Math.cos(q * 0.1309) * d.r, cz + Math.sin(q * 0.1309) * d.r)); // 48 round it: eight could straddle the ice wall's crest, and now and then so could 24
     d.c.set(cx, top + 16 + Math.random() * 38, cz);
     d.clear = d.c.y - top; d.off = d.off || new THREE.Vector3(); d.off.set(0, 0, 0); d.reT = Math.random() * 0.2; // how high it keeps over its circle, and how far the wind has drifted it
     d.w = (0.25 + Math.random() * 0.4) * (Math.random() < 0.5 ? -1 : 1);
@@ -2781,14 +2829,14 @@
     for (i = 0; i < ground.length; i++) { ground[i].alive = false; ground[i].group.visible = false; ground[i].ring.visible = false; }
     // on the ice from chapter 2's size, enemies by place: a third of the drones over the frozen lake, and up to eight guns
     // inside the outpost's walls (the queued "ground units grouped into bases"); the rest wherever there is room
-    var G = arena === 1 && !boss ? iceRegions() : null, inYard = 0;
+    var G = arena === 1 && !boss ? iceLayout() : null, inYard = 0;
     if (G) {
       for (i = 0; i < Math.min(12, Math.floor(small / 3)); i++) spawnDrone(drones[i], G.lake);
-      var o = G.outpost, step = o.half * 0.55, want = Math.min(8, Math.floor(small / 3));
-      for (var yz = -1; yz <= 1 && inYard < want; yz++) for (var yx = -1; yx <= 1 && inYard < want; yx++) {
-        if (yx === 0 && yz === 0) continue; // the middle of the yard is left open
-        setGround(ground[inYard], o.x + yx * step, o.z + yz * step); inYard++;
-      }
+      // the bases' guns: the large base's eight first, then three to each camp, while there are guns to give
+      G.bases.forEach(function (o) {
+        var spots = o.guns === 8 ? [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]] : [[-0.6, -0.4], [0.6, -0.4], [0, 0.55]], step = o.half * 0.55;
+        for (var q = 0; q < spots.length && inYard < small; q++) { setGround(ground[inYard], o.x + spots[q][0] * step, o.z + spots[q][1] * step); inYard++; }
+      });
     }
     for (i = inYard; i < small; i++) placeGround(ground[i]);
     if (kind === 'wall') startWall(bossTier(n));
@@ -4106,7 +4154,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'ice-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'ice-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +

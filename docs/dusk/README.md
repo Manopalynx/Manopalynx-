@@ -749,36 +749,55 @@ clear of the ground, every capital ship's hull 8 clear on its whole circle, enem
 edge of where things are put, the far ridges and the far fight beyond the edge. A new run comes back
 to today's map exactly, not one coordinate different.
 
-### Step 3, built (`ice-1`): the ice field's regions
+### Step 3, built twice (`ice-2`): the ice field's territories
 
-**Sam, having played to the walker's defeat on `chapters-3`: "looking good so far, so go for it".**
+**The first version (`ice-1`)** put four places in the plain round the wall: a shelf of crevasses, a
+frozen lake, a field of spires and a walled outpost, each a neat shape. **Sam: "It's alright but it
+also looks like little demo areas around the map on the snow one."** From above it was four stamped
+shapes on a plain that was still plain everywhere else. He confirmed the reading (territories filling
+the whole map, borders that blend) and, for the bases, "can have a large one or a few but mostly
+smaller scattered around".
 
-Four places in the plain between the wall and the crags, in the gaps between the wall's six guard
-towers: **the outpost at 60°, the spires at 120°, the crevasses at 240°, the lake at 300°**. They
-appear from chapter 2's size; at today's the band between wall and crags is too narrow to hold
-them, and the ice is as it was. All of it is in `iceRegionHeight`, inside the ground.
+**Now the land round the wall is four territories**, each about a quarter of it, their borders
+wandering with noise and blending over a wide band, coming in to about 55 from the wall's faces and
+ends so the wall keeps only a moat (a first try began them 150 from the middle all the way round, and
+from above they were a ring round a plain). Each fades out into the crags at the rim, and each of the
+wall's six towers keeps a patch of plain to stand on.
 
-- **Crevasses**: a shelf of ice 34 high, cut by canyons 22 wide down to the plain, laid out as
-  winding lines: two crossing like a + at chapter 2's size, three like a # at full size.
-- **A frozen lake**: flat at 1.2, a low bank round it. A third of the drones, up to twelve, circle
-  over it.
-- **Ice spires**: columns 25 to 60 high, 26 apart, at least 8 clear between any two bases.
-- **An outpost**: a flat yard inside walls 16 high, a gate 18 wide in the side facing the middle,
-  and eight guns in the yard: the queued "ground units grouped into bases".
+- **Crevasse country** (towards 225°): a shelf 34 high whose edge breaks up as the territory thins,
+  cut by a network of winding canyons 22 wide, on two crossing sets of lines 70 apart.
+- **The lake basin** (315°): flat ice at 1.2, a shore band, a few low islands. A third of the drones,
+  up to twelve, circle over it.
+- **The spire forest** (135°): columns 26 apart, dense and up to 60 high in its heart, thinning and
+  shorter towards its edges. Worked out once per size and stored, not searched for point by point.
+- **Pressure ridges** (45°): long parallel ridges 22 high, valleys between to fly along.
+- **Bases**: one large off the wall's end, eight guns, walls 16 high; and small camps, three at
+  chapter 2's size and five at full size, each walled 11 high with a gate facing the middle and three
+  guns. They sit on the ground as the territories leave it: a camp can stand on the lake.
 
 **Measured** by `test/dusk-ice.mjs`:
 
 | | chapter 2 | full size |
 |---|---|---|
-| a shelf gun's line to a ship 10 over a canyon floor, blocked | 71% | 95% |
-| the same line with the ship lifted to 10 over the shelf, blocked | 1% | 3% |
-| canyon width, narrowest anywhere | 22 | 21.5 |
-| spires; narrowest gap between bases | 9; 9.2 | 49; 9.9 |
+| empty plain left in the band round the wall | 2% | 3% |
+| crevasses / lake / spires / ridges, share of it | 24 / 24 / 26 / 26% | 25 / 20 / 29 / 25% |
+| a shelf gun's line to a ship in a canyon, blocked; lifted over the shelf | 81%; 5% | 93%; 19% |
+| canyon width, narrowest tenth | 21 | 20.5 |
+| spires; narrowest gap; places taken in the heart / at the edge | 34; 10.9; 100 / 12% | 141; 9.4; 100 / 47% |
 
-**Three things the first versions got wrong:** canyons cut from noise fixed to the world gave thin
-cracks 12 wide at one setting and, at another, a shelf broken into islands at chapter 2's size, so
-the canyons are laid out now; spires 22 apart with jitter had bases touching; and the suite's first
-"cover" control drew its line to a ship out on the plain beyond the shelf, which the shelf blocked too.
+**On the way, measured rather than looked at:** the first borders blended only 8% of the land; and the
+suite's first "plain" counted a canyon floor or the ground between spires as plain, because they sit at
+its height. It now counts empty plain: nothing within 20 rising 6 over it. **And one wrong diagnosis:**
+the lake's check found ground 23 high in the lake basin at full size, and I put it down to islands and
+capped them. A deliberate break showed the cap did nothing, because the islands never pass 7: the 23
+was a base's walls, standing on the lake. The check now leaves the bases out, and the cap is gone.
+A camp that lands on the lake stands on a platform of ice 3 high, so its guns, like every ground
+unit, are 2.5 or more clear of the water line: the size suite found three at 1.2.
+
+**Found by the size suite, older than any of this:** now and then a drone at today's size circled with
+the bottom of its bob inside the ice wall's crest. A drone settles its height from the ground at 24
+points round its circle, and the crest, narrow and jagged, could fall between them. It checks 48 now.
+That fault was rare and random, so one clean run does not prove the fix; it is right in principle.
 
 ### Built in stages, each merged with its own version, each shown as renders first
 
@@ -827,7 +846,7 @@ node test/dusk-weather.mjs     # the weather: the draw, nothing stacking, how fa
 node test/dusk-wxsound.mjs     # the weather's sound: nothing before a tap, each bed under the music, thunder after its flash, the sound modes
 node test/dusk-chapter.mjs     # the chapters: the order, one arena a chapter, ordinary rounds on the ice and lava, ships over the ground
 node test/dusk-size.mjs        # the arenas' sizes: the spacing, the ground at every size, nothing in the wrong place, the wall's strips
-node test/dusk-ice.mjs         # the ice field's regions: crevasses that hide you, a flat lake, spires to weave, an outpost with a gate
+node test/dusk-ice.mjs         # the ice field's territories: the plain filled, borders that blend, each place doing its job, the bases
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between
