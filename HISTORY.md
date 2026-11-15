@@ -3353,3 +3353,16 @@ At the merge: sixteen Dusk suites, 385 checks, and offline, published and versio
 
 **Open, his:** how `bomb-2` feels; whether three to four times seekers on the ground is too strong (balancing); and
 the two still open from `bomb-1`, tower guns counting and the seed helper.
+
+### `bomb-3`: the rate, halved
+
+His: "it's good so far", then "measure half as often and a quarter less often through each level and pick which you
+think works better and go for it". Measured by the damage reaching the ship in the drone fight, five seeds a row,
+after a single run showed a card that kills no ground moving damage by 10%. Half as often tracks seekers level for
+level (−13 / −17 / −18% against −7 / −14 / −21%); a quarter less often barely differed from `bomb-2`. Chosen and
+merged: one every 8 / 6 / 4.4 seconds. The bomb suite and the smoke and repository suites were re-run on it; the
+other Dusk suites and the mutants were not, the change being one constant.
+
+He also raised the dreadnought: "a bit easy", "mostly just shooting at a structure with little threat", with two
+ideas (add units, six interceptors out at a time), for after the bomb. Queued in his words in
+`docs/dusk/README.md`. One thing found for it: boss rounds place no ground units, so the bomb does nothing there.

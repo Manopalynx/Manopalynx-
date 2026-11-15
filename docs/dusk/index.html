@@ -3443,7 +3443,7 @@
   // and falls. A target the throw cannot reach -- a ridge in the way -- is passed over for the next. Ground units only: it
   // falls through everything else, and its blast hurts nothing but ground units, the ice wall's and the walker's tower
   // guns included.
-  var BOMB_R = [0, 10, 14, 18], BOMB_COOL = [0, 4, 3, 2.2], BOMB_DMG = 5, BOMB_G = 30, BOMB_THROW = 55, BOMB_STEP = 1 / 30;
+  var BOMB_R = [0, 10, 14, 18], BOMB_COOL = [0, 8, 6, 4.4], BOMB_DMG = 5, BOMB_G = 30, BOMB_THROW = 55, BOMB_STEP = 1 / 30;
   var BOMB_CONE = Math.cos(30 * Math.PI / 180), BOMB_NEAR = 30, BOMB_FAR = 200, BOMB_MINT = 0.8, BOMB_HIT = 2.5;
   var bombs = [], bombWaves = [], bombCool = 1;
   var bmP = new THREE.Vector3(), bmV = new THREE.Vector3(), bmQ = new THREE.Vector3(), bmS = new THREE.Vector3();
@@ -4536,7 +4536,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'bomb-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'bomb-3', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +

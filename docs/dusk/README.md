@@ -886,7 +886,7 @@ measured at a fixed distance that on a stretched mesa was still on it.
 4. ~~The lava field's regions.~~ Built as territories, above.
 5. ~~The dusk hills at full size, for the second time round.~~ Built, above. The maps are done.
 
-## The bomb (build `bomb-2`)
+## The bomb (build `bomb-3`)
 
 **Sam's rulings:** an upgrade card that fires by itself; ground units only; its levels grow the blast and how
 often, the split to be settled by balancing; the rest left to the build ("go with your recommendations"). Then, on
@@ -920,7 +920,7 @@ bombs in 90 seconds where its cool-down allowed 22.
   question of the towers' 10-second rebuild:** an automatic weapon that keeps knocking them down makes it matter
   less. A gun on a tower is hit where it stands. The blast is measured in three dimensions.
 - **Numbers, starting points before balancing:** 5 damage a bomb (an ordinary gun or launcher in one; heavy bolts
-  scale it like every weapon); blast 10 / 14 / 18; one every 4 / 3 / 2.2 seconds. Its kills set off chain reaction,
+  scale it like every weapon); blast 10 / 14 / 18; one every 8 / 6 / 4.4 seconds (balanced, below). Its kills set off chain reaction,
   through the same path every kill takes. One level-1 bomb takes a three-gun camp.
 - **Look and sound:** a dark bomb with pale fins and an orange tail light, half again a real bomb's size so it can be
   followed; a flattened orange blast; a clunk and a faint falling whistle as it goes, a deep thump when it lands.
@@ -933,21 +933,32 @@ comparison, the other card that fires by itself.
 | card, level | flying legs, not firing: thrown | ground by it | fighting drones, firing: thrown | ground by it |
 |---|---|---|---|---|
 | none (the control) | 0 | 0 | 0 | 0 |
-| **bombs 1** | 17 | **17** | 14 | **14** |
-| **bombs 2** | 19 | **19** | 17 | **16** |
-| **bombs 3** | 21 | **20** | 26 | **25** |
-| seekers 1 | 27 | 4 | 25 | 4 |
-| seekers 2 | 36 | 4 | 35 | 7 |
-| seekers 3 | 49 | 6 | 45 | 12 |
+| **bombs 1** | 11 | **11** | 10 | **10** |
+| **bombs 2** | 12 | **12** | 11 | **11** |
+| **bombs 3** | 15 | **15** | 15 | **15** |
+| seekers 1 | 27 | 4 | 24 | 5 |
+| seekers 2 | 36 | 4 | 33 | 8 |
+| seekers 3 | 49 | 6 | 43 | 7 |
 
-Of 30 ground units in the round. **It is now the strong card on the ground, by three to four times**: `bomb-1`
-destroyed 3 / 5 / 6 flying legs, and in the drone fight it threw 2 bombs where this throws 14. Nearly every bomb
-kills one. Seekers spend most of their missiles on drones, which bombs never touch. Whether that is too strong is
-the balancing step's question, not settled here. Seeded from before the page loads and with sound muted, as
-before, so runs agree.
+Of 30 ground units in the round, at `bomb-3`'s rate. Seeded from before the page loads and with sound muted.
 
-**Balancing is the next step**, its own change. Not measured yet: with chain reaction, in the boss rounds, and by
-a stand-in that flies at the bases.
+**Balanced (`bomb-3`).** `bomb-2` threw every 4 / 3 / 2.2 seconds and was three to four times seekers on the ground.
+Sam: "measure half as often and a quarter less often through each level and pick which you think works better".
+The measure is the damage that reaches the ship (counted, not applied) in the drone fight, since ground guns are
+most of the threat; means of five seeds, because one run moves by 10% on its own. Against no card (1295):
+
+| | level 1 | level 2 | level 3 |
+|---|---|---|---|
+| seekers | −7% | −14% | −21% |
+| **bombs, half as often (chosen)** | −13% | −17% | −18% |
+| bombs, a quarter less often | −18% | −24% | −36% |
+| bombs, as `bomb-2` | −21% | −30% | −36% |
+
+Half as often tracks seekers at every level and still destroys about twice the ground (10 / 12 / 16 against
+5 / 6 / 9). **The stand-in never shoots the ground itself; Sam does**, so in his hands the bomb has fewer targets
+than here. In boss rounds: it does nothing against the dreadnought, which has no ground units; at `bomb-2`'s rate a
+level-1 bomb destroyed all six of the walker's tower guns in 90 seconds and 13 of the wall's 30, and they rebuild.
+Not measured: with chain reaction beyond one run, and a stand-in that flies at the bases.
 
 ## Queued, in the agreed order
 
@@ -956,7 +967,7 @@ a stand-in that flies at the bases.
 3. Ground units grouped into bases. (Proposed as part of the chapters' regions, above.)
 4. Canyons for cover. (Likewise: crevasses, the rift, the river canyon.)
 5. ~~A boss every fifth round.~~ Built: the dreadnought, above.
-6. ~~The bomb, once the maps were done (Sam).~~ Built: `bomb-2`, above. Balancing it is next.
+6. ~~The bomb, once the maps were done (Sam).~~ Built and balanced: `bomb-3`, above.
 7. **The dreadnought is too easy** (Sam, after `bomb-2`): "it's mostly just shooting at a structure with little
    threat so we probably need to find ways to up the difficulty such as add units or have 6 interceptors come out at
    a time". After the bomb is finished. Today: one interceptor from each bay every 30 seconds, up to six flying.
