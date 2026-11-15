@@ -102,9 +102,17 @@
     transform: rotate(45deg);
   }
   .point.raid.lock i { border-color: #ff5a48; }
+  .score {
+    position: fixed;
+    top: calc(66px + env(safe-area-inset-top, 0px));
+    left: calc(18px + env(safe-area-inset-left, 0px));
+    font-size: 1.05rem; font-variant-numeric: tabular-nums; white-space: nowrap;
+    text-shadow: 0 1px 8px rgba(6, 7, 22, 0.9); pointer-events: none;
+  }
+  .score .tally { margin-left: 0.6em; font-style: italic; color: var(--glow); }
   .warn {
     position: fixed;
-    top: calc(68px + env(safe-area-inset-top, 0px));
+    top: calc(92px + env(safe-area-inset-top, 0px));
     left: calc(18px + env(safe-area-inset-left, 0px));
     color: #ff7058; font-style: italic; font-size: 1.05rem;
     text-shadow: 0 1px 8px rgba(6, 7, 22, 0.9);
@@ -251,6 +259,7 @@
 <div class="hull" id="hull" role="img" aria-label="Hull strength"><i id="hullFill"></i></div>
 <div class="hull shieldbar" id="shieldBar" role="img" aria-label="Shield strength"><i id="shieldFill"></i></div>
 <div class="point" id="point"><i></i></div>
+<div class="score" id="score"><span id="scoreN"></span><span class="tally" id="scoreT"></span></div>
 <div class="warn" id="warn">Missile</div>
 <div class="hurt" id="hurt"></div>
 <div class="note" id="note"></div>
@@ -1516,7 +1525,7 @@
       // the screen was a generator destroyed and a shield still standing at full (Sam: "the boss retains their shield").
       f.shield = 0; f.shieldGlow = 1;
       gn.pivot.getWorldPosition(fleetTmp); boom(fleetTmp, true); chainBlast(fleetTmp, 1.5);
-      sfx('shieldDown', fleetTmp); banner('Shield generator destroyed', 2.5);
+      addScore('generator'); sfx('shieldDown', fleetTmp); banner('Shield generator destroyed', 2.5);
     } else boom(at, false);
     updateReadout();
   }
@@ -1612,7 +1621,7 @@
     if (f.hp <= 0) {
       f.hp = 0; f.dying = 0.001; f.fallV = 0; f.boomT = 0;
       sfx('capital', f.ship.position);
-      salvage(15);
+      salvage(15); addScore(f.boss ? 'boss' : 'capital');
       chainBlast(f.ship.position, 2.2);
       // the dreadnought's escort goes down with it, in the same moment, so the round is over when it is
       if (f === bossF) for (var ed = 0; ed < drones.length; ed++) if (drones[ed].alive) { boom(drones[ed].mesh.position, true); drones[ed].alive = false; drones[ed].mesh.visible = false; }
@@ -1995,16 +2004,18 @@
   }
   function die() {
     dead = true; deadT = 0;
+    tally = 0; chain = 0; // what was not yet banked goes with the ship; the best was already kept as each tally was banked
+    paintScore();
     boom(shipPos, true); sfx('dead'); heat = 0; icLeave();
     player.visible = false;
     crossEl.style.display = 'none';
     fireTouch = null; fireEl.classList.remove('on');
-    noteEl.textContent = 'Ship lost in round ' + round + '. ' + (best ? 'Best round cleared: ' + best + '. ' : '') + (isTouch ? 'Touch to fly again.' : 'Click to fly again.');
+    noteEl.textContent = 'Ship lost in round ' + round + '. Score ' + scoreFmt(score) + '. ' + (best ? 'Best round cleared: ' + best + '. ' : '') + (isTouch ? 'Touch to fly again.' : 'Click to fly again.');
     bannerT = 0;
     noteEl.style.display = 'block';
   }
   function respawn() {
-    dead = false; resetUpgrades(); hull = maxHull(); shield = 0; showShield(); sinceHit = 99; chOrder = []; arenaHold = false; // a new run: it draws its own order of arenas, and any look-round is over
+    dead = false; score = 0; tally = 0; chain = 0; paintScore(); resetUpgrades(); hull = maxHull(); shield = 0; showShield(); sinceHit = 99; chOrder = []; arenaHold = false; // a new run: it draws its own order of arenas, and any look-round is over
     shipPos.set(46, PAD_H + 30, 46);
     yaw = Math.atan2(shipPos.x, shipPos.z); pitch = 0; bank = 0; speed = 24;
     basis();
@@ -2349,7 +2360,7 @@
     if (sec.down || sec.falling > 0) return;
     sec.hp -= dmg; sec.flash = 0.2; paintRing(sec);
     if (sec.hp <= 0) {
-      sec.hp = 0; sec.falling = 0.001; sec.step = 0; sec.ring.visible = false; sec.grp.visible = false;
+      addScore('section'); sec.hp = 0; sec.falling = 0.001; sec.step = 0; sec.ring.visible = false; sec.grp.visible = false;
       // its guns go with it, and do not come back
       for (var i = 0; i < ground.length; i++) {
         var g = ground[i];
@@ -2615,7 +2626,7 @@
   function hitKnee(lg, dmg, at) {
     lg.hp -= dmg; lg.flash = 0.2; paintRing(lg);
     if (lg.hp > 0) { boom(at, false); return; }
-    lg.hp = 0; lg.dead = true; lg.t = -1; wkLegShow(lg, true);
+    addScore('knee'); lg.hp = 0; lg.dead = true; lg.t = -1; wkLegShow(lg, true);
     boom(lg.kneeAt, true); chainBlast(lg.kneeAt, 1);
     var gone = 0; for (var i = 0; i < walker.legs.length; i++) if (walker.legs[i].dead) gone++;
     if (gone >= WK_FALL_AT && walker.state === 'walk') { walker.state = 'falling'; walker.st = 0; sfx('capital', walker.g.position); banner('It is going down', 2); }
@@ -3174,7 +3185,7 @@
   function takeControl() {
     if (dead) { if (deadT > 1.2) respawn(); return; }
     if (inControl) return;
-    inControl = true; audioStart(); sfx('round');
+    inControl = true; paintScore(); audioStart(); sfx('round');
     yaw = camera.rotation.y; pitch = camera.rotation.x;
     basis();
     shipPos.copy(camera.position).addScaledVector(fwdV, 9.5).addScaledVector(upV, -2.6);
@@ -3251,23 +3262,57 @@
   window.addEventListener('resize', resize);
   resize();
 
+  // ---------- score ----------
+  // Sam: every unit destroyed gives points; kills in a row count up in a tally, and "after a few seconds with no points
+  // it gets added to the total". His too: dying ends the run, so the score starts again from nothing, and the best is
+  // kept on the phone. MINE, his to strike: the points; a multiplier that rises a step every three kills of a chain, to
+  // five times; three seconds without a kill to bank; a tally not yet banked is lost with the ship.
+  var SCORE = { drone: 10, ground: 15, turret: 20, interceptor: 25, knee: 50, capital: 100, generator: 200, section: 250, boss: 1000 };
+  var SCORE_BANK = 3, SCORE_STEP = 3, SCORE_MAXK = 5;
+  var score = 0, tally = 0, chain = 0, tallyT = 0, bestScore = 0;
+  var scoreN = document.getElementById('scoreN'), scoreT = document.getElementById('scoreT');
+  try { bestScore = Math.max(0, parseInt(localStorage.getItem('small-world-best-score'), 10) || 0); } catch (e) {}
+  function scoreFmt(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function scoreK() { return Math.min(SCORE_MAXK, 1 + Math.floor(chain / SCORE_STEP)); }
+  function paintScore() {
+    // before the first touch, and while down, the best; in flight, the score and the tally still counting
+    scoreN.textContent = inControl ? scoreFmt(score) : bestScore ? 'Best ' + scoreFmt(bestScore) : '';
+    scoreT.textContent = dead ? (bestScore ? 'Best ' + scoreFmt(bestScore) : '') : tally ? '+' + scoreFmt(tally) + (scoreK() > 1 ? ' \u00d7' + scoreK() : '') : '';
+  }
+  function addScore(kind) {
+    if (dead || !inControl) return;
+    tally += SCORE[kind] * scoreK(); chain++; tallyT = SCORE_BANK;
+    paintScore();
+  }
+  function bankScore() {
+    score += tally; tally = 0; chain = 0;
+    if (score > bestScore) { bestScore = score; try { localStorage.setItem('small-world-best-score', String(bestScore)); } catch (e) {} }
+    paintScore();
+  }
+  function updateScore(dt) {
+    if (!chain || dead) return;
+    tallyT -= dt;
+    if (tallyT <= 0) bankScore();
+  }
+  paintScore();
+
   // ---------- hurting things: every weapon lands through here ----------
   function killDrone(d) {
     boom(d.mesh.position, true);
     d.alive = false; d.mesh.visible = false;
-    salvage(4); chainBlast(d.mesh.position, 1);
+    salvage(4); addScore('drone'); chainBlast(d.mesh.position, 1);
     updateReadout(); checkRound();
   }
   function hitGround(g, dmg, at) {
     g.hp -= dmg; g.flash = 0.2; paintRing(g);
     if (g.hp <= 0) {
-      salvage(4); g.alive = false; g.group.visible = false; g.ring.visible = false; chainBlast(g.pos, 1);
+      salvage(4); addScore('ground'); g.alive = false; g.group.visible = false; g.ring.visible = false; chainBlast(g.pos, 1);
       boom(g.pos, true); if (wallOn) wallUnitDown(g); else if (wkTowerGun(g)) g.back = WK_TOWER_BACK; updateReadout(); checkRound();
     } else boom(at, false);
   }
   function hitTurret(f, t, dmg, at) {
     t.hp -= dmg; t.flash = 0.2; paintRing(t);
-    if (t.hp <= 0) { t.hp = 0; t.back = BOSS_REBUILD; t.ring.visible = false; t.pivot.visible = false; boom(at, true); t.pivot.getWorldPosition(chTmp); chainBlast(chTmp, 1); hitCapital(f, f.turretBlow || 60, true); if (!f.boss && f.dying === 0 && turretsGone(f) && !turretsDownTold) { turretsDownTold = true; banner('Turrets down: double damage', 2.5); } }
+    if (t.hp <= 0) { addScore('turret'); t.hp = 0; t.back = BOSS_REBUILD; t.ring.visible = false; t.pivot.visible = false; boom(at, true); t.pivot.getWorldPosition(chTmp); chainBlast(chTmp, 1); hitCapital(f, f.turretBlow || 60, true); if (!f.boss && f.dying === 0 && turretsGone(f) && !turretsDownTold) { turretsDownTold = true; banner('Turrets down: double damage', 2.5); } }
     else boom(at, false);
   }
   var stA = new THREE.Vector3(), stB = new THREE.Vector3(), stC = new THREE.Vector3(), CAP_BOX = [44, -10, 15, 13], GEN_AT = new THREE.Vector3(0, 0, 0);
@@ -4048,7 +4093,7 @@
   }
   function hitInterceptor(ic, dmg, at) {
     ic.hp -= dmg;
-    if (ic.hp <= 0) { boom(ic.pos, true); icHide(ic); salvage(4); } // no chainBlast: a chain can kill them, they do not carry it on
+    if (ic.hp <= 0) { boom(ic.pos, true); icHide(ic); salvage(4); addScore('interceptor'); } // no chainBlast: a chain can kill them, they do not carry it on
     else boom(at, false);
   }
   function updateInterceptors(dt) {
@@ -4592,7 +4637,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'landscape-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'score-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +
@@ -4746,6 +4791,7 @@
     updateBombs(dt);
     updateShots(dt);
     updateChain(dt);
+    updateScore(dt);
     updateBursts(dt);
     updateFar(dt);
     updateWeather(dt);

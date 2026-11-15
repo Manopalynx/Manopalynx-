@@ -996,6 +996,28 @@ than here. In boss rounds: it does nothing against the dreadnought, which has no
 level-1 bomb destroyed all six of the walker's tower guns in 90 seconds and 13 of the wall's 30, and they rebuild.
 Not measured: with chain reaction beyond one run, and a stand-in that flies at the bases.
 
+## The score (build `score-1`)
+
+**Sam's rulings:** "every time you destroy a unit you get points"; "if you get multiple points in a row it counts up
+and then after a few seconds with no points it gets added to the total"; "when you die you go back to round one so
+your score resets"; "yes to best score being saved". The rest were my recommendations, which he took.
+
+- **Points (mine):** drone 10, a gun or launcher on the ground 15, a turret 20, an interceptor 25, a knee of the
+  walker 50, a capital ship 100, the dreadnought's shield generator 200, a section of the ice wall 250, a boss 1000.
+  The dreadnought's escort, going down with it, is worth nothing.
+- **The chain (mine):** each kill adds to a tally. Every three kills of a chain the next are worth one more times
+  over, to five times. Three seconds without a kill and the tally is added to the score and the chain ends. The
+  upgrade screen stops that clock.
+- **Dying:** the tally not yet banked is lost with the ship (mine); the score starts from nothing on the next run
+  (his). The death message gives the score.
+- **The best** is kept on the phone (`small-world-best-score`) as each tally is banked, and shown on the first
+  screen and while down.
+- **Where:** top left under the hull and shield bars; the tally and its multiplier beside it in gold. The Missile
+  warning moved down a line to make room. Checked over nothing else at 393×852, 852×393 and 667×375.
+
+`test/dusk-score.mjs`, 22 checks. A line that saved the best at death was removed: a mutant showed it did nothing,
+since banking had already saved it.
+
 ## Both ways up (build `landscape-1`)
 
 **Sam:** "make sure it all looks good if I play it on landscape and portrait including the upgrade screen".
@@ -1077,6 +1099,7 @@ node test/dusk-lavafield.mjs   # the lava field's territories: the land filled, 
 node test/dusk-hills.mjs       # the dusk hills' territories: the town untouched, the canyon, ragged mesas, the range, the pylons
 node test/dusk-bomb.mjs        # the bomb: the cone, what it takes first, where it lands, what it hurts, how often, on the screen; then its worth
 DUSK_QUICK=1 node test/dusk-bomb.mjs     # its rules without the worth table, for mutation runs
+node test/dusk-score.mjs       # the score: what each kill is worth, the chain, the bank, dying, the best, where it sits both ways up
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between

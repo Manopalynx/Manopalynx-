@@ -3404,3 +3404,13 @@ shapes, each both ways up, rendered and each element's box checked against the s
 upgrade screen ran off the top and bottom; cards now sit side by side there, checked with the three longest card
 texts on the smallest screen. The worker restarted mid-fix; nothing was lost. The notch was not checkable here.
 
+### `score-1`
+
+His third batch: a score, "it feels rather easy especially as you start to accumulate upgrades", and an enemy type
+for each region. Discussed all three; he took my scoring recommendations with one correction of his own (dying
+resets the score, since it resets the run). Built: points, a chain multiplier, a three-second bank, the best kept.
+**My own check restated a sum and got it wrong** (480 for 500), and its edit then failed silently, so that check
+was red through a whole mutant run and four "caught" results were worth nothing; one of them, the best saved at
+death, was caught by nothing else, because the line did nothing. Removed. The other two of his three are not
+started: I asked what he holds when it gets easy, and which region ideas he likes.
+
