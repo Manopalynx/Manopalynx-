@@ -28,8 +28,8 @@ Left thumb throttle, right thumb steer, a Fire button. Round N is N capital ship
 drones and 5N ground units (flak and missile sites). Between rounds you pick one of three
 upgrade cards, each stacking to three levels. Dying resets to round 1.
 
-Twelve upgrades: rapid fire, heavy bolts, extra cannons, plating, fast repair, salvage,
-tracking bolts, seeker missiles, shield, point defence, chain reaction, wingman.
+Thirteen upgrades: rapid fire, heavy bolts, extra cannons, plating, fast repair, salvage,
+tracking bolts, seeker missiles, shield, point defence, chain reaction, wingman, bombs.
 
 ## Settled
 
@@ -886,6 +886,54 @@ measured at a fixed distance that on a stretched mesa was still on it.
 4. ~~The lava field's regions.~~ Built as territories, above.
 5. ~~The dusk hills at full size, for the second time round.~~ Built, above. The maps are done.
 
+## The bomb (build `bomb-1`)
+
+**Sam's rulings:** an upgrade card that fires by itself; ground units only; its levels grow the blast and how
+often it drops, the split to be settled by balancing. He then left the rest to the build: "go with your
+recommendations and whatever you think works best".
+
+**Fills, his to strike** (marked `MINE` in the code):
+
+- **A falling bomb, thrown.** It leaves along the nose at the ship's speed plus 55 and falls at 30 a second squared.
+  **Thrown, not dropped:** a bomb keeping only the ship's speed lands under the ship, and the portrait camera sees
+  39° below its line at most, so you would never have seen your own bomb go off. Measured: in level flight from 15 to
+  130 up the blast lands on the screen.
+- **It lets go by itself, only when the fall would end on a ground unit**, and at the moment it would land
+  **closest** to one. The first version let go at the first chance, which put the blast at a camp's near edge and
+  took one gun of three; it now takes a whole three-gun camp at level 1. It aims only where the miss still kills:
+  within three quarters of the blast.
+- **Ground units only, the ice wall's guns and the walker's tower guns included**: they are ground units in the code.
+  It falls through drones, interceptors and ships, and its blast hurts nothing else. **This bears on the open
+  question of the towers' 10-second rebuild:** an automatic weapon that keeps knocking them down makes it matter
+  less. A gun on a tower is hit where it stands, not at the tower's foot.
+- **Numbers, starting points before balancing:** 5 damage a bomb (an ordinary gun or launcher in one; heavy bolts
+  scale it like every weapon); blast 10 / 14 / 18; one every 4 / 3 / 2.2 seconds. Its kills set off chain reaction,
+  through the same path every kill takes.
+- **A gun on a rise beside a gully is out of reach** of a bomb landing in the gully: the blast is measured in three
+  dimensions. So is a gun just behind a ridge the ship skims: no fall clears the ridge and lands on it.
+- **Look and sound:** a dark bomb with pale fins and an orange tail light, half again a real bomb's size so it can be
+  followed; a flattened orange blast; a clunk and a faint falling whistle as it goes, a deep thump when it lands. For
+  its first half second the bomb is hidden behind your own ship, which sits between it and the camera.
+
+**What it is worth, first measure** (`test/dusk-bomb.mjs`, printed, not asserted): round 6 on the dusk hills,
+every enemy in it, the hull held, the stand-in flying legs across the map at 50 up and **not firing**, so only the
+automatic weapon works. Ground units destroyed, of 30, in 90 seconds:
+
+| card | level 1 | level 2 | level 3 |
+|---|---|---|---|
+| none (the control) | 0 | | |
+| **bombs** | **3** | **5** | **6** |
+| seekers: ground | 4 | 4 | 6 |
+| seekers: drones, besides | 9 | 11 | 15 |
+
+On the ground alone the bomb is level with seekers, a little behind at level 1 and ahead at level 2; it kills no
+drones and seekers kill many. On that measure it is the weaker card, which is what was proposed: it does nothing in
+the air. Seeded from before the page loads and with sound muted, three runs give the same table: the page builds
+the far dogfight at load, and the sound effects draw from the game's own random.
+
+**Balancing is the next step**, its own change. Not measured yet: the bomb with the guns firing, with chain
+reaction, in the boss rounds, and by a stand-in that flies at the bases rather than across the map.
+
 ## Queued, in the agreed order
 
 1. Wrecks of downed capital ships that stay for the run.
@@ -893,6 +941,7 @@ measured at a fixed distance that on a stretched mesa was still on it.
 3. Ground units grouped into bases. (Proposed as part of the chapters' regions, above.)
 4. Canyons for cover. (Likewise: crevasses, the rift, the river canyon.)
 5. ~~A boss every fifth round.~~ Built: the dreadnought, above.
+6. ~~The bomb, once the maps were done (Sam).~~ Built: `bomb-1`, above. Balancing it is next.
 
 Also noted: once interceptors exist, invulnerable wingmen will look odd.
 
@@ -928,6 +977,8 @@ node test/dusk-size.mjs        # the arenas' sizes: the spacing, the ground at e
 node test/dusk-ice.mjs         # the ice field's territories: the plain filled, borders that blend, each place doing its job, the bases
 node test/dusk-lavafield.mjs   # the lava field's territories: the land filled, the walker's ground untouched, each place doing its job
 node test/dusk-hills.mjs       # the dusk hills' territories: the town untouched, the canyon, ragged mesas, the range, the pylons
+node test/dusk-bomb.mjs        # the bomb: when it lets go, where it lands, what it hurts, how often, a camp, on the screen; then its worth
+DUSK_QUICK=1 node test/dusk-bomb.mjs     # its rules without the worth table, for mutation runs
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between

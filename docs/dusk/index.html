@@ -2803,7 +2803,8 @@
     { id: 'shield', name: 'Shield', desc: 'A recharging barrier that soaks hits before your hull. Each level holds more and refills faster.', max: 3 },
     { id: 'pd', name: 'Point defence', desc: 'A small gun tries to shoot down missiles before they reach you. Each level reaches further, fires faster and aims better.', max: 3 },
     { id: 'chain', name: 'Chain reaction', desc: 'Whatever you destroy explodes, hurting anything close, and that can set off more. Each level widens and strengthens the blast.', max: 3 },
-    { id: 'wingman', name: 'Wingman', desc: 'An escort flies on your wing and shoots at whatever’s ahead of you. Level 2 brings a second; level 3 doubles their fire.', max: 3 }
+    { id: 'wingman', name: 'Wingman', desc: 'An escort flies on your wing and shoots at whatever’s ahead of you. Level 2 brings a second; level 3 doubles their fire.', max: 3 },
+    { id: 'bomb', name: 'Bombs', desc: 'A bomb is thrown by itself whenever it would land on a gun or launcher ahead. Each level throws them more often and blasts wider.', max: 3 }
   ];
   var up = {}, picking = false, pickReady = 0;
   var pickEl = document.getElementById('pick'), pickTitle = document.getElementById('pickTitle'), pickCards = document.getElementById('pickCards');
@@ -3077,6 +3078,7 @@
     for (i = 0; i < missiles.length; i++) { missiles[i].life = 0; missiles[i].mesh.visible = false; }
     for (i = 0; i < seekers.length; i++) { seekers[i].life = 0; seekers[i].mesh.visible = false; }
     clearChain();
+    clearBombs();
     icReset(n);
     wxStart(n); // after the landscape is settled, because what falls and what it is called depend on it
     updateReadout();
@@ -3428,6 +3430,124 @@
     if (seekCool > 0) return;
     if (pickTarget(shipPos, fwdV, 0.77, 240, 0.04)) { launchSeeker(); seekCool = SEEK_COOL[up.seeker]; }
     else seekCool = 0.25;
+  }
+
+  // ---------- bombs: they drop by themselves when one would land on something on the ground ----------
+  // Sam: an upgrade that fires by itself, at ground units only, its levels growing the blast and how often. MINE, his to
+  // strike: a bomb is thrown out along the nose, faster than the ship, and falls; it is let go only when that fall would
+  // end on a ground unit, at the moment it would land closest to one, so you never press anything but where you fly
+  // decides what is hit. Thrown, not dropped: a bomb keeping only the ship's speed lands under the ship, below the
+  // chase camera's view, and you would never see your own bomb go off. Ground units only: it falls through everything
+  // else, and its blast hurts nothing but ground units -- the ice wall's guns and the walker's tower guns included.
+  var BOMB_R = [0, 10, 14, 18], BOMB_COOL = [0, 4, 3, 2.2], BOMB_DMG = 5, BOMB_G = 30, BOMB_THROW = 55, BOMB_AIM = 0.75, BOMB_STEP = 1 / 30;
+  var bombs = [], bombWaves = [], bombCool = 1, bombLast = Infinity;
+  var bmP = new THREE.Vector3(), bmV = new THREE.Vector3(), bmQ = new THREE.Vector3();
+  (function () {
+    var bodyGeo = new THREE.CylinderGeometry(0.42, 0.3, 1.9, 8), noseGeo = new THREE.SphereGeometry(0.42, 8, 6);
+    var finGeo = new THREE.BoxGeometry(1.1, 0.06, 0.4), lampGeo = new THREE.SphereGeometry(0.5, 8, 6);
+    var lampMat = new THREE.MeshBasicMaterial({ color: 0xffa050, fog: false, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending });
+    for (var i = 0; i < 8; i++) {
+      var m = new THREE.Group(), core = new THREE.Group();
+      core.rotation.x = Math.PI / 2; core.scale.setScalar(1.6); m.add(core); // the body's length along the way it is falling; half again a bomb's size, to be followed by eye
+      core.add(new THREE.Mesh(bodyGeo, gDark));
+      var nose = new THREE.Mesh(noseGeo, gDark); nose.position.y = 0.95; core.add(nose);
+      var f1 = new THREE.Mesh(finGeo, gPale), f2 = new THREE.Mesh(finGeo, gPale);
+      f1.position.y = f2.position.y = -0.85; f2.rotation.y = Math.PI / 2; core.add(f1); core.add(f2);
+      var lamp = new THREE.Mesh(lampGeo, lampMat); lamp.position.y = -1.05; core.add(lamp);
+      m.visible = false; scene.add(m);
+      bombs.push({ mesh: m, p0: new THREE.Vector3(), v0: new THREE.Vector3(), age: 0, live: false, r: 0 });
+    }
+    var geo = new THREE.SphereGeometry(1, 16, 10);
+    for (i = 0; i < 6; i++) {
+      var w = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: 0, fog: false, depthWrite: false, blending: THREE.AdditiveBlending }));
+      w.visible = false; scene.add(w);
+      bombWaves.push({ mesh: w, life: 0, r: 1 });
+    }
+  })();
+  // where a falling bomb stops: the ground or the water's or lava's surface, or the top of a ground unit standing
+  // proud of it (a gun on a tower is not part of the ground)
+  function bombStops(p) {
+    if (p.y <= Math.max(height(p.x, p.z), 0)) return true;
+    for (var i = 0; i < ground.length; i++) {
+      var g = ground[i];
+      if (!g.alive) continue;
+      var dx = g.pos.x - p.x, dz = g.pos.z - p.z;
+      if (dx * dx + dz * dz < 9 && p.y <= g.pos.y + 0.5) return true;
+    }
+    return false;
+  }
+  // a bomb's place t seconds after it left from p0 at v0: the same sum for where it is and for where it will land
+  function bombAt(p0, v0, t, out) { return out.copy(p0).addScaledVector(v0, t).setY(p0.y + v0.y * t - 0.5 * BOMB_G * t * t); }
+  // from under the ship's belly, worked from where the ship is rather than from its model, which moves a tick later
+  function bombStart(p0, v0) {
+    p0.copy(shipPos).addScaledVector(upV, -0.7).addScaledVector(fwdV, -0.3);
+    v0.copy(fwdV).multiplyScalar(speed + BOMB_THROW);
+  }
+  // where a bomb let go now would land, or false if it would fall for more than eight seconds
+  function bombLanding(out) {
+    bombStart(bmP, bmV);
+    for (var t = BOMB_STEP; t < 8; t += BOMB_STEP) { bombAt(bmP, bmV, t, out); if (bombStops(out)) return true; }
+    return false;
+  }
+  function updateBombDrop(dt) {
+    if (!up.bomb) return;
+    bombCool -= dt;
+    if (bombCool > 0) return;
+    if (!bombLanding(bmQ)) { bombLast = Infinity; return; }
+    var reach = BOMB_R[up.bomb] * BOMB_AIM, near = Infinity, i;
+    for (i = 0; i < ground.length; i++) if (ground[i].alive) near = Math.min(near, ground[i].pos.distanceTo(bmQ));
+    // within reach, wait while the landing is still coming closer: let go at the closest, not at the first chance,
+    // which would put the blast at the near edge of a camp and leave the rest of it standing
+    var closing = near < bombLast - 0.01;
+    bombLast = near;
+    if (near > reach || (closing && near > 1.5)) return;
+    var b = null;
+    for (i = 0; i < bombs.length; i++) if (!bombs[i].live) { b = bombs[i]; break; }
+    if (!b) return;
+    bombStart(b.p0, b.v0);
+    b.age = 0; b.live = true; b.r = BOMB_R[up.bomb];
+    b.mesh.position.copy(b.p0); b.mesh.visible = true;
+    bombCool = BOMB_COOL[up.bomb]; bombLast = Infinity;
+    sfx('drop');
+  }
+  function bombBlast(p, r) {
+    var w = bombWaves[0], i;
+    for (i = 1; i < bombWaves.length; i++) if (bombWaves[i].life < w.life) w = bombWaves[i];
+    w.mesh.position.copy(p); w.r = r; w.life = 0.55; w.mesh.visible = true;
+    boom(p, true); sfx('bomb', p);
+    var r2 = r * r, dmg = BOMB_DMG * dmgMul();
+    for (i = 0; i < ground.length; i++) if (ground[i].alive && ground[i].pos.distanceToSquared(p) < r2) hitGround(ground[i], dmg, ground[i].pos);
+  }
+  function updateBombs(dt) {
+    var i;
+    for (i = 0; i < bombs.length; i++) {
+      var b = bombs[i];
+      if (!b.live) continue;
+      b.age += dt;
+      bombAt(b.p0, b.v0, b.age, b.mesh.position);
+      bmV.copy(b.v0).setY(b.v0.y - BOMB_G * b.age);
+      b.mesh.lookAt(bmP.copy(b.mesh.position).add(bmV));
+      if (bombStops(b.mesh.position) || b.age > 8) {
+        b.live = false; b.mesh.visible = false;
+        b.mesh.position.y = Math.max(b.mesh.position.y, Math.max(height(b.mesh.position.x, b.mesh.position.z), 0));
+        bombBlast(b.mesh.position, b.r);
+      }
+    }
+    for (i = 0; i < bombWaves.length; i++) {
+      var w = bombWaves[i];
+      if (w.life <= 0) continue;
+      w.life -= dt;
+      if (w.life <= 0) { w.mesh.visible = false; continue; }
+      var k = w.life / 0.55;
+      w.mesh.scale.set(1, 0.55, 1).multiplyScalar(w.r * (0.3 + 0.7 * (1 - k * k)));
+      w.mesh.material.opacity = 0.6 * k;
+    }
+  }
+  function clearBombs() {
+    var i;
+    for (i = 0; i < bombs.length; i++) { bombs[i].live = false; bombs[i].mesh.visible = false; }
+    for (i = 0; i < bombWaves.length; i++) { bombWaves[i].life = 0; bombWaves[i].mesh.visible = false; }
+    bombCool = 1; bombLast = Infinity;
   }
 
   // ---------- point defence: shoots down incoming missiles ----------
@@ -4147,6 +4267,8 @@
     erupt:      { label: 'Volcano erupts', heat: 0.3, gap: 1, play: function (v, d) { hiss(2.6, 0.55, 'lowpass', 700, 60, d); tone('sawtooth', 48, 30, 2.2, 0.25, d); } },
     stomp:      { label: 'Walker footfall', heat: 0.04, gap: 0.08, floor: 0.2, play: function (v, d) { tone('sine', 70, 34, 0.32, 0.5 * v, d); hiss(0.18, 0.3 * v, 'lowpass', 500, 90, d); } },
     rebuild:    { label: 'Turret rebuilt', gap: 0.15, floor: 0.35, play: function (v, d) { tone('square', 330, 660, 0.12, 0.07 * v, d); tone('square', 660, 990, 0.1, 0.05 * v, d, 0.1); } },
+    drop:       { label: 'Bomb away', gap: 0.2, play: function (v, d) { tone('square', 210, 120, 0.07, 0.08, d); tone('sine', 1500, 520, 1.1, 0.035, d, 0.05); } },
+    bomb:       { label: 'Bomb blast', heat: 0.08, gap: 0.08, floor: 0.35, play: function (v, d) { tone('sine', 96, 28, 0.7, 0.6 * v, d); hiss(0.8, 0.45 * v, 'lowpass', 900, 50, d); } },
     pick:       { label: 'Upgrade chosen', gap: 0.1, play: function (v, d) { tone('triangle', 660, 660, 0.16, 0.16, d); tone('triangle', 990, 990, 0.3, 0.16, d, 0.09); } }
   };
   // play a sound; with a position it gets quieter with distance and pans to the side it came from
@@ -4386,7 +4508,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'dusk-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'bomb-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +
@@ -4529,6 +4651,7 @@
       cool -= dt;
       if ((fireTouch !== null || keys.fire) && cool <= 0) { shoot(); cool = 0.1 / (1 + 0.3 * up.rapid); }
       updateSeekerLaunch(dt);
+      updateBombDrop(dt);
       updateShield(dt);
     }
     updatePointDefence(dt);
@@ -4536,6 +4659,7 @@
 
     updateBolts(dt);
     updateSeekers(dt);
+    updateBombs(dt);
     updateShots(dt);
     updateChain(dt);
     updateBursts(dt);
