@@ -1006,9 +1006,25 @@ Not measured: with chain reaction beyond one run, and a stand-in that flies at t
 5. ~~A boss every fifth round.~~ Built: the dreadnought, above.
 6. ~~The bomb, once the maps were done (Sam).~~ Built and balanced: `bomb-3`, above.
 7. ~~The dreadnought is too easy (Sam).~~ Built: `dreadnought-5`, above.
-8. **Interceptors every 30 seconds in ordinary rounds** (Sam: "they get destroyed early every round"). Proposed,
-   not agreed in detail.
-9. **A capital ship with every turret destroyed takes double damage** (Sam). Proposed, not agreed in detail.
+8. ~~Interceptors every 30 seconds in ordinary rounds (Sam).~~ Built: `capitals-1`, below.
+9. ~~A capital ship with every turret destroyed takes double damage (Sam).~~ Built: `capitals-1`, below.
+
+### `capitals-1`: interceptors that come back, and ships that fall faster once disarmed
+
+**Sam:** "introduce interceptors every 30 seconds in normal rounds because I find that they get destroyed early
+every round", and "when all turrets are destroyed the capital ship takes double damage". The details below were my
+recommendations, which he took.
+
+- **Every 30 seconds the interceptors shot down are replaced, back up to the round's number** (one in rounds 3 and
+  4, two from 5, three from 8). His "never more" stands: it tops up, it does not add. One on its way home does not
+  count as here. They are still not in the round's "to go" count.
+- **An ordinary capital ship with every turret destroyed takes double damage.** Not the bosses: their turrets
+  rebuild, so on them it would flicker. The last turret's own blow to the hull is not doubled. The banner says
+  "Turrets down: double damage" when the last one goes (mine).
+
+Checked in `test/dusk-intercept.mjs` and `test/dusk-boss.mjs`. **Not measured:** how many more interceptors a
+real round now sees, or how much sooner a ship sinks in play; across this session's measurements interceptors did
+little damage (30 of about 800 in round 4), so the first adds presence more than danger.
 
 Also noted: once interceptors exist, invulnerable wingmen will look odd.
 

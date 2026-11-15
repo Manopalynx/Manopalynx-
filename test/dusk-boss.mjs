@@ -86,6 +86,23 @@ console.log('\n— harder each time —');
   check(t.tiers.every(r => Math.abs(r.lost / r.hull - 0.04) < 0.005), 'a turret lost costs it 4% of its hull, at every tier', t.tiers.map(r => (100 * r.lost / r.hull).toFixed(1) + '%').join(', '));
 }
 
+console.log('\n— an ordinary ship with no turrets left —');
+{
+  // Sam: "when all turrets are destroyed the capital ship takes double damage". Ordinary ships only (a boss's turrets rebuild).
+  const d = await run(`startRound(4); damage = function () {}; var f = fleet[0], o = { blows: [] }, h;
+    h = f.hp; hitCapital(f, 10); o.whole = h - f.hp;
+    f.turrets.forEach(function (t, i) { if (i === f.turrets.length - 1) { h = f.hp; hitCapital(f, 10); o.oneLeft = h - f.hp; }
+      h = f.hp; while (t.hp > 0) hitTurret(f, t, 1, t.local); o.blows.push(h - f.hp); });
+    o.note = noteEl.textContent; h = f.hp; hitCapital(f, 10); o.bare = h - f.hp; o.n = f.turrets.length;
+    startRound(5); var b = bossF; b.shield = 0; b.gen.hp = 0; b.turrets.forEach(function (t) { t.hp = 0; }); h = b.hp; hitCapital(b, 10); o.boss = h - b.hp;
+    JSON.stringify(o)`);
+  check(d.whole === 10 && d.oneLeft === 10, 'with turrets standing, even one, a hit does what it does', JSON.stringify(d));
+  check(d.bare === 20, `with all ${d.n} destroyed it does double  [10 becomes ${d.bare}]`, JSON.stringify(d));
+  check(d.blows.every(x => x === 60), 'the last turret\'s own blow is not doubled: 60 off the hull, like the others', d.blows.join(', '));
+  check(/double damage/.test(d.note), 'and the screen says so when the last one goes', d.note);
+  check(d.boss === 10, 'the dreadnought with every turret down takes no more than before', `10 did ${d.boss}`);
+}
+
 console.log('\n— what makes it a dreadnought —');
 {
   // The mounts: each sits outside the hull and against it, and between them they face every way.

@@ -1583,9 +1583,13 @@
     else if (wallOn) { bossLine = ''; readoutEl.innerHTML = 'Round ' + round + '<br>Ice wall: ' + wallStanding() + ' of ' + WALL_SECS + ' standing'; }
     else { bossLine = ''; readoutEl.innerHTML = 'Round ' + round + '<br>' + remaining() + ' to go'; }
   }
-  function hitCapital(f, dmg) {
+  function turretsGone(f) { for (var i = 0; i < f.turrets.length; i++) if (f.turrets[i].hp > 0) return false; return f.turrets.length > 0; }
+  function hitCapital(f, dmg, raw) {
     if (f.dying > 0 || f.gone > 0) return;
     if (f.armour) return; // the walker's plate: nothing gets through it, the way in is its core
+    // Sam: "when all turrets are destroyed the capital ship takes double damage". Ordinary ships only: a boss's turrets
+    // rebuild, so on one this would flicker. Not the blow of the last turret itself, which arrives here as raw.
+    if (!f.boss && !raw && turretsGone(f)) dmg *= 2;
     if (f.boss && f.shield > 0) {
       // the shield takes it first; whatever is left over goes through
       var soak = Math.min(f.shield, dmg);
@@ -3251,7 +3255,7 @@
   }
   function hitTurret(f, t, dmg, at) {
     t.hp -= dmg; t.flash = 0.2; paintRing(t);
-    if (t.hp <= 0) { t.hp = 0; t.back = BOSS_REBUILD; t.ring.visible = false; t.pivot.visible = false; boom(at, true); t.pivot.getWorldPosition(chTmp); chainBlast(chTmp, 1); hitCapital(f, f.turretBlow || 60); }
+    if (t.hp <= 0) { t.hp = 0; t.back = BOSS_REBUILD; t.ring.visible = false; t.pivot.visible = false; boom(at, true); t.pivot.getWorldPosition(chTmp); chainBlast(chTmp, 1); hitCapital(f, f.turretBlow || 60, true); if (!f.boss && f.dying === 0 && turretsGone(f)) banner('Turrets down: double damage', 2.5); }
     else boom(at, false);
   }
   var stA = new THREE.Vector3(), stB = new THREE.Vector3(), stC = new THREE.Vector3(), CAP_BOX = [44, -10, 15, 13], GEN_AT = new THREE.Vector3(0, 0, 0);
@@ -3981,7 +3985,7 @@
   // the view is about 20 degrees either side, so an enemy behind you is one you can neither see nor shoot: their
   // guns fire only while they are on your screen, and one coming up from behind overtakes and flies on out ahead.
   var IC_HP = 3, IC_SCALE = 1.3, IC_SPEED = 66, IC_TURN = 1.9, IC_SHOT = 150, IC_DMG = 10, IC_SPREAD = 10;
-  var ics = [], icPeelT = -1, icWant = 0;
+  var ics = [], icPeelT = -1, icWant = 0, IC_AGAIN = 30;
   var icA = new THREE.Vector3(), icB = new THREE.Vector3(), icC = new THREE.Vector3(), icQ = new THREE.Quaternion();
   function icCount(n) { return n < 3 ? 0 : n < 5 ? 1 : n < 8 ? 2 : 3; }
   (function () {
@@ -4040,8 +4044,14 @@
     if (icPeelT > 0 && inControl && !dead && roundLive) {
       icPeelT -= dt;
       if (icPeelT <= 0) {
-        for (i = 0; i < icWant; i++) icPeel(ics[i]);
-        sfx('raid'); banner(icWant > 1 ? 'Interceptors inbound' : 'Interceptor inbound', 2.5);
+        // Sam: "introduce interceptors every 30 seconds in normal rounds because I find that they get destroyed early
+        // every round". Every 30 seconds the ones shot down are replaced, back up to the round's number: his "never
+        // more" stands. One on its way home does not count as here.
+        var icUp = 0, icSent = 0;
+        for (i = 0; i < ics.length; i++) if (ics[i].alive && ics[i].mode !== 3) icUp++;
+        for (i = 0; i < ics.length && icUp < icWant; i++) if (!ics[i].alive) { icPeel(ics[i]); icUp++; icSent++; }
+        if (icSent) { sfx('raid'); banner(icSent > 1 ? 'Interceptors inbound' : 'Interceptor inbound', 2.5); }
+        icPeelT = IC_AGAIN;
       }
     }
     for (i = 0; i < ics.length; i++) {
@@ -4570,7 +4580,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'dreadnought-5', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'capitals-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +

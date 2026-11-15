@@ -3383,3 +3383,11 @@ suite's own "none floating" check caught that. Eight mutants on the new checks, 
 He raised two more in the same message, discussed and not built: interceptors every 30 seconds in ordinary rounds,
 and double damage to a capital ship with no turrets left.
 
+### `capitals-1`
+
+His two, built on "go with your recommendations": interceptors topped back up to the round's number every 30
+seconds (his "never more" kept), and double damage to an ordinary capital ship with no turrets left (not bosses,
+not the last turret's own blow). Eight mutants. Two read as missed and were not: with top-ups off the check had
+no interceptor to shoot and **crashed rather than failed, and my mutant script counted only printed failures**.
+The check now fails properly and the script counts a non-zero exit. Neither change was measured in play.
+

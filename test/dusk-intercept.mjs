@@ -181,6 +181,25 @@ console.log('\n— the rules —');
     var ic = ics[0], n = 0; while (ic.alive && n < 9) { hitInterceptor(ic, 1 * dmgMul(), ic.pos); n++; } n`));
   check(hp === 3, 'three hits at base damage brings one down', `took ${hp}`);
 
+  // Sam: "introduce interceptors every 30 seconds in normal rounds because I find that they get destroyed early every
+  // round". Topped back up to the round's number every 30 seconds; his "never more" stands.
+  await again();
+  const top = await page.evaluate(() => window.__t(`
+    startRound(6); M.quiet(); damage = function () {}; var t0 = time, o = { log: [], max: 0 };
+    function up() { return ics.filter(function (c) { return c.alive && c.mode !== 3; }).length; }
+    function kill(ic) { var n = 0; while (ic && ic.alive && n < 9) { hitInterceptor(ic, 1, ic.pos); n++; } }   // none to shoot is a result, not a crash
+    M.step(30 * 7, function () { o.max = Math.max(o.max, up()); }); o.first = up();
+    ics.forEach(function (c) { if (c.alive) kill(c); }); o.afterKill = up();
+    M.step(30 * 25, function () { o.max = Math.max(o.max, up()); }); o.at32 = up();          // 32 s in: the second look is at 34
+    M.step(30 * 4, function () { o.max = Math.max(o.max, up()); }); o.at36 = up();
+    kill(ics.filter(function (c) { return c.alive; })[0]); o.oneDown = up();
+    M.step(30 * 30, function () { o.max = Math.max(o.max, up()); }); o.at66 = up();
+    M.step(30 * 70, function () { o.max = Math.max(o.max, up()); }); o.at136 = up();        // left alone through two more looks
+    o.live = roundLive; JSON.stringify(o)`)).then(JSON.parse);
+  check(top.first === 2 && top.afterKill === 0 && top.at32 === 0 && top.at36 === 2, 'both shot down early: none for the rest of the half minute, then two again', JSON.stringify(top));
+  check(top.oneDown === 1 && top.at66 === 2, 'one shot down: one comes to replace it at the next half minute', JSON.stringify(top));
+  check(top.max === 2 && top.at136 === 2, 'and never more than the round\'s number, however long they are left alone', JSON.stringify(top));
+
   await again();
   const pick = await page.evaluate(() => window.__t(`
     startRound(6); damage = function () {}; M.step(140);
