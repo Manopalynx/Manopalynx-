@@ -69,7 +69,11 @@ console.log('\n— can it be hit where you aim —');
 {
   // The dreadnought shipped with a generator nothing could reach. So: bolts with a person's scatter, from every side.
   // the tower guns stand in some of these lines, and a bolt that hits one is not a miss on the knee: take them away
-  const los = await run(`M.go(5); ground.forEach(function (g) { if (wkTowerGun(g)) { g.alive = false; g.group.visible = false; g.back = 0; } }); M.step(90); var out = { knee: {}, core: {} }, hk = hitKnee;
+  // the scatter and the clock fixed: level, the knee is reached about 82% of the time against a bar of 80, and with
+  // them free the check gave 79 to 85% on a build nothing had changed, and failed. Fixed, 83 to 85%: some small
+  // randomness is left that was not run down; the check is now clear of its bar rather than on it.
+  const los = await run(`var seed = 4242; Math.random = function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    M.go(5); ground.forEach(function (g) { if (wkTowerGun(g)) { g.alive = false; g.group.visible = false; g.back = 0; } }); last = M.now; time = 0; M.step(90); /* and the clock, which the walker walks by */ var out = { knee: {}, core: {} }, hk = hitKnee;
     out.blocked = {};
     [0, 20, 40].forEach(function (elev) { var hits = 0, n = 0, blocked = 0; hitKnee = function () { hits++; };
       walker.legs.forEach(function (lg) { for (var q = 0; q < 16; q++) { var az = q / 16 * 6.283, e = elev * Math.PI / 180, c = lg.kneeAt;

@@ -749,11 +749,42 @@ clear of the ground, every capital ship's hull 8 clear on its whole circle, enem
 edge of where things are put, the far ridges and the far fight beyond the edge. A new run comes back
 to today's map exactly, not one coordinate different.
 
+### Step 3, built (`ice-1`): the ice field's regions
+
+**Sam, having played to the walker's defeat on `chapters-3`: "looking good so far, so go for it".**
+
+Four places in the plain between the wall and the crags, in the gaps between the wall's six guard
+towers: **the outpost at 60°, the spires at 120°, the crevasses at 240°, the lake at 300°**. They
+appear from chapter 2's size; at today's the band between wall and crags is too narrow to hold
+them, and the ice is as it was. All of it is in `iceRegionHeight`, inside the ground.
+
+- **Crevasses**: a shelf of ice 34 high, cut by canyons 22 wide down to the plain, laid out as
+  winding lines: two crossing like a + at chapter 2's size, three like a # at full size.
+- **A frozen lake**: flat at 1.2, a low bank round it. A third of the drones, up to twelve, circle
+  over it.
+- **Ice spires**: columns 25 to 60 high, 26 apart, at least 8 clear between any two bases.
+- **An outpost**: a flat yard inside walls 16 high, a gate 18 wide in the side facing the middle,
+  and eight guns in the yard: the queued "ground units grouped into bases".
+
+**Measured** by `test/dusk-ice.mjs`:
+
+| | chapter 2 | full size |
+|---|---|---|
+| a shelf gun's line to a ship 10 over a canyon floor, blocked | 71% | 95% |
+| the same line with the ship lifted to 10 over the shelf, blocked | 1% | 3% |
+| canyon width, narrowest anywhere | 22 | 21.5 |
+| spires; narrowest gap between bases | 9; 9.2 | 49; 9.9 |
+
+**Three things the first versions got wrong:** canyons cut from noise fixed to the world gave thin
+cracks 12 wide at one setting and, at another, a shelf broken into islands at chapter 2's size, so
+the canyons are laid out now; spires 22 apart with jitter had bases touching; and the suite's first
+"cover" control drew its line to a ship out on the plain beyond the shelf, which the shelf blocked too.
+
 ### Built in stages, each merged with its own version, each shown as renders first
 
 1. ~~Chapters: the move every five rounds and the order, at today's size.~~ Built, above.
 2. ~~Size: every distance following the arena, and the arenas growing.~~ Built, above.
-3. The ice field's regions.
+3. ~~The ice field's regions.~~ Built, above.
 4. The lava field's regions.
 5. The dusk hills at full size, for the second time round.
 
@@ -796,6 +827,7 @@ node test/dusk-weather.mjs     # the weather: the draw, nothing stacking, how fa
 node test/dusk-wxsound.mjs     # the weather's sound: nothing before a tap, each bed under the music, thunder after its flash, the sound modes
 node test/dusk-chapter.mjs     # the chapters: the order, one arena a chapter, ordinary rounds on the ice and lava, ships over the ground
 node test/dusk-size.mjs        # the arenas' sizes: the spacing, the ground at every size, nothing in the wrong place, the wall's strips
+node test/dusk-ice.mjs         # the ice field's regions: crevasses that hide you, a flat lake, spires to weave, an outpost with a gate
 ```
 
 `dusk.mjs` is a smoke test: the page opens, three.js loads from beside it, the picture changes between
