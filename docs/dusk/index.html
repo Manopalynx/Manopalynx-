@@ -1583,6 +1583,9 @@
     else if (wallOn) { bossLine = ''; readoutEl.innerHTML = 'Round ' + round + '<br>Ice wall: ' + wallStanding() + ' of ' + WALL_SECS + ' standing'; }
     else { bossLine = ''; readoutEl.innerHTML = 'Round ' + round + '<br>' + remaining() + ' to go'; }
   }
+  // Sam: the banner only "for the first capital ship the player destroys all turrets as a indicator to them but no
+  // more the rest of the game". Once per time the page is opened: dying and starting again does not show it again.
+  var turretsDownTold = false;
   function turretsGone(f) { for (var i = 0; i < f.turrets.length; i++) if (f.turrets[i].hp > 0) return false; return f.turrets.length > 0; }
   function hitCapital(f, dmg, raw) {
     if (f.dying > 0 || f.gone > 0) return;
@@ -3255,7 +3258,7 @@
   }
   function hitTurret(f, t, dmg, at) {
     t.hp -= dmg; t.flash = 0.2; paintRing(t);
-    if (t.hp <= 0) { t.hp = 0; t.back = BOSS_REBUILD; t.ring.visible = false; t.pivot.visible = false; boom(at, true); t.pivot.getWorldPosition(chTmp); chainBlast(chTmp, 1); hitCapital(f, f.turretBlow || 60, true); if (!f.boss && f.dying === 0 && turretsGone(f)) banner('Turrets down: double damage', 2.5); }
+    if (t.hp <= 0) { t.hp = 0; t.back = BOSS_REBUILD; t.ring.visible = false; t.pivot.visible = false; boom(at, true); t.pivot.getWorldPosition(chTmp); chainBlast(chTmp, 1); hitCapital(f, f.turretBlow || 60, true); if (!f.boss && f.dying === 0 && turretsGone(f) && !turretsDownTold) { turretsDownTold = true; banner('Turrets down: double damage', 2.5); } }
     else boom(at, false);
   }
   var stA = new THREE.Vector3(), stB = new THREE.Vector3(), stC = new THREE.Vector3(), CAP_BOX = [44, -10, 15, 13], GEN_AT = new THREE.Vector3(0, 0, 0);
@@ -4580,7 +4583,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'capitals-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'capitals-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +

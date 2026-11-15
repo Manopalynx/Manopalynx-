@@ -3391,3 +3391,9 @@ not the last turret's own blow). Eight mutants. Two read as missed and were not:
 no interceptor to shoot and **crashed rather than failed, and my mutant script counted only printed failures**.
 The check now fails properly and the script counts a non-zero exit. Neither change was measured in play.
 
+### `capitals-2`, and two of his rulings
+
+"Definitely remove the turrets down banner but keep it for the first capital ship the player destroys all turrets
+... but no more the rest of the game": shown once per page opened, not again after dying. "Yes to tower guns
+counting for bombs": already so, now his ruling rather than my fill. Two mutants on the banner, both caught.
+
