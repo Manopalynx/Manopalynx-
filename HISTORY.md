@@ -3180,7 +3180,7 @@ dark slab, the shadow with legs and the dim dreadnought were all found that way.
 decide: the softer first dreadnought generator, a lives system, and offline and a Home Screen
 icon for the game. He said three bosses is enough for now.
 
-## Instance 16 — 14 November 2026
+## Instance 16 — 14–15 November 2026
 
 Setup found everything green (the hook repaired a stale local `main`, 16 behind, nothing lost).
 Then a long run of Dusk, every change merged as it landed: `walker-2`, `time-1`, `weather-1`,
@@ -3227,3 +3227,42 @@ Fog at 130 he approved. Open: how a storm's push and the sound feel on the phone
 is now too hard (it costs about twice the hull you have, against the dreadnought's 1.5); towers
 whose rebuild makes clearing them pointless. Chapter steps 2 to 5 (size, then the ice, lava and
 dusk regions) are designed and agreed; step 2 is next.
+
+### The second half: chapters, and the maps (written at the end)
+
+The first part of this section was written before the biggest step, in case the session was cut.
+After it: `chapters-2` (every arena takes every time of day, bosses keep their look), `chapters-3`
+(each chapter's arena grows with its enemy count, 444 to 968 across), and the three maps as
+territories: `ice-1` and then `ice-2`, `lava-1`, `dusk-1`. All merged, each with its own suite;
+sixteen Dusk suites, 368 checks, at the end. He played `chapters-3` to the walker's defeat.
+
+**His sharpest correction:** of `ice-1`, "it also looks like little demo areas around the map". It
+was: four stamped shapes on a plain that was still plain. I had built exactly the thing he asked me
+not to, one level down. The fix (territories that fill the land and blend) was his reading, which I
+asked him to confirm before rebuilding. Then I made the same mistake twice more in smaller form,
+caught on renders before he saw them: territories that began 150 from the middle (a ring round a
+plain), and round mesas (polka dots). **Look at it from above before calling it varied.**
+
+**Measuring, not looking, found:** a capital ship that has always flown 18 metres into a hill once
+every five minutes; interceptors entering hills in still air; a base perched on a basalt column 40
+up; guns at the water line on a lake camp; an old, rare drone clipping the ice wall's crest; ground
+placement that could fall back into the lava. None threw.
+
+**Wrong, and walked back:** I told him the dark night hid the ship (it hid the ground); I blamed
+islands for ground 23 high in the lake (it was a base's walls, and the cap I added did nothing, which
+a mutant proved); I said the columns would have 12 between them before measuring 9.4; I scaled the
+rift to its band when shortening the fades alone was the fix. Three things I built did nothing and
+were removed when mutants showed it.
+
+**The instrument lesson of the session:** render-based and random measures swung up to 18 points
+between runs on unchanged builds until the seed **and the game clock** were both pinned. A seed alone
+was not enough: drones and the walker move by the clock, whose first step is however long the test
+took to start.
+
+**For the next instance:** the bomb is next and agreed in his words (automatic; ground units only;
+levels grow blast radius and/or rate, settled by balancing). Read `docs/dusk/README.md` first. Still
+open, his: the softer first dreadnought generator, lives, offline and a Home Screen icon, whether
+the walker is now too hard (he beat it), and whether the towers' 10-second rebuild makes clearing
+them pointless. He asked whether to carry on here or start fresh; I advised a fresh session, because this
+one had grown long enough that its early parts survived only as summaries.
+
