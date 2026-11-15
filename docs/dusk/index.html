@@ -2804,7 +2804,7 @@
     { id: 'pd', name: 'Point defence', desc: 'A small gun tries to shoot down missiles before they reach you. Each level reaches further, fires faster and aims better.', max: 3 },
     { id: 'chain', name: 'Chain reaction', desc: 'Whatever you destroy explodes, hurting anything close, and that can set off more. Each level widens and strengthens the blast.', max: 3 },
     { id: 'wingman', name: 'Wingman', desc: 'An escort flies on your wing and shoots at whatever’s ahead of you. Level 2 brings a second; level 3 doubles their fire.', max: 3 },
-    { id: 'bomb', name: 'Bombs', desc: 'A bomb is thrown by itself whenever it would land on a gun or launcher ahead. Each level throws them more often and blasts wider.', max: 3 }
+    { id: 'bomb', name: 'Bombs', desc: 'Bombs lob themselves at guns and launchers on the ground ahead of you, even while you fight in the air. Each level throws them more often and blasts wider.', max: 3 }
   ];
   var up = {}, picking = false, pickReady = 0;
   var pickEl = document.getElementById('pick'), pickTitle = document.getElementById('pickTitle'), pickCards = document.getElementById('pickCards');
@@ -3432,16 +3432,21 @@
     else seekCool = 0.25;
   }
 
-  // ---------- bombs: they drop by themselves when one would land on something on the ground ----------
-  // Sam: an upgrade that fires by itself, at ground units only, its levels growing the blast and how often. MINE, his to
-  // strike: a bomb is thrown out along the nose, faster than the ship, and falls; it is let go only when that fall would
-  // end on a ground unit, at the moment it would land closest to one, so you never press anything but where you fly
-  // decides what is hit. Thrown, not dropped: a bomb keeping only the ship's speed lands under the ship, below the
-  // chase camera's view, and you would never see your own bomb go off. Ground units only: it falls through everything
-  // else, and its blast hurts nothing but ground units -- the ice wall's guns and the walker's tower guns included.
-  var BOMB_R = [0, 10, 14, 18], BOMB_COOL = [0, 4, 3, 2.2], BOMB_DMG = 5, BOMB_G = 30, BOMB_THROW = 55, BOMB_AIM = 0.75, BOMB_STEP = 1 / 30;
-  var bombs = [], bombWaves = [], bombCool = 1, bombLast = Infinity;
-  var bmP = new THREE.Vector3(), bmV = new THREE.Vector3(), bmQ = new THREE.Vector3();
+  // ---------- bombs: thrown by themselves at what is on the ground ahead ----------
+  // Sam: an upgrade that fires by itself, at ground units only, its levels growing the blast and how often; then "still
+  // shooting forward so you still see it", with targeting like the wingmen's: pick something in a forward cone and aim at
+  // it. MINE, his to strike, the details: the cone is measured on the map round your heading, not round the nose (the
+  // wingmen's own cone, round the nose, holds a ground target 12% of a dogfight, because pitching up at a drone lifts it
+  // off the ground); 30 degrees either side, from 30 to 200 out. A target on the screen is taken before one off it, then
+  // the one whose blast would catch the most, then the nearest. The bomb is lobbed: thrown toward it at the ship's speed
+  // plus 55 across the ground (never under 0.8 seconds in the air), with whatever upward or downward push lands it there,
+  // and falls. A target the throw cannot reach -- a ridge in the way -- is passed over for the next. Ground units only: it
+  // falls through everything else, and its blast hurts nothing but ground units, the ice wall's and the walker's tower
+  // guns included.
+  var BOMB_R = [0, 10, 14, 18], BOMB_COOL = [0, 4, 3, 2.2], BOMB_DMG = 5, BOMB_G = 30, BOMB_THROW = 55, BOMB_STEP = 1 / 30;
+  var BOMB_CONE = Math.cos(30 * Math.PI / 180), BOMB_NEAR = 30, BOMB_FAR = 200, BOMB_MINT = 0.8, BOMB_HIT = 2.5;
+  var bombs = [], bombWaves = [], bombCool = 1;
+  var bmP = new THREE.Vector3(), bmV = new THREE.Vector3(), bmQ = new THREE.Vector3(), bmS = new THREE.Vector3();
   (function () {
     var bodyGeo = new THREE.CylinderGeometry(0.42, 0.3, 1.9, 8), noseGeo = new THREE.SphereGeometry(0.42, 8, 6);
     var finGeo = new THREE.BoxGeometry(1.1, 0.06, 0.4), lampGeo = new THREE.SphereGeometry(0.5, 8, 6);
@@ -3479,36 +3484,59 @@
   // a bomb's place t seconds after it left from p0 at v0: the same sum for where it is and for where it will land
   function bombAt(p0, v0, t, out) { return out.copy(p0).addScaledVector(v0, t).setY(p0.y + v0.y * t - 0.5 * BOMB_G * t * t); }
   // from under the ship's belly, worked from where the ship is rather than from its model, which moves a tick later
-  function bombStart(p0, v0) {
-    p0.copy(shipPos).addScaledVector(upV, -0.7).addScaledVector(fwdV, -0.3);
-    v0.copy(fwdV).multiplyScalar(speed + BOMB_THROW);
+  function bombFrom(p0) { return p0.copy(shipPos).addScaledVector(upV, -0.7).addScaledVector(fwdV, -0.3); }
+  // the throw from p0 that lands on t: across the ground at the ship's speed plus the throw, never under BOMB_MINT in
+  // the air, and up or down by whatever makes the fall end at t's height
+  function bombAim(p0, t, v0) {
+    var dx = t.x - p0.x, dz = t.z - p0.z, d = Math.sqrt(dx * dx + dz * dz), ft = Math.max(BOMB_MINT, d / (speed + BOMB_THROW));
+    return v0.set(dx / ft, (t.y - p0.y + 0.5 * BOMB_G * ft * ft) / ft, dz / ft);
   }
-  // where a bomb let go now would land, or false if it would fall for more than eight seconds
-  function bombLanding(out) {
-    bombStart(bmP, bmV);
-    for (var t = BOMB_STEP; t < 8; t += BOMB_STEP) { bombAt(bmP, bmV, t, out); if (bombStops(out)) return true; }
+  // where a bomb thrown from p0 at v0 stops, or false if it would fall for more than eight seconds
+  function bombPath(p0, v0, out) {
+    for (var t = BOMB_STEP; t < 8; t += BOMB_STEP) { bombAt(p0, v0, t, out); if (bombStops(out)) return true; }
     return false;
+  }
+  function bombOnScreen(p) {
+    bmS.copy(p).project(camera);
+    return bmS.z < 1 && Math.abs(bmS.x) < 1 && Math.abs(bmS.y) < 1;
+  }
+  // ground units in the forward cone, best first: on the screen, then the most the blast would catch, then the nearest
+  function bombTargets() {
+    var hx = -Math.sin(yaw), hz = -Math.cos(yaw), r2 = BOMB_R[up.bomb] * BOMB_R[up.bomb] * 0.81, list = [], i, j;
+    camera.updateMatrixWorld();
+    for (i = 0; i < ground.length; i++) {
+      var g = ground[i];
+      if (!g.alive) continue;
+      var dx = g.pos.x - shipPos.x, dz = g.pos.z - shipPos.z, d = Math.sqrt(dx * dx + dz * dz);
+      if (d < BOMB_NEAR || d > BOMB_FAR || (dx * hx + dz * hz) / d < BOMB_CONE) continue;
+      var n = 0;
+      for (j = 0; j < ground.length; j++) if (ground[j].alive && ground[j].pos.distanceToSquared(g.pos) < r2) n++;
+      list.push({ g: g, d: d, n: n, seen: bombOnScreen(g.pos) ? 1 : 0 });
+    }
+    list.sort(function (a, b) { return (b.seen - a.seen) || (b.n - a.n) || (a.d - b.d); });
+    return list;
   }
   function updateBombDrop(dt) {
     if (!up.bomb) return;
     bombCool -= dt;
     if (bombCool > 0) return;
-    if (!bombLanding(bmQ)) { bombLast = Infinity; return; }
-    var reach = BOMB_R[up.bomb] * BOMB_AIM, near = Infinity, i;
-    for (i = 0; i < ground.length; i++) if (ground[i].alive) near = Math.min(near, ground[i].pos.distanceTo(bmQ));
-    // within reach, wait while the landing is still coming closer: let go at the closest, not at the first chance,
-    // which would put the blast at the near edge of a camp and leave the rest of it standing
-    var closing = near < bombLast - 0.01;
-    bombLast = near;
-    if (near > reach || (closing && near > 1.5)) return;
-    var b = null;
+    var b = null, i;
     for (i = 0; i < bombs.length; i++) if (!bombs[i].live) { b = bombs[i]; break; }
     if (!b) return;
-    bombStart(b.p0, b.v0);
-    b.age = 0; b.live = true; b.r = BOMB_R[up.bomb];
-    b.mesh.position.copy(b.p0); b.mesh.visible = true;
-    bombCool = BOMB_COOL[up.bomb]; bombLast = Infinity;
-    sfx('drop');
+    var list = bombTargets();
+    bombFrom(bmP);
+    for (i = 0; i < list.length && i < 6; i++) {
+      bombAim(bmP, list[i].g.pos, bmV);
+      // a throw that would stop short of it -- a ridge, a tower, another gun in the way -- is not made
+      if (!bombPath(bmP, bmV, bmQ) || bmQ.distanceTo(list[i].g.pos) > BOMB_HIT) continue;
+      b.p0.copy(bmP); b.v0.copy(bmV); b.to = list[i].g;
+      b.age = 0; b.live = true; b.r = BOMB_R[up.bomb];
+      b.mesh.position.copy(b.p0); b.mesh.visible = true;
+      bombCool = BOMB_COOL[up.bomb];
+      sfx('drop');
+      return;
+    }
+    bombCool = 0.1; // nothing to throw at: look again shortly
   }
   function bombBlast(p, r) {
     var w = bombWaves[0], i;
@@ -3547,7 +3575,7 @@
     var i;
     for (i = 0; i < bombs.length; i++) { bombs[i].live = false; bombs[i].mesh.visible = false; }
     for (i = 0; i < bombWaves.length; i++) { bombWaves[i].life = 0; bombWaves[i].mesh.visible = false; }
-    bombCool = 1; bombLast = Infinity;
+    bombCool = 1;
   }
 
   // ---------- point defence: shoots down incoming missiles ----------
@@ -4508,7 +4536,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'bomb-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'bomb-2', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +

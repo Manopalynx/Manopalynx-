@@ -886,53 +886,68 @@ measured at a fixed distance that on a stretched mesa was still on it.
 4. ~~The lava field's regions.~~ Built as territories, above.
 5. ~~The dusk hills at full size, for the second time round.~~ Built, above. The maps are done.
 
-## The bomb (build `bomb-1`)
+## The bomb (build `bomb-2`)
 
 **Sam's rulings:** an upgrade card that fires by itself; ground units only; its levels grow the blast and how
-often it drops, the split to be settled by balancing. He then left the rest to the build: "go with your
-recommendations and whatever you think works best".
+often, the split to be settled by balancing; the rest left to the build ("go with your recommendations"). Then, on
+`bomb-1`: **"I like it"**, with a change: it should hit ground targets while he fights in the air, "still shooting
+forward so you still see it", with "a targeting similar to the wingmen". The wingmen pick a target inside a forward
+cone and aim each shot at it, while holding his heading.
+
+**`bomb-1`, for the record:** thrown along the nose, and let go only when its natural fall would end on a ground
+unit. Measured with a stand-in fighting drones (turning and pitching at the nearest, guns firing) in round 6: a
+ground unit was within 100 of the ship 98% of the time, the fall ended near one 16% of the time, and it threw 2
+bombs in 90 seconds where its cool-down allowed 22.
 
 **Fills, his to strike** (marked `MINE` in the code):
 
-- **A falling bomb, thrown.** It leaves along the nose at the ship's speed plus 55 and falls at 30 a second squared.
-  **Thrown, not dropped:** a bomb keeping only the ship's speed lands under the ship, and the portrait camera sees
-  39° below its line at most, so you would never have seen your own bomb go off. Measured: in level flight from 15 to
-  130 up the blast lands on the screen.
-- **It lets go by itself, only when the fall would end on a ground unit**, and at the moment it would land
-  **closest** to one. The first version let go at the first chance, which put the blast at a camp's near edge and
-  took one gun of three; it now takes a whole three-gun camp at level 1. It aims only where the miss still kills:
-  within three quarters of the blast.
+- **The cone is round the heading, on the map, not round the nose.** The wingmen's own cone (15° round the nose)
+  held a ground target 12% of that dogfight, worse than `bomb-1`: pitching up at a drone lifts it off the ground.
+  Round the heading, measured in the same fight: ±15° holds one 46% of the time, ±30° 64%, ±45° 79%, ±60° 90%;
+  but the target is on the screen 41%, 38%, 25% and 19% of the time. The portrait screen shows about 21° either
+  side, so a wider cone mostly adds targets you cannot see. **Chosen with Sam: ±30°, from 30 to 200 out.**
+- **What it takes first:** a target on the screen before one off it; then the one whose blast would catch the most
+  (a camp before a lone gun); then the nearest.
+- **A lob, aimed.** Thrown toward the target at the ship's speed plus 55 across the ground, never under 0.8 seconds
+  in the air, with whatever push up or down lands it there, falling at 30. Measured: every throw in the suite lands
+  on what it was thrown at, from 15 to 150 up, at 20 and 30 ticks a second. **A target the throw cannot reach**, a
+  ridge in the way, is passed over for the next: no bomb is spent on a hillside.
+- **Seen:** with a target on the screen in level flight, the blast is on the screen from 15 to 80 up. **Higher, it
+  is not:** at 130 up the ground within 200 is under the view, so high-altitude throws land out of sight. Nothing
+  short of a wider camera fixes that.
 - **Ground units only, the ice wall's guns and the walker's tower guns included**: they are ground units in the code.
   It falls through drones, interceptors and ships, and its blast hurts nothing else. **This bears on the open
   question of the towers' 10-second rebuild:** an automatic weapon that keeps knocking them down makes it matter
-  less. A gun on a tower is hit where it stands, not at the tower's foot.
+  less. A gun on a tower is hit where it stands. The blast is measured in three dimensions.
 - **Numbers, starting points before balancing:** 5 damage a bomb (an ordinary gun or launcher in one; heavy bolts
   scale it like every weapon); blast 10 / 14 / 18; one every 4 / 3 / 2.2 seconds. Its kills set off chain reaction,
-  through the same path every kill takes.
-- **A gun on a rise beside a gully is out of reach** of a bomb landing in the gully: the blast is measured in three
-  dimensions. So is a gun just behind a ridge the ship skims: no fall clears the ridge and lands on it.
+  through the same path every kill takes. One level-1 bomb takes a three-gun camp.
 - **Look and sound:** a dark bomb with pale fins and an orange tail light, half again a real bomb's size so it can be
-  followed; a flattened orange blast; a clunk and a faint falling whistle as it goes, a deep thump when it lands. For
-  its first half second the bomb is hidden behind your own ship, which sits between it and the camera.
+  followed; a flattened orange blast; a clunk and a faint falling whistle as it goes, a deep thump when it lands.
 
-**What it is worth, first measure** (`test/dusk-bomb.mjs`, printed, not asserted): round 6 on the dusk hills,
-every enemy in it, the hull held, the stand-in flying legs across the map at 50 up and **not firing**, so only the
-automatic weapon works. Ground units destroyed, of 30, in 90 seconds:
+**What it is worth** (`test/dusk-bomb.mjs`, printed, not asserted): round 6 on the dusk hills, every enemy in it,
+the hull held, two stand-ins: one flying legs across the map at 50 up and not firing, one fighting drones with its
+guns firing. Ground units destroyed **by the card's own weapon**, of the round's, in 90 seconds; seekers are the
+comparison, the other card that fires by itself.
 
-| card | level 1 | level 2 | level 3 |
-|---|---|---|---|
-| none (the control) | 0 | | |
-| **bombs** | **3** | **5** | **6** |
-| seekers: ground | 4 | 4 | 6 |
-| seekers: drones, besides | 9 | 11 | 15 |
+| card, level | flying legs, not firing: thrown | ground by it | fighting drones, firing: thrown | ground by it |
+|---|---|---|---|---|
+| none (the control) | 0 | 0 | 0 | 0 |
+| **bombs 1** | 17 | **17** | 14 | **14** |
+| **bombs 2** | 19 | **19** | 17 | **16** |
+| **bombs 3** | 21 | **20** | 26 | **25** |
+| seekers 1 | 27 | 4 | 25 | 4 |
+| seekers 2 | 36 | 4 | 35 | 7 |
+| seekers 3 | 49 | 6 | 45 | 12 |
 
-On the ground alone the bomb is level with seekers, a little behind at level 1 and ahead at level 2; it kills no
-drones and seekers kill many. On that measure it is the weaker card, which is what was proposed: it does nothing in
-the air. Seeded from before the page loads and with sound muted, three runs give the same table: the page builds
-the far dogfight at load, and the sound effects draw from the game's own random.
+Of 30 ground units in the round. **It is now the strong card on the ground, by three to four times**: `bomb-1`
+destroyed 3 / 5 / 6 flying legs, and in the drone fight it threw 2 bombs where this throws 14. Nearly every bomb
+kills one. Seekers spend most of their missiles on drones, which bombs never touch. Whether that is too strong is
+the balancing step's question, not settled here. Seeded from before the page loads and with sound muted, as
+before, so runs agree.
 
-**Balancing is the next step**, its own change. Not measured yet: the bomb with the guns firing, with chain
-reaction, in the boss rounds, and by a stand-in that flies at the bases rather than across the map.
+**Balancing is the next step**, its own change. Not measured yet: with chain reaction, in the boss rounds, and by
+a stand-in that flies at the bases.
 
 ## Queued, in the agreed order
 
@@ -941,7 +956,7 @@ reaction, in the boss rounds, and by a stand-in that flies at the bases rather t
 3. Ground units grouped into bases. (Proposed as part of the chapters' regions, above.)
 4. Canyons for cover. (Likewise: crevasses, the rift, the river canyon.)
 5. ~~A boss every fifth round.~~ Built: the dreadnought, above.
-6. ~~The bomb, once the maps were done (Sam).~~ Built: `bomb-1`, above. Balancing it is next.
+6. ~~The bomb, once the maps were done (Sam).~~ Built: `bomb-2`, above. Balancing it is next.
 
 Also noted: once interceptors exist, invulnerable wingmen will look odd.
 
@@ -977,7 +992,7 @@ node test/dusk-size.mjs        # the arenas' sizes: the spacing, the ground at e
 node test/dusk-ice.mjs         # the ice field's territories: the plain filled, borders that blend, each place doing its job, the bases
 node test/dusk-lavafield.mjs   # the lava field's territories: the land filled, the walker's ground untouched, each place doing its job
 node test/dusk-hills.mjs       # the dusk hills' territories: the town untouched, the canyon, ragged mesas, the range, the pylons
-node test/dusk-bomb.mjs        # the bomb: when it lets go, where it lands, what it hurts, how often, a camp, on the screen; then its worth
+node test/dusk-bomb.mjs        # the bomb: the cone, what it takes first, where it lands, what it hurts, how often, on the screen; then its worth
 DUSK_QUICK=1 node test/dusk-bomb.mjs     # its rules without the worth table, for mutation runs
 ```
 
