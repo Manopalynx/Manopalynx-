@@ -957,6 +957,9 @@ a stand-in that flies at the bases.
 4. Canyons for cover. (Likewise: crevasses, the rift, the river canyon.)
 5. ~~A boss every fifth round.~~ Built: the dreadnought, above.
 6. ~~The bomb, once the maps were done (Sam).~~ Built: `bomb-2`, above. Balancing it is next.
+7. **The dreadnought is too easy** (Sam, after `bomb-2`): "it's mostly just shooting at a structure with little
+   threat so we probably need to find ways to up the difficulty such as add units or have 6 interceptors come out at
+   a time". After the bomb is finished. Today: one interceptor from each bay every 30 seconds, up to six flying.
 
 Also noted: once interceptors exist, invulnerable wingmen will look odd.
 
