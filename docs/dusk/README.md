@@ -1102,9 +1102,8 @@ recommendations, which he took.
   count as here. They are still not in the round's "to go" count.
 - **An ordinary capital ship with every turret destroyed takes double damage.** Not the bosses: their turrets
   rebuild, so on them it would flicker. The last turret's own blow to the hull is not doubled. **The banner
-  "Turrets down: double damage" shows once**, the first time a ship is disarmed after the page is opened. Sam:
-  "keep it for the first capital ship the player destroys all turrets as a indicator to them but no more the rest of
-  the game". Dying and starting again from round 1 does not bring it back; reopening the page does (`capitals-2`).
+  "Turrets down: double damage" shows once per life**, the first time a ship is disarmed in a run (`capitals-3`). Sam first said once
+  for the whole game (`capitals-2`), then "once per life": dying and starting again brings it back.
 
 Checked in `test/dusk-intercept.mjs` and `test/dusk-boss.mjs`. **Not measured:** how many more interceptors a
 real round now sees, or how much sooner a ship sinks in play; across this session's measurements interceptors did

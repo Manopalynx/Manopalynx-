@@ -1620,8 +1620,7 @@
     else if (wallOn) { bossLine = ''; readoutEl.innerHTML = 'Round ' + round + '<br>Ice wall: ' + wallStanding() + ' of ' + WALL_SECS + ' standing'; }
     else { bossLine = ''; readoutEl.innerHTML = 'Round ' + round + '<br>' + remaining() + ' to go'; }
   }
-  // Sam: the banner only "for the first capital ship the player destroys all turrets as a indicator to them but no
-  // more the rest of the game". Once per time the page is opened: dying and starting again does not show it again.
+  // Sam: the banner only for the first capital ship disarmed, then "once per life": a new run shows it again.
   var turretsDownTold = false;
   function turretsGone(f) { for (var i = 0; i < f.turrets.length; i++) if (f.turrets[i].hp > 0) return false; return f.turrets.length > 0; }
   function hitCapital(f, dmg, raw) {
@@ -2036,7 +2035,7 @@
     noteEl.style.display = 'block';
   }
   function respawn() {
-    dead = false; score = 0; tally = 0; chain = 0; paintScore(); resetUpgrades(); hull = maxHull(); shield = 0; showShield(); sinceHit = 99; chOrder = []; arenaHold = false; // a new run: it draws its own order of arenas, and any look-round is over
+    dead = false; score = 0; tally = 0; chain = 0; paintScore(); turretsDownTold = false; resetUpgrades(); hull = maxHull(); shield = 0; showShield(); sinceHit = 99; chOrder = []; arenaHold = false; // a new run: it draws its own order of arenas, and any look-round is over
     shipPos.set(46, PAD_H + 30, 46);
     yaw = Math.atan2(shipPos.x, shipPos.z); pitch = 0; bank = 0; speed = 24;
     basis();
@@ -4859,7 +4858,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'regions-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'capitals-3', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +

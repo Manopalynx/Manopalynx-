@@ -98,7 +98,7 @@ console.log('\n— an ordinary ship with no turrets left —');
     o.note = noteEl.textContent; h = f.hp; hitCapital(f, 10); o.bare = h - f.hp; o.n = f.turrets.length;
     var f2 = fleet[1]; noteEl.textContent = ''; f2.turrets.forEach(function (t) { while (t.hp > 0) hitTurret(f2, t, 1, t.local); }); o.note2 = noteEl.textContent;
     h = f2.hp; hitCapital(f2, 10); o.bare2 = h - f2.hp;
-    startRound(1); startRound(4); var f3 = fleet[0]; noteEl.textContent = ''; f3.turrets.forEach(function (t) { while (t.hp > 0) hitTurret(f3, t, 1, t.local); }); o.note3 = noteEl.textContent;
+    die(); respawn(); startRound(4); var f3 = fleet[0]; noteEl.textContent = ''; f3.turrets.forEach(function (t) { while (t.hp > 0) hitTurret(f3, t, 1, t.local); }); o.note3 = noteEl.textContent;
     startRound(5); var b = bossF; b.shield = 0; b.gen.hp = 0; b.turrets.forEach(function (t) { t.hp = 0; }); h = b.hp; hitCapital(b, 10); o.boss = h - b.hp;
     JSON.stringify(o)`);
   check(d.whole === 10 && d.oneLeft === 10, 'with turrets standing, even one, a hit does what it does', JSON.stringify(d));
@@ -106,7 +106,9 @@ console.log('\n— an ordinary ship with no turrets left —');
   check(d.blows.every(x => x === 60), 'the last turret\'s own blow is not doubled: 60 off the hull, like the others', d.blows.join(', '));
   check(/double damage/.test(d.note), 'and the screen says so the first time the last one goes', d.note);
   // Sam: only "for the first capital ship the player destroys all turrets ... but no more the rest of the game"
-  check(d.bare2 === 20 && !/double damage/.test(d.note2) && !/double damage/.test(d.note3), 'the second ship disarmed takes double too, and the screen says nothing; nor after starting again from round 1', JSON.stringify({ note2: d.note2, note3: d.note3, bare2: d.bare2 }));
+  check(d.bare2 === 20 && !/double damage/.test(d.note2), 'the second ship disarmed takes double too, and the screen says nothing', JSON.stringify({ note2: d.note2, bare2: d.bare2 }));
+  // Sam, later: "once per life"
+  check(/double damage/.test(d.note3), 'after dying and flying again, the first ship disarmed says so again', JSON.stringify({ note3: d.note3 }));
   check(d.boss === 10, 'the dreadnought with every turret down takes no more than before', `10 did ${d.boss}`);
 }
 
