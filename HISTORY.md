@@ -3474,3 +3474,11 @@ edit aimed at the same heading and its anchor check failed. Restored. The anchor
 once) is what caught it; the earlier edit had passed that check, because the heading did occur once, and was
 replaced.
 
+### `aim-1`
+
+His "sounds good go for it": every gun now aims fully ahead, using the lancer's calculation, scatter kept. Measured on
+the old and new builds side by side, the old half reproducing the earlier table to the shot (the seeding helper
+holding across builds). Straight fliers are now hit more than weavers by drones and turrets; flak barely changed
+(its scatter dominates). A round costs 16 to 47% more. `test/dusk-aim.mjs` added; with the old aim restored it
+fails both its checks. Missiles, the largest share and still beaten by full throttle, are his next decision.
+

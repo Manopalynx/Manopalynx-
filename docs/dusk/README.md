@@ -1081,7 +1081,7 @@ on either side. Checked with the three longest descriptions on the smallest scre
 HUD already had) were read, not seen working.
 
 
-## How the enemies aim (measured for Sam's difficulty question, nothing changed)
+## How the enemies aim (build `aim-1`)
 
 Sam asked what range enemies have, and whether they shoot where you are, where they think you will be, or track
 you. From the code:
@@ -1109,6 +1109,20 @@ cell; hits of shots fired):
 **Weaving is hit more than flying straight**, for every gun: with the aim only part of the way ahead, a straight
 flier is missed behind, and a weave turns back into the shots. **Full throttle beats missiles entirely** (0 of 14).
 Samples are 8 to 60 shots a cell.
+
+**`aim-1`: every gun aims fully at where you will be** (Sam: "sounds good go for it"), the lancer's exact calculation
+shared by all (`leadAt`), each gun's scatter unchanged. Missiles untouched. Same test, same seeds:
+
+| | flying past at | cruising straight | full throttle straight | weaving |
+|---|---|---|---|---|
+| drone | 40 | 15% → **71%** | 0% → **75%** | 23% → 47% |
+| turret | 40 | 12% → **26%** | 11% → **41%** | 22% → 22% |
+| flak | 40 | 14% → 14% | 13% → 25% | 25% → 28% |
+
+Flak's scatter (±5 each way) is so wide at its short range that the aim hardly matters to it. **Damage taken across
+a whole round** (four upgrades, a stand-in fighting drones; three seeds): round 4 cruising 7.9 → 10.1 a second,
+round 8 15.7 → 18.2; at full throttle 3.6 → 5.3 and 5.0 → 6.1. Turrets' share rose by more than half. **Missiles are
+still the largest share, and full throttle still about halves what you take**: that is the next lever, not pulled.
 
 ## Queued, in the agreed order
 
@@ -1176,6 +1190,7 @@ node test/dusk-lavafield.mjs   # the lava field's territories: the land filled, 
 node test/dusk-hills.mjs       # the dusk hills' territories: the town untouched, the canyon, ragged mesas, the range, the pylons
 node test/dusk-bomb.mjs        # the bomb: the cone, what it takes first, where it lands, what it hurts, how often, on the screen; then its worth
 DUSK_QUICK=1 node test/dusk-bomb.mjs     # its rules without the worth table, for mutation runs
+node test/dusk-aim.mjs         # the guns aim fully ahead: a straight flier is hit more than a weaving one
 node test/dusk-repeat.mjs      # does a seeded suite repeat itself? the guard on test/dusk-seed.mjs
 node test/dusk-regions.mjs     # the region enemies: who is where and how many, the lancer's shot and its dodge, the crawler's driving, the embers
 node test/dusk-score.mjs       # the score: what each kill is worth, the chain, the bank, dying, the best, where it sits both ways up
