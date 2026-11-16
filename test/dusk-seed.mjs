@@ -26,6 +26,13 @@
 //     runs from a timer is given the browser's own random for as long as it runs; only what the suite itself drives,
 //     the game's steps, draws from the seed.
 //
+// WHAT IS PROVEN AND WHAT IS NOT. test/dusk-repeat.mjs runs one fight on three pages that wait different lengths of
+// real time and asserts they end in exactly the same place. Taking out the seed, the silence or the clock makes it
+// fail. Taking out "no audio system" (while still muted) or the timers' own random does NOT, alone or together: those
+// two are caution, kept because each was seen to remove a difference while this was being built (the timers', before
+// the clock was fixed), and because audio waking is a real-time event that game steps can see. If either is ever in
+// the way, it can go without the guard noticing; the first three cannot.
+//
 // Use, straight after the page is made and before it goes anywhere:
 //
 //     await seedPage(page);                      // seeded and silent

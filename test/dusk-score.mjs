@@ -130,6 +130,9 @@ check(frozen.during.tally === 10 && frozen.at28.tally === 10 && frozen.after.sco
   check(d.best === 20 && d.stored === '20' && /Score 20\./.test(d.note) && d.dead.t === 'Best 20', 'the best is kept, and the screen says the score and the best', JSON.stringify(d));
   check(d.again.score === 0 && d.again.tally === 0 && d.again.n === '0' && d.bestAgain === 20, 'flying again starts from nothing, the best still held', JSON.stringify(d));
   check(d.best2 === 20 && d.stored2 === '20', 'a worse run does not lower the best', JSON.stringify(d));
+  // half a second first: the browser writes storage through to its own process a little after the page sets it, and a
+  // reload that lands on a fresh page process before then reads nothing (1 run in 2 here, once; never before or since)
+  await page.waitForTimeout(500);
   await page.reload({ waitUntil: 'load' });
   const first = await page.evaluate(() => window.__t(`JSON.stringify({ best: bestScore, n: scoreN.textContent, t: scoreT.textContent })`)).then(JSON.parse);
   check(first.best === 20 && first.n === 'Best 20', 'opened again, the first screen shows the best', JSON.stringify(first));

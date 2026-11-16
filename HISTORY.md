@@ -3443,3 +3443,19 @@ were reset from measurements, and the size check's two mutants still catch what 
 on a rerun is a finding, not a pass.** The worker restarted once in the middle; the game file was verified against
 the saved copy before going on.
 
+### The seeding helper (16 November)
+
+His: "want to go for your seeding helper". `test/dusk-seed.mjs`, used by every Dusk suite, and
+`test/dusk-repeat.mjs` to guard it. Before: nine of seventeen suites printed different figures on two runs of one
+build. After: fourteen byte-identical; the other three differ where they should.
+
+**I was wrong about the cause three times running, each time with a confident story**, and each was settled by
+comparing two full passes line for line, not by the story. Seeding before load and muting: nine still differed. The
+first step's length: still nine. The music's timer: one page fixed, waits still mattered. What finally did it was
+counting random draws step by step in two runs and finding them identical, which left only arithmetic: every suite
+starts its step counter from "now", and a thirtieth of a second added to different starting numbers rounds
+differently. A fixed clock made five pages agree to six decimal places whatever they waited. The guard then showed
+that two of the helper's five measures are not needed once the others are in; kept, and labelled as caution in the
+file. **Pinning the runs exposed two scenes that had been passing by which lancer the dice chose** (one stood beside
+the ice wall), and a storage race in the score suite's reload.
+

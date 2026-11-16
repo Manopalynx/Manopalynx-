@@ -81,11 +81,22 @@ const lance = await run(J(`
   var ev = [], s0 = sfx; sfx = function (n, p) { if (n === 'charge' || n === 'lance') ev.push([n, +time.toFixed(2)]); return s0(n, p); };
   // straight and level past it, 150 off, at cruise: what flying on as you are costs
   function pass(dodge, side) { M.dmg = []; ev.length = 0; g.cool = 0.5; g.charge = 0; shots.forEach(function (s) { s.life = 0; s.mesh.visible = false; });
-    // from near the middle of the map, so the ship is never at the rim, where the game turns it for home (a dodge of its own)
-    shipPos.set(g.pos.x * 0.15 + side * 40, g.pos.y + 20, g.pos.z * 0.15 + 60); yaw = 0; pitch = 0; speed = 25; basis(); var fired = 0;
+    // a straight run found by looking, not assumed: 170 out from the lancer and flown across its front, every point of
+    // nine seconds' flight inside the rim (where the game turns the ship for home, a dodge of its own), 30 clear of the
+    // ground (which would lift the ship, another), and in plain sight of the gun
+    // (side 1 takes the first such run round the compass, side -1 the last: two different runs, flown the same way round)
+    var run0 = null, runs = [];
+    for (var ai = 0; ai < 48; ai++) { var a = ai * 6.2832 / 48, sx = g.pos.x + Math.cos(a) * 170, sz = g.pos.z + Math.sin(a) * 170, sy = g.pos.y + 45, hy = a + Math.PI / 2, good = true;
+      for (var ts = 0; ts <= 9 && good; ts += 0.5) { var px = sx - Math.sin(hy) * 25 * ts, pz = sz - Math.cos(hy) * 25 * ts;
+        if (Math.hypot(px, pz) > EDGE * SCALE - 15 || Math.max(height(px, pz), 0) > sy - 30) good = false;
+        for (var q = 1; q < 12 && good; q++) { var k = q / 12, lx = g.pos.x + (px - g.pos.x) * k, lz = g.pos.z + (pz - g.pos.z) * k; if (Math.max(height(lx, lz), 0) > g.pos.y + (sy - g.pos.y) * k - 3) good = false; } }
+      if (good) runs.push({ x: sx, y: sy, z: sz, yaw: hy }); }
+    run0 = side > 0 ? runs[0] : runs[runs.length - 1]; M.runsFound = runs.length;
+    if (!run0) return { none: true, hits: 0, other: 0, ev: [], shots: 0 };
+    shipPos.set(run0.x, run0.y, run0.z); yaw = run0.yaw; pitch = 0; speed = 25; basis(); var fired = 0;
     M.step(30 * 9, function () { pitch = 0; if (dodge) { var n = ev.filter(function (e) { return e[0] === 'lance'; }).length; if (n > fired) { fired = n; yaw += 0.9 * (n % 2 ? 1 : -1); } } basis(); });
     return { hits: M.dmg.filter(function (d) { return d === LANCE_DMG; }).length, other: M.dmg.filter(function (d) { return d !== LANCE_DMG; }).length, ev: ev.slice(0, 4), shots: ev.filter(function (e) { return e[0] === 'lance'; }).length }; }
-  o.straight = pass(false, 1); o.straight2 = pass(false, -1); o.dodge = pass(true, 1); o.d0 = Math.round(Math.hypot(g.pos.x * 0.85, g.pos.z * 0.85));
+  o.straight = pass(false, 1); o.straight2 = pass(false, -1); o.dodge = pass(true, 1); o.d0 = 170; o.runs = M.runsFound;
   // out of reach
   M.dmg = []; ev.length = 0; g.cool = 0.5; g.charge = 0; shipPos.set(g.pos.x + 400, g.pos.y + 20, g.pos.z); M.step(300, function () { shipPos.set(g.pos.x + 400, g.pos.y + 20, g.pos.z); }); o.farShots = ev.length;
   // shot at the top of its mast, not at its foot
@@ -98,7 +109,8 @@ const lance = await run(J(`
 `));
 check(lance.hp === 6 && Math.abs(lance.up - 14.2) < 0.05 && lance.seated && lance.body, 'a lancer stands on the ground in its own body, its gun 14 up at the top of the mast; six hits', JSON.stringify(lance));
 check(lance.straight.ev[0][0] === 'charge' && lance.straight.ev[1][0] === 'lance' && Math.abs(lance.straight.ev[1][1] - lance.straight.ev[0][1] - 1.5) < 0.1, 'it charges for a second and a half where you can hear and see it, then fires', JSON.stringify(lance.straight.ev));
-check(lance.straight.shots >= 1 && lance.straight.hits === lance.straight.shots && lance.straight2.shots >= 1 && lance.straight2.hits === lance.straight2.shots && lance.straight.other === 0, `fly on straight and level and the shot lands, 30, from about ${lance.d0} off, on either side  [${lance.straight.hits} of ${lance.straight.shots}, ${lance.straight2.hits} of ${lance.straight2.shots}]`, JSON.stringify([lance.straight, lance.straight2]));
+check(!lance.straight.none && !lance.straight2.none && !lance.dodge.none, `fixture: clear straight runs past the lancer were found, two of them different  [${lance.runs} of 48 bearings]`, JSON.stringify([lance.straight.none, lance.straight2.none, lance.dodge.none])); check(lance.runs >= 2, 'fixture: more than one clear run', String(lance.runs));
+check(lance.straight.shots >= 1 && lance.straight.hits === lance.straight.shots && lance.straight2.shots >= 1 && lance.straight2.hits === lance.straight2.shots && lance.straight.other === 0, `fly on straight and level and the shot lands, 30, from ${lance.d0} off, on two different runs  [${lance.straight.hits} of ${lance.straight.shots}, ${lance.straight2.hits} of ${lance.straight2.shots}]`, JSON.stringify([lance.straight, lance.straight2]));
 check(lance.dodge.shots >= 1 && lance.dodge.hits === 0, `turn once it has fired and every shot passes  [${lance.dodge.hits} of ${lance.dodge.shots}]`, JSON.stringify(lance.dodge));
 check(lance.farShots === 0, 'beyond 320 it does not charge at all', `events ${lance.farShots}`);
 check(lance.topHit === 1 && lance.footHit === 0, 'it is shot at the top of its mast; a bolt through its foot does nothing', JSON.stringify(lance));

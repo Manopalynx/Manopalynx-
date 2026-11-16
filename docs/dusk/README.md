@@ -1146,6 +1146,7 @@ node test/dusk-lavafield.mjs   # the lava field's territories: the land filled, 
 node test/dusk-hills.mjs       # the dusk hills' territories: the town untouched, the canyon, ragged mesas, the range, the pylons
 node test/dusk-bomb.mjs        # the bomb: the cone, what it takes first, where it lands, what it hurts, how often, on the screen; then its worth
 DUSK_QUICK=1 node test/dusk-bomb.mjs     # its rules without the worth table, for mutation runs
+node test/dusk-repeat.mjs      # does a seeded suite repeat itself? the guard on test/dusk-seed.mjs
 node test/dusk-regions.mjs     # the region enemies: who is where and how many, the lancer's shot and its dodge, the crawler's driving, the embers
 node test/dusk-score.mjs       # the score: what each kill is worth, the chain, the bank, dying, the best, where it sits both ways up
 ```
@@ -1160,6 +1161,15 @@ off, so its figures are the same on any machine. It works on a temp copy with on
 (`window.__t = function (code) { return eval(code); }` before the final
 `requestAnimationFrame(tick);`), never the published file. **Clearing a round brings up the
 upgrade cards, which stops the clock**: give each check a fresh page.
+
+**Every suite opens its pages through `test/dusk-seed.mjs`**, which makes a run repeat itself: the random seeded
+from before the page loads, no sound (sound draws from the game's random on the real audio clock), and a fixed
+clock (the game's first step is as long as the real time since load, and a step counter started from "now" rounds
+differently every run). Before it, nine of seventeen suites printed different figures on two runs of the same
+build; after it, fourteen print byte-identical output, and the other three differ only where they should: `dusk-size`
+times real work, `dusk-wxsound` is about sound, and both keep the real clock. `test/dusk-repeat.mjs` is its guard.
+**A new suite should call `seedPage(page)` straight after making a page.** Its file says what is proven and what
+is only caution.
 
 **Neither proves how it plays.** Feel is Sam's to judge on his phone.
 
