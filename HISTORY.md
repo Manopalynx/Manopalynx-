@@ -3459,3 +3459,18 @@ that two of the helper's five measures are not needed once the others are in; ke
 file. **Pinning the runs exposed two scenes that had been passing by which lancer the dice chose** (one stood beside
 the ice wall), and a storage race in the score suite's reload.
 
+### `capitals-3`, and how the enemies aim
+
+His: the turrets-down banner "once per life" (built; the check now dies and respawns, and a mutant proves it). And
+for difficulty: "what range do enemies have and do they shoot where you are or where they think you are going to be
+or if the shots track you". Read from the code and measured. My first table was wrong in one column: the weave I
+wrote drifted the ship off its line, so it hardly passed the shooter; the second centres the weave and uses four
+seeds. The finding is his to weigh: guns lead only 60 to 85% of the way, so weaving is hit about twice as often as
+flying straight, and full throttle is never hit by a missile. Nothing changed in the game for this.
+
+**My `landscape-1` edit had deleted the Dusk document's "Queued" heading**: it replaced the heading it was meant to
+insert before, so the queue sat headless under the landscape section for five merges. Found only because a later
+edit aimed at the same heading and its anchor check failed. Restored. The anchor check (assert the text occurs
+once) is what caught it; the earlier edit had passed that check, because the heading did occur once, and was
+replaced.
+

@@ -1081,6 +1081,37 @@ on either side. Checked with the three longest descriptions on the smallest scre
 HUD already had) were read, not seen working.
 
 
+## How the enemies aim (measured for Sam's difficulty question, nothing changed)
+
+Sam asked what range enemies have, and whether they shoot where you are, where they think you will be, or track
+you. From the code:
+
+| enemy | fires within | its shot | aims at |
+|---|---|---|---|
+| drone | 140 | 78 a second, 10 damage | 60% of the way to where you will be, scattered ±2.5 |
+| capital ship turret | 190 (dreadnought 230) | 115 a second, 8 | 85% of the way, ±4 |
+| flak site, crawler | 125 | bursts of three, 95 a second, 6 | 80% of the way, ±5 |
+| missile site, dreadnought launcher | 210 (not inside 40) | 64 a second, homing, turning 1.15 a second, 20 | tracks you |
+| interceptor | 175, only when you could see it | 150 a second, 10 | 60% of the way, ±5 |
+| lancer | 320 | 62 a second, 30 | exactly where you will be; does not track |
+| ember | (it is the shot) | 42 a second, homing, 20 | tracks you |
+
+**Measured** (one shooter on flat ground, the ship flying a straight line past it for 20 seconds, four seeds a
+cell; hits of shots fired):
+
+| | flying past at | cruising straight | full throttle straight | weaving |
+|---|---|---|---|---|
+| drone | 40 | 15% | 0% | 23% |
+| turret | 40 | 12% | 11% | 22% |
+| flak | 40 | 14% | 13% | 25% |
+| missile | 90 | 100% | 0% | 88% |
+
+**Weaving is hit more than flying straight**, for every gun: with the aim only part of the way ahead, a straight
+flier is missed behind, and a weave turns back into the shots. **Full throttle beats missiles entirely** (0 of 14).
+Samples are 8 to 60 shots a cell.
+
+## Queued, in the agreed order
+
 1. Wrecks of downed capital ships that stay for the run.
 2. ~~Time of day moving on each round.~~ Built: the time of day, the weather and its sound, above.
 3. Ground units grouped into bases. (Proposed as part of the chapters' regions, above.)
