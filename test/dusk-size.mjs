@@ -95,7 +95,13 @@ console.log('\n— nothing in the wrong place, in any landscape, at any size —
   check(rows.every(r => r.shipsBad === 0), 'every capital ship circles inside the edge, its hull 8 clear of the ground the whole way', JSON.stringify(rows));
   // (a first version asked the ridges for 1.2 times the edge: they are the ring at the rim, and today's nearest is 238 against 222)
   check(rows.every(r => r.ridgeIn > r.edge && r.dog > r.edge * 1.2 && r.veil > r.edge), 'the far ridges stay beyond the edge, the far fight well beyond, and the weather\'s veil beyond it, at every size', JSON.stringify(rows));
-  check(rows.every(r => r.groundFar > 0.85 * SPAWN0 * r.scale && r.droneFar > 0.85 * SPAWN0 * r.scale), 'the enemies spread across the whole arena: the furthest ground unit and drone are out near the edge of where things are put, at every size', JSON.stringify(rows.map(r => [r.scale, r.groundFar, r.droneFar])));
+  // What this guards is things still being put as if the arena had not grown: at one and a half times the size that reads
+  // 67% of the way out, at twice 46%. Measured over 60 rounds a row, the furthest of a round's units comes as low as 80%
+  // on a correct game at the larger sizes (the lava field has little rock) and 74% at the smallest, where a round has 20.
+  // The bars were 85% everywhere, inside that, and the check went red about one run in ten. 72% where the arena has grown;
+  // 60% at the smallest size, where there is no growing to check.
+  const far = r => (r.scale > 1.2 ? 0.72 : 0.6) * SPAWN0 * r.scale;
+  check(rows.every(r => r.groundFar > far(r) && r.droneFar > far(r)), 'the enemies spread across the whole arena: the furthest ground unit and drone are out near the edge of where things are put, at every size', JSON.stringify(rows.map(r => [r.scale, r.groundFar, r.droneFar])));
   check(rows.every(r => r.shipFar > 0.75 * r.edge), 'and the capital ships\' circles widen with it', JSON.stringify(rows.map(r => [r.scale, r.shipFar, r.edge])));
   check(rows.filter(r => r.arena !== 0).every(r => r.rim - r.mid > 15), 'on the ice and the lava the crags stay at the rim, not in the middle of a bigger map', JSON.stringify(rows.map(r => [r.arena, r.scale, r.mid, r.rim])));
   check(rows.filter(r => r.arena !== 2).every(r => r.volcFlank > r.edge), 'the volcano on the horizon stays beyond the edge of the dusk hills and the ice', JSON.stringify(rows.map(r => r.volcFlank)));

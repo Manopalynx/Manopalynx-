@@ -3434,3 +3434,12 @@ guard in the game that did nothing and was removed. The stop hook asked for a co
 rewriting the game file; I waited for it to restore the file first. Recolouring the ordinary enemies by region,
 and the difficulty he raised, are not started.
 
+**After the other suites ran (16 November).** Four reds. Three were checks measuring a ground unit by where it is
+shot or by ordinary toughness; updated. The fourth came and went between runs, and I did not merge on a green
+rerun: it was two things. One drone in 600 has always circled up to 2.6 past the edge (fixed; 0 of 20,000). And
+`dusk-size`'s spread check failed 2 runs in 20 on a correct game, its bar inside the natural range (measured over
+60 rounds a row); `dusk-time`'s ice-at-dawn figure sat one point off its bar on `main` and on it here. Both bars
+were reset from measurements, and the size check's two mutants still catch what it is for. **A red that goes away
+on a rerun is a finding, not a pass.** The worker restarted once in the middle; the game file was verified against
+the saved copy before going on.
+

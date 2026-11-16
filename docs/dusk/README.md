@@ -1024,6 +1024,20 @@ two at once could never be reached at one every seven seconds; and an ember at 5
 comment that said it could. **Not measured:** what any of them does to how hard a round is. A ship circling low
 over the lava at cruise, never shooting, was hit by 11 embers of 12 at the first speed; not re-counted at 42.
 
+**What the other suites said when these went in, and what was done:**
+
+- **Three older checks measured a ground unit by where it is shot, or by "ordinary toughness".** A lancer is shot at
+  the top of its mast and a crawler takes five hits. They now measure the body on the ground and each kind's own
+  toughness (`dusk-arena`, `dusk-size`, `dusk-wall`).
+- **One drone in 600 circled up to 2.6 past the map's edge**, in every arena, and always had: put up to 205 out with
+  a circle up to 20 wide, against an edge at 222. Harmless in play; it failed `dusk-size` now and then. Its circle is
+  now pulled inside: 0 of 20,000 past it.
+- **Two checks were passing or failing by the run, on a correct game.** `dusk-size` asked that the furthest of a
+  round's units be 85% of the way out; measured over 60 rounds a row the furthest comes as low as 74 to 80%. It
+  guards against things put as if the arena had not grown (67% or lower), so the bar is 72% where the arena has
+  grown, and two mutants that do exactly that are still caught. `dusk-time` asked that enemies on the ice stand out
+  75% as far as under the boss's look; ice at dawn read 76% on `main` and 75% here. Its bar is 70%.
+
 ## The score (build `score-2`)
 
 **Sam's rulings:** "every time you destroy a unit you get points"; "if you get multiple points in a row it counts up
