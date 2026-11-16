@@ -1719,7 +1719,7 @@
     if (!s) return;
     fleetTmp.set(0, 0, 3.6);
     t.pivot.localToWorld(fleetTmp);
-    aimTmp.copy(shipPos).addScaledVector(fwdV, speed * (dist / 115) * 0.85);
+    leadAt(fleetTmp, 115, aimTmp);
     aimTmp.x += (Math.random() - 0.5) * 8; aimTmp.y += (Math.random() - 0.5) * 8; aimTmp.z += (Math.random() - 0.5) * 8;
     s.mesh.position.copy(fleetTmp); s.prev.copy(fleetTmp);
     s.mesh.lookAt(aimTmp);
@@ -1947,6 +1947,18 @@
       } else d.core.scale.setScalar(1);
     }
   }
+  // WHERE A SHOT MEETS YOU if you fly on as you are: the meeting time t solves |ship + v t - from| = shotSpeed t. Every
+  // gun aims here (aim-1). They used to aim only part of the way (drones and interceptors 60%, flak 80%, turrets 85%), so
+  // a ship flying straight was missed behind it and a ship weaving turned back into the shots: measured, weaving was hit
+  // about twice as often as flying straight (Sam: "do they shoot where you are or where they think you are going to be").
+  // Now flying straight is what gets you hit and a turn after the shot is fired is what gets you out. The scatter each
+  // gun adds afterwards is unchanged.
+  function leadAt(from, shotSpeed, out) {
+    var rx = shipPos.x - from.x, ry = shipPos.y - from.y, rz = shipPos.z - from.z, vx = fwdV.x * speed, vy = fwdV.y * speed, vz = fwdV.z * speed;
+    var qa = vx * vx + vy * vy + vz * vz - shotSpeed * shotSpeed, qb = 2 * (rx * vx + ry * vy + rz * vz), qc = rx * rx + ry * ry + rz * rz;
+    var disc = qb * qb - 4 * qa * qc, tm = disc > 0 && qa < 0 ? (-qb - Math.sqrt(disc)) / (2 * qa) : Math.sqrt(qc) / shotSpeed;
+    return out.copy(shipPos).addScaledVector(fwdV, speed * tm);
+  }
   function segDist2(p, a, b) {
     var abx = b.x - a.x, aby = b.y - a.y, abz = b.z - a.z;
     var apx = p.x - a.x, apy = p.y - a.y, apz = p.z - a.z;
@@ -1990,8 +2002,7 @@
     if (!s) return;
     var from = d.mesh.position;
     var dist = from.distanceTo(shipPos);
-    // lead the target a little, but not perfectly: weaving gets you out of it
-    aimTmp.copy(shipPos).addScaledVector(fwdV, speed * (dist / 78) * 0.6);
+    leadAt(from, 78, aimTmp);
     aimTmp.x += (Math.random() - 0.5) * 5; aimTmp.y += (Math.random() - 0.5) * 5; aimTmp.z += (Math.random() - 0.5) * 5;
     s.vel.copy(aimTmp).sub(from).normalize().multiplyScalar(78);
     s.mesh.position.copy(from); s.prev.copy(from);
@@ -2175,13 +2186,8 @@
     for (var i = 0; i < shots.length; i++) if (shots[i].life <= 0 && shots[i].kind === 4) { s = shots[i]; break; }
     if (!s) return;
     gTmp.set(0, 0, 8.6); g.pivot.localToWorld(gTmp);
-    // aimed exactly where you will be if you fly on as you are: turn, climb or change speed and it passes. The meeting
-    // time t solves |ship + v t - muzzle| = LANCE_SPEED t; a rough lead (distance over speed) missed a straight flier by
-    // many lengths at range, which made the shot no threat at all.
-    var rx = shipPos.x - gTmp.x, ry = shipPos.y - gTmp.y, rz = shipPos.z - gTmp.z, vx = fwdV.x * speed, vy = fwdV.y * speed, vz = fwdV.z * speed;
-    var qa = vx * vx + vy * vy + vz * vz - LANCE_SPEED * LANCE_SPEED, qb = 2 * (rx * vx + ry * vy + rz * vz), qc = rx * rx + ry * ry + rz * rz;
-    var disc = qb * qb - 4 * qa * qc, tm = disc > 0 && qa < 0 ? (-qb - Math.sqrt(disc)) / (2 * qa) : dist / LANCE_SPEED;
-    aimTmp.copy(shipPos).addScaledVector(fwdV, speed * tm);
+    // aimed exactly where you will be if you fly on as you are, with no scatter: turn, climb or change speed and it passes
+    leadAt(gTmp, LANCE_SPEED, aimTmp);
     s.mesh.position.copy(gTmp); s.prev.copy(gTmp);
     s.vel.copy(aimTmp).sub(gTmp).normalize().multiplyScalar(LANCE_SPEED);
     s.life = 7; s.mesh.visible = true;
@@ -2258,7 +2264,7 @@
     for (var i = 0; i < shots.length; i++) if (shots[i].life <= 0 && shots[i].kind === 2) { s = shots[i]; break; }
     if (!s) return;
     gTmp.copy(g.pos); gTmp.y += 0.8;
-    aimTmp.copy(shipPos).addScaledVector(fwdV, speed * (dist / 95) * 0.8);
+    leadAt(gTmp, 95, aimTmp);
     aimTmp.x += (Math.random() - 0.5) * 10; aimTmp.y += (Math.random() - 0.5) * 10; aimTmp.z += (Math.random() - 0.5) * 10;
     s.mesh.position.copy(gTmp); s.prev.copy(gTmp);
     s.mesh.lookAt(aimTmp);
@@ -4346,7 +4352,7 @@
         var s = null;
         for (var k = 0; k < shots.length; k++) if (shots[k].life <= 0 && shots[k].kind === 3) { s = shots[k]; break; }
         if (s) {
-          icC.copy(shipPos).addScaledVector(fwdV, speed * (dist / IC_SHOT) * 0.6);
+          leadAt(ic.pos, IC_SHOT, icC);
           icC.x += (Math.random() - 0.5) * IC_SPREAD; icC.y += (Math.random() - 0.5) * IC_SPREAD; icC.z += (Math.random() - 0.5) * IC_SPREAD;
           s.mesh.position.copy(ic.pos).addScaledVector(ic.dir, 3); s.prev.copy(s.mesh.position);
           s.vel.copy(icC).sub(s.mesh.position).normalize().multiplyScalar(IC_SHOT);
@@ -4858,7 +4864,7 @@
     }
     devEl.style.display = on ? 'flex' : 'none';
   }
-  var BUILD = 'capitals-3', devDiag = document.getElementById('devDiag'), devTaps = 0;
+  var BUILD = 'aim-1', devDiag = document.getElementById('devDiag'), devTaps = 0;
   function devDiagPaint() {
     devDiag.textContent = 'build ' + BUILD + ' | audio: ' + (!AC ? 'not supported' : !actx ? 'not started' : actx.state) +
       (actx ? ' | clock ' + actx.currentTime.toFixed(1) + ' | ' + actx.sampleRate + ' Hz' : '') +
