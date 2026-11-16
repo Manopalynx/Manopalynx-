@@ -33,7 +33,7 @@ async function run(code) {
   const page = await browser.newPage({ viewport: { width: 393, height: 852 } });
   page.on('pageerror', e => allErrors.push(e.message.split('\n')[0]));
   await page.addInitScript(() => { window.requestAnimationFrame = () => 0; });
-  await seedPage(page);   // seeded from before the page loads, and silent: see dusk-seed.mjs
+  await seedPage(page, { realClock: true });   // seeded from before the page loads, and silent; the real clock, because this suite times how long the ground takes to build
   await page.goto(pathToFileURL(join(dir, 'index.html')).href, { waitUntil: 'load' });
   await page.mouse.click(196, 426);
   await page.evaluate(() => window.__t(`
