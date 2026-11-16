@@ -10,6 +10,12 @@
 //     game is opened in its own "silent" mode unless the suite is about sound. The game still counts every sound it
 //     would have made (a suite that wraps sfx sees them all); it only stops short of playing them.
 //
+//  3. THE GAME'S FIRST STEP IS AS LONG AS THE REAL TIME SINCE THE PAGE LOADED, up to a twentieth of a second. A suite
+//     that starts stepping 15 thousandths after load and one that starts 40 after begin from different worlds (a
+//     minimal scene read 54, 55, 56 and 97 thousandths on four pages: three of them just over the cap). So once the
+//     page has loaded its clock reads a second ahead: the first step is always the full twentieth. The clock still
+//     runs in real time after that, so anything that waits on it (the upgrade cards' 0.6 seconds) still works.
+//
 // Use, straight after the page is made and before it goes anywhere:
 //
 //     await seedPage(page);                      // seeded and silent
@@ -24,6 +30,9 @@ export async function seedPage(page, { seed = 20261116, sound = false } = {}) {
     window.__seed = seed;
     Math.random = function () { var s = window.__seed | 0; s = s + 0x6D2B79F5 | 0; window.__seed = s; var t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
     window.__reseed = function (n) { window.__seed = n === undefined ? seed : n; };
+    var realNow = performance.now.bind(performance), ahead = 0;
+    window.addEventListener('load', function () { ahead = 1000; });
+    performance.now = function () { return realNow() + ahead; };
     if (!sound) { try { localStorage.setItem('small-world-mute', '1'); } catch (e) {} }
   }, [seed, sound]);
 }
