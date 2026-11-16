@@ -7,6 +7,7 @@
 //   node test/dusk-lava.mjs
 
 import { chromium } from 'playwright';
+import { seedPage } from './dusk-seed.mjs';
 import { readFileSync, writeFileSync, mkdtempSync, copyFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -28,6 +29,7 @@ const page = await browser.newPage({ viewport: { width: 393, height: 852 } });
 const errors = [];
 page.on('pageerror', e => errors.push(e.message.split('\n')[0]));
 await page.addInitScript(() => { window.requestAnimationFrame = () => 0; });
+await seedPage(page);   // seeded from before the page loads, and silent: see dusk-seed.mjs
 await page.goto(pathToFileURL(join(dir, 'index.html')).href, { waitUntil: 'load' });
 await page.mouse.click(196, 426);
 const r = JSON.parse(await page.evaluate(() => window.__t(`

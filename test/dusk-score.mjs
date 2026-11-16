@@ -10,6 +10,7 @@
 //   node test/dusk-score.mjs
 
 import { chromium } from 'playwright';
+import { seedPage } from './dusk-seed.mjs';
 import { readFileSync, writeFileSync, mkdtempSync, copyFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -35,6 +36,7 @@ async function open(vp = { width: 393, height: 852 }) {
   const page = await browser.newPage({ viewport: vp });
   page.on('pageerror', e => errorsSeen.push(e.message.split('\n')[0]));
   await page.addInitScript(() => { window.requestAnimationFrame = () => 0; });
+  await seedPage(page);   // seeded from before the page loads, and silent: see dusk-seed.mjs
   await page.goto(pathToFileURL(join(dir, 'index.html')).href, { waitUntil: 'load' });
   return page;
 }

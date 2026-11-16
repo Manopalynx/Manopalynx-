@@ -8,6 +8,7 @@
 //   node test/dusk-wxsound.mjs
 
 import { chromium } from 'playwright';
+import { seedPage } from './dusk-seed.mjs';
 import { readFileSync, writeFileSync, mkdtempSync, copyFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -29,6 +30,7 @@ const errors = [];
 const page = await browser.newPage({ viewport: { width: 393, height: 852 } });
 page.on('pageerror', e => errors.push(e.message.split('\n')[0]));
 await page.addInitScript(() => { window.requestAnimationFrame = () => 0; });
+await seedPage(page, { sound: true });   // seeded from before the page loads; sound left on, which this suite is about
 await page.goto(pathToFileURL(join(dir, 'index.html')).href, { waitUntil: 'load' });
 const T = c => page.evaluate(code => window.__t(code), c).then(JSON.parse);
 const wait = ms => page.waitForTimeout(ms);

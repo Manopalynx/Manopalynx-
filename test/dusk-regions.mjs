@@ -9,6 +9,7 @@
 //   node test/dusk-regions.mjs
 
 import { chromium } from 'playwright';
+import { seedPage } from './dusk-seed.mjs';
 import { readFileSync, writeFileSync, mkdtempSync, copyFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -34,11 +35,8 @@ const J = s => `JSON.stringify((function () { ${s} })())`;
 async function run(code) {
   const page = await browser.newPage({ viewport: { width: 393, height: 852 } });
   page.on('pageerror', e => errorsSeen.push(e.message.split('\n')[0]));
-  await page.addInitScript(() => {
-    window.requestAnimationFrame = () => 0;
-    window.__seed = 4711;
-    Math.random = function () { var s = window.__seed | 0; s = s + 0x6D2B79F5 | 0; window.__seed = s; var t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
-  });
+  await page.addInitScript(() => { window.requestAnimationFrame = () => 0; });
+  await seedPage(page, { seed: 4711 });   // seeded from before the page loads, and silent: see dusk-seed.mjs
   await page.goto(pathToFileURL(join(dir, 'index.html')).href, { waitUntil: 'load' });
   await page.mouse.click(196, 426);
   const out = await page.evaluate(c => window.__t(c), `
