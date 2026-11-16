@@ -1906,6 +1906,8 @@
     var cx = Math.cos(a) * r, cz = Math.sin(a) * r;
     if (around) { r = Math.sqrt(Math.random()) * around.R * 0.7; cx = around.x + Math.cos(a) * r; cz = around.z + Math.sin(a) * r; } // gathered over a place
     d.r = 6 + Math.random() * 14;
+    // its whole circle inside the edge: a drone put 205 out with a circle 20 wide went up to 2.6 past it, one time in 600
+    var cr = Math.sqrt(cx * cx + cz * cz), lim = EDGE * SCALE - 1 - d.r; if (cr > lim) { cx *= lim / cr; cz *= lim / cr; }
     // above the highest ground anywhere on its circle, not only at the middle of it: beside a cliff the middle can be
     // on the plain and the circle inside the rock
     var top = Math.max(height(cx, cz), 0);
@@ -3260,7 +3262,7 @@
     }
     for (i = inYard; i < small; i++) placeGround(ground[i]);
     // the region's own: the last few of those just put down in the open become lancers on the ice, crawlers in the hills
-    var own = boss || arena === 2 ? 0 : Math.min(regionCount(n), small - inYard);
+    var own = arena === 2 ? 0 : Math.min(regionCount(n), small - inYard); // a boss round has no ordinary ground units, so none to turn
     for (i = 0; i < own; i++) { var og = ground[small - 1 - i]; setKindAt(og, arena === 1 ? 'lance' : 'crawl', og.pos.x, og.pos.z); }
     emberReset(boss || arena !== 2 ? 0 : n);
     if (kind === 'dread') bossEscort(bossTier(n));

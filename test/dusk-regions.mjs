@@ -61,15 +61,15 @@ async function run(code) {
 // ------------------------------------------------------------ who is where
 const where = await run(J(`
   var o = {};
-  [[0, 1], [0, 2], [0, 6], [1, 6], [2, 6], [1, 17], [0, 19]].forEach(function (a) { M.go(a[0], a[1]); o[a[0] + ':' + a[1]] = M.kinds(); });
+  [[0, 1], [0, 2], [0, 6], [1, 6], [2, 6], [1, 29], [0, 29]].forEach(function (a) { M.go(a[0], a[1]); o[a[0] + ':' + a[1]] = M.kinds(); });
   M.go(1, 6); M.go(0, 3); o.after = M.kinds();                       // the ice, then the hills: no lancer carried over
   M.go(0, 5); o.dread = M.kinds(); bossForce = 'wall'; M.go(1, 10); o.wall = M.kinds(); bossForce = 'walker'; M.go(2, 15); o.walker = M.kinds();
   return o;
 `));
 const K = (k, lance, crawl, embers) => where[k].lance === lance && where[k].crawl === crawl && where[k].embers === embers;
 check(K('0:1', 0, 0, 0), 'round 1 has none of them: the introduction is as it was', JSON.stringify(where['0:1']));
-check(K('0:2', 0, 1, 0) && K('0:6', 0, 2, 0) && K('0:19', 0, 6, 0), 'the dusk hills have crawlers and nothing else new: one in round 2, two by 6, six at most', JSON.stringify([where['0:2'], where['0:6'], where['0:19']]));
-check(K('1:6', 2, 0, 0) && K('1:17', 6, 0, 0), 'the ice field has lancers and nothing else new: two in round 6, six at most', JSON.stringify([where['1:6'], where['1:17']]));
+check(K('0:2', 0, 1, 0) && K('0:6', 0, 2, 0) && K('0:29', 0, 6, 0), 'the dusk hills have crawlers and nothing else new: one in round 2, two by 6, six at most (round 29 would have ten)', JSON.stringify([where['0:2'], where['0:6'], where['0:29']]));
+check(K('1:6', 2, 0, 0) && K('1:29', 6, 0, 0), 'the ice field has lancers and nothing else new: two in round 6, six at most', JSON.stringify([where['1:6'], where['1:29']]));
 check(K('2:6', 0, 0, 2), 'the lava field has embers and nothing else new: two at once in round 6', JSON.stringify(where['2:6']));
 check(where['0:6'].all === 30 && where['1:6'].all === 30 && where['0:6'].left === where['2:6'].left, 'they take the place of ordinary ground units: a round still has 5 to its number, and the same "to go" in every region', JSON.stringify([where['0:6'], where['1:6'], where['2:6']]));
 check(where.after.lance === 0 && where.after.crawl === 1, 'a lancer from an ice round is an ordinary gun again in the hills', JSON.stringify(where.after));
@@ -124,8 +124,16 @@ const crawl = await run(J(`
   var fl = 0, s0 = sfx; sfx = function (n, p) { if (n === 'flak') fl++; return s0(n, p); };
   M.step(30 * 12, function () { shipPos.set(g.pos.x + 60, g.pos.y + 50, g.pos.z); }); o.flak = fl;
   var t0 = tally; hitGround(g, 99, g.pos); o.pts = tally - t0;
+  // one put on rock beside water and told to drive into it: it must refuse
+  var spot = null; for (var r = 70; r < 200 && !spot; r += 5) for (var a = 0; a < 6.283 && !spot; a += 0.1) { var x = Math.cos(a) * r, z = Math.sin(a) * r; if (height(x, z) < 3 || height(x, z) > 9) continue;
+    for (var b = 0; b < 6.283; b += 0.3) { var wx = x + Math.cos(b) * 22, wz = z + Math.sin(b) * 22; if (height(wx, wz) < 0 && height(x + Math.cos(b) * 3, z + Math.sin(b) * 3) >= 2.5) { spot = { x: x, z: z, wx: wx, wz: wz }; break; } } }
+  o.spot = !!spot;
+  if (spot) { var c = C[1]; setKindAt(c, 'crawl', spot.x, spot.z); c.wp = { x: spot.wx, z: spot.wz }; var w2 = 0, first = true, tried = 0;
+    M.step(30 * 8, function () { shipPos.copy(shipAt); if (first) { tried = Math.hypot(c.pos.x - spot.x, c.pos.z - spot.z); } first = false; if (height(c.pos.x, c.pos.z) < 2.5) w2++; });
+    o.wet2 = w2; o.went = +Math.hypot(c.pos.x - spot.x, c.pos.z - spot.z).toFixed(1); }
   return o;
 `));
+check(crawl.spot && crawl.wet2 === 0, 'told to drive into water 22 off, it never leaves the rock', JSON.stringify({ spot: crawl.spot, wet2: crawl.wet2, went: crawl.went }));
 check(crawl.n === 2 && crawl.hp === 5 && crawl.body, 'a crawler wears its own body; five hits', JSON.stringify(crawl));
 check(crawl.path > 150 && crawl.far > 30 && crawl.jump < 0.4, `it drives: ${crawl.path} of ground covered in a minute, ${crawl.far} from where it began, never more than a step at a time`, JSON.stringify(crawl));
 check(crawl.wet === 0 && crawl.off === 0 && crawl.out === 0, 'it keeps to rock, on the ground, inside the map', JSON.stringify(crawl));
@@ -146,7 +154,11 @@ const ember = await run(J(`
     rushers.forEach(function (e, i) { if (e.alive && !seen[i]) { seen[i] = 1; born.push({ h: height(e.pos.x, e.pos.z), y: e.pos.y, d: Math.round(Math.hypot(e.pos.x - shipPos.x, e.pos.z - shipPos.z)) }); } if (!e.alive) seen[i] = 0; });
     maxUp = Math.max(maxUp, up0()); });
   o.bornAt = born.filter(function (b) { return !(b.h < -0.5 && b.y < 0); }).slice(0, 4); o.born = born.length; o.fromLava = born.every(function (b) { return b.h < -0.5 && b.y < 0; }); o.dist = born.map(function (b) { return b.d; }); o.maxUp = maxUp;
-  o.hits = M.dmg.filter(function (d) { return d === EMBER_DMG; }).length; o.left = remaining();
+  o.hits = M.dmg.filter(function (d) { return d === EMBER_DMG; }).length;
+  // made to rise every half second and to live long, the cap is what holds them: still two
+  var gap0 = EMBER_GAP, life0 = EMBER_LIFE, capMax = 0; EMBER_GAP = 1; EMBER_LIFE = 60; emberT = 0.1;
+  M.step(30 * 12, function () { shipPos.set(lx, 30, lz); rushers.forEach(function (e) { if (e.alive && e.t > 1) e.pos.set(lx + 40, 20, lz); }); capMax = Math.max(capMax, up0()); });   // held off the ship, so none bursts
+  o.capMax = capMax; o.leftWith = remaining(); o.upThen = up0(); EMBER_GAP = gap0; EMBER_LIFE = life0; emberReset(6);
   // two hits, 20 points
   emberT = 0.1; M.step(60, function () { shipPos.set(lx, 30, lz); }); var e = rushers.filter(function (x) { return x.alive; })[0];
   if (e) { var t0 = tally; hitEmber(e, 1, e.pos); o.after1 = e.alive; hitEmber(e, 1, e.pos); o.after2 = e.alive; o.pts = tally - t0; }
@@ -156,9 +168,9 @@ const ember = await run(J(`
 `));
 check(ember.lava && ember.high === 0, 'fly high over the lava, 120 up, and nothing rises', JSON.stringify(ember));
 check(ember.born >= 3 && ember.fromLava, `fly low over it and they rise, out of the lava and nowhere else  [${ember.born} in 40 seconds, ${ember.dist.join(', ')} away]`, JSON.stringify(ember));
-check(ember.maxUp === 2, 'never more at once than the round allows: two in round 6', `most at once ${ember.maxUp}`);
+check(ember.maxUp === 2 && ember.capMax === 2, 'never more at once than the round allows, two in round 6, even made to rise every half second and live a minute', `most at once ${ember.maxUp}, ${ember.capMax}`);
 check(ember.hits >= 1, `left alone they reach a ship circling at cruise and burst on it for 20  [${ember.hits} times in 40 seconds]`, JSON.stringify(ember));
-check(ember.left === 1 || ember.left === 0, 'they are not in the round\'s "to go" count', `to go ${ember.left}`);
+check(ember.upThen === 2 && ember.leftWith === 0, 'they are not in the round\'s "to go" count: two in the air, and nothing to go', `up ${ember.upThen}, to go ${ember.leftWith}`);
 check(ember.after1 === true && ember.after2 === false && ember.pts === 20, 'two hits brings one down, for 20', JSON.stringify(ember));
 check(ember.before >= 1 && ember.afterRound === 0, 'and when the round ends they go with it', JSON.stringify(ember));
 

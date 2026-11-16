@@ -996,13 +996,41 @@ than here. In boss rounds: it does nothing against the dreadnought, which has no
 level-1 bomb destroyed all six of the walker's tower guns in 90 seconds and 13 of the wall's 30, and they rebuild.
 Not measured: with chain reaction beyond one run, and a stand-in that flies at the bases.
 
+## An enemy of its own for each region (build `regions-1`)
+
+**Sam:** "we should think of a enemy type exclusive to each region so it helps with variety and even potentially
+change the look of the normal enemies to match the region." The three kinds were proposed to him and taken ("go
+with your recommendations for the region enemies"). **Every number and shape below is mine, his to strike.**
+**Recolouring the ordinary enemies by region is not done yet.**
+
+- **The ice field: lancers.** A gun at the top of a 14-high mast. In reach (320) it charges for a second and a half,
+  its muzzle swelling cyan and a rising whine, then throws one slow shot (62 a second, 30 damage) aimed exactly where
+  you will be if you fly on as you are. Fly on and it lands; turn once it has fired and it passes. Six hits, shot at
+  the top of the mast, not the foot. 40 points.
+- **The dusk hills: crawlers.** A tracked gun that drives between the hills at 7 a second, firing flak as it goes.
+  It keeps to rock, off water, clear of other units, inside the map. Five hits. 30 points.
+- **The lava field: embers.** One rises out of the lava near you, ahead by preference, while you are under 80 up;
+  it climbs for a moment, then comes at you at 42 (faster than you cruise, slower than your full throttle), turning
+  only so hard. Touching you it bursts for 20; after seven seconds it burns out. Two hits. 20 points. They rise every
+  seven seconds, sooner in later rounds, which allow more at once (one from round 2, two from 4, three from 8, four
+  from 12). Tracking bolts, seekers, wingmen and chain reaction all take them; bombs do not.
+- **How many.** Lancers and crawlers take the place of a few of the round's ordinary ground units, so a round still
+  has five to its number and the same "to go": one from round 2, two from 5, three from 8, six at most. None in
+  round 1, none in a boss round. Embers, like interceptors, are not in the count and go when the round does.
+
+**Found by its own suite (`test/dusk-regions.mjs`, 28 checks, twenty-two mutants):** the lancer's first aim was a
+rough lead and missed a ship flying dead straight, every time, so it was no threat at all; the embers' allowance of
+two at once could never be reached at one every seven seconds; and an ember at 52 could not be outrun, against a
+comment that said it could. **Not measured:** what any of them does to how hard a round is. A ship circling low
+over the lava at cruise, never shooting, was hit by 11 embers of 12 at the first speed; not re-counted at 42.
+
 ## The score (build `score-2`)
 
 **Sam's rulings:** "every time you destroy a unit you get points"; "if you get multiple points in a row it counts up
 and then after a few seconds with no points it gets added to the total"; "when you die you go back to round one so
 your score resets"; "yes to best score being saved". The rest were my recommendations, which he took.
 
-- **Points (mine):** drone 10, a gun or launcher on the ground 15, a turret 20, an interceptor 25, a knee of the
+- **Points (mine):** drone 10, a gun or launcher on the ground 15, a turret 20, an interceptor 25, an ember 20, a crawler 30, a lancer 40, a knee of the
   walker 50, a capital ship 100, the dreadnought's shield generator 200, a section of the ice wall 250, a boss 1000.
   The dreadnought's escort, going down with it, is worth nothing.
 - **The chain (mine):** each kill adds to a tally. Every three kills of a chain the next are worth one more times
@@ -1104,6 +1132,7 @@ node test/dusk-lavafield.mjs   # the lava field's territories: the land filled, 
 node test/dusk-hills.mjs       # the dusk hills' territories: the town untouched, the canyon, ragged mesas, the range, the pylons
 node test/dusk-bomb.mjs        # the bomb: the cone, what it takes first, where it lands, what it hurts, how often, on the screen; then its worth
 DUSK_QUICK=1 node test/dusk-bomb.mjs     # its rules without the worth table, for mutation runs
+node test/dusk-regions.mjs     # the region enemies: who is where and how many, the lancer's shot and its dodge, the crawler's driving, the embers
 node test/dusk-score.mjs       # the score: what each kill is worth, the chain, the bank, dying, the best, where it sits both ways up
 ```
 

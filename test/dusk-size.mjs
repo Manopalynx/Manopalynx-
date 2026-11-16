@@ -70,7 +70,7 @@ console.log('\n— nothing in the wrong place, in any landscape, at any size —
   for (const a of [0, 1, 2]) for (const c of [0, 1, 3]) {
     const r = await run(`chapterHold = ${a}; startRound(${c * 5 + 4}); var o = { arena: arena, scale: +SCALE.toFixed(2) }, edge = EDGE * SCALE;
       var g = ground.filter(function (x) { return x.alive; }), d = drones.filter(function (x) { return x.alive; });
-      o.ground = g.length; o.groundBad = g.filter(function (x) { var h = height(x.pos.x, x.pos.z); return h < 2.5 || Math.abs(x.pos.y - (h + 1.9)) > 0.01 || Math.hypot(x.pos.x, x.pos.z) > edge; }).length;
+      o.ground = g.length; o.groundBad = g.filter(function (x) { var h = height(x.pos.x, x.pos.z); return h < 2.5 || Math.abs(x.group.position.y - (h - 0.25)) > 0.01 || Math.hypot(x.pos.x, x.pos.z) > edge; }).length; // its body on the ground: a lancer is shot at the top of its mast
       o.drones = d.length; o.dronesBad = d.filter(function (x) { if (Math.hypot(x.c.x, x.c.z) + x.r > edge) return true; for (var q = 0; q < 6.3; q += 0.2) if (x.c.y - 4 < Math.max(height(x.c.x + Math.cos(q) * x.r, x.c.z + Math.sin(q) * x.r), 0) + 2) return true; return false; }).length;
       o.ships = fleet.filter(function (f) { return !f.boss && f.gone <= 0; }).map(function (f) { var w = 1e9; for (var q = 0; q < 1500; q++) { var t = q / 1500 * 6.283, cx = Math.cos(t) * f.radius * SCALE, cz = Math.sin(t) * f.radius * SCALE;
         for (var k = -2; k <= 2; k++) w = Math.min(w, f.flyAlt - Math.max(height(cx - Math.sin(t) * k * 14 * f.scale, cz + Math.cos(t) * k * 14 * f.scale), 0)); } return { clear: w, out: f.radius * SCALE > edge }; });

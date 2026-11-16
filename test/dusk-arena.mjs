@@ -41,7 +41,7 @@ const r = JSON.parse(await page.evaluate(() => window.__t(`
     for (var i = 0; i < pos.count; i++) { var d = Math.abs(pos.getY(i) - height(pos.getX(i), pos.getZ(i))); if (d > 1e-4) o.meshOff++; if (d > o.worst) o.worst = d; o.r += col[i * 3]; o.b += col[i * 3 + 2]; if (pos.getY(i) > o.top) o.top = pos.getY(i); }
     o.r /= pos.count; o.b /= pos.count;
     var g = ground.filter(function (x) { return x.alive; });
-    o.ground = g.length; o.groundOff = g.filter(function (x) { return Math.abs(x.pos.y - (height(x.pos.x, x.pos.z) + 1.9)) > 0.01; }).length;
+    o.ground = g.length; o.groundOff = g.filter(function (x) { return Math.abs(x.group.position.y - (height(x.pos.x, x.pos.z) - 0.25)) > 0.01; }).length; // its body, not where it is shot: a lancer's gun is at the top of its mast
     o.groundTilted = g.filter(function (x) { var h = height(x.pos.x, x.pos.z); return Math.abs(height(x.pos.x + 3, x.pos.z) - h) > 2.2 || Math.abs(height(x.pos.x, x.pos.z + 3) - h) > 2.2; }).length;
     o.groundOnWall = g.filter(function (x) { return x.pos.y > 25; }).length;
     var d = drones.filter(function (x) { return x.alive; });

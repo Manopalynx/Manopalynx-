@@ -169,7 +169,7 @@ console.log('\n— winning, and what comes after —');
     o.live = roundLive; o.note = noteEl.textContent; o.guns = M.guns().length;
     startRound(6); o.arena = arena; o.props = duskProps.visible; o.wallOn = wallOn; o.ships = fleet.filter(function (f) { return f.gone <= 0; }).length; o.ground = ground.filter(function (g) { return g.alive; }).length;
     var pos = terrainGeo.attributes.position.array, diff = 0; for (var i = 0; i < pos.length; i++) if (Math.abs(pos[i] - M.snap[i]) > 1e-6) diff++;
-    o.diff = diff; o.meshOff = M.meshOff(); o.left = remaining(); o.hp = ground.filter(function (g) { return g.maxHp !== g.baseHp; }).length;
+    o.diff = diff; o.meshOff = M.meshOff(); o.left = remaining(); o.hp = ground.filter(function (g) { return g.maxHp !== (g.kind === 'crawl' ? CRAWL_HP : g.kind === 'lance' ? LANCE_HP : g.baseHp); }).length; // a region's own kind has its own toughness; none still carries the wall's extra
     JSON.stringify(o)`);
   check(w.liveAt3 && !w.live && /cleared/.test(w.note) && w.guns === 0, 'the round is won when the fourth section falls, and not before', JSON.stringify(w));
   check(w.arena === 0 && w.props && !w.wallOn && w.diff === 0 && w.meshOff === 0, 'the next round is back at dusk, with the landscape exactly as it was', JSON.stringify(w));

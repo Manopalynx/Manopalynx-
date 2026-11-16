@@ -3421,3 +3421,16 @@ beside the score to under the crosshair, swelling per kill, each kill's points f
 the flashes landing on his ship in landscape; moved beside the tally. Six mutants, all caught. Only the score suite
 and the smoke test were re-run: the change is display only.
 
+### `regions-1`
+
+"Go with your recommendations for the region enemies": lancers on the ice, crawlers in the hills, embers over the
+lava. Lancers and crawlers are ordinary ground units wearing another body, so everything that counts, targets,
+bombs and scores a ground unit already knew them. **I named the embers' array `embers`, which was already the
+volcano's sparks**; the game threw on its first frame and the smoke test caught it. Each new name is now checked
+for a single declaration before the edit lands. The suite found three faults in what I had built (a lancer that
+never hit a straight flier, an ember allowance that could not be reached, an ember that could not be outrun), and
+five of twenty-two mutants got past it first time: three weak scenes, one count read at the wrong moment, one
+guard in the game that did nothing and was removed. The stop hook asked for a commit while the mutant run was
+rewriting the game file; I waited for it to restore the file first. Recolouring the ordinary enemies by region,
+and the difficulty he raised, are not started.
+
